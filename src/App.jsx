@@ -139,25 +139,28 @@ if (!document.querySelector("[data-yani-styles]")) {
 // ══════════════════════════════════════════════════════════════════
 
 function ProductImage({ item, size = 72 }) {
-  const [err, setErr] = useState(false);
-  const getUrl = (link, id) => {
-    // Local path (starts with /)
-    if (link && link.startsWith("/")) return link;
-    // Google Drive link
-    if (link) {
+  const [src, setSrc] = useState(null);
+  const [fallbackTried, setFallbackTried] = useState(false);
+
+  useEffect(() => {
+    // Always prefer local image first — fastest & most reliable
+    const ext = item.id === "C004" ? "jpg" : "png";
+    setSrc(`/images/${item.id}.${ext}`);
+    setFallbackTried(false);
+  }, [item.id]);
+
+  const handleError = () => {
+    if (!fallbackTried && item.image) {
+      // Try API/Drive image as fallback
+      const link = item.image;
       const m = link.match(/[?&]id=([a-zA-Z0-9_-]+)/) || link.match(/\/d\/([a-zA-Z0-9_-]+)/);
-      if (m) return `https://drive.google.com/thumbnail?id=${m[1]}&sz=w400`;
-      if (link.startsWith("http")) return link;
+      if (m) { setSrc(`https://drive.google.com/thumbnail?id=${m[1]}&sz=w400`); setFallbackTried(true); return; }
+      if (link.startsWith("http")) { setSrc(link); setFallbackTried(true); return; }
     }
-    // Fallback: try local image by item ID
-    if (id) {
-      const ext = id === "C004" ? "jpg" : "png";
-      return `/images/${id}.${ext}`;
-    }
-    return null;
+    setSrc(null);
   };
-  const url = getUrl(item.image, item.id);
-  if (!url || err) {
+
+  if (!src) {
     const icons = { "COFFEE": "☕", "COLD BEVERAGE": "🧊", "SODA": "🫧", "PASTRY": "🍞" };
     return (
       <div style={{ width: size, height: size, display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.5, position: "relative" }}>
@@ -171,7 +174,7 @@ function ProductImage({ item, size = 72 }) {
       </div>
     );
   }
-  return <img src={url} alt={item.name} onError={() => setErr(true)} style={{ width: size, height: size, objectFit: "cover", borderRadius: 10 }} />;
+  return <img src={src} alt={item.name} onError={handleError} style={{ width: size, height: size, objectFit: "cover", borderRadius: 10 }} />;
 }
 
 // ── Leaf decoration SVG ──
