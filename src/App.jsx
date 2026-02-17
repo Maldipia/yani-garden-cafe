@@ -28,29 +28,32 @@ const B = {
 const FONT_SOUL = "'STIX Two Text', 'Georgia', 'Times New Roman', serif";     // Headlines — The Soul
 const FONT_FUNC = "'Montserrat', 'Segoe UI', system-ui, sans-serif";          // Body — The Function
 
+// ── Local image map (bundled in /public/images/) ──
+const IMG = (id, ext = "png") => `/images/${id}.${ext}`;
+
 // ── Menu Data (from your Google Sheet — active items only) ──
 const FALLBACK_MENU = [
   // ── COLD BEVERAGES ──
-  { id: "C001", category: "COLD BEVERAGE", name: "Iced Dark Cocoa Ovaltine", price: 150, isHot: false, isCold: true, image: "https://drive.google.com/thumbnail?id=18CJoLG29dmyM08ItBbm90cYL7rgMbR3X&sz=w400" },
-  { id: "C003", category: "COLD BEVERAGE", name: "Strawberry Sunrise", price: 160, isHot: false, isCold: true, image: "" },
-  { id: "C006", category: "COLD BEVERAGE", name: "Blueberry Milk", price: 170, isHot: false, isCold: true, image: "" },
-  { id: "C008", category: "COLD BEVERAGE", name: "Caramel Macchiato Frappe", price: 180, isHot: false, isCold: true, image: "" },
-  { id: "C009", category: "COLD BEVERAGE", name: "Creamy Double Dutch Frappe", price: 180, isHot: false, isCold: true, image: "" },
-  { id: "C010", category: "COLD BEVERAGE", name: "Lush Oreo Frappe", price: 180, isHot: false, isCold: true, image: "" },
+  { id: "C001", category: "COLD BEVERAGE", name: "Iced Dark Cocoa Ovaltine", price: 150, isHot: false, isCold: true, image: IMG("C001") },
+  { id: "C003", category: "COLD BEVERAGE", name: "Strawberry Sunrise", price: 160, isHot: false, isCold: true, image: IMG("C003") },
+  { id: "C006", category: "COLD BEVERAGE", name: "Blueberry Milk", price: 170, isHot: false, isCold: true, image: IMG("C006") },
+  { id: "C008", category: "COLD BEVERAGE", name: "Caramel Macchiato Frappe", price: 180, isHot: false, isCold: true, image: IMG("C008") },
+  { id: "C009", category: "COLD BEVERAGE", name: "Creamy Double Dutch Frappe", price: 180, isHot: false, isCold: true, image: IMG("C009") },
+  { id: "C010", category: "COLD BEVERAGE", name: "Lush Oreo Frappe", price: 180, isHot: false, isCold: true, image: IMG("C010") },
   // ── COFFEE (Hot & Iced) ──
-  { id: "C004", category: "COFFEE", name: "Coffee Frost", price: 150, isHot: false, isCold: true, image: "" },
-  { id: "C005", category: "COFFEE", name: "Katapang", price: 140, isHot: false, isCold: true, image: "" },
-  { id: "H001", category: "COFFEE", name: "Hot Americano", price: 120, isHot: true, isCold: false, image: "https://drive.google.com/thumbnail?id=1_qRWFyudJNr2iuvoqHB2aKdOQHAUtjv4&sz=w400" },
-  { id: "H002", category: "COFFEE", name: "Hot Spanish Latte", price: 150, isHot: true, isCold: false, image: "https://drive.google.com/thumbnail?id=1SpqufWxmd2ymUFt2MZBJNsKnzx9EQaXX&sz=w400" },
-  { id: "H003", category: "COFFEE", name: "Hot Cafe Mocha", price: 160, isHot: true, isCold: false, image: "https://drive.google.com/thumbnail?id=1zDNpjPO2GMyj4wIVRE-62bHdMUawS6DJ&sz=w400" },
-  { id: "H004", category: "COFFEE", name: "Cinnamon Espresso Latte", price: 130, isHot: true, isCold: false, image: "https://drive.google.com/thumbnail?id=1TLmKhxztfKTtCbLoauelKeRFlWr7ksmW&sz=w400" },
-  { id: "H007", category: "COFFEE", name: "Cinnamon Espresso Choco Latte", price: 130, isHot: true, isCold: false, image: "https://drive.google.com/thumbnail?id=1n6E6W6dcyt87HKPQurORFbi34fdp_-yf&sz=w400" },
+  { id: "C004", category: "COFFEE", name: "Coffee Frost", price: 150, isHot: false, isCold: true, image: IMG("C004", "jpg") },
+  { id: "C005", category: "COFFEE", name: "Katapang", price: 140, isHot: false, isCold: true, image: IMG("C005") },
+  { id: "H001", category: "COFFEE", name: "Hot Americano", price: 120, isHot: true, isCold: false, image: IMG("H001") },
+  { id: "H002", category: "COFFEE", name: "Hot Spanish Latte", price: 150, isHot: true, isCold: false, image: IMG("H002") },
+  { id: "H003", category: "COFFEE", name: "Hot Cafe Mocha", price: 160, isHot: true, isCold: false, image: IMG("H003") },
+  { id: "H004", category: "COFFEE", name: "Cinnamon Espresso Latte", price: 130, isHot: true, isCold: false, image: IMG("H004") },
+  { id: "H007", category: "COFFEE", name: "Cinnamon Espresso Choco Latte", price: 130, isHot: true, isCold: false, image: IMG("H007") },
   // ── PASTRY ──
-  { id: "P001", category: "PASTRY", name: "Banana Bread Loaf", price: 180, isHot: true, isCold: false, image: "https://drive.google.com/thumbnail?id=1xjvUIL6FMvq1jeThM5aqXA8kEoeUKYjN&sz=w400" },
-  { id: "P002", category: "PASTRY", name: "Banana Bread Cupcake", price: 85, isHot: false, isCold: false, image: "https://drive.google.com/thumbnail?id=1w4knbt5QhN9UDokiF3lVMCbBXmgaxOyl&sz=w400" },
+  { id: "P001", category: "PASTRY", name: "Banana Bread Loaf", price: 180, isHot: true, isCold: false, image: IMG("P001") },
+  { id: "P002", category: "PASTRY", name: "Banana Bread Cupcake", price: 85, isHot: false, isCold: false, image: IMG("P002") },
   // ── SODA ──
-  { id: "S001", category: "SODA", name: "Strawberry Soda", price: 120, isHot: false, isCold: true, image: "https://drive.google.com/thumbnail?id=1xsHT4BUfHdtlMLiA3NOCqfhz9bdJIlDk&sz=w400" },
-  { id: "S002", category: "SODA", name: "Blueberry Soda", price: 120, isHot: false, isCold: true, image: "https://drive.google.com/thumbnail?id=15wmHSGqj8o_XIMCb1W7TVwaW4rBUjuF8&sz=w400" },
+  { id: "S001", category: "SODA", name: "Strawberry Soda", price: 120, isHot: false, isCold: true, image: IMG("S001") },
+  { id: "S002", category: "SODA", name: "Blueberry Soda", price: 120, isHot: false, isCold: true, image: IMG("S002") },
 ];
 
 const CATEGORIES = [
@@ -137,13 +140,23 @@ if (!document.querySelector("[data-yani-styles]")) {
 
 function ProductImage({ item, size = 72 }) {
   const [err, setErr] = useState(false);
-  const getUrl = (link) => {
-    if (!link) return null;
-    const m = link.match(/[?&]id=([a-zA-Z0-9_-]+)/) || link.match(/\/d\/([a-zA-Z0-9_-]+)/);
-    if (m) return `https://drive.google.com/thumbnail?id=${m[1]}&sz=w400`;
-    return link;
+  const getUrl = (link, id) => {
+    // Local path (starts with /)
+    if (link && link.startsWith("/")) return link;
+    // Google Drive link
+    if (link) {
+      const m = link.match(/[?&]id=([a-zA-Z0-9_-]+)/) || link.match(/\/d\/([a-zA-Z0-9_-]+)/);
+      if (m) return `https://drive.google.com/thumbnail?id=${m[1]}&sz=w400`;
+      if (link.startsWith("http")) return link;
+    }
+    // Fallback: try local image by item ID
+    if (id) {
+      const ext = id === "C004" ? "jpg" : "png";
+      return `/images/${id}.${ext}`;
+    }
+    return null;
   };
-  const url = getUrl(item.image);
+  const url = getUrl(item.image, item.id);
   if (!url || err) {
     const icons = { "COFFEE": "☕", "COLD BEVERAGE": "🧊", "SODA": "🫧", "PASTRY": "🍞" };
     return (
