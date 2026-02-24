@@ -1,0 +1,15 @@
+{
+  "framework": null,
+  "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/api/pos", "destination": "/api/pos" }
+  ],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store" }
+      ]
+    }
+  ]
+}
