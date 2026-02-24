@@ -1,6 +1,5 @@
 {
   "framework": null,
-  "outputDirectory": "dist",
   "rewrites": [
     { "source": "/api/pos", "destination": "/api/pos" }
   ],
