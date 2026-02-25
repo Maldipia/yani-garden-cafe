@@ -1808,7 +1808,11 @@ function showQRPayment() {
     '</div>';
 
     // Skip option
-    h += '<button class="btn-secondary mt-16" style="width:100%" onclick="closePage(\'payment\');openPage(\'status\');startStatusPolling()">I\'ll pay later · Track Order →</button>';
+    h += '<div style="margin-top:20px;padding:16px;background:var(--mist-light);border-radius:var(--r-md);text-align:center">' +
+      '<div style="font-size:1.2rem;margin-bottom:6px">☕</div>' +
+      '<div style="font-size:.82rem;font-weight:600;color:var(--forest);margin-bottom:4px">Your order is being prepared</div>' +
+      '<div style="font-size:.75rem;color:var(--timber);line-height:1.5">Please complete your payment above.<br>Once verified, your order will be served to your table.</div>' +
+    '</div>';
 
     return h;
   }
