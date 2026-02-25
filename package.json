@@ -1,9 +1,6 @@
 {
-  "name": "yani-cafe",
-  "version": "2.0.0",
+  "name": "yani-garden-cafe-pos",
+  "version": "3.0.0",
   "private": true,
-  "description": "Yani Garden Cafe - QR Self-Order POS System",
-  "scripts": {
-    "build": "mkdir -p dist && cp index.html dist/"
-  }
+  "description": "Yani Garden Cafe QR Self-Order POS"
 }
