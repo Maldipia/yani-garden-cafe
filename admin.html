@@ -189,13 +189,6 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 .empty-icon { font-size:3rem; margin-bottom:12px; opacity:.5 }
 .empty-text { font-size:.88rem }
 
-/* ── Sound toggle ── */
-.sound-toggle {
-  background:none; border:none; color:var(--white); font-size:1.1rem;
-  cursor:pointer; opacity:.7; padding:4px;
-}
-.sound-toggle:hover { opacity:1 }
-
 /* ── Responsive ── */
 @media (max-width:640px) {
   .order-grid { grid-template-columns:1fr }
@@ -224,7 +217,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
     <img class="topbar-logo" src="/images/logo.png" alt="Yani">
     <div class="topbar-title">Order Board</div>
     <div class="topbar-live"><div class="topbar-dot"></div> LIVE</div>
-    <button class="sound-toggle" id="soundBtn" onclick="toggleSound()" title="Toggle notification sound">🔔</button>
+
   </div>
 
   <div class="stats-bar" id="statsBar">
@@ -247,7 +240,6 @@ var POLL_INTERVAL = 5000;
 var pollTimer = null;
 var currentFilter = 'ACTIVE';
 var allOrders = [];
-var soundEnabled = true;
 var lastOrderCount = 0;
 
 var STATUS_CONFIG = {
@@ -325,13 +317,6 @@ function startPolling() {
 async function loadOrders() {
   var result = await api('getOrders');
   if (!result.ok || !result.orders) return;
-
-  // Check for new orders (sound notification)
-  var newOrders = result.orders.filter(function(o){ return o.status === 'NEW' });
-  if (soundEnabled && newOrders.length > lastOrderCount && lastOrderCount > 0) {
-    playNotification();
-  }
-  lastOrderCount = newOrders.length;
 
   allOrders = result.orders;
   renderStats();
@@ -528,37 +513,6 @@ async function updateStatus(orderId, newStatus) {
   } else {
     alert('Failed: ' + (result.error || 'Unknown error'));
   }
-}
-
-// ══════════════════════════════════════════════════════════
-// SOUND
-// ══════════════════════════════════════════════════════════
-function toggleSound() {
-  soundEnabled = !soundEnabled;
-  document.getElementById('soundBtn').textContent = soundEnabled ? '🔔' : '🔕';
-}
-
-function playNotification() {
-  try {
-    var ctx = new (window.AudioContext || window.webkitAudioContext)();
-    var osc = ctx.createOscillator();
-    var gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.frequency.value = 800;
-    gain.gain.value = 0.15;
-    osc.start();
-    osc.stop(ctx.currentTime + 0.15);
-    setTimeout(function(){
-      var osc2 = ctx.createOscillator();
-      var gain2 = ctx.createGain();
-      osc2.connect(gain2); gain2.connect(ctx.destination);
-      osc2.frequency.value = 1000;
-      gain2.gain.value = 0.15;
-      osc2.start();
-      osc2.stop(ctx.currentTime + 0.2);
-    }, 180);
-  } catch(e) {}
 }
 
 // ══════════════════════════════════════════════════════════
