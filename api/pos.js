@@ -4,7 +4,7 @@
 // Handles Apps Script's 302 redirect behavior
 // ══════════════════════════════════════════════════════════════
 
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbytCV-jiFSOoon7Ijww5a-AABRYzhiNZPXVubaaa2zoVBOFxvcgkDH-6e4CfksMA7LC/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyBTbbjyPXM5pceXgj5udmUeXaMVHMxEEHMC58FJIwMnKKjom4oEeJlr7ScSdmADtdH/exec';
 
 export default async function handler(req, res) {
   // CORS headers
