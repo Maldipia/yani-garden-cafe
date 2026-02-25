@@ -189,6 +189,35 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 .empty-icon { font-size:3rem; margin-bottom:12px; opacity:.5 }
 .empty-text { font-size:.88rem }
 
+/* ── Payment Badge ── */
+.oc-payment {
+  display:inline-flex; align-items:center; gap:5px;
+  padding:6px 12px; margin:0 16px 10px; border-radius:var(--r-sm);
+  font-size:.72rem; font-weight:700;
+}
+.oc-payment.submitted { background:#FEF3C7; color:#92400E }
+.oc-payment.verified { background:#D1FAE5; color:#065F46 }
+.oc-payment.none { background:var(--mist-light); color:var(--timber) }
+
+/* ── Quick Links ── */
+.quick-links {
+  display:flex; gap:8px; padding:0 16px 14px; overflow-x:auto;
+}
+.quick-link {
+  display:flex; align-items:center; gap:6px;
+  padding:10px 16px; border-radius:var(--r-md);
+  background:var(--white); border:1.5px solid var(--mist);
+  font-size:.75rem; font-weight:600; color:var(--forest);
+  text-decoration:none; white-space:nowrap;
+  box-shadow:var(--shadow-sm); transition:all .15s;
+}
+.quick-link:hover { border-color:var(--forest); box-shadow:var(--shadow-md) }
+.quick-link-icon { font-size:1rem }
+.quick-link-badge {
+  background:var(--terra); color:#fff; padding:1px 7px;
+  border-radius:10px; font-size:.65rem; font-weight:700;
+}
+
 /* ── Responsive ── */
 @media (max-width:640px) {
   .order-grid { grid-template-columns:1fr }
@@ -224,6 +253,19 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
     <div class="stat-card"><div class="stat-value" id="statSales">₱0</div><div class="stat-label">Today's Sales</div></div>
     <div class="stat-card"><div class="stat-value" id="statOrders">0</div><div class="stat-label">Orders</div></div>
     <div class="stat-card"><div class="stat-value" id="statActive">0</div><div class="stat-label">Active</div></div>
+  </div>
+
+  <div class="quick-links" id="quickLinks">
+    <a class="quick-link" href="https://docs.google.com/spreadsheets/d/14wSvfCy5LUrlgi4d48jcGjnFpy310XYUsCWCg5VMg0g/edit?gid=458543912#gid=458543912" target="_blank">
+      <span class="quick-link-icon">💳</span> Payments Sheet
+      <span class="quick-link-badge" id="pendingCount">0</span>
+    </a>
+    <a class="quick-link" href="https://docs.google.com/spreadsheets/d/14wSvfCy5LUrlgi4d48jcGjnFpy310XYUsCWCg5VMg0g/edit?gid=0#gid=0" target="_blank">
+      <span class="quick-link-icon">📋</span> Orders Sheet
+    </a>
+    <a class="quick-link" href="https://docs.google.com/spreadsheets/d/14wSvfCy5LUrlgi4d48jcGjnFpy310XYUsCWCg5VMg0g/edit?gid=143920344#gid=143920344" target="_blank">
+      <span class="quick-link-icon">📊</span> Daily Sales
+    </a>
   </div>
 
   <div class="filter-bar" id="filterBar"></div>
@@ -340,9 +382,10 @@ function renderStats() {
   todayOrders.forEach(function(o) {
     if (o.status === 'COMPLETED') {
       completed++;
-      // Use items to calculate total if main total is null
       var orderTotal = 0;
-      if (o.items && o.items.length) {
+      if (o.subtotal && typeof o.subtotal === 'number') {
+        orderTotal = o.subtotal + (o.serviceCharge || 0);
+      } else if (o.items && o.items.length) {
         o.items.forEach(function(it){ orderTotal += (it.price || 0) * (it.qty || 1) });
       }
       totalSales += orderTotal;
@@ -355,6 +398,10 @@ function renderStats() {
   document.getElementById('statSales').textContent = '₱' + totalSales.toLocaleString();
   document.getElementById('statOrders').textContent = todayOrders.length;
   document.getElementById('statActive').textContent = active;
+
+  // Count pending payments across all orders
+  var pendingPayments = allOrders.filter(function(o){ return o.paymentStatus === 'SUBMITTED' }).length;
+  document.getElementById('pendingCount').textContent = pendingPayments;
 }
 
 // ══════════════════════════════════════════════════════════
@@ -441,6 +488,7 @@ function renderOrders() {
     html += '<div class="oc-meta">' +
       '<div class="oc-meta-item">🪑 Table ' + esc(String(o.table || '?')) + '</div>' +
       (o.customer ? '<div class="oc-meta-item">👤 ' + esc(o.customer) + '</div>' : '') +
+      (o.orderType ? '<div class="oc-meta-item">' + (o.orderType==='TAKE-OUT'?'🥡':'🍽️') + ' ' + esc(o.orderType) + '</div>' : '') +
       '<div class="oc-meta-item">🕐 ' + esc(time) + '</div>' +
       '<div class="oc-meta-item" style="opacity:.6">' + esc(elapsed) + '</div>' +
     '</div>';
@@ -468,8 +516,23 @@ function renderOrders() {
     }
     html += '</div>';
 
-    // Total
-    html += '<div class="oc-total">₱' + orderTotal.toLocaleString() + '</div>';
+    // Total — prefer subtotal+service from backend, fallback to item sum
+    var displayTotal = orderTotal;
+    if (o.subtotal && typeof o.subtotal === 'number') {
+      displayTotal = o.subtotal + (o.serviceCharge || 0);
+    }
+    var scLine = (o.serviceCharge && typeof o.serviceCharge === 'number' && o.serviceCharge > 0)
+      ? ' <span style="font-size:.7rem;font-weight:500;color:var(--timber)">(incl. ₱' + o.serviceCharge.toLocaleString() + ' svc)</span>' : '';
+    html += '<div class="oc-total">₱' + displayTotal.toLocaleString() + scLine + '</div>';
+
+    // Payment status
+    if (o.paymentStatus === 'SUBMITTED') {
+      html += '<div class="oc-payment submitted">💳 Payment Submitted · Pending Verification</div>';
+    } else if (o.paymentStatus === 'VERIFIED') {
+      html += '<div class="oc-payment verified">✅ Payment Verified</div>';
+    } else {
+      html += '<div class="oc-payment none">⏳ No payment yet</div>';
+    }
 
     // Notes
     if (o.notes && typeof o.notes === 'string' && o.notes.trim()) {
