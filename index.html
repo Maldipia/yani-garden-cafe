@@ -741,6 +741,17 @@ a { color: var(--terra); text-decoration: none }
 }
 .pay-card-copy:active { background:var(--forest); color:#fff }
 
+/* Payment Accordion */
+.pay-accord { background:var(--white); border-radius:var(--r-lg); margin-bottom:10px; box-shadow:var(--shadow-sm); overflow:hidden; cursor:pointer }
+.pay-accord-header { display:flex; align-items:center; gap:10px; padding:14px 16px }
+.pay-accord-info { flex:1 }
+.pay-accord-info strong { display:block; font-size:.88rem }
+.pay-accord-info span { font-size:.72rem; color:var(--timber) }
+.pay-accord-arrow { font-size:.8rem; color:var(--timber); transition:transform .2s }
+.pay-accord.open .pay-accord-arrow { transform:rotate(180deg) }
+.pay-accord-body { display:none; padding:0 16px 16px; cursor:default }
+.pay-accord.open .pay-accord-body { display:block }
+
 /* CTA banner at bottom of Tab 1 */
 .pay-cta-banner {
   background:linear-gradient(135deg,var(--forest),#2d5a50); color:#fff;
@@ -1009,10 +1020,10 @@ const TABLE_TOKENS = {
 // ── PAYMENT QR CODES ────────────────────────────────────
 const PAYMENT_METHODS = [
   { id:'gcash', name:'GCash', icon:'💚', acctName:'LEGERYN PIA', acctNum:'', img:'/images/pay-gcash.jpg' },
-  { id:'instapay', name:'InstaPay', icon:'🏦', acctName:'LEGERYN PIA', acctNum:'', img:'/images/pay-gcash.jpg' },
+  { id:'instapay', name:'InstaPay', icon:'🏦', acctName:'LEGERYN PIA', acctNum:'', img:'/images/pay-instapay.jpg' },
   { id:'bdo', name:'BDO', icon:'🔵', acctName:'LEGERYN PIA', acctNum:'0126-000-62617', img:'/images/pay-bdo.jpg' },
   { id:'bpi', name:'BPI', icon:'🔴', acctName:'LEGERYN PIA', acctNum:'1539-235-628', img:'/images/pay-bpi.png' },
-  { id:'unionbank', name:'UnionBank', icon:'🟠', acctName:'LEGERYN PIA', acctNum:'1093-2100-0528', img:'/images/pay-bpi.png' }
+  { id:'unionbank', name:'UnionBank', icon:'🟠', acctName:'LEGERYN PIA', acctNum:'1093-2100-0528', img:'/images/pay-unionbank.jpg' }
 ];
 
 // ── SUGAR LEVELS ────────────────────────────────────────
@@ -1763,50 +1774,30 @@ function showQRPayment() {
   function renderMethodsTab() {
     var h = '';
 
-    // ── GCash ──
-    h += '<div class="pay-section-title">GCash</div>';
-    var gc = PAYMENT_METHODS.find(function(p){return p.id==='gcash'});
-    h += '<div class="pay-card">' +
-      '<div class="pay-card-header">' +
-        '<div class="pay-card-badge gcash">G</div>' +
-        '<div class="pay-card-label"><strong>GCash</strong><span>' + esc(gc.acctName) + '</span></div>' +
-      '</div>' +
-      '<div class="pay-card-qr"><img src="' + gc.img + '" alt="GCash QR" onerror="this.parentElement.innerHTML=\'<div style=padding:20px;color:var(--timber)>QR unavailable</div>\'"></div>' +
-      '<div class="pay-card-acct">Scan QR to pay via GCash</div>' +
-    '</div>';
+    h += '<div style="font-size:.78rem;color:var(--timber);text-align:center;margin-bottom:16px">Tap a payment method to see its QR code</div>';
 
-    // ── InstaPay ──
-    h += '<div class="pay-section-title">InstaPay</div>';
-    var ip = PAYMENT_METHODS.find(function(p){return p.id==='instapay'});
-    h += '<div class="pay-card">' +
-      '<div class="pay-card-header">' +
-        '<div class="pay-card-badge instapay">IP</div>' +
-        '<div class="pay-card-label"><strong>InstaPay</strong><span>' + esc(ip.acctName) + '</span></div>' +
-      '</div>' +
-      '<div class="pay-card-qr"><img src="' + ip.img + '" alt="InstaPay QR" onerror="this.parentElement.innerHTML=\'<div style=padding:20px;color:var(--timber)>QR unavailable</div>\'"></div>' +
-      '<div class="pay-card-acct">Scan QR to pay via any InstaPay bank</div>' +
-    '</div>';
-
-    // ── Bank Transfer ──
-    h += '<div class="pay-section-title">Bank Transfer</div>';
-    var banks = [
-      { id:'bdo', badge:'BDO', cls:'bdo' },
-      { id:'bpi', badge:'BPI', cls:'bpi' },
-      { id:'unionbank', badge:'UB', cls:'union' }
+    // Build accordion items
+    var methods = [
+      { id:'gcash', badge:'G', cls:'gcash', label:'GCash', desc:'Scan with GCash app' },
+      { id:'instapay', badge:'IP', cls:'instapay', label:'InstaPay', desc:'Any InstaPay-enabled bank' },
+      { id:'bdo', badge:'BDO', cls:'bdo', label:'BDO', desc:'BDO bank transfer' },
+      { id:'bpi', badge:'BPI', cls:'bpi', label:'BPI', desc:'BPI bank transfer' },
+      { id:'unionbank', badge:'UB', cls:'union', label:'UnionBank', desc:'UnionBank transfer' }
     ];
-    banks.forEach(function(b) {
-      var pm = PAYMENT_METHODS.find(function(p){return p.id===b.id});
-      h += '<div class="pay-card">' +
-        '<div class="pay-card-header">' +
-          '<div class="pay-card-badge ' + b.cls + '">' + b.badge + '</div>' +
-          '<div class="pay-card-label"><strong>' + esc(pm.name) + '</strong><span>' + esc(pm.acctName) + '</span></div>' +
+
+    methods.forEach(function(m) {
+      var pm = PAYMENT_METHODS.find(function(p){return p.id===m.id});
+      h += '<div class="pay-accord" id="payAccord_' + m.id + '" onclick="togglePayAccord(\'' + m.id + '\')">' +
+        '<div class="pay-accord-header">' +
+          '<div class="pay-card-badge ' + m.cls + '">' + m.badge + '</div>' +
+          '<div class="pay-accord-info"><strong>' + m.label + '</strong><span>' + esc(pm.acctName) + (pm.acctNum ? ' · ' + pm.acctNum : '') + '</span></div>' +
+          '<div class="pay-accord-arrow">▾</div>' +
         '</div>' +
-        '<div class="pay-card-qr"><img src="' + pm.img + '" alt="' + esc(pm.name) + ' QR" onerror="this.parentElement.innerHTML=\'<div style=padding:20px;color:var(--timber)>QR unavailable</div>\'"></div>' +
-        '<div class="pay-card-acct">' +
-          '<strong>' + esc(pm.acctName) + '</strong>' +
-          (pm.acctNum ? '<div>' + esc(pm.acctNum) + ' <button class="pay-card-copy" onclick="copyAcct(\'' + pm.acctNum + '\',this)">📋 Copy</button></div>' : '') +
+        '<div class="pay-accord-body" id="payBody_' + m.id + '">' +
+          '<div class="pay-card-qr"><img src="' + pm.img + '" alt="' + m.label + ' QR" onerror="this.parentElement.innerHTML=\'<div style=padding:20px;color:var(--timber)>QR unavailable</div>\'"></div>' +
+          (pm.acctNum ? '<div style="text-align:center;margin-top:8px"><span style="font-size:.82rem;color:var(--timber)">' + esc(pm.acctNum) + '</span> <button class="pay-card-copy" onclick="event.stopPropagation();copyAcct(\'' + pm.acctNum + '\',this)">📋 Copy</button></div>' : '') +
+          '<div style="font-size:.72rem;color:var(--timber);text-align:center;margin-top:6px">' + m.desc + '</div>' +
         '</div>' +
-        '<div style="font-size:.72rem;color:var(--timber);margin-top:4px">Scan QR to pay via InstaPay</div>' +
       '</div>';
     });
 
@@ -1965,6 +1956,16 @@ function copyAcct(num, btn) {
     btn.innerHTML = '✅ Copied!';
     setTimeout(function(){ btn.innerHTML = orig }, 1500);
   });
+}
+
+function togglePayAccord(id) {
+  var el = document.getElementById('payAccord_' + id);
+  if (!el) return;
+  var wasOpen = el.classList.contains('open');
+  // Close all
+  document.querySelectorAll('.pay-accord').forEach(function(a) { a.classList.remove('open') });
+  // Toggle clicked
+  if (!wasOpen) el.classList.add('open');
 }
 
 async function submitPaymentProof() {
