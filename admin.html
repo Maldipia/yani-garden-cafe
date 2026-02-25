@@ -120,6 +120,9 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 .order-card[data-status="READY"] { border-left-color:#10B981 }
 .order-card[data-status="COMPLETED"] { border-left-color:var(--mist) }
 .order-card[data-status="CANCELLED"] { border-left-color:#EF4444; opacity:.6 }
+.order-card[data-platform="GRAB"] { border-right:4px solid #00B14F }
+.order-card[data-platform="FOODPANDA"] { border-right:4px solid #D70246 }
+.order-card[data-platform="OTHER"] { border-right:4px solid #6366F1 }
 
 .oc-header {
   display:flex; align-items:center; gap:10px; padding:14px 16px 10px;
@@ -287,6 +290,152 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
   .stats-bar { margin:12px }
   .stat-value { font-size:1.2rem }
 }
+
+/* ── Platform Badge on Order Cards ── */
+.oc-platform-badge {
+  display:inline-flex; align-items:center; gap:4px;
+  padding:3px 10px; border-radius:12px; font-size:.68rem; font-weight:700;
+  text-transform:uppercase; letter-spacing:.3px;
+}
+.oc-platform-badge.grab { background:#00B14F20; color:#00B14F }
+.oc-platform-badge.foodpanda { background:#D7024620; color:#D70246 }
+.oc-platform-badge.other { background:#6366F120; color:#6366F1 }
+.oc-platform-ref { font-size:.7rem; color:var(--timber); padding:0 16px 6px }
+
+/* ── Platform Order Modal ── */
+.po-overlay {
+  position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:200;
+  display:none; align-items:flex-end; justify-content:center;
+}
+.po-overlay.open { display:flex }
+.po-modal {
+  background:var(--cream); width:100%; max-width:600px; max-height:92vh;
+  border-radius:var(--r-xl) var(--r-xl) 0 0;
+  display:flex; flex-direction:column; overflow:hidden;
+  box-shadow:0 -4px 30px rgba(0,0,0,.25);
+}
+.po-header {
+  background:var(--forest); color:#fff; padding:16px 20px;
+  display:flex; align-items:center; gap:12px;
+}
+.po-header-title { flex:1; font-family:var(--font-soul); font-size:1.1rem; font-weight:700 }
+.po-close { background:none; border:none; color:#fff; font-size:1.5rem; cursor:pointer; padding:4px }
+.po-body { flex:1; overflow-y:auto; padding:16px }
+
+/* Platform selector */
+.po-platforms { display:flex; gap:8px; margin-bottom:16px }
+.po-plat-btn {
+  flex:1; padding:12px 8px; border-radius:var(--r-md); border:2px solid var(--mist);
+  background:var(--white); font-family:var(--font-body); font-size:.8rem; font-weight:700;
+  cursor:pointer; text-align:center; transition:all .15s;
+}
+.po-plat-btn.active { border-color:var(--forest); background:var(--forest); color:#fff }
+.po-plat-btn .po-plat-icon { font-size:1.3rem; display:block; margin-bottom:4px }
+
+/* Ref input */
+.po-ref-row { display:flex; gap:8px; margin-bottom:16px; align-items:center }
+.po-ref-input {
+  flex:1; padding:10px 14px; border:1.5px solid var(--mist); border-radius:var(--r-md);
+  font-family:var(--font-body); font-size:.85rem; outline:none;
+}
+.po-ref-input:focus { border-color:var(--forest) }
+
+/* Menu categories */
+.po-cats { display:flex; gap:6px; margin-bottom:12px; overflow-x:auto; padding-bottom:4px }
+.po-cat-btn {
+  padding:6px 14px; border-radius:16px; font-size:.72rem; font-weight:700;
+  border:1.5px solid var(--mist); background:var(--white); color:var(--timber);
+  cursor:pointer; white-space:nowrap; font-family:var(--font-body);
+}
+.po-cat-btn.active { background:var(--terra); color:#fff; border-color:var(--terra) }
+
+/* Menu items grid */
+.po-menu-grid {
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(160px, 1fr)); gap:8px;
+  margin-bottom:16px;
+}
+.po-menu-item {
+  background:var(--white); border-radius:var(--r-md); padding:10px; cursor:pointer;
+  border:1.5px solid var(--mist); transition:all .15s;
+}
+.po-menu-item:active { transform:scale(.97) }
+.po-menu-item-name { font-size:.78rem; font-weight:600; color:var(--forest) }
+.po-menu-item-price { font-size:.72rem; color:var(--terra); font-weight:700; margin-top:2px }
+.po-menu-item-cat { font-size:.62rem; color:var(--timber); text-transform:uppercase }
+
+/* Size/Sugar popup */
+.po-popup {
+  position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:250;
+  display:none; align-items:center; justify-content:center;
+}
+.po-popup.open { display:flex }
+.po-popup-box {
+  background:var(--white); border-radius:var(--r-xl); padding:24px; width:90%; max-width:340px;
+  box-shadow:0 12px 40px rgba(0,0,0,.2);
+}
+.po-popup-title { font-family:var(--font-soul); font-size:1rem; font-weight:700; margin-bottom:4px }
+.po-popup-sub { font-size:.78rem; color:var(--timber); margin-bottom:16px }
+.po-option {
+  display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:var(--r-md);
+  border:1.5px solid var(--mist); margin-bottom:6px; cursor:pointer; transition:all .15s;
+}
+.po-option:hover { border-color:var(--forest-light) }
+.po-option.selected { border-color:var(--forest); background:var(--forest); color:#fff }
+.po-option-label { flex:1; font-size:.82rem; font-weight:600 }
+.po-option-price { font-size:.78rem; font-weight:700 }
+.po-popup-btn {
+  width:100%; padding:12px; border:none; border-radius:var(--r-md); margin-top:12px;
+  background:var(--forest); color:#fff; font-size:.85rem; font-weight:700;
+  cursor:pointer; font-family:var(--font-body);
+}
+
+/* Cart */
+.po-cart { background:var(--white); border-radius:var(--r-lg); padding:14px; margin-bottom:12px }
+.po-cart-title { font-size:.78rem; font-weight:700; color:var(--timber); margin-bottom:8px }
+.po-cart-item {
+  display:flex; align-items:center; gap:8px; padding:6px 0;
+  border-bottom:1px solid var(--mist-light); font-size:.78rem;
+}
+.po-cart-item:last-child { border-bottom:none }
+.po-cart-item-name { flex:1; font-weight:600; color:var(--forest) }
+.po-cart-item-opts { font-size:.68rem; color:var(--terra) }
+.po-cart-item-price { font-weight:700; color:var(--terra) }
+.po-cart-qty {
+  display:flex; align-items:center; gap:4px;
+}
+.po-cart-qty button {
+  width:24px; height:24px; border-radius:6px; border:1px solid var(--mist);
+  background:var(--white); cursor:pointer; font-weight:700; font-size:.8rem;
+}
+.po-cart-remove { color:#EF4444; cursor:pointer; font-size:.9rem }
+
+/* Cart footer */
+.po-cart-footer {
+  background:var(--white); padding:14px 20px; border-top:2px solid var(--mist);
+}
+.po-cart-total {
+  display:flex; justify-content:space-between; font-size:1rem; font-weight:700;
+  color:var(--forest); margin-bottom:10px;
+}
+.po-submit-btn {
+  width:100%; padding:14px; border:none; border-radius:var(--r-md);
+  background:var(--forest); color:#fff; font-size:.92rem; font-weight:700;
+  cursor:pointer; font-family:var(--font-body);
+}
+.po-submit-btn:disabled { opacity:.4; cursor:not-allowed }
+.po-submit-btn:active:not(:disabled) { background:var(--forest-light) }
+
+/* Fab Button */
+.fab-platform {
+  position:fixed; bottom:24px; right:24px; z-index:150;
+  width:56px; height:56px; border-radius:50%;
+  background:var(--terra); color:#fff; border:none;
+  font-size:1.5rem; cursor:pointer;
+  box-shadow:0 4px 16px rgba(196,112,75,.4);
+  display:flex; align-items:center; justify-content:center;
+  transition:transform .15s;
+}
+.fab-platform:active { transform:scale(.92) }
 </style>
 </head>
 <body>
@@ -340,6 +489,69 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
     <div class="order-grid" id="payGrid"></div>
   </div>
 
+  <!-- FAB: New Platform Order -->
+  <button class="fab-platform" onclick="openPlatformOrder()" title="New Platform Order">+</button>
+
+</div>
+
+<!-- ═══════════════ PLATFORM ORDER MODAL ═══════════════ -->
+<div class="po-overlay" id="poOverlay">
+  <div class="po-modal">
+    <div class="po-header">
+      <div class="po-header-title">📦 New Platform Order</div>
+      <button class="po-close" onclick="closePlatformOrder()">&times;</button>
+    </div>
+    <div class="po-body" id="poBody">
+      <!-- Platform selector -->
+      <div class="po-platforms" id="poPlatforms">
+        <button class="po-plat-btn active" data-platform="GRAB" onclick="selectPlatform('GRAB')">
+          <span class="po-plat-icon">🟢</span>Grab
+        </button>
+        <button class="po-plat-btn" data-platform="FOODPANDA" onclick="selectPlatform('FOODPANDA')">
+          <span class="po-plat-icon">🟠</span>FoodPanda
+        </button>
+        <button class="po-plat-btn" data-platform="OTHER" onclick="selectPlatform('OTHER')">
+          <span class="po-plat-icon">🟣</span>Other
+        </button>
+      </div>
+
+      <!-- Ref input -->
+      <div class="po-ref-row">
+        <input class="po-ref-input" id="poRef" placeholder="Platform Order # (e.g. GF-8842)" />
+      </div>
+
+      <!-- Notes input -->
+      <div class="po-ref-row">
+        <input class="po-ref-input" id="poNotes" placeholder="Notes (optional)" />
+      </div>
+
+      <!-- Category tabs -->
+      <div class="po-cats" id="poCats"></div>
+
+      <!-- Menu grid -->
+      <div class="po-menu-grid" id="poMenuGrid"></div>
+
+      <!-- Cart -->
+      <div class="po-cart" id="poCart" style="display:none">
+        <div class="po-cart-title">🛒 Cart</div>
+        <div id="poCartItems"></div>
+      </div>
+    </div>
+
+    <!-- Cart footer with total + submit -->
+    <div class="po-cart-footer" id="poFooter" style="display:none">
+      <div class="po-cart-total">
+        <span>Total</span>
+        <span id="poTotal">₱0</span>
+      </div>
+      <button class="po-submit-btn" id="poSubmitBtn" onclick="submitPlatformOrder()">📦 Place Platform Order</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ SIZE/SUGAR POPUP ═══════════════ -->
+<div class="po-popup" id="poPopup">
+  <div class="po-popup-box" id="poPopupBox"></div>
 </div>
 
 <script>
@@ -481,11 +693,12 @@ function renderStats() {
 // FILTERS
 // ══════════════════════════════════════════════════════════
 function renderFilters() {
-  var counts = { ALL:0, ACTIVE:0, NEW:0, PREPARING:0, READY:0, COMPLETED:0, CANCELLED:0 };
+  var counts = { ALL:0, ACTIVE:0, NEW:0, PREPARING:0, READY:0, COMPLETED:0, CANCELLED:0, PLATFORM:0 };
   allOrders.forEach(function(o) {
     counts.ALL++;
     counts[o.status] = (counts[o.status] || 0) + 1;
     if (o.status === 'NEW' || o.status === 'PREPARING' || o.status === 'READY') counts.ACTIVE++;
+    if (o.platform) counts.PLATFORM++;
   });
 
   var tabs = [
@@ -494,6 +707,7 @@ function renderFilters() {
     { key:'PREPARING', label:'👨‍🍳 Preparing', count:counts.PREPARING },
     { key:'READY', label:'✨ Ready', count:counts.READY },
     { key:'COMPLETED', label:'🎉 Done', count:counts.COMPLETED },
+    { key:'PLATFORM', label:'📦 Platform', count:counts.PLATFORM },
     { key:'ALL', label:'All', count:counts.ALL },
     { key:'PAYMENTS', label:'💳 Payments', count:pendingPayCount }
   ];
@@ -526,6 +740,7 @@ function renderOrders() {
   var filtered = allOrders.filter(function(o) {
     if (currentFilter === 'ALL') return true;
     if (currentFilter === 'ACTIVE') return o.status === 'NEW' || o.status === 'PREPARING' || o.status === 'READY';
+    if (currentFilter === 'PLATFORM') return !!o.platform;
     return o.status === currentFilter;
   });
 
@@ -559,19 +774,37 @@ function renderOrders() {
       else elapsed = Math.floor(mins/60) + 'h ' + (mins%60) + 'm ago';
     } catch(e) {}
 
-    var html = '<div class="order-card" data-status="' + o.status + '">';
+    var html = '<div class="order-card" data-status="' + o.status + '"' + (o.platform ? ' data-platform="' + esc(o.platform) + '"' : '') + '>';
 
     // Header
     html += '<div class="oc-header">' +
-      '<div class="oc-id">' + esc(o.orderId) + '</div>' +
-      '<span class="oc-status-badge ' + cfg.badge + '">' + cfg.icon + ' ' + cfg.label + '</span>' +
+      '<div class="oc-id">' + esc(o.orderId) + '</div>';
+    
+    // Platform badge (if platform order)
+    if (o.platform) {
+      var platClass = o.platform === 'GRAB' ? 'grab' : (o.platform === 'FOODPANDA' ? 'foodpanda' : 'other');
+      var platIcon = o.platform === 'GRAB' ? '🟢' : (o.platform === 'FOODPANDA' ? '🟠' : '🟣');
+      html += '<span class="oc-platform-badge ' + platClass + '">' + platIcon + ' ' + esc(o.platform) + '</span>';
+    }
+    
+    html += '<span class="oc-status-badge ' + cfg.badge + '">' + cfg.icon + ' ' + cfg.label + '</span>' +
     '</div>';
 
+    // Platform ref (if exists)
+    if (o.platformRef) {
+      html += '<div class="oc-platform-ref">📦 Ref: ' + esc(o.platformRef) + '</div>';
+    }
+
     // Meta
+    var isPlatform = !!o.platform;
+    var tableLabel = isPlatform ? '📦 ' + esc(o.platform) : '🪑 Table ' + esc(String(o.table || '?'));
+    var typeIcon = isPlatform ? '🚴' : (o.orderType==='TAKE-OUT'?'🥡':'🍽️');
+    var typeLabel = isPlatform ? 'Rider Pickup' : esc(o.orderType || '');
+    
     html += '<div class="oc-meta">' +
-      '<div class="oc-meta-item">🪑 Table ' + esc(String(o.table || '?')) + '</div>' +
+      '<div class="oc-meta-item">' + tableLabel + '</div>' +
       (o.customer ? '<div class="oc-meta-item">👤 ' + esc(o.customer) + '</div>' : '') +
-      (o.orderType ? '<div class="oc-meta-item">' + (o.orderType==='TAKE-OUT'?'🥡':'🍽️') + ' ' + esc(o.orderType) + '</div>' : '') +
+      '<div class="oc-meta-item">' + typeIcon + ' ' + typeLabel + '</div>' +
       '<div class="oc-meta-item">🕐 ' + esc(time) + '</div>' +
       '<div class="oc-meta-item" style="opacity:.6">' + esc(elapsed) + '</div>' +
     '</div>';
@@ -609,7 +842,9 @@ function renderOrders() {
     html += '<div class="oc-total">₱' + displayTotal.toLocaleString() + scLine + '</div>';
 
     // Payment status
-    if (o.paymentStatus === 'SUBMITTED') {
+    if (o.paymentStatus === 'PLATFORM_PAID') {
+      html += '<div class="oc-payment verified">📦 Platform Handles Payment</div>';
+    } else if (o.paymentStatus === 'SUBMITTED') {
       html += '<div class="oc-payment submitted">💳 Payment Submitted · Pending Verification</div>';
     } else if (o.paymentStatus === 'VERIFIED') {
       html += '<div class="oc-payment verified">✅ Payment Verified</div>';
@@ -858,6 +1093,267 @@ async function doRejectPayment(paymentId) {
     }
   } else {
     alert('Failed: ' + (result.error || 'Unknown error'));
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// PLATFORM ORDER FLOW
+// ══════════════════════════════════════════════════════════
+var poMenuItems = [];
+var poCart = [];
+var poSelectedPlatform = 'GRAB';
+var poSelectedCat = 'ALL';
+var poAddingItem = null;  // item being configured (size/sugar)
+
+function openPlatformOrder() {
+  poCart = [];
+  poSelectedPlatform = 'GRAB';
+  poSelectedCat = 'ALL';
+  document.getElementById('poRef').value = '';
+  document.getElementById('poNotes').value = '';
+  document.getElementById('poOverlay').classList.add('open');
+  selectPlatform('GRAB');
+  loadPlatformMenu();
+}
+
+function closePlatformOrder() {
+  document.getElementById('poOverlay').classList.remove('open');
+}
+
+function selectPlatform(p) {
+  poSelectedPlatform = p;
+  var btns = document.querySelectorAll('.po-plat-btn');
+  btns.forEach(function(btn) {
+    btn.classList.toggle('active', btn.getAttribute('data-platform') === p);
+  });
+}
+
+async function loadPlatformMenu() {
+  var result = await api('getMenu', {});
+  if (!result.ok || !result.items) return;
+  poMenuItems = result.items;
+  renderPoCats();
+  renderPoMenu();
+}
+
+function renderPoCats() {
+  var cats = ['ALL'];
+  poMenuItems.forEach(function(it) {
+    if (it.category && cats.indexOf(it.category) < 0) cats.push(it.category);
+  });
+  document.getElementById('poCats').innerHTML = cats.map(function(c) {
+    return '<button class="po-cat-btn' + (poSelectedCat===c?' active':'') + '" onclick="setPoCategory(\'' + esc(c) + '\')">' +
+      (c === 'ALL' ? '🍽️ All' : esc(c)) + '</button>';
+  }).join('');
+}
+
+function setPoCategory(c) {
+  poSelectedCat = c;
+  renderPoCats();
+  renderPoMenu();
+}
+
+function renderPoMenu() {
+  var filtered = poMenuItems.filter(function(it) {
+    if (poSelectedCat === 'ALL') return true;
+    return it.category === poSelectedCat;
+  });
+
+  document.getElementById('poMenuGrid').innerHTML = filtered.map(function(it, idx) {
+    var priceStr = it.hasSizes ? ('₱' + it.priceShort + ' - ₱' + it.priceTall) : ('₱' + it.price);
+    return '<div class="po-menu-item" onclick="poAddItem(\'' + esc(it.code) + '\')">' +
+      '<div class="po-menu-item-cat">' + esc(it.category || '') + '</div>' +
+      '<div class="po-menu-item-name">' + esc(it.name) + '</div>' +
+      '<div class="po-menu-item-price">' + priceStr + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function poAddItem(code) {
+  var item = poMenuItems.find(function(it) { return it.code === code });
+  if (!item) return;
+
+  poAddingItem = {
+    code: item.code,
+    name: item.name,
+    hasSizes: item.hasSizes,
+    hasSugar: item.hasSugar,
+    price: item.price,
+    priceShort: item.priceShort,
+    priceMedium: item.priceMedium,
+    priceTall: item.priceTall,
+    size: '',
+    sugarLevel: '',
+    qty: 1
+  };
+
+  // If has sizes → show size popup
+  if (item.hasSizes) {
+    showSizePopup();
+  } else if (item.hasSugar) {
+    showSugarPopup();
+  } else {
+    // No options — add directly
+    poFinishAdd();
+  }
+}
+
+function showSizePopup() {
+  var it = poAddingItem;
+  var html = '<div class="po-popup-title">' + esc(it.name) + '</div>'
+    + '<div class="po-popup-sub">Choose size</div>'
+    + '<div class="po-option" onclick="poSelectSize(\'Short\',' + it.priceShort + ')">'
+    +   '<span class="po-option-label">Short (12oz)</span><span class="po-option-price">₱' + it.priceShort + '</span>'
+    + '</div>'
+    + '<div class="po-option" onclick="poSelectSize(\'Medium\',' + it.priceMedium + ')">'
+    +   '<span class="po-option-label">Medium (16oz)</span><span class="po-option-price">₱' + it.priceMedium + '</span>'
+    + '</div>'
+    + '<div class="po-option" onclick="poSelectSize(\'Tall\',' + it.priceTall + ')">'
+    +   '<span class="po-option-label">Tall (22oz)</span><span class="po-option-price">₱' + it.priceTall + '</span>'
+    + '</div>';
+
+  document.getElementById('poPopupBox').innerHTML = html;
+  document.getElementById('poPopup').classList.add('open');
+}
+
+function poSelectSize(size, price) {
+  poAddingItem.size = size;
+  poAddingItem.price = price;
+  document.getElementById('poPopup').classList.remove('open');
+
+  if (poAddingItem.hasSugar) {
+    setTimeout(showSugarPopup, 200);
+  } else {
+    poFinishAdd();
+  }
+}
+
+function showSugarPopup() {
+  var it = poAddingItem;
+  var sizeLabel = it.size ? ' · ' + it.size : '';
+  var html = '<div class="po-popup-title">' + esc(it.name) + '</div>'
+    + '<div class="po-popup-sub">₱' + it.price + sizeLabel + ' — Choose sugar level</div>'
+    + '<div class="po-option" onclick="poSelectSugar(\'Grounded\')"><span class="po-option-label">Grounded (25%)</span></div>'
+    + '<div class="po-option" onclick="poSelectSugar(\'YANI\')"><span class="po-option-label">YANI (50%) — Signature</span></div>'
+    + '<div class="po-option" onclick="poSelectSugar(\'Comfort\')"><span class="po-option-label">Comfort (75%)</span></div>'
+    + '<div class="po-option" onclick="poSelectSugar(\'Full Sweet\')"><span class="po-option-label">Full Sweet (100%)</span></div>';
+
+  document.getElementById('poPopupBox').innerHTML = html;
+  document.getElementById('poPopup').classList.add('open');
+}
+
+function poSelectSugar(level) {
+  poAddingItem.sugarLevel = level;
+  document.getElementById('poPopup').classList.remove('open');
+  poFinishAdd();
+}
+
+function poFinishAdd() {
+  // Check if same item+size+sugar exists in cart → increment qty
+  var existing = poCart.find(function(c) {
+    return c.code === poAddingItem.code && c.size === poAddingItem.size && c.sugarLevel === poAddingItem.sugarLevel;
+  });
+
+  if (existing) {
+    existing.qty++;
+  } else {
+    poCart.push({
+      code: poAddingItem.code,
+      name: poAddingItem.name,
+      size: poAddingItem.size,
+      sugarLevel: poAddingItem.sugarLevel,
+      price: poAddingItem.price,
+      qty: 1
+    });
+  }
+
+  poAddingItem = null;
+  renderPoCart();
+}
+
+function renderPoCart() {
+  var cartEl = document.getElementById('poCart');
+  var footerEl = document.getElementById('poFooter');
+
+  if (poCart.length === 0) {
+    cartEl.style.display = 'none';
+    footerEl.style.display = 'none';
+    return;
+  }
+
+  cartEl.style.display = '';
+  footerEl.style.display = '';
+
+  var total = 0;
+  var html = '';
+  poCart.forEach(function(c, idx) {
+    var lineTotal = c.price * c.qty;
+    total += lineTotal;
+    var opts = [];
+    if (c.size) opts.push(c.size);
+    if (c.sugarLevel) opts.push(c.sugarLevel);
+
+    html += '<div class="po-cart-item">'
+      + '<div style="flex:1">'
+      +   '<div class="po-cart-item-name">' + esc(c.name) + '</div>'
+      +   (opts.length ? '<div class="po-cart-item-opts">' + esc(opts.join(' · ')) + '</div>' : '')
+      + '</div>'
+      + '<div class="po-cart-qty">'
+      +   '<button onclick="poCartQty(' + idx + ',-1)">−</button>'
+      +   '<span style="min-width:20px;text-align:center;font-weight:700;font-size:.8rem">' + c.qty + '</span>'
+      +   '<button onclick="poCartQty(' + idx + ',1)">+</button>'
+      + '</div>'
+      + '<div class="po-cart-item-price">₱' + lineTotal.toLocaleString() + '</div>'
+      + '<span class="po-cart-remove" onclick="poCartRemove(' + idx + ')">🗑</span>'
+      + '</div>';
+  });
+
+  document.getElementById('poCartItems').innerHTML = html;
+  document.getElementById('poTotal').textContent = '₱' + total.toLocaleString();
+}
+
+function poCartQty(idx, delta) {
+  poCart[idx].qty += delta;
+  if (poCart[idx].qty < 1) poCart.splice(idx, 1);
+  renderPoCart();
+}
+
+function poCartRemove(idx) {
+  poCart.splice(idx, 1);
+  renderPoCart();
+}
+
+async function submitPlatformOrder() {
+  if (poCart.length === 0) return alert('Cart is empty');
+
+  var btn = document.getElementById('poSubmitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Placing order...';
+
+  var items = poCart.map(function(c) {
+    return { code: c.code, size: c.size, sugarLevel: c.sugarLevel, qty: c.qty };
+  });
+
+  var result = await api('placePlatformOrder', {
+    platform: poSelectedPlatform,
+    platformRef: document.getElementById('poRef').value.trim(),
+    notes: document.getElementById('poNotes').value.trim(),
+    items: items
+  });
+
+  btn.disabled = false;
+  btn.textContent = '📦 Place Platform Order';
+
+  if (result.ok) {
+    closePlatformOrder();
+    // Refresh orders
+    loadOrders();
+    alert('✅ ' + poSelectedPlatform + ' order placed!\n\nOrder: ' + result.orderId +
+      '\nTotal: ₱' + Number(result.total).toLocaleString() +
+      (result.commissionRate > 0 ? '\nCommission: ' + result.commissionRate + '% = ₱' + Number(result.commissionAmt).toLocaleString() : '') +
+      (result.platformRef ? '\nRef: ' + result.platformRef : ''));
+  } else {
+    alert('❌ Failed: ' + (result.error || 'Unknown error'));
   }
 }
 </script>
