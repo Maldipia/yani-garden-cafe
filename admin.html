@@ -757,16 +757,46 @@ function renderPayCards() {
       '<span class="pay-status ' + statusClass + '">' + esc(p.status) + '</span>' +
     '</div>';
 
-    // Meta
+    // Meta row 1: Order + Table + Time
     html += '<div class="pay-meta">' +
       '<div class="pay-meta-item">📋 ' + esc(p.orderId) + '</div>' +
       '<div class="pay-meta-item">🪑 Table ' + esc(String(p.tableNo || '?')) + '</div>' +
-      (p.customerName ? '<div class="pay-meta-item">👤 ' + esc(p.customerName) + '</div>' : '') +
       '<div class="pay-meta-item">🕐 ' + esc(timeStr) + '</div>' +
     '</div>';
 
+    // Customer details section
+    var custName = p.customerNameFull || p.customerName || '';
+    if (custName || p.customerAddress || p.customerTin || p.receiptEmail) {
+      html += '<div style="padding:0 16px 8px;font-size:.75rem;border-top:1px solid var(--mist-light);margin:0 0 0;padding-top:8px;">';
+      if (custName) html += '<div style="color:var(--forest);font-weight:600;">👤 ' + esc(custName) + '</div>';
+      if (p.customerAddress) html += '<div style="color:var(--timber);margin-top:2px;">📍 ' + esc(p.customerAddress) + '</div>';
+      if (p.customerTin) html += '<div style="color:var(--timber);margin-top:2px;">🏢 TIN: ' + esc(p.customerTin) + '</div>';
+      if (p.receiptEmail) html += '<div style="color:var(--timber);margin-top:2px;">📧 ' + esc(p.receiptEmail) + '</div>';
+      html += '</div>';
+    }
+
     // Amount
     html += '<div class="pay-amount">₱' + Number(p.amount || 0).toLocaleString(undefined,{minimumFractionDigits:2}) + '</div>';
+
+    // Receipt info
+    if (p.receiptRequested === 'TRUE' || p.receiptType) {
+      var rType = p.receiptType ? p.receiptType.toUpperCase() : '';
+      var rDel = p.receiptDelivery ? p.receiptDelivery.toUpperCase() : '';
+      var rStatus = p.receiptStatus || '';
+      
+      var rBadgeColor = rStatus === 'SENT' ? '#D1FAE5;color:#065F46' : (rStatus === 'SENT_TO_CAFE' ? '#FEF3C7;color:#92400E' : '#F3F0EB;color:var(--timber)');
+      
+      html += '<div style="padding:4px 16px 10px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;">';
+      html += '<span style="padding:2px 8px;border-radius:8px;font-size:.68rem;font-weight:700;background:#EDE9FE;color:#6D28D9;">🧾 ' + esc(rType || 'RECEIPT') + '</span>';
+      if (rDel) html += '<span style="padding:2px 8px;border-radius:8px;font-size:.68rem;font-weight:600;background:#F3F0EB;color:var(--timber);">' + (rDel === 'EMAIL' ? '📧' : '🖨️') + ' ' + esc(rDel) + '</span>';
+      if (rStatus) html += '<span style="padding:2px 8px;border-radius:8px;font-size:.68rem;font-weight:600;background:' + rBadgeColor + ';">' + esc(rStatus) + '</span>';
+      html += '</div>';
+      
+      // Receipt file link
+      if (p.receiptFileUrl) {
+        html += '<div style="padding:0 16px 8px;"><a href="' + esc(p.receiptFileUrl) + '" target="_blank" style="font-size:.72rem;color:var(--forest);font-weight:600;text-decoration:none;">📄 View Receipt PDF</a></div>';
+      }
+    }
 
     // Screenshot link
     if (p.fileUrl) {
