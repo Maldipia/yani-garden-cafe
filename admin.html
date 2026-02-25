@@ -218,6 +218,69 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
   border-radius:10px; font-size:.65rem; font-weight:700;
 }
 
+/* ── Payment Management Cards ── */
+.pay-card {
+  background:var(--white); border-radius:var(--r-lg); overflow:hidden;
+  box-shadow:var(--shadow-sm); border-left:4px solid #F59E0B;
+  transition:box-shadow .2s;
+}
+.pay-card:hover { box-shadow:var(--shadow-md) }
+.pay-card.verified { border-left-color:#10B981; opacity:.7 }
+.pay-card.rejected { border-left-color:#EF4444; opacity:.5 }
+.pay-header {
+  display:flex; align-items:center; gap:10px; padding:14px 16px 8px;
+}
+.pay-id { font-family:var(--font-soul); font-size:.95rem; font-weight:700; flex:1 }
+.pay-status {
+  padding:3px 10px; border-radius:12px; font-size:.68rem; font-weight:700;
+  text-transform:uppercase; letter-spacing:.3px;
+}
+.pay-status.pending { background:#FEF3C7; color:#92400E }
+.pay-status.verified { background:#D1FAE5; color:#065F46 }
+.pay-status.rejected { background:#FEE2E2; color:#991B1B }
+.pay-meta {
+  display:flex; flex-wrap:wrap; gap:10px; padding:0 16px 10px; font-size:.78rem; color:var(--timber);
+}
+.pay-meta-item { display:flex; align-items:center; gap:4px }
+.pay-amount {
+  padding:8px 16px; font-size:1rem; font-weight:700; color:var(--terra);
+  border-top:1px solid var(--mist-light);
+}
+.pay-screenshot {
+  padding:0 16px 12px;
+}
+.pay-screenshot a {
+  display:inline-flex; align-items:center; gap:6px;
+  padding:8px 14px; border-radius:var(--r-sm);
+  background:var(--mist-light); color:var(--forest);
+  font-size:.75rem; font-weight:600; text-decoration:none;
+  transition:all .15s;
+}
+.pay-screenshot a:hover { background:var(--forest); color:#fff }
+.pay-actions {
+  display:flex; gap:8px; padding:12px 16px; border-top:1px solid var(--mist-light);
+}
+.pay-btn {
+  flex:1; padding:10px; border:none; border-radius:var(--r-md);
+  font-size:.78rem; font-weight:700; cursor:pointer; font-family:var(--font-body);
+  transition:all .15s;
+}
+.pay-btn:active { transform:scale(.97) }
+.pay-btn-verify { background:#10B981; color:#fff }
+.pay-btn-reject { background:var(--mist-light); color:#EF4444 }
+.pay-btn:disabled { opacity:.4; cursor:not-allowed }
+
+/* ── Payment Filter Sub-tabs ── */
+.pay-filters {
+  display:flex; gap:6px; padding:0 16px 12px;
+}
+.pay-filter-btn {
+  padding:6px 12px; border-radius:16px; font-size:.7rem; font-weight:700;
+  border:1.5px solid var(--mist); background:var(--white); color:var(--timber);
+  cursor:pointer; font-family:var(--font-body); transition:all .15s;
+}
+.pay-filter-btn.active { background:var(--terra); color:#fff; border-color:var(--terra) }
+
 /* ── Responsive ── */
 @media (max-width:640px) {
   .order-grid { grid-template-columns:1fr }
@@ -271,6 +334,12 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
   <div class="filter-bar" id="filterBar"></div>
   <div class="order-grid" id="orderGrid"></div>
 
+  <!-- Payments Management View -->
+  <div id="paymentsView" style="display:none">
+    <div class="pay-filters" id="payFilters"></div>
+    <div class="order-grid" id="payGrid"></div>
+  </div>
+
 </div>
 
 <script>
@@ -283,6 +352,9 @@ var pollTimer = null;
 var currentFilter = 'ACTIVE';
 var allOrders = [];
 var lastOrderCount = 0;
+var allPayments = [];
+var pendingPayCount = 0;
+var payFilter = 'PENDING';
 
 var STATUS_CONFIG = {
   NEW:       { icon:'🔔', label:'New',       badge:'new',       actions:['start','cancel'] },
@@ -402,6 +474,7 @@ function renderStats() {
   // Count pending payments across all orders
   var pendingPayments = allOrders.filter(function(o){ return o.paymentStatus === 'SUBMITTED' }).length;
   document.getElementById('pendingCount').textContent = pendingPayments;
+  pendingPayCount = pendingPayments;
 }
 
 // ══════════════════════════════════════════════════════════
@@ -421,7 +494,8 @@ function renderFilters() {
     { key:'PREPARING', label:'👨‍🍳 Preparing', count:counts.PREPARING },
     { key:'READY', label:'✨ Ready', count:counts.READY },
     { key:'COMPLETED', label:'🎉 Done', count:counts.COMPLETED },
-    { key:'ALL', label:'All', count:counts.ALL }
+    { key:'ALL', label:'All', count:counts.ALL },
+    { key:'PAYMENTS', label:'💳 Payments', count:pendingPayCount }
   ];
 
   document.getElementById('filterBar').innerHTML = tabs.map(function(t) {
@@ -433,7 +507,16 @@ function renderFilters() {
 function setFilter(f) {
   currentFilter = f;
   renderFilters();
-  renderOrders();
+  
+  if (f === 'PAYMENTS') {
+    document.getElementById('orderGrid').style.display = 'none';
+    document.getElementById('paymentsView').style.display = 'block';
+    loadPayments();
+  } else {
+    document.getElementById('orderGrid').style.display = '';
+    document.getElementById('paymentsView').style.display = 'none';
+    renderOrders();
+  }
 }
 
 // ══════════════════════════════════════════════════════════
@@ -591,6 +674,161 @@ function esc(s) {
 function capitalize(s) {
   if (!s) return '';
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+}
+
+// ══════════════════════════════════════════════════════════
+// PAYMENTS MANAGEMENT
+// ══════════════════════════════════════════════════════════
+
+async function loadPayments() {
+  var result = await api('listPayments', {});
+  if (result.ok) {
+    allPayments = result.payments || [];
+    pendingPayCount = allPayments.filter(function(p){ return p.status === 'PENDING' }).length;
+    document.getElementById('pendingCount').textContent = pendingPayCount;
+    renderPayFilters();
+    renderPayCards();
+    renderFilters(); // Update the count on the Payments tab
+  }
+}
+
+function renderPayFilters() {
+  var counts = { ALL:0, PENDING:0, VERIFIED:0, REJECTED:0 };
+  allPayments.forEach(function(p) {
+    counts.ALL++;
+    counts[p.status] = (counts[p.status] || 0) + 1;
+  });
+
+  var tabs = [
+    { key:'PENDING', label:'⏳ Pending', count:counts.PENDING },
+    { key:'VERIFIED', label:'✅ Verified', count:counts.VERIFIED },
+    { key:'REJECTED', label:'❌ Rejected', count:counts.REJECTED },
+    { key:'ALL', label:'All', count:counts.ALL }
+  ];
+
+  document.getElementById('payFilters').innerHTML = tabs.map(function(t) {
+    return '<button class="pay-filter-btn' + (payFilter===t.key?' active':'') + '" onclick="setPayFilter(\'' + t.key + '\')">' +
+      t.label + ' <span style="opacity:.6">' + t.count + '</span></button>';
+  }).join('');
+}
+
+function setPayFilter(f) {
+  payFilter = f;
+  renderPayFilters();
+  renderPayCards();
+}
+
+function renderPayCards() {
+  var filtered = allPayments.filter(function(p) {
+    if (payFilter === 'ALL') return true;
+    return p.status === payFilter;
+  });
+
+  // Sort: PENDING first, newest first
+  filtered.sort(function(a,b) {
+    var order = { PENDING:0, VERIFIED:1, REJECTED:2 };
+    var sa = order[a.status] || 9, sb = order[b.status] || 9;
+    if (sa !== sb) return sa - sb;
+    return new Date(b.uploadedAt || 0) - new Date(a.uploadedAt || 0);
+  });
+
+  if (filtered.length === 0) {
+    document.getElementById('payGrid').innerHTML =
+      '<div class="empty-state"><div class="empty-icon">💳</div><div class="empty-text">No payments here</div></div>';
+    return;
+  }
+
+  document.getElementById('payGrid').innerHTML = filtered.map(function(p) {
+    var statusClass = p.status.toLowerCase();
+    var cardClass = 'pay-card' + (statusClass !== 'pending' ? ' ' + statusClass : '');
+
+    // Format time
+    var timeStr = '';
+    try {
+      var d = new Date(p.uploadedAt);
+      timeStr = d.toLocaleString('en-PH', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit', hour12:true });
+    } catch(e) { timeStr = p.uploadedAt || ''; }
+
+    var html = '<div class="' + cardClass + '">';
+
+    // Header
+    html += '<div class="pay-header">' +
+      '<div class="pay-id">' + esc(p.paymentId) + '</div>' +
+      '<span class="pay-status ' + statusClass + '">' + esc(p.status) + '</span>' +
+    '</div>';
+
+    // Meta
+    html += '<div class="pay-meta">' +
+      '<div class="pay-meta-item">📋 ' + esc(p.orderId) + '</div>' +
+      '<div class="pay-meta-item">🪑 Table ' + esc(String(p.tableNo || '?')) + '</div>' +
+      (p.customerName ? '<div class="pay-meta-item">👤 ' + esc(p.customerName) + '</div>' : '') +
+      '<div class="pay-meta-item">🕐 ' + esc(timeStr) + '</div>' +
+    '</div>';
+
+    // Amount
+    html += '<div class="pay-amount">₱' + Number(p.amount || 0).toLocaleString(undefined,{minimumFractionDigits:2}) + '</div>';
+
+    // Screenshot link
+    if (p.fileUrl) {
+      html += '<div class="pay-screenshot">' +
+        '<a href="' + esc(p.fileUrl) + '" target="_blank">📸 View Payment Screenshot</a>' +
+      '</div>';
+    }
+
+    // Verified/Rejected info
+    if (p.status === 'VERIFIED' && p.verifiedBy) {
+      html += '<div style="padding:4px 16px 10px;font-size:.72rem;color:#065F46;">✅ Verified by ' + esc(p.verifiedBy) + (p.verifiedAt ? ' · ' + esc(p.verifiedAt) : '') + '</div>';
+    }
+    if (p.status === 'REJECTED' && p.notes) {
+      html += '<div style="padding:4px 16px 10px;font-size:.72rem;color:#991B1B;">❌ ' + esc(p.notes) + '</div>';
+    }
+
+    // Actions (only for PENDING)
+    if (p.status === 'PENDING') {
+      html += '<div class="pay-actions">' +
+        '<button class="pay-btn pay-btn-verify" onclick="doVerifyPayment(\'' + esc(p.paymentId) + '\')">✅ Verify</button>' +
+        '<button class="pay-btn pay-btn-reject" onclick="doRejectPayment(\'' + esc(p.paymentId) + '\')">✕ Reject</button>' +
+      '</div>';
+    }
+
+    html += '</div>';
+    return html;
+  }).join('');
+}
+
+async function doVerifyPayment(paymentId) {
+  if (!confirm('Verify payment ' + paymentId + '?\n\nThis will mark it as confirmed and move the screenshot to the processed folder.')) return;
+
+  var result = await api('verifyPayment', { paymentId: paymentId, verifiedBy: 'Staff' });
+  if (result.ok) {
+    // Refresh payments
+    loadPayments();
+    // Also refresh orders to update payment badges
+    var ordResult = await api('getOrders', { status:'ALL', limit:100 });
+    if (ordResult.ok) {
+      allOrders = ordResult.orders || [];
+      renderStats();
+    }
+  } else {
+    alert('Failed: ' + (result.error || 'Unknown error'));
+  }
+}
+
+async function doRejectPayment(paymentId) {
+  var reason = prompt('Reason for rejecting payment ' + paymentId + ':');
+  if (reason === null) return; // Cancelled
+
+  var result = await api('rejectPayment', { paymentId: paymentId, reason: reason, verifiedBy: 'Staff' });
+  if (result.ok) {
+    loadPayments();
+    var ordResult = await api('getOrders', { status:'ALL', limit:100 });
+    if (ordResult.ok) {
+      allOrders = ordResult.orders || [];
+      renderStats();
+    }
+  } else {
+    alert('Failed: ' + (result.error || 'Unknown error'));
+  }
 }
 </script>
 </body>
