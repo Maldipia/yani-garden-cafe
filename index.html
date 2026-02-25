@@ -1143,8 +1143,8 @@ function getCategoryIcon(cat) {
 async function api(action, data) {
   try {
     var body = Object.assign({ action: action }, data || {});
-    if (state.tableNo) body.table = state.tableNo;
-    if (state.token) body.token = state.token;
+    if (state.tableNo && !body.tableNo) body.tableNo = state.tableNo;
+    if (state.token && !body.token) body.token = state.token;
 
     var resp = await fetch(API_URL, {
       method: 'POST',
@@ -1531,31 +1531,24 @@ async function placeOrder() {
   var items = state.cart.map(function(c) {
     return {
       code: c.code,
-      name: c.name,
-      price: c.price,
       qty: c.qty,
       size: c.size || '',
-      sizeLabel: c.sizeLabel || '',
-      sugar: c.sugar || '',
-      sugarLabel: c.sugarLabel || ''
+      sugarLevel: c.sugar || ''
     };
   });
 
   var result = await api('placeOrder', {
-    table: state.tableNo,
+    tableNo: state.tableNo,
     token: state.token,
-    customer: state.customerName,
+    customerName: state.customerName,
     notes: state.orderNotes,
-    type: state.orderType,
-    items: items,
-    subtotal: subtotal,
-    serviceCharge: svc,
-    total: total
+    orderType: state.orderType.toUpperCase(),
+    items: items
   });
 
   if (result.ok) {
     state.orderId = result.orderId || result.ORDER_ID || 'YANI-???';
-    state.orderTotal = total;
+    state.orderTotal = result.total || total;
     state.orderStatus = 'NEW';
     closePage('checkout');
     openPage('receipt'); // Go to receipt question first
@@ -1719,8 +1712,7 @@ async function selectPayment(method) {
 
   if (method === 'card' || method === 'cash') {
     var label = method === 'card' ? 'Card' : 'Cash';
-    // Notify backend
-    api('selectPayment', { orderId: state.orderId, method: method });
+    // No backend call needed - staff handles at table
 
     var body = document.getElementById('paymentBody');
     body.innerHTML = '<div class="status-card">' +
@@ -1993,17 +1985,17 @@ async function submitPaymentProof() {
 
   var reader = new FileReader();
   reader.onload = async function(e) {
-    var base64 = e.target.result.split(',')[1];
+    var dataUrl = e.target.result; // full data URL including prefix
     var ts = new Date().toISOString().replace(/[-:T]/g,'').slice(0,15);
     var fname = state.orderId + '_T' + state.tableNo + '_' + ts + '.jpg';
 
     var result = await api('uploadPayment', {
       orderId: state.orderId,
-      table: state.tableNo,
+      tableNo: state.tableNo,
       customerName: nameEl.value.trim(),
       amount: parseFloat(amountEl.value),
       notes: payNotes,
-      image: base64,
+      imageData: dataUrl,
       filename: fname
     });
 
@@ -2092,9 +2084,9 @@ function startStatusPolling() {
   renderStatusPage();
   if (state.statusInterval) clearInterval(state.statusInterval);
   state.statusInterval = setInterval(async function() {
-    var result = await api('getOrderStatus', { orderId: state.orderId });
-    if (result.ok && result.status) {
-      var newStatus = result.status.toUpperCase();
+    var result = await api('getOrders', { orderId: state.orderId });
+    if (result.ok && result.orders && result.orders.length > 0) {
+      var newStatus = result.orders[0].status.toUpperCase();
       if (newStatus !== state.orderStatus) {
         state.orderStatus = newStatus;
         renderStatusPage();
