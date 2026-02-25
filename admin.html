@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>YANI · Kitchen Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --forest: #314C47;
+  --forest-deep: #1E3530;
+  --forest-light: #3D5E57;
+  --terra: #C4704B;
+  --terra-light: #D4916F;
+  --gold: #B8973A;
+  --timber: #6B7B6E;
+  --mist: #D2D5CD;
+  --mist-light: #EEF0EB;
+  --cream: #FAF8F4;
+  --white: #FFFFFF;
+  --font-soul: 'Crimson Pro', Georgia, serif;
+  --font-body: 'Quicksand', sans-serif;
+  --r-sm: 6px; --r-md: 10px; --r-lg: 14px; --r-xl: 20px;
+  --shadow-sm: 0 1px 4px rgba(0,0,0,.06);
+  --shadow-md: 0 4px 16px rgba(0,0,0,.1);
+}
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent }
+body { font-family:var(--font-body); background:var(--cream); color:var(--forest-deep); min-height:100dvh }
+
+/* ── Login ── */
+.login-overlay {
+  position:fixed; inset:0; background:var(--forest-deep);
+  display:flex; align-items:center; justify-content:center;
+  z-index:999;
+}
+.login-overlay.hidden { display:none }
+.login-box {
+  background:var(--white); border-radius:var(--r-xl); padding:40px 32px;
+  text-align:center; width:90%; max-width:360px;
+  box-shadow:0 20px 60px rgba(0,0,0,.3);
+}
+.login-logo { width:72px; height:72px; border-radius:50%; object-fit:cover; margin-bottom:16px; box-shadow:var(--shadow-md) }
+.login-title { font-family:var(--font-soul); font-size:1.4rem; font-weight:700; margin-bottom:4px }
+.login-sub { font-size:.78rem; color:var(--timber); margin-bottom:24px }
+.pin-input {
+  width:100%; padding:14px; border:2px solid var(--mist); border-radius:var(--r-md);
+  font-size:1.2rem; text-align:center; letter-spacing:8px; font-weight:700;
+  font-family:var(--font-body); outline:none; transition:border-color .2s;
+}
+.pin-input:focus { border-color:var(--forest) }
+.pin-input.error { border-color:var(--terra); animation:shake .4s }
+@keyframes shake { 20%,60%{transform:translateX(-4px)} 40%,80%{transform:translateX(4px)} }
+.pin-btn {
+  width:100%; padding:14px; background:var(--forest); color:var(--white);
+  border:none; border-radius:var(--r-md); font-size:.92rem; font-weight:700;
+  font-family:var(--font-body); cursor:pointer; margin-top:16px;
+}
+.pin-btn:active { background:var(--forest-light) }
+
+/* ── Top Bar ── */
+.topbar {
+  background:linear-gradient(160deg, var(--forest-deep) 0%, var(--forest) 60%, var(--forest-light) 100%);
+  color:var(--white); padding:14px 20px;
+  display:flex; align-items:center; gap:12px;
+  position:sticky; top:0; z-index:100;
+  box-shadow:0 2px 16px rgba(0,0,0,.15);
+}
+.topbar::after {
+  content:''; position:absolute; bottom:-4px; left:0; right:0; height:4px;
+  background:linear-gradient(to right, var(--gold), var(--terra), var(--gold)); opacity:.6;
+}
+.topbar-logo { width:36px; height:36px; border-radius:50%; object-fit:cover }
+.topbar-title { font-family:var(--font-soul); font-size:1.15rem; font-weight:700; flex:1 }
+.topbar-live { display:flex; align-items:center; gap:6px; font-size:.72rem; font-weight:600; opacity:.8 }
+.topbar-dot { width:8px; height:8px; border-radius:50%; background:#4ADE80; animation:pulse 2s infinite }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+/* ── Stats Bar ── */
+.stats-bar {
+  display:flex; gap:1px; background:var(--mist); margin:16px; border-radius:var(--r-lg); overflow:hidden;
+  box-shadow:var(--shadow-sm);
+}
+.stat-card {
+  flex:1; background:var(--white); padding:14px 12px; text-align:center;
+}
+.stat-value { font-family:var(--font-soul); font-size:1.4rem; font-weight:700; color:var(--forest) }
+.stat-label { font-size:.65rem; color:var(--timber); font-weight:600; text-transform:uppercase; letter-spacing:.5px; margin-top:2px }
+
+/* ── Filter Tabs ── */
+.filter-bar {
+  display:flex; gap:6px; padding:0 16px 12px; overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
+}
+.filter-btn {
+  padding:8px 14px; border-radius:20px; font-size:.75rem; font-weight:700;
+  border:1.5px solid var(--mist); background:var(--white); color:var(--timber);
+  cursor:pointer; white-space:nowrap; font-family:var(--font-body); transition:all .15s;
+}
+.filter-btn.active { background:var(--forest); color:var(--white); border-color:var(--forest) }
+.filter-count {
+  display:inline-flex; align-items:center; justify-content:center;
+  min-width:18px; height:18px; border-radius:9px; font-size:.65rem;
+  background:rgba(0,0,0,.1); margin-left:4px; padding:0 5px;
+}
+.filter-btn.active .filter-count { background:rgba(255,255,255,.25) }
+
+/* ── Order Grid ── */
+.order-grid {
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr));
+  gap:14px; padding:0 16px 100px;
+}
+.order-card {
+  background:var(--white); border-radius:var(--r-lg); overflow:hidden;
+  box-shadow:var(--shadow-sm); border-left:4px solid var(--mist);
+  transition:box-shadow .2s;
+}
+.order-card:hover { box-shadow:var(--shadow-md) }
+.order-card[data-status="NEW"] { border-left-color:#F59E0B }
+.order-card[data-status="PREPARING"] { border-left-color:#3B82F6 }
+.order-card[data-status="READY"] { border-left-color:#10B981 }
+.order-card[data-status="COMPLETED"] { border-left-color:var(--mist) }
+.order-card[data-status="CANCELLED"] { border-left-color:#EF4444; opacity:.6 }
+
+.oc-header {
+  display:flex; align-items:center; gap:10px; padding:14px 16px 10px;
+}
+.oc-status-badge {
+  padding:3px 10px; border-radius:12px; font-size:.68rem; font-weight:700;
+  text-transform:uppercase; letter-spacing:.3px;
+}
+.oc-status-badge.new { background:#FEF3C7; color:#92400E }
+.oc-status-badge.preparing { background:#DBEAFE; color:#1E40AF }
+.oc-status-badge.ready { background:#D1FAE5; color:#065F46 }
+.oc-status-badge.completed { background:var(--mist-light); color:var(--timber) }
+.oc-status-badge.cancelled { background:#FEE2E2; color:#991B1B }
+
+.oc-id { font-family:var(--font-soul); font-size:1rem; font-weight:700; flex:1 }
+.oc-time { font-size:.7rem; color:var(--timber); font-weight:500 }
+
+.oc-meta {
+  display:flex; gap:12px; padding:0 16px 10px; font-size:.78rem; color:var(--timber);
+}
+.oc-meta-item { display:flex; align-items:center; gap:4px }
+
+.oc-items { padding:0 16px }
+.oc-item {
+  padding:8px 0; border-top:1px solid var(--mist-light);
+  display:flex; align-items:flex-start; gap:8px;
+}
+.oc-item:first-child { border-top:none }
+.oc-item-qty {
+  min-width:24px; height:24px; border-radius:6px; background:var(--mist-light);
+  display:flex; align-items:center; justify-content:center;
+  font-size:.72rem; font-weight:700; color:var(--forest); flex-shrink:0;
+}
+.oc-item-info { flex:1 }
+.oc-item-name { font-size:.82rem; font-weight:600 }
+.oc-item-opts { font-size:.7rem; color:var(--terra); font-weight:500; margin-top:1px }
+.oc-item-notes { font-size:.68rem; color:var(--timber); font-style:italic; margin-top:2px }
+
+.oc-total {
+  padding:10px 16px; font-size:.82rem; font-weight:700; text-align:right;
+  border-top:1px solid var(--mist-light); color:var(--terra);
+}
+
+.oc-notes {
+  padding:8px 16px; font-size:.72rem; color:var(--timber); font-style:italic;
+  background:var(--mist-light); margin:0 12px 12px; border-radius:var(--r-sm);
+}
+
+.oc-actions {
+  display:flex; gap:8px; padding:12px 16px; border-top:1px solid var(--mist-light);
+}
+.oc-btn {
+  flex:1; padding:10px; border:none; border-radius:var(--r-md);
+  font-size:.78rem; font-weight:700; cursor:pointer; font-family:var(--font-body);
+  transition:all .15s;
+}
+.oc-btn:active { transform:scale(.97) }
+.oc-btn-start { background:#3B82F6; color:#fff }
+.oc-btn-ready { background:#10B981; color:#fff }
+.oc-btn-complete { background:var(--forest); color:#fff }
+.oc-btn-cancel { background:var(--mist-light); color:#EF4444; font-weight:600 }
+
+/* ── Empty State ── */
+.empty-state {
+  text-align:center; padding:60px 20px; color:var(--timber);
+}
+.empty-icon { font-size:3rem; margin-bottom:12px; opacity:.5 }
+.empty-text { font-size:.88rem }
+
+/* ── Sound toggle ── */
+.sound-toggle {
+  background:none; border:none; color:var(--white); font-size:1.1rem;
+  cursor:pointer; opacity:.7; padding:4px;
+}
+.sound-toggle:hover { opacity:1 }
+
+/* ── Responsive ── */
+@media (max-width:640px) {
+  .order-grid { grid-template-columns:1fr }
+  .stats-bar { margin:12px }
+  .stat-value { font-size:1.2rem }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════ LOGIN ═══════════════════ -->
+<div class="login-overlay" id="loginOverlay">
+  <div class="login-box">
+    <img class="login-logo" src="/images/logo.png" alt="Yani">
+    <div class="login-title">Kitchen Dashboard</div>
+    <div class="login-sub">Enter staff PIN to continue</div>
+    <input class="pin-input" id="pinInput" type="password" maxlength="4" inputmode="numeric" placeholder="• • • •" autofocus>
+    <button class="pin-btn" id="pinBtn" onclick="login()">Enter Dashboard</button>
+  </div>
+</div>
+
+<!-- ═══════════════════ DASHBOARD ═══════════════════ -->
+<div id="dashboard" style="display:none">
+
+  <div class="topbar">
+    <img class="topbar-logo" src="/images/logo.png" alt="Yani">
+    <div class="topbar-title">Order Board</div>
+    <div class="topbar-live"><div class="topbar-dot"></div> LIVE</div>
+    <button class="sound-toggle" id="soundBtn" onclick="toggleSound()" title="Toggle notification sound">🔔</button>
+  </div>
+
+  <div class="stats-bar" id="statsBar">
+    <div class="stat-card"><div class="stat-value" id="statSales">₱0</div><div class="stat-label">Today's Sales</div></div>
+    <div class="stat-card"><div class="stat-value" id="statOrders">0</div><div class="stat-label">Orders</div></div>
+    <div class="stat-card"><div class="stat-value" id="statActive">0</div><div class="stat-label">Active</div></div>
+  </div>
+
+  <div class="filter-bar" id="filterBar"></div>
+  <div class="order-grid" id="orderGrid"></div>
+
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════
+// CONFIG
+// ══════════════════════════════════════════════════════════
+var API_URL = '/api/pos';
+var POLL_INTERVAL = 5000;
+var pollTimer = null;
+var currentFilter = 'ACTIVE';
+var allOrders = [];
+var soundEnabled = true;
+var lastOrderCount = 0;
+
+var STATUS_CONFIG = {
+  NEW:       { icon:'🔔', label:'New',       badge:'new',       actions:['start','cancel'] },
+  PREPARING: { icon:'👨‍🍳', label:'Preparing', badge:'preparing', actions:['ready','cancel'] },
+  READY:     { icon:'✨', label:'Ready',     badge:'ready',     actions:['complete','cancel'] },
+  COMPLETED: { icon:'🎉', label:'Completed', badge:'completed', actions:[] },
+  CANCELLED: { icon:'❌', label:'Cancelled', badge:'cancelled', actions:[] }
+};
+
+// ══════════════════════════════════════════════════════════
+// LOGIN
+// ══════════════════════════════════════════════════════════
+document.getElementById('pinInput').addEventListener('keyup', function(e) {
+  if (e.key === 'Enter') login();
+});
+
+async function login() {
+  var pin = document.getElementById('pinInput').value.trim();
+  if (!pin) return;
+
+  var btn = document.getElementById('pinBtn');
+  btn.textContent = 'Verifying...';
+  btn.disabled = true;
+
+  try {
+    var resp = await fetch(API_URL, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ action:'verifyAdminPin', pin:pin })
+    });
+    var data = await resp.json();
+
+    if (data.ok && data.valid) {
+      document.getElementById('loginOverlay').classList.add('hidden');
+      document.getElementById('dashboard').style.display = 'block';
+      startPolling();
+    } else {
+      document.getElementById('pinInput').classList.add('error');
+      setTimeout(function(){ document.getElementById('pinInput').classList.remove('error') }, 500);
+      document.getElementById('pinInput').value = '';
+      document.getElementById('pinInput').focus();
+    }
+  } catch(e) {
+    alert('Connection error: ' + e.message);
+  }
+  btn.textContent = 'Enter Dashboard';
+  btn.disabled = false;
+}
+
+// ══════════════════════════════════════════════════════════
+// API
+// ══════════════════════════════════════════════════════════
+async function api(action, data) {
+  try {
+    var body = Object.assign({ action:action }, data || {});
+    var resp = await fetch(API_URL, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(body)
+    });
+    return await resp.json();
+  } catch(e) {
+    return { ok:false, error:e.message };
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// POLLING
+// ══════════════════════════════════════════════════════════
+function startPolling() {
+  loadOrders();
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(loadOrders, POLL_INTERVAL);
+}
+
+async function loadOrders() {
+  var result = await api('getOrders');
+  if (!result.ok || !result.orders) return;
+
+  // Check for new orders (sound notification)
+  var newOrders = result.orders.filter(function(o){ return o.status === 'NEW' });
+  if (soundEnabled && newOrders.length > lastOrderCount && lastOrderCount > 0) {
+    playNotification();
+  }
+  lastOrderCount = newOrders.length;
+
+  allOrders = result.orders;
+  renderStats();
+  renderFilters();
+  renderOrders();
+}
+
+// ══════════════════════════════════════════════════════════
+// STATS
+// ══════════════════════════════════════════════════════════
+function renderStats() {
+  var today = new Date().toDateString();
+  var todayOrders = allOrders.filter(function(o) {
+    try { return new Date(o.createdAt).toDateString() === today } catch(e) { return false }
+  });
+
+  var totalSales = 0;
+  var completed = 0;
+  var active = 0;
+
+  todayOrders.forEach(function(o) {
+    if (o.status === 'COMPLETED') {
+      completed++;
+      // Use items to calculate total if main total is null
+      var orderTotal = 0;
+      if (o.items && o.items.length) {
+        o.items.forEach(function(it){ orderTotal += (it.price || 0) * (it.qty || 1) });
+      }
+      totalSales += orderTotal;
+    }
+    if (o.status === 'NEW' || o.status === 'PREPARING' || o.status === 'READY') {
+      active++;
+    }
+  });
+
+  document.getElementById('statSales').textContent = '₱' + totalSales.toLocaleString();
+  document.getElementById('statOrders').textContent = todayOrders.length;
+  document.getElementById('statActive').textContent = active;
+}
+
+// ══════════════════════════════════════════════════════════
+// FILTERS
+// ══════════════════════════════════════════════════════════
+function renderFilters() {
+  var counts = { ALL:0, ACTIVE:0, NEW:0, PREPARING:0, READY:0, COMPLETED:0, CANCELLED:0 };
+  allOrders.forEach(function(o) {
+    counts.ALL++;
+    counts[o.status] = (counts[o.status] || 0) + 1;
+    if (o.status === 'NEW' || o.status === 'PREPARING' || o.status === 'READY') counts.ACTIVE++;
+  });
+
+  var tabs = [
+    { key:'ACTIVE', label:'🔥 Active', count:counts.ACTIVE },
+    { key:'NEW', label:'🔔 New', count:counts.NEW },
+    { key:'PREPARING', label:'👨‍🍳 Preparing', count:counts.PREPARING },
+    { key:'READY', label:'✨ Ready', count:counts.READY },
+    { key:'COMPLETED', label:'🎉 Done', count:counts.COMPLETED },
+    { key:'ALL', label:'All', count:counts.ALL }
+  ];
+
+  document.getElementById('filterBar').innerHTML = tabs.map(function(t) {
+    return '<button class="filter-btn' + (currentFilter===t.key?' active':'') + '" onclick="setFilter(\'' + t.key + '\')">' +
+      t.label + '<span class="filter-count">' + t.count + '</span></button>';
+  }).join('');
+}
+
+function setFilter(f) {
+  currentFilter = f;
+  renderFilters();
+  renderOrders();
+}
+
+// ══════════════════════════════════════════════════════════
+// RENDER ORDERS
+// ══════════════════════════════════════════════════════════
+function renderOrders() {
+  var filtered = allOrders.filter(function(o) {
+    if (currentFilter === 'ALL') return true;
+    if (currentFilter === 'ACTIVE') return o.status === 'NEW' || o.status === 'PREPARING' || o.status === 'READY';
+    return o.status === currentFilter;
+  });
+
+  // Sort: NEW first, then PREPARING, then READY, newest first within status
+  var statusOrder = { NEW:0, PREPARING:1, READY:2, COMPLETED:3, CANCELLED:4 };
+  filtered.sort(function(a,b) {
+    var sa = statusOrder[a.status] || 9, sb = statusOrder[b.status] || 9;
+    if (sa !== sb) return sa - sb;
+    return new Date(b.createdAt) - new Date(a.createdAt);
+  });
+
+  if (filtered.length === 0) {
+    document.getElementById('orderGrid').innerHTML =
+      '<div class="empty-state"><div class="empty-icon">☕</div><div class="empty-text">No orders here yet</div></div>';
+    return;
+  }
+
+  document.getElementById('orderGrid').innerHTML = filtered.map(function(o) {
+    var cfg = STATUS_CONFIG[o.status] || STATUS_CONFIG.NEW;
+    var time = '';
+    try {
+      var d = new Date(o.createdAt);
+      time = d.toLocaleTimeString('en-PH', { hour:'numeric', minute:'2-digit', hour12:true });
+    } catch(e) {}
+
+    var elapsed = '';
+    try {
+      var mins = Math.floor((Date.now() - new Date(o.createdAt).getTime()) / 60000);
+      if (mins < 1) elapsed = 'just now';
+      else if (mins < 60) elapsed = mins + 'm ago';
+      else elapsed = Math.floor(mins/60) + 'h ' + (mins%60) + 'm ago';
+    } catch(e) {}
+
+    var html = '<div class="order-card" data-status="' + o.status + '">';
+
+    // Header
+    html += '<div class="oc-header">' +
+      '<div class="oc-id">' + esc(o.orderId) + '</div>' +
+      '<span class="oc-status-badge ' + cfg.badge + '">' + cfg.icon + ' ' + cfg.label + '</span>' +
+    '</div>';
+
+    // Meta
+    html += '<div class="oc-meta">' +
+      '<div class="oc-meta-item">🪑 Table ' + esc(String(o.table || '?')) + '</div>' +
+      (o.customer ? '<div class="oc-meta-item">👤 ' + esc(o.customer) + '</div>' : '') +
+      '<div class="oc-meta-item">🕐 ' + esc(time) + '</div>' +
+      '<div class="oc-meta-item" style="opacity:.6">' + esc(elapsed) + '</div>' +
+    '</div>';
+
+    // Items
+    html += '<div class="oc-items">';
+    var orderTotal = 0;
+    if (o.items && o.items.length) {
+      o.items.forEach(function(it) {
+        var opts = [];
+        if (it.size) opts.push(capitalize(it.size));
+        if (it.sugar) opts.push(capitalize(it.sugar));
+        var lineTotal = (it.price || 0) * (it.qty || 1);
+        orderTotal += lineTotal;
+
+        html += '<div class="oc-item">' +
+          '<div class="oc-item-qty">' + (it.qty || 1) + '×</div>' +
+          '<div class="oc-item-info">' +
+            '<div class="oc-item-name">' + esc(it.name) + '</div>' +
+            (opts.length ? '<div class="oc-item-opts">' + esc(opts.join(' · ')) + '</div>' : '') +
+            (it.notes ? '<div class="oc-item-notes">"' + esc(it.notes) + '"</div>' : '') +
+          '</div>' +
+        '</div>';
+      });
+    }
+    html += '</div>';
+
+    // Total
+    html += '<div class="oc-total">₱' + orderTotal.toLocaleString() + '</div>';
+
+    // Notes
+    if (o.notes && typeof o.notes === 'string' && o.notes.trim()) {
+      html += '<div class="oc-notes">📝 ' + esc(o.notes) + '</div>';
+    }
+
+    // Actions
+    if (cfg.actions.length) {
+      html += '<div class="oc-actions">';
+      cfg.actions.forEach(function(act) {
+        if (act === 'start') html += '<button class="oc-btn oc-btn-start" onclick="updateStatus(\'' + o.orderId + '\',\'PREPARING\')">☕ Start Preparing</button>';
+        if (act === 'ready') html += '<button class="oc-btn oc-btn-ready" onclick="updateStatus(\'' + o.orderId + '\',\'READY\')">✨ Mark Ready</button>';
+        if (act === 'complete') html += '<button class="oc-btn oc-btn-complete" onclick="updateStatus(\'' + o.orderId + '\',\'COMPLETED\')">🙏 Complete</button>';
+        if (act === 'cancel') html += '<button class="oc-btn oc-btn-cancel" onclick="updateStatus(\'' + o.orderId + '\',\'CANCELLED\')">✕</button>';
+      });
+      html += '</div>';
+    }
+
+    html += '</div>';
+    return html;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════════
+// STATUS UPDATE
+// ══════════════════════════════════════════════════════════
+async function updateStatus(orderId, newStatus) {
+  if (newStatus === 'CANCELLED') {
+    if (!confirm('Cancel order ' + orderId + '?')) return;
+  }
+
+  var result = await api('updateOrderStatus', { orderId:orderId, status:newStatus });
+  if (result.ok) {
+    // Update local state immediately for responsiveness
+    allOrders.forEach(function(o) {
+      if (o.orderId === orderId) o.status = newStatus;
+    });
+    renderStats();
+    renderFilters();
+    renderOrders();
+  } else {
+    alert('Failed: ' + (result.error || 'Unknown error'));
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// SOUND
+// ══════════════════════════════════════════════════════════
+function toggleSound() {
+  soundEnabled = !soundEnabled;
+  document.getElementById('soundBtn').textContent = soundEnabled ? '🔔' : '🔕';
+}
+
+function playNotification() {
+  try {
+    var ctx = new (window.AudioContext || window.webkitAudioContext)();
+    var osc = ctx.createOscillator();
+    var gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 800;
+    gain.gain.value = 0.15;
+    osc.start();
+    osc.stop(ctx.currentTime + 0.15);
+    setTimeout(function(){
+      var osc2 = ctx.createOscillator();
+      var gain2 = ctx.createGain();
+      osc2.connect(gain2); gain2.connect(ctx.destination);
+      osc2.frequency.value = 1000;
+      gain2.gain.value = 0.15;
+      osc2.start();
+      osc2.stop(ctx.currentTime + 0.2);
+    }, 180);
+  } catch(e) {}
+}
+
+// ══════════════════════════════════════════════════════════
+// UTILS
+// ══════════════════════════════════════════════════════════
+function esc(s) {
+  if (!s) return '';
+  var d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function capitalize(s) {
+  if (!s) return '';
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+}
+</script>
+</body>
+</html>
