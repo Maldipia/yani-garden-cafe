@@ -1143,8 +1143,8 @@ function getCategoryIcon(cat) {
 async function api(action, data) {
   try {
     var body = Object.assign({ action: action }, data || {});
-    if (state.tableNo && !body.tableNo) body.tableNo = state.tableNo;
-    if (state.token && !body.token) body.token = state.token;
+    if (!body.tableNo) body.tableNo = state.tableNo || '1';
+    if (!body.token) body.token = state.token || TABLE_TOKENS['1'];
 
     var resp = await fetch(API_URL, {
       method: 'POST',
@@ -1538,8 +1538,8 @@ async function placeOrder() {
   });
 
   var result = await api('placeOrder', {
-    tableNo: state.tableNo,
-    token: state.token,
+    tableNo: state.tableNo || '1',
+    token: state.token || TABLE_TOKENS['1'],
     customerName: state.customerName,
     notes: state.orderNotes,
     orderType: state.orderType.toUpperCase(),
