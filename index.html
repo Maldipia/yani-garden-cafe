@@ -97,7 +97,8 @@ a { color: var(--terra); text-decoration: none }
   background: linear-gradient(to right, var(--gold), var(--terra), var(--gold));
   opacity: .6;
 }
-.header-brand { font-family: var(--font-soul); font-size: 1.5rem; font-weight: 700; letter-spacing: 1px; line-height: 1.1 }
+.header-brand { display: flex; align-items: center; justify-content: center }
+.header-logo { height: 52px; width: 52px; border-radius: 50%; object-fit: cover; box-shadow: 0 2px 8px rgba(0,0,0,.2) }
 .header-sub { font-size: .72rem; opacity: .6; margin-top: 2px; letter-spacing: 2px; text-transform: uppercase; font-weight: 500 }
 .header-table {
   display: inline-block;
@@ -902,7 +903,7 @@ a { color: var(--terra); text-decoration: none }
 <body>
 <!-- ═══════════════════ HEADER ═══════════════════ -->
 <div class="header">
-  <div class="header-brand">Yani Garden Cafe</div>
+  <div class="header-brand"><img class="header-logo" src="/images/logo.png" alt="Yani Garden Cafe"></div>
   <div class="header-sub">Highland Sanctuary • Amadeo</div>
   <div class="header-table" id="headerTable">Table —</div>
 </div>
