@@ -1042,25 +1042,26 @@ const SUGAR_LEVELS = [
 const MENU_DATA = [
   // ── HOT COFFEE ── (is_hot=TRUE, no sizes)
   { code:'H001', name:'Hot Americano', category:'COFFEE', price:120, hasSugar:false, hasSizes:false, available:true, img:'/images/H001.png' },
-  { code:'H002', name:'Hot Spanish Latte', category:'COFFEE', price:150, hasSugar:true, hasSizes:false, available:true, img:'/images/H002.png' },
-  { code:'H003', name:'Hot Cafe Mocha', category:'COFFEE', price:160, hasSugar:true, hasSizes:false, available:true, img:'/images/H003.png' },
-  { code:'H004', name:'Cinnamon Espresso Latte', category:'COFFEE', price:160, hasSugar:true, hasSizes:false, available:true, img:'/images/H004.png' },
-  { code:'H007', name:'Cinnamon Espresso Choco Latte', category:'COFFEE', price:130, hasSugar:false, hasSizes:false, available:true, img:'/images/H007.png' },
-  { code:'H010', name:'Kapeng Barako', category:'COFFEE', price:149, hasSugar:false, hasSizes:false, available:true, img:'/images/H010.jpg' },
+  { code:'H002', name:'Hot Spanish Latte', category:'COFFEE', price:159, hasSugar:true, hasSizes:false, available:true, img:'/images/H002.png' },
+  { code:'H003', name:'Hot Cafe Mocha', category:'COFFEE', price:159, hasSugar:true, hasSizes:false, available:true, img:'/images/H003.png' },
+  { code:'H004', name:'Cinnamon Espresso Latte', category:'COFFEE', price:159, hasSugar:true, hasSizes:false, available:true, img:'/images/H004.png' },
+  { code:'H007', name:'Cinnamon Espresso Choco Latte', category:'COFFEE', price:169, hasSugar:true, hasSizes:false, available:true, img:'/images/H007.png' },
+  { code:'H010', name:'Kapeng Barako', category:'COFFEE', price:149, hasSugar:true, hasSizes:false, available:true, img:'/images/H010.jpg' },
 
   // ── ICED COFFEE ── (H008 - has sizes + sugar)
-  { code:'H008', name:'Iced Vanilla Latte', category:'ICED COFFEE', price:140, hasSugar:true, hasSizes:true, sizes:{short:140,medium:160,tall:169}, available:true, img:'/images/H008.jpg' },
+  { code:'H008', name:'Iced Vanilla Latte', category:'ICED COFFEE', price:139, hasSugar:true, hasSizes:true, sizes:{short:139,medium:159,tall:169}, available:true, img:'/images/H008.jpg' },
 
   // ── COLD BEVERAGES ──
-  { code:'C001', name:'Iced Dark Cocoa Ovaltine', category:'COLD BEVERAGE', price:150, hasSugar:true, hasSizes:true, sizes:{short:150,medium:170,tall:179}, available:true, img:'/images/C001.png' },
-  { code:'C009', name:"YANI's Echo", category:'COLD BEVERAGE', price:159, hasSugar:false, hasSizes:false, available:true, img:'/images/C009.jpg' },
-  { code:'C011', name:'Double Dutch Frappe', category:'COLD BEVERAGE', price:149, hasSugar:true, hasSizes:true, sizes:{short:149,medium:169,tall:178}, available:true, img:'/images/C011.jpg' },
-  { code:'C012', name:'Caramel Macchiato Frappe', category:'COLD BEVERAGE', price:159, hasSugar:true, hasSizes:true, sizes:{short:159,medium:179,tall:188}, available:true, img:'/images/C012.png' },
-  { code:'C013', name:'Lush Oreo Frappe', category:'COLD BEVERAGE', price:159, hasSugar:true, hasSizes:true, sizes:{short:159,medium:179,tall:188}, available:true, img:'/images/C013.jpg' },
-  { code:'C014', name:'Affogato', category:'COLD BEVERAGE', price:159, hasSugar:true, hasSizes:false, available:true, img:'/images/C014.png' },
+  { code:'C001', name:'Iced Dark Cocoa Ovaltine', category:'COLD BEVERAGE', price:149, hasSugar:true, hasSizes:true, sizes:{short:149,medium:170,tall:179}, available:true, img:'/images/C001.png' },
+  { code:'C009', name:"YANI's Echo", category:'COLD BEVERAGE', price:159, hasSugar:true, hasSizes:true, sizes:{short:159,medium:179,tall:189}, available:true, img:'/images/C009.jpg' },
+  { code:'C011', name:'Creamy Double Dutch Frappe', category:'COLD BEVERAGE', price:149, hasSugar:true, hasSizes:true, sizes:{short:149,medium:169,tall:189}, available:true, img:'/images/C011.png' },
+  { code:'C012', name:'Caramel Macchiato Frappe', category:'COLD BEVERAGE', price:159, hasSugar:true, hasSizes:true, sizes:{short:159,medium:179,tall:189}, available:true, img:'/images/C012.png' },
+  { code:'C013', name:'Lush Oreo Frappe', category:'COLD BEVERAGE', price:159, hasSugar:true, hasSizes:true, sizes:{short:159,medium:179,tall:188}, available:true, img:'/images/C013.png' },
+  { code:'C014', name:'Affogato', category:'COLD BEVERAGE', price:159, hasSugar:false, hasSizes:false, available:true, img:'/images/C014.png' },
+  { code:'C016', name:'Peach Iced Tea', category:'COLD BEVERAGE', price:129, hasSugar:true, hasSizes:true, sizes:{short:129,medium:149,tall:158}, available:true, img:'/images/C016.jpeg' },
 
   // ── PASTRIES ──
-  { code:'P001', name:'Banana Bread Loaf', category:'PASTRY', price:180, hasSugar:false, hasSizes:false, available:true, img:'/images/P001.png' },
+  { code:'P001', name:'Banana Bread Loaf', category:'PASTRY', price:179, hasSugar:false, hasSizes:false, available:true, img:'/images/P001.png' },
   { code:'P002', name:'Banana Bread Cupcake', category:'PASTRY', price:59, hasSugar:false, hasSizes:false, available:true, img:'/images/P002.png' },
 
   // ── SODAS (with sizes + sweetness) ──
@@ -1069,7 +1070,7 @@ const MENU_DATA = [
 
   // ── FOOD ──
   { code:'F001', name:'French Fries (Sharing)', category:'FOOD', price:299, hasSugar:false, hasSizes:false, available:true, img:'/images/F001.jpg' },
-  { code:'F002', name:'Fries w/ Chicken Pops', category:'FOOD', price:350, hasSugar:false, hasSizes:false, available:true, img:'/images/F002.png' },
+  { code:'F002', name:'Fries w/ Chicken Pops', category:'FOOD', price:349, hasSugar:false, hasSizes:false, available:true, img:'/images/F002.png' },
   { code:'F003', name:'Chicken Pops', category:'FOOD', price:250, hasSugar:false, hasSizes:false, available:true, img:'/images/F003.png' },
 ];
 
