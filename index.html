@@ -1040,18 +1040,16 @@ const SUGAR_LEVELS = [
 // Images use Google Drive thumbnail URLs.
 // ══════════════════════════════════════════════════════════
 const MENU_DATA = [
-  // ── HOT COFFEE ── (is_hot=TRUE, no sizes)
-  { code:'H001', name:'Hot Americano', category:'COFFEE', price:120, hasSugar:false, hasSizes:false, available:true, img:'/images/H001.png' },
-  { code:'H002', name:'Hot Spanish Latte', category:'COFFEE', price:159, hasSugar:true, hasSizes:false, available:true, img:'/images/H002.png' },
-  { code:'H003', name:'Hot Cafe Mocha', category:'COFFEE', price:159, hasSugar:true, hasSizes:false, available:true, img:'/images/H003.png' },
-  { code:'H004', name:'Cinnamon Espresso Latte', category:'COFFEE', price:159, hasSugar:true, hasSizes:false, available:true, img:'/images/H004.png' },
-  { code:'H007', name:'Cinnamon Espresso Choco Latte', category:'COFFEE', price:169, hasSugar:true, hasSizes:false, available:true, img:'/images/H007.png' },
-  { code:'H010', name:'Kapeng Barako', category:'COFFEE', price:149, hasSugar:true, hasSizes:false, available:true, img:'/images/H010.jpg' },
+  // ── HOT BEVERAGE ──
+  { code:'H001', name:'Hot Americano', category:'HOT BEVERAGE', price:120, hasSugar:false, hasSizes:false, available:true, img:'/images/H001.png' },
+  { code:'H002', name:'Hot Spanish Latte', category:'HOT BEVERAGE', price:159, hasSugar:true, hasSizes:false, available:true, img:'/images/H002.png' },
+  { code:'H003', name:'Hot Cafe Mocha', category:'HOT BEVERAGE', price:159, hasSugar:true, hasSizes:false, available:true, img:'/images/H003.png' },
+  { code:'H004', name:'Cinnamon Espresso Latte', category:'HOT BEVERAGE', price:159, hasSugar:true, hasSizes:false, available:true, img:'/images/H004.png' },
+  { code:'H007', name:'Cinnamon Espresso Choco Latte', category:'HOT BEVERAGE', price:169, hasSugar:true, hasSizes:false, available:true, img:'/images/H007.png' },
+  { code:'H010', name:'Kapeng Barako', category:'HOT BEVERAGE', price:149, hasSugar:true, hasSizes:false, available:true, img:'/images/H010.jpg' },
 
-  // ── ICED COFFEE ── (H008 - has sizes + sugar)
-  { code:'H008', name:'Iced Vanilla Latte', category:'ICED COFFEE', price:139, hasSugar:true, hasSizes:true, sizes:{short:139,medium:159,tall:169}, available:true, img:'/images/H008.jpg' },
-
-  // ── COLD BEVERAGES ──
+  // ── COLD BEVERAGE ──
+  { code:'H008', name:'Iced Vanilla Latte', category:'COLD BEVERAGE', price:139, hasSugar:true, hasSizes:true, sizes:{short:139,medium:159,tall:169}, available:true, img:'/images/H008.jpg' },
   { code:'C001', name:'Iced Dark Cocoa Ovaltine', category:'COLD BEVERAGE', price:149, hasSugar:true, hasSizes:true, sizes:{short:149,medium:170,tall:179}, available:true, img:'/images/C001.png' },
   { code:'C009', name:"YANI's Echo", category:'COLD BEVERAGE', price:159, hasSugar:true, hasSizes:true, sizes:{short:159,medium:179,tall:189}, available:true, img:'/images/C009.jpg' },
   { code:'C011', name:'Creamy Double Dutch Frappe', category:'COLD BEVERAGE', price:149, hasSugar:true, hasSizes:true, sizes:{short:149,medium:169,tall:189}, available:true, img:'/images/C011.png' },
@@ -1059,19 +1057,17 @@ const MENU_DATA = [
   { code:'C013', name:'Lush Oreo Frappe', category:'COLD BEVERAGE', price:159, hasSugar:true, hasSizes:true, sizes:{short:159,medium:179,tall:188}, available:true, img:'/images/C013.png' },
   { code:'C014', name:'Affogato', category:'COLD BEVERAGE', price:159, hasSugar:false, hasSizes:false, available:true, img:'/images/C014.png' },
   { code:'C016', name:'Peach Iced Tea', category:'COLD BEVERAGE', price:129, hasSugar:true, hasSizes:true, sizes:{short:129,medium:149,tall:158}, available:true, img:'/images/C016.jpeg' },
+  { code:'S001', name:'Strawberry Soda', category:'COLD BEVERAGE', price:120, hasSugar:true, hasSizes:true, sizes:{short:120,medium:140,tall:149}, available:true, img:'/images/S001.png' },
+  { code:'S002', name:'Blueberry Soda', category:'COLD BEVERAGE', price:120, hasSugar:true, hasSizes:true, sizes:{short:120,medium:140,tall:149}, available:true, img:'/images/S002.png' },
 
-  // ── PASTRIES ──
+  // ── PASTRY ──
   { code:'P001', name:'Banana Bread Loaf', category:'PASTRY', price:179, hasSugar:false, hasSizes:false, available:true, img:'/images/P001.png' },
   { code:'P002', name:'Banana Bread Cupcake', category:'PASTRY', price:59, hasSugar:false, hasSizes:false, available:true, img:'/images/P002.png' },
 
-  // ── SODAS (with sizes + sweetness) ──
-  { code:'S001', name:'Strawberry Soda', category:'SODA', price:120, hasSugar:true, hasSizes:true, sizes:{short:120,medium:140,tall:149}, available:true, img:'/images/S001.png' },
-  { code:'S002', name:'Blueberry Soda', category:'SODA', price:120, hasSugar:true, hasSizes:true, sizes:{short:120,medium:140,tall:149}, available:true, img:'/images/S002.png' },
-
-  // ── FOOD ──
-  { code:'F001', name:'French Fries (Sharing)', category:'FOOD', price:299, hasSugar:false, hasSizes:false, available:true, img:'/images/F001.jpg' },
-  { code:'F002', name:'Fries w/ Chicken Pops', category:'FOOD', price:349, hasSugar:false, hasSizes:false, available:true, img:'/images/F002.png' },
-  { code:'F003', name:'Chicken Pops', category:'FOOD', price:250, hasSugar:false, hasSizes:false, available:true, img:'/images/F003.png' },
+  // ── MEAL ──
+  { code:'F001', name:'French Fries (Sharing)', category:'MEAL', price:299, hasSugar:false, hasSizes:false, available:true, img:'/images/F001.jpg' },
+  { code:'F002', name:'Fries w/ Chicken Pops', category:'MEAL', price:349, hasSugar:false, hasSizes:false, available:true, img:'/images/F002.png' },
+  { code:'F003', name:'Chicken Pops', category:'MEAL', price:250, hasSugar:false, hasSizes:false, available:true, img:'/images/F003.png' },
 ];
 
 // ══════════════════════════════════════════════════════════
@@ -1147,7 +1143,7 @@ function getImgUrl(item) {
 }
 
 function getCategoryIcon(cat) {
-  var icons = { 'COFFEE':'☕', 'ICED COFFEE':'🧋', 'COLD BEVERAGE':'🧊', 'PASTRY':'🥐', 'SODA':'🥤', 'FOOD':'🍟' };
+  var icons = { 'HOT BEVERAGE':'☕', 'COLD BEVERAGE':'🧊', 'PASTRY':'🥐', 'MEAL':'🍽️' };
   return icons[cat] || '🍃';
 }
 
