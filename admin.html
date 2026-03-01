@@ -940,10 +940,27 @@ function printReceipt(orderId) {
   var tableNo = o.table || '?';
   var customerName = o.customer || '';
   var orderNotes = (o.notes && typeof o.notes === 'string') ? o.notes.trim() : '';
+  
+  // Receipt customer details (for BIR receipts)
+  var hasReceiptDetails = o.receiptName || o.receiptAddress || o.receiptTIN;
+  var receiptType = (o.receiptType || '').toLowerCase();
+  var isBIRReceipt = receiptType === 'bir' || hasReceiptDetails;
 
   // Print date = NOW (when receipt is printed) - compact format
   var now = new Date();
   var printDate = now.toLocaleDateString('en-PH', {month:'short',day:'numeric',year:'numeric'}) + ' ' + now.toLocaleTimeString('en-PH', {hour:'2-digit',minute:'2-digit',hour12:true});
+  
+  // Build customer details section (for BIR receipts)
+  var customerSection = '';
+  if (hasReceiptDetails) {
+    customerSection = '<div class="divider"></div>' +
+      '<div style="font-size:10px;margin:3px 0;">' +
+      '<div style="font-weight:bold;margin-bottom:2px;">SOLD TO:</div>' +
+      (o.receiptName ? '<div>Name: ' + esc(o.receiptName) + '</div>' : '') +
+      (o.receiptAddress ? '<div>Address: ' + esc(o.receiptAddress) + '</div>' : '') +
+      (o.receiptTIN ? '<div>TIN: ' + esc(o.receiptTIN) + '</div>' : '') +
+      '</div>';
+  }
 
   var receiptHTML = '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
     '<title>Receipt - ' + esc(orderId) + '</title>' +
@@ -996,6 +1013,9 @@ function printReceipt(orderId) {
     '<div class="info-row"><span class="label">' + esc(orderType) + '</span><span>Table: <b>' + esc(String(tableNo)) + '</b></span></div>' +
     (customerName ? '<div class="info-row"><span class="label">Customer:</span><span>' + esc(customerName) + '</span></div>' : '') +
 
+    // Customer Details (BIR Receipt)
+    customerSection +
+
     '<div class="divider"></div>' +
 
     // Items Table
@@ -1026,8 +1046,13 @@ function printReceipt(orderId) {
     '<p style="margin-top:3px;font-size:9px;">FB: facebook.com/YANIgardencafe</p>' +
     '<p style="font-size:9px;">IG: @yanigardencafe</p>' +
     '<div class="legal">' +
-    '<p>This serves as your Sales Invoice</p>' +
-    '<p>Not valid for input tax claim</p>' +
+    (isBIRReceipt ? 
+      '<p>This serves as an OFFICIAL RECEIPT</p>' +
+      '<p>Valid for tax deduction purposes</p>' 
+      : 
+      '<p>This serves as your Sales Invoice</p>' +
+      '<p>Not valid for input tax claim</p>'
+    ) +
     '</div>' +
     '</div>' +
 
