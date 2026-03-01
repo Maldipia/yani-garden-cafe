@@ -1050,12 +1050,12 @@ function printReceipt(orderId) {
       var lineTotal = (it.price || 0) * (it.qty || 1);
       itemsTotal += lineTotal;
       itemRows += '<tr>' +
-        '<td style="padding:4px 0 3px 0;font-weight:bold;">' + esc(it.name) +
-        (opts.length ? '<br><span style="font-size:18px;color:#555;">' + esc(opts.join(' | ')) + '</span>' : '') +
+        '<td style="padding:4px 0 3px 0;font-weight:bold;font-size:16pt !important;">' + esc(it.name) +
+        (opts.length ? '<br><span style="font-size:14pt !important;color:#555;">' + esc(opts.join(' | ')) + '</span>' : '') +
         '</td>' +
-        '<td style="text-align:center;padding:4px 4px 3px 4px;">' + (it.qty || 1) + '</td>' +
-        '<td style="text-align:right;padding:4px 0 3px 0;">' + (it.price || 0).toFixed(2) + '</td>' +
-        '<td style="text-align:right;padding:4px 0 3px 0;font-weight:bold;">' + lineTotal.toFixed(2) + '</td>' +
+        '<td style="text-align:center;padding:4px 4px 3px 4px;font-size:16pt !important;">' + (it.qty || 1) + '</td>' +
+        '<td style="text-align:right;padding:4px 0 3px 0;font-size:16pt !important;">' + (it.price || 0).toFixed(2) + '</td>' +
+        '<td style="text-align:right;padding:4px 0 3px 0;font-weight:bold;font-size:16pt !important;">' + lineTotal.toFixed(2) + '</td>' +
         '</tr>';
     });
   }
@@ -1085,11 +1085,11 @@ function printReceipt(orderId) {
   var customerSection = '';
   if (hasReceiptDetails) {
     customerSection = '<div class="divider"></div>' +
-      '<div style="font-size:22px;margin:5px 0;">' +
-      '<div style="font-weight:bold;margin-bottom:4px;">SOLD TO:</div>' +
-      (o.receiptName ? '<div>Name: ' + esc(o.receiptName) + '</div>' : '') +
-      (o.receiptAddress ? '<div>Address: ' + esc(o.receiptAddress) + '</div>' : '') +
-      (o.receiptTIN ? '<div>TIN: ' + esc(o.receiptTIN) + '</div>' : '') +
+      '<div style="font-size:18pt !important;margin:5px 0;">' +
+      '<div style="font-weight:bold;margin-bottom:4px;font-size:18pt !important;">SOLD TO:</div>' +
+      (o.receiptName ? '<div style="font-size:18pt !important;">Name: ' + esc(o.receiptName) + '</div>' : '') +
+      (o.receiptAddress ? '<div style="font-size:18pt !important;">Address: ' + esc(o.receiptAddress) + '</div>' : '') +
+      (o.receiptTIN ? '<div style="font-size:18pt !important;">TIN: ' + esc(o.receiptTIN) + '</div>' : '') +
       '</div>' +
       '<!-- AUDIT: Customer data from ORDERS sheet columns U,V,W: CUSTOMER_TIN, CUSTOMER_NAME_FULL, CUSTOMER_ADDRESS -->';
   }
@@ -1111,32 +1111,45 @@ function printReceipt(orderId) {
     '\n-->' +
     '<style>' +
     '* { margin:0; padding:0; box-sizing:border-box; }' +
-    'body { font-family: "Courier New", "Courier", monospace; width:80mm; max-width:80mm; margin:0 auto; padding:3mm 2mm; font-size:20px; color:#000; -webkit-print-color-adjust:exact; line-height:1.4; }' +
+    'body { font-family: "Courier New", "Courier", monospace; width:80mm; max-width:80mm; margin:0 auto; padding:3mm 2mm; font-size:18pt !important; color:#000; -webkit-print-color-adjust:exact; line-height:1.4; }' +
     '.header { text-align:center; margin-bottom:8px; }' +
-    '.header h1 { font-size:38px; font-weight:bold; margin-bottom:4px; letter-spacing:0.5px; }' +
-    '.header .subtitle { font-size:28px; font-weight:bold; margin:3px 0; }' +
-    '.header p { font-size:20px; color:#000; margin:2px 0; line-height:1.3; }' +
+    '.header h1 { font-size:32pt !important; font-weight:bold; margin-bottom:4px; letter-spacing:0.5px; }' +
+    '.header .subtitle { font-size:24pt !important; font-weight:bold; margin:3px 0; }' +
+    '.header p { font-size:16pt !important; color:#000; margin:2px 0; line-height:1.3; }' +
     '.divider { border-top:1px dashed #000; margin:6px 0; }' +
     '.divider-thick { border-top:2px solid #000; margin:6px 0; }' +
-    '.info-row { display:flex; justify-content:space-between; font-size:22px; margin:4px 0; }' +
+    '.info-row { display:flex; justify-content:space-between; font-size:18pt !important; margin:4px 0; }' +
     '.info-row .label { font-weight:bold; }' +
-    'table { width:100%; border-collapse:collapse; font-size:20px; margin:5px 0; }' +
-    'th { text-align:left; padding:4px 0 3px 0; border-bottom:1px solid #000; font-size:18px; font-weight:bold; }' +
+    'table { width:100%; border-collapse:collapse; font-size:16pt !important; margin:5px 0; }' +
+    'th { text-align:left; padding:4px 0 3px 0; border-bottom:1px solid #000; font-size:14pt !important; font-weight:bold; }' +
     'th:nth-child(2) { text-align:center; width:12%; }' +
     'th:nth-child(3) { text-align:right; width:20%; }' +
     'th:nth-child(4) { text-align:right; width:22%; }' +
-    'td { padding:4px 0 3px 0; vertical-align:top; }' +
+    'td { padding:4px 0 3px 0; vertical-align:top; font-size:16pt !important; }' +
     'td:nth-child(2) { text-align:center; }' +
     'td:nth-child(3), td:nth-child(4) { text-align:right; }' +
     '.total-section { margin-top:6px; }' +
-    '.total-row { display:flex; justify-content:space-between; margin:4px 0; font-size:24px; }' +
-    '.total-row.grand { font-size:42px; font-weight:bold; margin:6px 0 4px 0; padding-top:4px; }' +
+    '.total-row { display:flex; justify-content:space-between; margin:4px 0; font-size:20pt !important; }' +
+    '.total-row.grand { font-size:36pt !important; font-weight:bold; margin:6px 0 4px 0; padding-top:4px; }' +
     '.footer { text-align:center; margin-top:10px; }' +
-    '.footer p { margin:4px 0; font-size:20px; }' +
-    '.footer .tagline { font-size:18px; font-style:italic; margin:4px 0; }' +
-    '.footer .legal { font-size:16px; margin-top:5px; color:#333; }' +
-    '.notes { border:1px solid #000; padding:5px 7px; margin:6px 0; font-size:20px; }' +
-    '@media print { body { width:80mm; margin:0; padding:2mm 1.5mm; } @page { size:80mm auto; margin:0; } }' +
+    '.footer p { margin:4px 0; font-size:16pt !important; }' +
+    '.footer .tagline { font-size:14pt !important; font-style:italic; margin:4px 0; }' +
+    '.footer .legal { font-size:13pt !important; margin-top:5px; color:#333; }' +
+    '.notes { border:1px solid #000; padding:5px 7px; margin:6px 0; font-size:16pt !important; }' +
+    '@media print { ' +
+    'body { width:80mm; margin:0; padding:2mm 1.5mm; font-size:18pt !important; } ' +
+    '.header h1 { font-size:32pt !important; } ' +
+    '.header .subtitle { font-size:24pt !important; } ' +
+    '.header p { font-size:16pt !important; } ' +
+    '.info-row { font-size:18pt !important; } ' +
+    'table { font-size:16pt !important; } ' +
+    'td { font-size:16pt !important; } ' +
+    'th { font-size:14pt !important; } ' +
+    '.total-row { font-size:20pt !important; } ' +
+    '.total-row.grand { font-size:36pt !important; } ' +
+    '.footer p { font-size:16pt !important; } ' +
+    '@page { size:80mm auto; margin:0; } ' +
+    '}' +
     '</style></head><body>' +
 
     // Header
