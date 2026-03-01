@@ -184,6 +184,8 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 .oc-btn-ready { background:#10B981; color:#fff }
 .oc-btn-complete { background:var(--forest); color:#fff }
 .oc-btn-cancel { background:var(--mist-light); color:#EF4444; font-weight:600 }
+.oc-btn-print { background:var(--white); color:var(--forest); border:1.5px solid var(--forest) !important; margin-top:6px; width:100% }
+.oc-btn-print:hover { background:var(--forest); color:var(--white) }
 
 /* ── Empty State ── */
 .empty-state {
@@ -869,6 +871,9 @@ function renderOrders() {
       html += '</div>';
     }
 
+    // Print Receipt button (always visible)
+    html += '<button class="oc-btn oc-btn-print" onclick="printReceipt(\'' + o.orderId + '\')">🖨️ Print Receipt</button>';
+
     html += '</div>';
     return html;
   }).join('');
@@ -893,6 +898,133 @@ async function updateStatus(orderId, newStatus) {
     renderOrders();
   } else {
     alert('Failed: ' + (result.error || 'Unknown error'));
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// PRINT RECEIPT
+// ══════════════════════════════════════════════════════════
+function printReceipt(orderId) {
+  var o = allOrders.find(function(x) { return x.orderId === orderId; });
+  if (!o) { alert('Order not found'); return; }
+
+  // Calculate totals
+  var itemsTotal = 0;
+  var itemRows = '';
+  if (o.items && o.items.length) {
+    o.items.forEach(function(it) {
+      var opts = [];
+      if (it.size) opts.push(it.size);
+      if (it.sugar) opts.push(it.sugar);
+      var lineTotal = (it.price || 0) * (it.qty || 1);
+      itemsTotal += lineTotal;
+      itemRows += '<tr>' +
+        '<td style="text-align:left;padding:3px 0;">' + esc(it.name) +
+        (opts.length ? '<br><span style="font-size:11px;color:#666;">' + esc(opts.join(' | ')) + '</span>' : '') +
+        '</td>' +
+        '<td style="text-align:center;padding:3px 0;">' + (it.qty || 1) + '</td>' +
+        '<td style="text-align:right;padding:3px 0;">₱' + (it.price || 0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) + '</td>' +
+        '<td style="text-align:right;padding:3px 0;">₱' + lineTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) + '</td>' +
+        '</tr>';
+    });
+  }
+
+  var subtotal = (o.subtotal && typeof o.subtotal === 'number') ? o.subtotal : itemsTotal;
+  var serviceCharge = (o.serviceCharge && typeof o.serviceCharge === 'number') ? o.serviceCharge : 0;
+  var grandTotal = subtotal + serviceCharge;
+
+  var orderType = o.orderType || 'DINE-IN';
+  var tableNo = o.table || '?';
+  var customerName = o.customer || '';
+  var orderNotes = (o.notes && typeof o.notes === 'string') ? o.notes.trim() : '';
+  var orderTime = '';
+  try {
+    var d = new Date(o.createdAt);
+    orderTime = d.toLocaleDateString('en-PH', {year:'numeric',month:'long',day:'numeric'}) + ' ' + d.toLocaleTimeString('en-PH', {hour:'2-digit',minute:'2-digit'});
+  } catch(e) { orderTime = o.createdAt || ''; }
+
+  var receiptHTML = '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
+    '<title>Receipt - ' + esc(orderId) + '</title>' +
+    '<style>' +
+    '* { margin:0; padding:0; box-sizing:border-box; }' +
+    'body { font-family: "Courier New", Courier, monospace; width:80mm; max-width:80mm; margin:0 auto; padding:8mm 4mm; font-size:12px; color:#000; }' +
+    '.header { text-align:center; margin-bottom:10px; }' +
+    '.header h1 { font-size:18px; font-weight:bold; margin-bottom:2px; }' +
+    '.header p { font-size:11px; color:#333; }' +
+    '.divider { border-top:1px dashed #000; margin:8px 0; }' +
+    '.divider-thick { border-top:2px solid #000; margin:8px 0; }' +
+    '.info-row { display:flex; justify-content:space-between; font-size:11px; margin:2px 0; }' +
+    '.info-row .label { color:#555; }' +
+    'table { width:100%; border-collapse:collapse; font-size:11px; }' +
+    'th { text-align:left; padding:3px 0; border-bottom:1px solid #000; font-size:10px; text-transform:uppercase; }' +
+    'th:nth-child(2), th:nth-child(3), th:nth-child(4) { text-align:right; }' +
+    'th:nth-child(2) { text-align:center; }' +
+    '.total-section { margin-top:6px; }' +
+    '.total-row { display:flex; justify-content:space-between; margin:3px 0; font-size:12px; }' +
+    '.total-row.grand { font-size:16px; font-weight:bold; margin:6px 0; }' +
+    '.footer { text-align:center; margin-top:12px; font-size:10px; color:#555; }' +
+    '.footer p { margin:2px 0; }' +
+    '.notes { background:#f5f5f5; padding:6px 8px; border-radius:4px; margin:6px 0; font-size:11px; }' +
+    '@media print { body { width:80mm; margin:0; padding:4mm 2mm; } @page { size:80mm auto; margin:0; } }' +
+    '</style></head><body>' +
+
+    // Header
+    '<div class="header">' +
+    '<h1>YANI GARDEN CAFE</h1>' +
+    '<p>Amadeo, Cavite</p>' +
+    '<p>Non-VAT Registered</p>' +
+    '</div>' +
+
+    '<div class="divider-thick"></div>' +
+
+    // Order Info
+    '<div class="info-row"><span class="label">Order:</span><span><b>' + esc(orderId) + '</b></span></div>' +
+    '<div class="info-row"><span class="label">Date:</span><span>' + esc(orderTime) + '</span></div>' +
+    '<div class="info-row"><span class="label">Table:</span><span>' + esc(String(tableNo)) + '</span></div>' +
+    '<div class="info-row"><span class="label">Type:</span><span>' + esc(orderType) + '</span></div>' +
+    (customerName ? '<div class="info-row"><span class="label">Customer:</span><span>' + esc(customerName) + '</span></div>' : '') +
+
+    '<div class="divider"></div>' +
+
+    // Items Table
+    '<table>' +
+    '<tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th></tr>' +
+    itemRows +
+    '</table>' +
+
+    '<div class="divider"></div>' +
+
+    // Totals
+    '<div class="total-section">' +
+    '<div class="total-row"><span>Subtotal:</span><span>₱' + subtotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) + '</span></div>' +
+    (serviceCharge > 0 ? '<div class="total-row"><span>Service Charge (10%):</span><span>₱' + serviceCharge.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) + '</span></div>' : '') +
+    '<div class="divider-thick"></div>' +
+    '<div class="total-row grand"><span>TOTAL:</span><span>₱' + grandTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) + '</span></div>' +
+    '</div>' +
+
+    // Notes
+    (orderNotes ? '<div class="notes">📝 ' + esc(orderNotes) + '</div>' : '') +
+
+    '<div class="divider"></div>' +
+
+    // Footer
+    '<div class="footer">' +
+    '<p>Thank you for dining with us!</p>' +
+    '<p>🌿 Yani Garden Cafe 🌿</p>' +
+    '<p style="margin-top:6px;font-size:9px;">This serves as your Sales Invoice</p>' +
+    '<p style="font-size:9px;">Not valid for input tax claim</p>' +
+    '</div>' +
+
+    // Auto-print
+    '<script>window.onload=function(){window.print();}<\/script>' +
+    '</body></html>';
+
+  var printWin = window.open('', '_blank', 'width=350,height=600');
+  if (printWin) {
+    printWin.document.write(receiptHTML);
+    printWin.document.close();
+  } else {
+    alert('Pop-up blocked! Please allow pop-ups for this site to print receipts.');
   }
 }
 
