@@ -1050,12 +1050,12 @@ function printReceipt(orderId) {
       var lineTotal = (it.price || 0) * (it.qty || 1);
       itemsTotal += lineTotal;
       itemRows += '<tr>' +
-        '<td style="padding:3px 4px 3px 0;font-weight:bold;font-size:10pt !important;">' + esc(it.name) +
+        '<td style="padding:3px 6px 3px 0;font-weight:bold;font-size:10pt !important;">' + esc(it.name) +
         (opts.length ? '<br><span style="font-size:9pt !important;color:#555;">' + esc(opts.join(' | ')) + '</span>' : '') +
         '</td>' +
-        '<td style="text-align:center;padding:3px 4px;font-size:10pt !important;">' + (it.qty || 1) + '</td>' +
-        '<td style="text-align:right;padding:3px 4px;font-size:10pt !important;">' + (it.price || 0).toFixed(2) + '</td>' +
-        '<td style="text-align:right;padding:3px 0 3px 4px;font-weight:bold;font-size:10pt !important;">' + lineTotal.toFixed(2) + '</td>' +
+        '<td style="text-align:center;padding:3px 6px;font-size:10pt !important;">' + (it.qty || 1) + '</td>' +
+        '<td style="text-align:right;padding:3px 6px;font-size:10pt !important;">' + (it.price || 0).toFixed(2) + '</td>' +
+        '<td style="text-align:right;padding:3px 0 3px 6px;font-weight:bold;font-size:10pt !important;">' + lineTotal.toFixed(2) + '</td>' +
         '</tr>';
     });
   }
@@ -1122,13 +1122,13 @@ function printReceipt(orderId) {
     '.info-row .label { font-weight:bold; }' +
     'table { width:100%; border-collapse:collapse; font-size:10pt !important; margin:4px 0; }' +
     'th { text-align:left; padding:4px 0 3px 0; border-bottom:1px solid #000; font-size:9pt !important; font-weight:bold; }' +
-    'th:nth-child(2) { text-align:center; width:15%; }' +
-    'th:nth-child(3) { text-align:right; width:24%; }' +
-    'th:nth-child(4) { text-align:right; width:26%; }' +
+    'th:nth-child(2) { text-align:center; width:18%; }' +
+    'th:nth-child(3) { text-align:right; width:28%; }' +
+    'th:nth-child(4) { text-align:right; width:30%; }' +
     'td { padding:3px 0; vertical-align:top; font-size:10pt !important; }' +
     'td:nth-child(2) { text-align:center; }' +
     'td:nth-child(3), td:nth-child(4) { text-align:right; }' +
-    'th, td { padding-left:4px; padding-right:4px; }' +
+    'th, td { padding-left:6px; padding-right:6px; }' +
     'th:first-child, td:first-child { padding-left:0; }' +
     'th:last-child, td:last-child { padding-right:0; }' +
     '.total-section { margin-top:5px; }' +
