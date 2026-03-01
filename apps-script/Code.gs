@@ -593,13 +593,13 @@ function getOrders(data) {
         commissionRate: getValue('COMMISSION_RATE') || 0,
         commissionAmt: getValue('COMMISSION_AMT') || 0,
         netRevenue: getValue('NET_REVENUE') || 0,
-        // Receipt customer details
+        // Receipt customer details - FIXED TO MATCH ACTUAL SHEET COLUMNS
         receiptType: getValue('RECEIPT_TYPE') || '',
         receiptDelivery: getValue('RECEIPT_DELIVERY') || '',
         receiptEmail: getValue('RECEIPT_EMAIL') || '',
-        receiptName: getValue('RECEIPT_NAME') || '',
-        receiptAddress: getValue('RECEIPT_ADDRESS') || '',
-        receiptTIN: getValue('RECEIPT_TIN') || '',
+        receiptName: getValue('CUSTOMER_NAME_FULL') || '',      // Column V
+        receiptAddress: getValue('CUSTOMER_ADDRESS') || '',     // Column W
+        receiptTIN: getValue('CUSTOMER_TIN') || '',             // Column U
         items: items
       });
       

@@ -959,11 +959,25 @@ function printReceipt(orderId) {
       (o.receiptName ? '<div>Name: ' + esc(o.receiptName) + '</div>' : '') +
       (o.receiptAddress ? '<div>Address: ' + esc(o.receiptAddress) + '</div>' : '') +
       (o.receiptTIN ? '<div>TIN: ' + esc(o.receiptTIN) + '</div>' : '') +
-      '</div>';
+      '</div>' +
+      '<!-- AUDIT: Customer data from ORDERS sheet columns U,V,W: CUSTOMER_TIN, CUSTOMER_NAME_FULL, CUSTOMER_ADDRESS -->';
   }
 
   var receiptHTML = '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
     '<title>Receipt - ' + esc(orderId) + '</title>' +
+    '<!--' +
+    '\n  YANI POS RECEIPT - AUDIT TRAIL' +
+    '\n  Generated: ' + printDate +
+    '\n  Order ID: ' + esc(orderId) +
+    '\n  ' +
+    '\n  DATA SOURCE: Google Sheets "YANI CAFE" > ORDERS Tab' +
+    '\n  Column Mapping:' +
+    '\n  - Order Info: A (ORDER_ID), D (TABLE_NO), E (CUSTOMER_NAME), F (STATUS)' +
+    '\n  - Amounts: G (SUBTOTAL), H (SERVICE_CHARGE), I (TOTAL)' +
+    '\n  - Receipt: N (RECEIPT_TYPE), O (RECEIPT_DELIVERY), P (RECEIPT_EMAIL)' +
+    '\n  - Customer: U (CUSTOMER_TIN), V (CUSTOMER_NAME_FULL), W (CUSTOMER_ADDRESS)' +
+    '\n  - Items: ORDER_ITEMS sheet with sizes/sugar in columns' +
+    '\n-->' +
     '<style>' +
     '* { margin:0; padding:0; box-sizing:border-box; }' +
     'body { font-family: "Courier New", "Courier", monospace; width:80mm; max-width:80mm; margin:0 auto; padding:3mm 2mm; font-size:11px; color:#000; -webkit-print-color-adjust:exact; line-height:1.3; }' +
