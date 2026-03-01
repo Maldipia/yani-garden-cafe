@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YANI POS - Login</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .login-container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+
+        .logo {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            font-size: 36px;
+        }
+
+        h1 {
+            color: #333;
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 30px;
+        }
+
+        .pin-input-container {
+            margin: 30px 0;
+        }
+
+        .pin-label {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 15px;
+            display: block;
+        }
+
+        .pin-dots {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .pin-dot {
+            width: 16px;
+            height: 16px;
+            border: 2px solid #ddd;
+            border-radius: 50%;
+            transition: all 0.2s;
+        }
+
+        .pin-dot.filled {
+            background: #667eea;
+            border-color: #667eea;
+            transform: scale(1.1);
+        }
+
+        #pinInput {
+            width: 100%;
+            padding: 15px;
+            font-size: 24px;
+            text-align: center;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            letter-spacing: 10px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        #pinInput:focus {
+            border-color: #667eea;
+        }
+
+        .btn-login {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-top: 20px;
+        }
+
+        .btn-login:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-login:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .btn-login:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .error-message {
+            background: #fee;
+            color: #c33;
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+            animation: shake 0.5s;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
+        }
+
+        .help-text {
+            color: #999;
+            font-size: 13px;
+            margin-top: 20px;
+        }
+
+        .loading {
+            display: none;
+            margin-top: 15px;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="logo">🍽️</div>
+        <h1>YANI Garden Cafe</h1>
+        <p class="subtitle">Point of Sale System</p>
+
+        <div class="pin-input-container">
+            <label class="pin-label">Enter Your PIN</label>
+            <div class="pin-dots">
+                <div class="pin-dot"></div>
+                <div class="pin-dot"></div>
+                <div class="pin-dot"></div>
+                <div class="pin-dot"></div>
+                <div class="pin-dot"></div>
+                <div class="pin-dot"></div>
+            </div>
+            <input 
+                type="password" 
+                id="pinInput" 
+                maxlength="6" 
+                placeholder="••••••" 
+                inputmode="numeric"
+                autocomplete="off"
+            >
+        </div>
+
+        <button class="btn-login" onclick="handleLogin()">
+            Login
+        </button>
+
+        <div class="error-message" id="errorMessage"></div>
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+        </div>
+
+        <p class="help-text">Forgot your PIN? Contact the cafe owner</p>
+    </div>
+
+    <script>
+        const API_URL = 'https://script.google.com/macros/s/AKfycbytCV-jiFSOoon7Ijww5a-AABRYzhiNZPXVubaaa2zoVBOFxvcgkDH-6e4CfksMA7LC/exec';
+
+        // Update PIN dots as user types
+        document.getElementById('pinInput').addEventListener('input', function(e) {
+            const value = e.target.value;
+            const dots = document.querySelectorAll('.pin-dot');
+            
+            dots.forEach((dot, index) => {
+                if (index < value.length) {
+                    dot.classList.add('filled');
+                } else {
+                    dot.classList.remove('filled');
+                }
+            });
+
+            // Auto-login when 4 or 6 digits entered
+            if (value.length === 4 || value.length === 6) {
+                setTimeout(() => handleLogin(), 300);
+            }
+        });
+
+        // Allow Enter key to login
+        document.getElementById('pinInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                handleLogin();
+            }
+        });
+
+        // SHA256 hash function
+        async function sha256(message) {
+            const msgBuffer = new TextEncoder().encode(message);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            return hashHex;
+        }
+
+        async function handleLogin() {
+            const pin = document.getElementById('pinInput').value.trim();
+            const errorDiv = document.getElementById('errorMessage');
+            const loadingDiv = document.getElementById('loading');
+            const loginBtn = document.querySelector('.btn-login');
+
+            // Validate PIN
+            if (!pin) {
+                showError('Please enter your PIN');
+                return;
+            }
+
+            if (pin.length !== 4 && pin.length !== 6) {
+                showError('PIN must be 4 or 6 digits');
+                return;
+            }
+
+            if (!/^\d+$/.test(pin)) {
+                showError('PIN must contain only numbers');
+                return;
+            }
+
+            // Show loading
+            errorDiv.classList.remove('show');
+            loadingDiv.classList.add('show');
+            loginBtn.disabled = true;
+
+            try {
+                // Hash the PIN
+                const pinHash = await sha256(pin);
+
+                // Call API to verify PIN
+                const response = await fetch(`${API_URL}?action=verifyUserPin&pinHash=${encodeURIComponent(pinHash)}`);
+                const data = await response.json();
+
+                if (data.ok) {
+                    // Login successful
+                    const session = {
+                        userId: data.userId,
+                        username: data.username,
+                        role: data.role,
+                        loginTime: new Date().toISOString(),
+                        expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString() // 30 min
+                    };
+
+                    // Save session
+                    localStorage.setItem('yaniSession', JSON.stringify(session));
+
+                    // Log the login
+                    logAudit(data.userId, 'LOGIN', null, `User logged in as ${data.role}`);
+
+                    // Redirect to appropriate page
+                    if (data.role === 'KITCHEN') {
+                        window.location.href = 'admin.html?view=kitchen';
+                    } else {
+                        window.location.href = 'admin.html';
+                    }
+                } else {
+                    // Login failed
+                    showError(data.message || 'Invalid PIN. Please try again.');
+                    document.getElementById('pinInput').value = '';
+                    document.querySelectorAll('.pin-dot').forEach(dot => dot.classList.remove('filled'));
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                showError('Connection error. Please check your internet and try again.');
+            } finally {
+                loadingDiv.classList.remove('show');
+                loginBtn.disabled = false;
+            }
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.classList.add('show');
+            
+            // Shake animation
+            setTimeout(() => {
+                errorDiv.classList.remove('show');
+            }, 5000);
+        }
+
+        async function logAudit(userId, action, target, details) {
+            try {
+                await fetch(`${API_URL}?action=logAudit&userId=${userId}&action=${action}&target=${target || ''}&details=${encodeURIComponent(details || '')}`);
+            } catch (error) {
+                console.error('Audit log error:', error);
+            }
+        }
+
+        // Check if already logged in
+        window.addEventListener('DOMContentLoaded', function() {
+            const session = localStorage.getItem('yaniSession');
+            if (session) {
+                try {
+                    const sessionData = JSON.parse(session);
+                    const expiresAt = new Date(sessionData.expiresAt);
+                    
+                    if (expiresAt > new Date()) {
+                        // Session still valid, redirect
+                        window.location.href = 'admin.html';
+                    } else {
+                        // Session expired, clear it
+                        localStorage.removeItem('yaniSession');
+                    }
+                } catch (error) {
+                    localStorage.removeItem('yaniSession');
+                }
+            }
+
+            // Focus on PIN input
+            document.getElementById('pinInput').focus();
+        });
+    </script>
+</body>
+</html>
