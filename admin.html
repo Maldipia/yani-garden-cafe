@@ -919,12 +919,12 @@ function printReceipt(orderId) {
       var lineTotal = (it.price || 0) * (it.qty || 1);
       itemsTotal += lineTotal;
       itemRows += '<tr>' +
-        '<td style="text-align:left;padding:4px 0;font-size:16px;">' + esc(it.name) +
-        (opts.length ? '<br><span style="font-size:14px;color:#444;">' + esc(opts.join(' | ')) + '</span>' : '') +
+        '<td style="padding:2px 0 1px 0;">' + esc(it.name) +
+        (opts.length ? '<br><span style="font-size:9px;color:#555;">' + esc(opts.join(' | ')) + '</span>' : '') +
         '</td>' +
-        '<td style="text-align:center;padding:4px 0;font-size:16px;">' + (it.qty || 1) + '</td>' +
-        '<td style="text-align:right;padding:4px 0;font-size:16px;">' + (it.price || 0).toFixed(2) + '</td>' +
-        '<td style="text-align:right;padding:4px 0;font-size:16px;">' + lineTotal.toFixed(2) + '</td>' +
+        '<td style="text-align:center;padding:2px 4px 1px 4px;">' + (it.qty || 1) + '</td>' +
+        '<td style="text-align:right;padding:2px 0 1px 0;">' + (it.price || 0).toFixed(2) + '</td>' +
+        '<td style="text-align:right;padding:2px 0 1px 0;font-weight:bold;">' + lineTotal.toFixed(2) + '</td>' +
         '</tr>';
     });
   }
@@ -932,58 +932,60 @@ function printReceipt(orderId) {
   var subtotal = (o.subtotal && typeof o.subtotal === 'number') ? o.subtotal : itemsTotal;
   var serviceCharge = (o.serviceCharge && typeof o.serviceCharge === 'number') ? o.serviceCharge : 0;
   var grandTotal = subtotal + serviceCharge;
+  
+  // Calculate service charge percentage dynamically
+  var scPct = subtotal > 0 ? ((serviceCharge / subtotal) * 100) : 0;
 
   var orderType = o.orderType || 'DINE-IN';
   var tableNo = o.table || '?';
   var customerName = o.customer || '';
   var orderNotes = (o.notes && typeof o.notes === 'string') ? o.notes.trim() : '';
 
-  // Print date = NOW (when receipt is printed)
+  // Print date = NOW (when receipt is printed) - compact format
   var now = new Date();
-  var printDate = now.toLocaleDateString('en-PH', {year:'numeric',month:'long',day:'numeric'}) + ' ' + now.toLocaleTimeString('en-PH', {hour:'2-digit',minute:'2-digit'});
-
-  // Order date (when order was placed)
-  var orderTime = '';
-  try {
-    var d = new Date(o.createdAt);
-    orderTime = d.toLocaleDateString('en-PH', {year:'numeric',month:'short',day:'numeric'}) + ' ' + d.toLocaleTimeString('en-PH', {hour:'2-digit',minute:'2-digit'});
-  } catch(e) { orderTime = o.createdAt || ''; }
+  var printDate = now.toLocaleDateString('en-PH', {month:'short',day:'numeric',year:'numeric'}) + ' ' + now.toLocaleTimeString('en-PH', {hour:'2-digit',minute:'2-digit',hour12:true});
 
   var receiptHTML = '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
     '<title>Receipt - ' + esc(orderId) + '</title>' +
     '<style>' +
     '* { margin:0; padding:0; box-sizing:border-box; }' +
-    'body { font-family: "Arial", "Helvetica", sans-serif; width:100mm; max-width:100mm; margin:0 auto; padding:6mm 3mm; font-size:16px; color:#000; -webkit-print-color-adjust:exact; }' +
-    '.header { text-align:center; margin-bottom:8px; }' +
-    '.header h1 { font-size:26px; font-weight:bold; margin-bottom:4px; letter-spacing:1px; }' +
-    '.header p { font-size:16px; color:#000; margin:2px 0; }' +
-    '.divider { border-top:1px dashed #000; margin:8px 0; }' +
-    '.divider-thick { border-top:3px solid #000; margin:8px 0; }' +
-    '.info-row { display:flex; justify-content:space-between; font-size:16px; margin:3px 0; }' +
+    'body { font-family: "Courier New", "Courier", monospace; width:80mm; max-width:80mm; margin:0 auto; padding:3mm 2mm; font-size:11px; color:#000; -webkit-print-color-adjust:exact; line-height:1.3; }' +
+    '.header { text-align:center; margin-bottom:5px; }' +
+    '.header h1 { font-size:14px; font-weight:bold; margin-bottom:2px; letter-spacing:0.5px; }' +
+    '.header .subtitle { font-size:10px; font-weight:bold; margin:1px 0; }' +
+    '.header p { font-size:9px; color:#000; margin:1px 0; line-height:1.2; }' +
+    '.divider { border-top:1px dashed #000; margin:4px 0; }' +
+    '.divider-thick { border-top:2px solid #000; margin:4px 0; }' +
+    '.info-row { display:flex; justify-content:space-between; font-size:10px; margin:2px 0; }' +
     '.info-row .label { font-weight:bold; }' +
-    'table { width:100%; border-collapse:collapse; font-size:16px; }' +
-    'th { text-align:left; padding:4px 0; border-bottom:2px solid #000; font-size:15px; font-weight:bold; text-transform:uppercase; }' +
-    'th:nth-child(2) { text-align:center; }' +
-    'th:nth-child(3), th:nth-child(4) { text-align:right; }' +
-    '.total-section { margin-top:8px; }' +
-    '.total-row { display:flex; justify-content:space-between; margin:4px 0; font-size:18px; }' +
-    '.total-row.grand { font-size:24px; font-weight:bold; margin:8px 0; }' +
-    '.footer { text-align:center; margin-top:14px; }' +
-    '.footer p { margin:4px 0; font-size:16px; color:#000; }' +
-    '.footer .legal { font-size:14px; margin-top:8px; }' +
-    '.notes { border:1px solid #000; padding:6px 8px; margin:8px 0; font-size:15px; }' +
-    '@media print { body { width:100mm; margin:0; padding:4mm 2mm; } @page { size:100mm auto; margin:0; } }' +
+    'table { width:100%; border-collapse:collapse; font-size:10px; margin:3px 0; }' +
+    'th { text-align:left; padding:2px 0 1px 0; border-bottom:1px solid #000; font-size:9px; font-weight:bold; }' +
+    'th:nth-child(2) { text-align:center; width:12%; }' +
+    'th:nth-child(3) { text-align:right; width:20%; }' +
+    'th:nth-child(4) { text-align:right; width:22%; }' +
+    'td { padding:2px 0 1px 0; vertical-align:top; }' +
+    'td:nth-child(2) { text-align:center; }' +
+    'td:nth-child(3), td:nth-child(4) { text-align:right; }' +
+    '.total-section { margin-top:4px; }' +
+    '.total-row { display:flex; justify-content:space-between; margin:2px 0; font-size:11px; }' +
+    '.total-row.grand { font-size:14px; font-weight:bold; margin:4px 0 2px 0; padding-top:2px; }' +
+    '.footer { text-align:center; margin-top:6px; }' +
+    '.footer p { margin:2px 0; font-size:10px; }' +
+    '.footer .tagline { font-size:9px; font-style:italic; margin:2px 0; }' +
+    '.footer .legal { font-size:8px; margin-top:3px; color:#333; }' +
+    '.notes { border:1px solid #000; padding:3px 5px; margin:4px 0; font-size:10px; }' +
+    '@media print { body { width:80mm; margin:0; padding:2mm 1.5mm; } @page { size:80mm auto; margin:0; } }' +
     '</style></head><body>' +
 
     // Header
     '<div class="header">' +
     '<h1>YANI GARDEN CAFE</h1>' +
-    '<p><b>YANI-CAFE FOOD AND BEVERAGE HOUSE</b></p>' +
+    '<p class="subtitle">YANI-CAFE FOOD AND BEVERAGE HOUSE</p>' +
     '<p>Purok 8 Daang Malinaw, Loma 4119</p>' +
     '<p>Amadeo, Cavite, Philippines</p>' +
     '<p>TIN: 501-401-857-00005</p>' +
     '<p>Tel: 0967-400-0040</p>' +
-    '<p>Non-VAT Registered</p>' +
+    '<p style="margin-top:1px;">Non-VAT Registered</p>' +
     '</div>' +
 
     '<div class="divider-thick"></div>' +
@@ -991,8 +993,7 @@ function printReceipt(orderId) {
     // Order Info
     '<div class="info-row"><span class="label">Order:</span><span><b>' + esc(orderId) + '</b></span></div>' +
     '<div class="info-row"><span class="label">Date:</span><span>' + esc(printDate) + '</span></div>' +
-    '<div class="info-row"><span class="label">Table:</span><span>' + esc(String(tableNo)) + '</span></div>' +
-    '<div class="info-row"><span class="label">Type:</span><span>' + esc(orderType) + '</span></div>' +
+    '<div class="info-row"><span class="label">' + esc(orderType) + '</span><span>Table: <b>' + esc(String(tableNo)) + '</b></span></div>' +
     (customerName ? '<div class="info-row"><span class="label">Customer:</span><span>' + esc(customerName) + '</span></div>' : '') +
 
     '<div class="divider"></div>' +
@@ -1007,36 +1008,36 @@ function printReceipt(orderId) {
 
     // Totals
     '<div class="total-section">' +
-    '<div class="total-row"><span>Subtotal:</span><span>P' + subtotal.toFixed(2) + '</span></div>' +
-    (serviceCharge > 0 ? '<div class="total-row"><span>Service Charge (10%):</span><span>P' + serviceCharge.toFixed(2) + '</span></div>' : '') +
+    '<div class="total-row"><span>Subtotal:</span><span>P ' + subtotal.toFixed(2) + '</span></div>' +
+    (serviceCharge > 0 ? '<div class="total-row"><span>Service Charge (' + scPct.toFixed(1) + '%):</span><span>P ' + serviceCharge.toFixed(2) + '</span></div>' : '') +
     '<div class="divider-thick"></div>' +
-    '<div class="total-row grand"><span>TOTAL:</span><span>P' + grandTotal.toFixed(2) + '</span></div>' +
+    '<div class="total-row grand"><span>TOTAL:</span><span>P ' + grandTotal.toFixed(2) + '</span></div>' +
     '</div>' +
 
     // Notes
-    (orderNotes ? '<div class="notes">Note: ' + esc(orderNotes) + '</div>' : '') +
+    (orderNotes ? '<div class="notes"><b>Note:</b> ' + esc(orderNotes) + '</div>' : '') +
 
     '<div class="divider"></div>' +
 
     // Footer
     '<div class="footer">' +
     '<p><b>Happy to serve. Visit us again soon.</b></p>' +
-    '<p><b>Hold on a cup of blessing - YANI</b></p>' +
-    '<p style="margin-top:6px;">FB: facebook.com/YANIgardencafe</p>' +
-    '<p>IG: @yanigardencafe</p>' +
+    '<p class="tagline">Hold on a cup of blessing - YANI</p>' +
+    '<p style="margin-top:3px;font-size:9px;">FB: facebook.com/YANIgardencafe</p>' +
+    '<p style="font-size:9px;">IG: @yanigardencafe</p>' +
     '<div class="legal">' +
     '<p>This serves as your Sales Invoice</p>' +
     '<p>Not valid for input tax claim</p>' +
     '</div>' +
     '</div>' +
 
-    '<div style="margin-top:16px;"></div>' +
+    '<div style="margin-top:8mm;"></div>' +
 
     // Auto-print
     '<script>window.onload=function(){window.print();}<\/script>' +
     '</body></html>';
 
-  var printWin = window.open('', '_blank', 'width=400,height=700');
+  var printWin = window.open('', '_blank', 'width=320,height=600');
   if (printWin) {
     printWin.document.write(receiptHTML);
     printWin.document.close();
