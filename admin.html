@@ -187,6 +187,24 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 .oc-btn-print { background:var(--white); color:var(--forest); border:1.5px solid var(--forest) !important; margin-top:6px; width:100% }
 .oc-btn-print:hover { background:var(--forest); color:var(--white) }
 
+/* Delete button */
+.oc-btn-delete { background:#EF4444; color:var(--white); border:1.5px solid #EF4444 !important; margin-top:6px; width:100%; font-size:.75rem }
+.oc-btn-delete:hover { background:#DC2626; border-color:#DC2626 !important }
+
+/* Bulk actions bar */
+.bulk-actions {
+  background:var(--mist-light); padding:12px 16px; border-radius:var(--r-md);
+  margin-bottom:16px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+}
+.bulk-actions-label { font-size:.85rem; font-weight:600; color:var(--timber) }
+.bulk-btn {
+  padding:8px 16px; border:none; border-radius:var(--r-md);
+  font-size:.85rem; font-weight:600; cursor:pointer; transition:all .2s;
+  font-family:var(--font-body);
+}
+.bulk-btn-danger { background:#EF4444; color:white }
+.bulk-btn-danger:hover { background:#DC2626; transform:translateY(-1px); box-shadow:0 2px 8px rgba(239,68,68,.3) }
+
 /* ── Empty State ── */
 .empty-state {
   text-align:center; padding:60px 20px; color:var(--timber);
@@ -480,6 +498,14 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
     <a class="quick-link" href="https://docs.google.com/spreadsheets/d/14wSvfCy5LUrlgi4d48jcGjnFpy310XYUsCWCg5VMg0g/edit?gid=143920344#gid=143920344" target="_blank">
       <span class="quick-link-icon">📊</span> Daily Sales
     </a>
+  </div>
+
+  <!-- Bulk Actions Bar -->
+  <div class="bulk-actions">
+    <span class="bulk-actions-label">Bulk Actions:</span>
+    <button class="bulk-btn bulk-btn-danger" onclick="bulkDeleteOldOrders()">
+      🗑️ Delete Orders Older Than 3 Days
+    </button>
   </div>
 
   <div class="filter-bar" id="filterBar"></div>
@@ -874,6 +900,11 @@ function renderOrders() {
     // Print Receipt button (always visible)
     html += '<button class="oc-btn oc-btn-print" onclick="printReceipt(\'' + o.orderId + '\')">🖨️ Print Receipt</button>';
 
+    // Delete button (only for completed/cancelled orders)
+    if (o.status === 'COMPLETED' || o.status === 'CANCELLED') {
+      html += '<button class="oc-btn oc-btn-delete" onclick="deleteOrder(\'' + o.orderId + '\')">🗑️ Delete</button>';
+    }
+
     html += '</div>';
     return html;
   }).join('');
@@ -898,6 +929,106 @@ async function updateStatus(orderId, newStatus) {
     renderOrders();
   } else {
     alert('Failed: ' + (result.error || 'Unknown error'));
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// DELETE ORDER
+// ══════════════════════════════════════════════════════════
+async function deleteOrder(orderId) {
+  if (!confirm('⚠️ DELETE ORDER ' + orderId + '?\n\nThis will permanently remove the order from the database.\n\nThis action cannot be undone!')) {
+    return;
+  }
+  
+  try {
+    var result = await api('deleteOrder', { orderId: orderId });
+    
+    if (result.ok) {
+      // Remove from local state
+      allOrders = allOrders.filter(function(o) { return o.orderId !== orderId; });
+      
+      renderStats();
+      renderFilters();
+      renderOrders();
+      
+      alert('✅ Order ' + orderId + ' deleted successfully');
+    } else {
+      alert('❌ Failed to delete: ' + (result.error || 'Unknown error'));
+    }
+  } catch (error) {
+    alert('❌ Error: ' + error.message);
+  }
+}
+
+// Bulk delete orders older than X days
+async function bulkDeleteOldOrders() {
+  var daysAgo = 3; // Delete orders older than 3 days
+  var cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - daysAgo);
+  
+  // Find old orders
+  var oldOrders = allOrders.filter(function(o) {
+    var orderDate = new Date(o.createdAt);
+    return orderDate < cutoffDate;
+  });
+  
+  if (oldOrders.length === 0) {
+    alert('ℹ️ No orders older than ' + daysAgo + ' days found.');
+    return;
+  }
+  
+  var msg = '⚠️ DELETE ' + oldOrders.length + ' ORDERS?\n\n';
+  msg += 'This will permanently delete all orders older than ' + daysAgo + ' days:\n\n';
+  msg += '• Total orders to delete: ' + oldOrders.length + '\n';
+  msg += '• Oldest order: ' + oldOrders[oldOrders.length - 1].orderId + '\n';
+  msg += '• Newest old order: ' + oldOrders[0].orderId + '\n\n';
+  msg += 'This action CANNOT be undone!\n\nContinue?';
+  
+  if (!confirm(msg)) return;
+  
+  // Final confirmation
+  if (!confirm('⚠️ FINAL CONFIRMATION\n\nAre you ABSOLUTELY SURE you want to delete ' + oldOrders.length + ' orders?\n\nThis is your last chance to cancel.')) {
+    return;
+  }
+  
+  try {
+    var deleted = 0;
+    var failed = 0;
+    
+    for (var i = 0; i < oldOrders.length; i++) {
+      var result = await api('deleteOrder', { orderId: oldOrders[i].orderId });
+      
+      if (result.ok) {
+        deleted++;
+        allOrders = allOrders.filter(function(o) { return o.orderId !== oldOrders[i].orderId; });
+      } else {
+        failed++;
+        console.error('Failed to delete ' + oldOrders[i].orderId + ':', result.error);
+      }
+      
+      // Update UI every 5 orders
+      if (i % 5 === 0) {
+        renderStats();
+        renderFilters();
+        renderOrders();
+      }
+    }
+    
+    // Final update
+    renderStats();
+    renderFilters();
+    renderOrders();
+    
+    var summary = '✅ BULK DELETE COMPLETE\n\n';
+    summary += '• Deleted: ' + deleted + ' orders\n';
+    if (failed > 0) {
+      summary += '• Failed: ' + failed + ' orders\n';
+    }
+    
+    alert(summary);
+    
+  } catch (error) {
+    alert('❌ Error during bulk delete: ' + error.message);
   }
 }
 
