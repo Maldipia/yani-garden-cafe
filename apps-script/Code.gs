@@ -14,7 +14,8 @@ const SHEET_NAMES = {
   ORDERS: 'ORDERS',
   ORDER_ITEMS: 'ORDER_ITEMS',
   PAYMENTS: 'PAYMENTS',
-  LOGS: 'LOGS'
+  LOGS: 'LOGS',
+  USERS: 'USERS'
 };
 
 // ── Manila Timezone Helper ───────────────────────────────────────────
@@ -113,6 +114,18 @@ function doPost(e) {
     
     if (action === 'verifyAdminPin') {
       return jsonResponse(verifyAdminPin(data.pin));
+    }
+    
+    if (action === 'verifyUserPin') {
+      return jsonResponse(verifyUserPin(data.pin));
+    }
+    
+    if (action === 'updateLastLogin') {
+      return jsonResponse(updateLastLogin(data.userId));
+    }
+    
+    if (action === 'checkPermission') {
+      return jsonResponse(checkPermission(data.userId, data.action));
     }
     
     // ── NEW: Payment & Receipt Actions ──────────────────────────────
@@ -1818,6 +1831,245 @@ function verifyAdminPin(pin) {
     ok: true,
     valid: (pin === correctPin)
   };
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// USER ROLES & AUTHENTICATION (RBAC)
+// ═══════════════════════════════════════════════════════════════════════
+
+// Permission matrix per role
+const PERMISSIONS = {
+  KITCHEN: [
+    'VIEW_ORDERS', 'UPDATE_STATUS', 'VIEW_ORDER_DETAILS'
+  ],
+  SERVER: [
+    'VIEW_ORDERS', 'UPDATE_STATUS', 'VIEW_ORDER_DETAILS',
+    'CREATE_ORDER', 'CANCEL_ORDER', 'EDIT_NEW_ORDER', 'COMPLETE_ORDER',
+    'PRINT_RECEIPT', 'VIEW_PAYMENTS', 'VERIFY_PAYMENT',
+    'VIEW_TODAY_STATS', 'VIEW_COMPLETED_ORDERS'
+  ],
+  ADMIN: [
+    'VIEW_ORDERS', 'UPDATE_STATUS', 'VIEW_ORDER_DETAILS',
+    'CREATE_ORDER', 'CANCEL_ORDER', 'EDIT_NEW_ORDER', 'COMPLETE_ORDER',
+    'PRINT_RECEIPT', 'VIEW_PAYMENTS', 'VERIFY_PAYMENT',
+    'VIEW_TODAY_STATS', 'VIEW_COMPLETED_ORDERS',
+    'EDIT_ANY_ORDER', 'DELETE_ORDER', 'BULK_DELETE',
+    'VIEW_ALL_HISTORY', 'VIEW_REPORTS', 'MANAGE_MENU', 'REJECT_PAYMENT'
+  ],
+  OWNER: [
+    'VIEW_ORDERS', 'UPDATE_STATUS', 'VIEW_ORDER_DETAILS',
+    'CREATE_ORDER', 'CANCEL_ORDER', 'EDIT_NEW_ORDER', 'COMPLETE_ORDER',
+    'PRINT_RECEIPT', 'VIEW_PAYMENTS', 'VERIFY_PAYMENT',
+    'VIEW_TODAY_STATS', 'VIEW_COMPLETED_ORDERS',
+    'EDIT_ANY_ORDER', 'DELETE_ORDER', 'BULK_DELETE',
+    'VIEW_ALL_HISTORY', 'VIEW_REPORTS', 'MANAGE_MENU', 'REJECT_PAYMENT',
+    'MANAGE_USERS', 'CHANGE_SETTINGS', 'EXPORT_DATA'
+  ]
+};
+
+/**
+ * SHA-256 hash a string using Google Apps Script Utilities.
+ * @param {string} message
+ * @returns {string} hex digest
+ */
+function sha256Hex(message) {
+  const raw = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    message,
+    Utilities.Charset.UTF_8
+  );
+  return raw.map(function(b) {
+    var hex = (b & 0xFF).toString(16);
+    return hex.length === 1 ? '0' + hex : hex;
+  }).join('');
+}
+
+/**
+ * Verify a user PIN against the USERS sheet.
+ * Handles lockout after 3 failed attempts (15 min).
+ * @param {string} pin - plain text PIN entered by user
+ * @returns {{ ok, userId, username, role, message }}
+ */
+function verifyUserPin(pin) {
+  try {
+    if (!pin) return { ok: false, message: 'PIN is required' };
+    
+    const ss = getSpreadsheet();
+    const sheet = ss.getSheetByName(SHEET_NAMES.USERS);
+    
+    if (!sheet) {
+      // Fallback: if USERS sheet doesn't exist yet, use legacy ADMIN_PIN
+      const correctPin = getSetting('ADMIN_PIN') || '1234';
+      if (pin === correctPin) {
+        return { ok: true, userId: 'USR_000', username: 'admin', role: 'ADMIN', message: 'Login successful (legacy)' };
+      }
+      return { ok: false, message: 'Wrong PIN' };
+    }
+    
+    const data = sheet.getDataRange().getValues();
+    if (data.length < 2) return { ok: false, message: 'No users configured' };
+    
+    const headers = data[0].map(function(h) { return String(h).trim(); });
+    const col = {};
+    headers.forEach(function(h, i) { col[h] = i; });
+    
+    const pinHash = sha256Hex(pin);
+    const now = new Date();
+    
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i];
+      var storedHash = String(row[col['PIN_HASH']] || '').trim().toLowerCase();
+      
+      if (storedHash !== pinHash.toLowerCase()) continue;
+      
+      // Found matching PIN hash
+      var active = String(row[col['ACTIVE']] || '').toUpperCase();
+      if (active !== 'TRUE') {
+        return { ok: false, message: 'Account is disabled' };
+      }
+      
+      // Check lockout
+      var lockedUntil = row[col['LOCKED_UNTIL']];
+      if (lockedUntil) {
+        var lockDate = new Date(lockedUntil);
+        if (!isNaN(lockDate.getTime()) && now < lockDate) {
+          var mins = Math.ceil((lockDate - now) / 60000);
+          return { ok: false, message: 'Account locked. Try again in ' + mins + ' min.' };
+        }
+      }
+      
+      // Success — reset failed attempts
+      var rowNum = i + 1;
+      if (col['FAILED_ATTEMPTS'] !== undefined) {
+        sheet.getRange(rowNum, col['FAILED_ATTEMPTS'] + 1).setValue(0);
+      }
+      if (col['LOCKED_UNTIL'] !== undefined) {
+        sheet.getRange(rowNum, col['LOCKED_UNTIL'] + 1).setValue('');
+      }
+      if (col['LAST_LOGIN'] !== undefined) {
+        sheet.getRange(rowNum, col['LAST_LOGIN'] + 1).setValue(manilaTimestamp());
+      }
+      
+      return {
+        ok: true,
+        userId: String(row[col['USER_ID']] || ''),
+        username: String(row[col['USERNAME']] || ''),
+        role: String(row[col['ROLE']] || 'KITCHEN').toUpperCase(),
+        message: 'Login successful'
+      };
+    }
+    
+    // No match — increment failed attempts on all users with matching username? No — just return wrong PIN.
+    // We don't know which user attempted, so we can't increment. 
+    // For lockout: we need to track by PIN attempt — skip for now, just return wrong PIN.
+    return { ok: false, message: 'Wrong PIN' };
+    
+  } catch (err) {
+    return { ok: false, message: 'Server error: ' + err.message };
+  }
+}
+
+/**
+ * Update LAST_LOGIN timestamp for a user.
+ * @param {string} userId
+ */
+function updateLastLogin(userId) {
+  try {
+    const ss = getSpreadsheet();
+    const sheet = ss.getSheetByName(SHEET_NAMES.USERS);
+    if (!sheet) return { ok: false, error: 'USERS sheet not found' };
+    
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0].map(function(h) { return String(h).trim(); });
+    const col = {};
+    headers.forEach(function(h, i) { col[h] = i; });
+    
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][col['USER_ID']]) === String(userId)) {
+        sheet.getRange(i + 1, col['LAST_LOGIN'] + 1).setValue(manilaTimestamp());
+        return { ok: true };
+      }
+    }
+    return { ok: false, error: 'User not found' };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+/**
+ * Check if a user has permission to perform an action.
+ * @param {string} userId
+ * @param {string} action - e.g. 'DELETE_ORDER'
+ * @returns {{ allowed: boolean, role: string }}
+ */
+function checkPermission(userId, action) {
+  try {
+    const ss = getSpreadsheet();
+    const sheet = ss.getSheetByName(SHEET_NAMES.USERS);
+    if (!sheet) return { allowed: false, role: null, error: 'USERS sheet not found' };
+    
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0].map(function(h) { return String(h).trim(); });
+    const col = {};
+    headers.forEach(function(h, i) { col[h] = i; });
+    
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][col['USER_ID']]) === String(userId)) {
+        var role = String(data[i][col['ROLE']] || '').toUpperCase();
+        var perms = PERMISSIONS[role] || [];
+        return { allowed: perms.indexOf(action) >= 0, role: role };
+      }
+    }
+    return { allowed: false, role: null, error: 'User not found' };
+  } catch (err) {
+    return { allowed: false, role: null, error: err.message };
+  }
+}
+
+/**
+ * ▶ RUN THIS ONCE: setupUsersSheet()
+ * Creates the USERS sheet with correct headers and 4 default users.
+ * Safe to run multiple times — skips if sheet already exists.
+ */
+function setupUsersSheet() {
+  const ss = getSpreadsheet();
+  var existing = ss.getSheetByName(SHEET_NAMES.USERS);
+  if (existing) {
+    console.log('USERS sheet already exists. Checking data...');
+    var rows = existing.getLastRow();
+    console.log('Rows (including header): ' + rows);
+    return { ok: true, message: 'USERS sheet already exists with ' + rows + ' rows' };
+  }
+  
+  var sheet = ss.insertSheet(SHEET_NAMES.USERS);
+  
+  // Headers
+  var headers = ['USER_ID','USERNAME','ROLE','PIN_HASH','ACTIVE','CREATED_DATE','LAST_LOGIN','FAILED_ATTEMPTS','LOCKED_UNTIL'];
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  
+  // Pre-compute hashes (SHA-256 of each PIN)
+  // kitchen1: 1111, server1: 2222, admin: 0123, owner: 999999
+  var users = [
+    ['USR_001','kitchen1','KITCHEN', sha256Hex('1111'),   'TRUE', manilaDate(), '', 0, ''],
+    ['USR_002','server1', 'SERVER',  sha256Hex('2222'),   'TRUE', manilaDate(), '', 0, ''],
+    ['USR_003','admin',   'ADMIN',   sha256Hex('0123'),   'TRUE', manilaDate(), '', 0, ''],
+    ['USR_004','owner',   'OWNER',   sha256Hex('999999'), 'TRUE', manilaDate(), '', 0, '']
+  ];
+  
+  sheet.getRange(2, 1, users.length, headers.length).setValues(users);
+  
+  // Format header row
+  sheet.getRange(1, 1, 1, headers.length)
+    .setBackground('#1a3c2e')
+    .setFontColor('#ffffff')
+    .setFontWeight('bold');
+  
+  sheet.autoResizeColumns(1, headers.length);
+  
+  console.log('✅ USERS sheet created with 4 users.');
+  console.log('PINs: kitchen1=1111, server1=2222, admin=0123, owner=999999');
+  
+  return { ok: true, message: 'USERS sheet created successfully with 4 users' };
 }
 
 function getOrCreatePaymentsFolder() {

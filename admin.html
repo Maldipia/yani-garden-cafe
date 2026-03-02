@@ -74,6 +74,21 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 .topbar-live { display:flex; align-items:center; gap:6px; font-size:.72rem; font-weight:600; opacity:.8 }
 .topbar-dot { width:8px; height:8px; border-radius:50%; background:#4ADE80; animation:pulse 2s infinite }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+.topbar-user { display:flex; align-items:center; gap:8px; margin-left:auto }
+.role-badge {
+  padding:3px 10px; border-radius:12px; font-size:.65rem; font-weight:700;
+  text-transform:uppercase; letter-spacing:.5px;
+}
+.role-badge.KITCHEN { background:#DBEAFE; color:#1E40AF }
+.role-badge.SERVER  { background:#D1FAE5; color:#065F46 }
+.role-badge.ADMIN   { background:#FEF3C7; color:#92400E }
+.role-badge.OWNER   { background:#F3E8FF; color:#6D28D9 }
+.logout-btn {
+  padding:5px 12px; border-radius:12px; border:1.5px solid rgba(255,255,255,.35);
+  background:transparent; color:rgba(255,255,255,.85); font-size:.68rem; font-weight:600;
+  cursor:pointer; font-family:var(--font-body); transition:all .15s;
+}
+.logout-btn:hover { background:rgba(255,255,255,.15) }
 
 /* ── Stats Bar ── */
 .stats-bar {
@@ -466,7 +481,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
     <img class="login-logo" src="/images/logo.png" alt="Yani">
     <div class="login-title">Kitchen Dashboard</div>
     <div class="login-sub">Enter staff PIN to continue</div>
-    <input class="pin-input" id="pinInput" type="password" maxlength="4" inputmode="numeric" placeholder="• • • •" autofocus>
+    <input class="pin-input" id="pinInput" type="password" maxlength="6" inputmode="numeric" placeholder="• • • •" autofocus>
     <button class="pin-btn" id="pinBtn" onclick="login()">Enter Dashboard</button>
   </div>
 </div>
@@ -478,7 +493,11 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
     <img class="topbar-logo" src="/images/logo.png" alt="Yani">
     <div class="topbar-title">Order Board</div>
     <div class="topbar-live"><div class="topbar-dot"></div> LIVE</div>
-
+    <div class="topbar-user" id="topbarUser" style="display:none">
+      <span class="role-badge" id="roleBadge"></span>
+      <span style="font-size:.72rem;font-weight:600;opacity:.85" id="usernameLabel"></span>
+      <button class="logout-btn" onclick="logout()">Logout</button>
+    </div>
   </div>
 
   <div class="stats-bar" id="statsBar">
@@ -500,8 +519,8 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
     </a>
   </div>
 
-  <!-- Bulk Actions Bar -->
-  <div class="bulk-actions">
+  <!-- Bulk Actions Bar (ADMIN/OWNER only) -->
+  <div class="bulk-actions" id="bulkActionsBar" style="display:none">
     <span class="bulk-actions-label">Bulk Actions:</span>
     <button class="bulk-btn bulk-btn-danger" onclick="bulkDeleteOldOrders()">
       🗑️ Delete Orders Older Than 3 Days
@@ -612,17 +631,62 @@ var STATUS_CONFIG = {
 };
 
 // ══════════════════════════════════════════════════════════
+// SESSION MANAGEMENT
+// ══════════════════════════════════════════════════════════
+var SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+var sessionTimer = null;
+
+function resetSessionTimer() {
+  if (sessionTimer) clearTimeout(sessionTimer);
+  sessionTimer = setTimeout(function() {
+    alert('⏰ Session expired after 30 minutes of inactivity. Please log in again.');
+    logout();
+  }, SESSION_TIMEOUT_MS);
+}
+
+// Reset timer on user activity
+['click','keydown','touchstart'].forEach(function(evt) {
+  document.addEventListener(evt, function() {
+    if (currentUser.userId) resetSessionTimer();
+  }, { passive: true });
+});
+
+function logout() {
+  if (sessionTimer) clearTimeout(sessionTimer);
+  currentUser = { userId: null, username: null, role: null };
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('loginOverlay').classList.remove('hidden');
+  document.getElementById('pinInput').value = '';
+  document.getElementById('pinInput').focus();
+  document.getElementById('topbarUser').style.display = 'none';
+}
+
+function applyRoleUI() {
+  var role = currentUser.role || 'KITCHEN';
+  
+  // Update topbar user info
+  document.getElementById('topbarUser').style.display = 'flex';
+  document.getElementById('roleBadge').textContent = role;
+  document.getElementById('roleBadge').className = 'role-badge ' + role;
+  document.getElementById('usernameLabel').textContent = currentUser.username || '';
+  
+  // Bulk actions: ADMIN and OWNER only
+  var canBulkDelete = (role === 'ADMIN' || role === 'OWNER');
+  document.getElementById('bulkActionsBar').style.display = canBulkDelete ? '' : 'none';
+  
+  // FAB (New Platform Order): SERVER, ADMIN, OWNER
+  var canCreateOrder = (role !== 'KITCHEN');
+  document.querySelector('.fab-platform').style.display = canCreateOrder ? '' : 'none';
+  
+  // Quick links (Payments Sheet): SERVER, ADMIN, OWNER
+  var canViewPayments = (role !== 'KITCHEN');
+  document.getElementById('quickLinks').style.display = canViewPayments ? '' : 'none';
+}
+
+// ══════════════════════════════════════════════════════════
 // LOGIN
 // ══════════════════════════════════════════════════════════
-
-// SHA-256 hash function for PIN security
-async function sha256(message) {
-  const msgBuffer = new TextEncoder().encode(message);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  return hashHex;
-}
 
 document.getElementById('pinInput').addEventListener('keyup', function(e) {
   if (e.key === 'Enter') login();
@@ -637,25 +701,38 @@ async function login() {
   btn.disabled = true;
 
   try {
-    // Call the backend verifyAdminPin endpoint
     var resp = await fetch(API_URL, {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ action:'verifyAdminPin', pin: pin })
+      body: JSON.stringify({ action:'verifyUserPin', pin: pin })
     });
     var data = await resp.json();
 
-    if (data.ok && data.valid) {
-      // PIN verified successfully
-      console.log('✅ Logged in as admin');
+    if (data.ok && data.userId) {
+      // Successful login
+      currentUser.userId   = data.userId;
+      currentUser.username = data.username;
+      currentUser.role     = data.role;
+      
+      console.log('✅ Logged in as', data.username, '(' + data.role + ')');
       
       document.getElementById('loginOverlay').classList.add('hidden');
       document.getElementById('dashboard').style.display = 'block';
+      
+      applyRoleUI();
+      resetSessionTimer();
       startPolling();
     } else {
+      // Wrong PIN
       document.getElementById('pinInput').classList.add('error');
       setTimeout(function(){ document.getElementById('pinInput').classList.remove('error') }, 500);
       document.getElementById('pinInput').value = '';
       document.getElementById('pinInput').focus();
+      if (data.message) {
+        // Show lockout message if applicable
+        if (data.message.indexOf('locked') >= 0 || data.message.indexOf('disabled') >= 0) {
+          alert('⚠️ ' + data.message);
+        }
+      }
     }
   } catch(e) {
     alert('Connection error: ' + e.message);
@@ -757,9 +834,12 @@ function renderFilters() {
     { key:'READY', label:'✨ Ready', count:counts.READY },
     { key:'COMPLETED', label:'🎉 Done', count:counts.COMPLETED },
     { key:'PLATFORM', label:'📦 Platform', count:counts.PLATFORM },
-    { key:'ALL', label:'All', count:counts.ALL },
-    { key:'PAYMENTS', label:'💳 Payments', count:pendingPayCount }
+    { key:'ALL', label:'All', count:counts.ALL }
   ];
+  // Payments tab: SERVER, ADMIN, OWNER only
+  if (currentUser.role !== 'KITCHEN') {
+    tabs.push({ key:'PAYMENTS', label:'💳 Payments', count:pendingPayCount });
+  }
 
   document.getElementById('filterBar').innerHTML = tabs.map(function(t) {
     return '<button class="filter-btn' + (currentFilter===t.key?' active':'') + '" onclick="setFilter(\'' + t.key + '\')">' +
@@ -909,20 +989,25 @@ function renderOrders() {
     // Actions
     if (cfg.actions.length) {
       html += '<div class="oc-actions">';
+      var canCancel = (currentUser.role !== 'KITCHEN');
       cfg.actions.forEach(function(act) {
         if (act === 'start') html += '<button class="oc-btn oc-btn-start" onclick="updateStatus(\'' + o.orderId + '\',\'PREPARING\')">☕ Start Preparing</button>';
         if (act === 'ready') html += '<button class="oc-btn oc-btn-ready" onclick="updateStatus(\'' + o.orderId + '\',\'READY\')">✨ Mark Ready</button>';
         if (act === 'complete') html += '<button class="oc-btn oc-btn-complete" onclick="updateStatus(\'' + o.orderId + '\',\'COMPLETED\')">🙏 Complete</button>';
-        if (act === 'cancel') html += '<button class="oc-btn oc-btn-cancel" onclick="updateStatus(\'' + o.orderId + '\',\'CANCELLED\')">✕</button>';
+        if (act === 'cancel' && canCancel) html += '<button class="oc-btn oc-btn-cancel" onclick="updateStatus(\'' + o.orderId + '\',\'CANCELLED\')">✕</button>';
       });
       html += '</div>';
     }
 
-    // Print Receipt button (always visible)
-    html += '<button class="oc-btn oc-btn-print" onclick="printReceipt(\'' + o.orderId + '\')">🖨️ Print Receipt</button>';
+    // Print Receipt button (SERVER, ADMIN, OWNER only)
+    var canPrint = (currentUser.role !== 'KITCHEN');
+    if (canPrint) {
+      html += '<button class="oc-btn oc-btn-print" onclick="printReceipt(\'' + o.orderId + '\')">🖨️ Print Receipt</button>';
+    }
 
-    // Delete button (only for completed/cancelled orders)
-    if (o.status === 'COMPLETED' || o.status === 'CANCELLED') {
+    // Delete button (ADMIN/OWNER only, for completed/cancelled orders)
+    var canDelete = (currentUser.role === 'ADMIN' || currentUser.role === 'OWNER');
+    if (canDelete && (o.status === 'COMPLETED' || o.status === 'CANCELLED')) {
       html += '<button class="oc-btn oc-btn-delete" onclick="deleteOrder(\'' + o.orderId + '\')">🗑️ Delete</button>';
     }
 
