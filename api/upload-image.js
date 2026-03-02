@@ -1,4 +1,5 @@
 // ══════════════════════════════════════════════════════════════
+// Last updated: 2026-03-02 05:06
 // YANI POS — Image Upload Endpoint
 // Accepts a base64-encoded image and commits it to GitHub repo
 // so Vercel auto-deploys it to /images/{code}.{ext}
