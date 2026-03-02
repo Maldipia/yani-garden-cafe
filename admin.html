@@ -646,7 +646,7 @@ async function login() {
     });
     var data = await resp.json();
 
-    if (data.ok && data.valid) {
+    if (data.ok && data.userId) {
       // Store user session (Phase 1 Security)
       currentUser.userId = data.userId;
       currentUser.username = data.username;
