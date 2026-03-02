@@ -523,7 +523,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
   <div class="bulk-actions" id="bulkActionsBar" style="display:none">
     <span class="bulk-actions-label">Bulk Actions:</span>
     <button class="bulk-btn bulk-btn-danger" onclick="bulkDeleteOldOrders()">
-      🗑️ Delete Orders Older Than 3 Days
+      🗑️ Delete Orders Older Than 98 Hours
     </button>
   </div>
 
@@ -1153,9 +1153,9 @@ async function deleteOrder(orderId) {
 
 // Bulk delete orders older than X days
 async function bulkDeleteOldOrders() {
-  var daysAgo = 3; // Delete orders older than 3 days
+  var hoursAgo = 98; // Delete orders older than 98 hours
   var cutoffDate = new Date();
-  cutoffDate.setDate(cutoffDate.getDate() - daysAgo);
+  cutoffDate.setTime(cutoffDate.getTime() - (hoursAgo * 60 * 60 * 1000));
   
   // Find old orders
   var oldOrders = allOrders.filter(function(o) {
@@ -1164,12 +1164,12 @@ async function bulkDeleteOldOrders() {
   });
   
   if (oldOrders.length === 0) {
-    alert('ℹ️ No orders older than ' + daysAgo + ' days found.');
+    alert('ℹ️ No orders older than ' + hoursAgo + ' hours found.');
     return;
   }
   
   var msg = '⚠️ DELETE ' + oldOrders.length + ' ORDERS?\n\n';
-  msg += 'This will permanently delete all orders older than ' + daysAgo + ' days:\n\n';
+  msg += 'This will permanently delete all orders older than ' + hoursAgo + ' hours:\n\n';
   msg += '• Total orders to delete: ' + oldOrders.length + '\n';
   msg += '• Oldest order: ' + oldOrders[oldOrders.length - 1].orderId + '\n';
   msg += '• Newest old order: ' + oldOrders[0].orderId + '\n\n';
