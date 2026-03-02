@@ -7,7 +7,7 @@
 
 const SESSION_KEY = 'yaniSession';
 const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutes in milliseconds
-const API_URL = 'https://script.google.com/macros/s/AKfycbytCV-jiFSOoon7Ijww5a-AABRYzhiNZPXVubaaa2zoVBOFxvcgkDH-6e4CfksMA7LC/exec';
+const API_URL = '/api/pos';
 
 // ============================================================================
 // SESSION MANAGEMENT
@@ -379,8 +379,11 @@ function disableEditForNonNewOrders() {
  */
 async function logAudit(userId, action, target, details) {
     try {
-        const url = `${API_URL}?action=logAudit&userId=${encodeURIComponent(userId)}&action=${encodeURIComponent(action)}&target=${encodeURIComponent(target || '')}&details=${encodeURIComponent(details || '')}`;
-        await fetch(url);
+        await fetch(API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'logAudit', userId, action, target: target || '', details: details || '' })
+        });
     } catch (error) {
         console.error('Audit log error:', error);
     }

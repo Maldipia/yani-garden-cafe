@@ -222,7 +222,7 @@
     </div>
 
     <script>
-        const API_URL = 'https://script.google.com/macros/s/AKfycbytCV-jiFSOoon7Ijww5a-AABRYzhiNZPXVubaaa2zoVBOFxvcgkDH-6e4CfksMA7LC/exec';
+        const API_URL = '/api/pos';
 
         // Update PIN dots as user types
         document.getElementById('pinInput').addEventListener('input', function(e) {
@@ -287,35 +287,27 @@
             loginBtn.disabled = true;
 
             try {
-                // Hash the PIN
-                const pinHash = await sha256(pin);
-
                 // Call API to verify PIN
-                const response = await fetch(`${API_URL}?action=verifyUserPin&pinHash=${encodeURIComponent(pinHash)}`);
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'verifyAdminPin', pin: pin })
+                });
                 const data = await response.json();
 
-                if (data.ok) {
-                    // Login successful
+                 if (data.ok && data.valid) {
+                    // Login successful — use defaults if role-based fields are not returned
                     const session = {
-                        userId: data.userId,
-                        username: data.username,
-                        role: data.role,
+                        userId: data.userId || 'admin',
+                        username: data.username || 'Admin',
+                        role: data.role || 'ADMIN',
                         loginTime: new Date().toISOString(),
                         expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString() // 30 min
                     };
-
                     // Save session
                     localStorage.setItem('yaniSession', JSON.stringify(session));
-
-                    // Log the login
-                    logAudit(data.userId, 'LOGIN', null, `User logged in as ${data.role}`);
-
-                    // Redirect to appropriate page
-                    if (data.role === 'KITCHEN') {
-                        window.location.href = 'admin.html?view=kitchen';
-                    } else {
-                        window.location.href = 'admin.html';
-                    }
+                    // Redirect to dashboard
+                    window.location.href = 'admin.html';
                 } else {
                     // Login failed
                     showError(data.message || 'Invalid PIN. Please try again.');
@@ -344,7 +336,11 @@
 
         async function logAudit(userId, action, target, details) {
             try {
-                await fetch(`${API_URL}?action=logAudit&userId=${userId}&action=${action}&target=${target || ''}&details=${encodeURIComponent(details || '')}`);
+                await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'logAudit', userId, action, target: target || '', details: details || '' })
+                });
             } catch (error) {
                 console.error('Audit log error:', error);
             }
