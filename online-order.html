@@ -654,7 +654,7 @@ function renderMenu(cat) {
   document.getElementById('menuGrid').innerHTML = items.map(function(item) {
     var cartQty = getCartQty(item.item_code || item.code);
     var inCart = cartQty > 0;
-    var imgSrc = item.image_path ? 'https://yani-garden-cafe-d3l6.vercel.app' + item.image_path : '';
+    var imgSrc = item.image || '';
     var price = parseFloat(item.base_price || item.price || 0);
     var hasSizes = item.has_sizes;
     
@@ -681,7 +681,7 @@ function onCardClick(itemJson) {
   if (item.has_sizes) {
     openSizeModal(item);
   } else {
-    addToCart(item.item_code || item.code, item.name, 'REGULAR', parseFloat(item.base_price || item.price), item.image_path);
+    addToCart(item.item_code || item.code, item.name, 'REGULAR', parseFloat(item.base_price || item.price), item.image || '');
   }
 }
 
@@ -731,7 +731,7 @@ function addSizeToCart() {
     REGULAR: parseFloat(sizeItem.base_price || sizeItem.price)
   };
   var price = sizes[selectedSize] || parseFloat(sizeItem.base_price || sizeItem.price);
-  addToCart(sizeItem.item_code || sizeItem.code, sizeItem.name, selectedSize, price, sizeItem.image_path);
+  addToCart(sizeItem.item_code || sizeItem.code, sizeItem.name, selectedSize, price, sizeItem.image || '');
   closeSizeModal();
 }
 
@@ -816,7 +816,7 @@ function renderCartView() {
   }
   
   container.innerHTML = cart.map(function(item) {
-    var imgSrc = item.imagePath ? 'https://yani-garden-cafe-d3l6.vercel.app' + item.imagePath : '';
+    var imgSrc = item.imagePath || '';
     return '<div class="cart-item">' +
       (imgSrc ? '<img class="cart-item-img" src="' + imgSrc + '" alt="' + esc(item.name) + '" onerror="this.style.display=\'none\'">' : '<div class="cart-item-img" style="display:flex;align-items:center;justify-content:center;font-size:1.5rem">🍽️</div>') +
       '<div class="cart-item-info">' +
