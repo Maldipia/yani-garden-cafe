@@ -171,6 +171,9 @@ function doPost(e) {
     if (action === 'deleteOrder') {
       return jsonResponse(deleteOrder(data));
     }
+    if (action === 'editOrderItems') {
+      return jsonResponse(editOrderItems(data));
+    }
     
     if (action === 'bulkDeleteOldOrders') {
       return jsonResponse(bulkDeleteOldOrders(data));
@@ -514,6 +517,121 @@ function deleteOrder(data) {
 
     logAction('ORDER_DELETED', orderId, '', 'Admin', 'Order deleted by admin', 'OK');
     return { ok: true, orderId: orderId, deleted: true };
+
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
+/**
+ * Edit the items of an existing order (ADMIN/OWNER only).
+ * Replaces all ORDER_ITEMS rows for the order and recalculates totals.
+ */
+function editOrderItems(data) {
+  try {
+    const orderId = String(data.orderId || '').trim();
+    const newItems = data.items || [];
+    if (!orderId) return { ok: false, error: 'orderId required' };
+    if (newItems.length === 0) return { ok: false, error: 'items array is empty' };
+
+    const ss = getSpreadsheet();
+    const ordersSheet = ss.getSheetByName(SHEET_NAMES.ORDERS);
+    const orderItemsSheet = ss.getSheetByName(SHEET_NAMES.ORDER_ITEMS);
+
+    // Find the order row
+    const ordersData = ordersSheet.getDataRange().getValues();
+    const ordersHeaders = ordersData[0];
+    const orderIdCol = ordersHeaders.indexOf('ORDER_ID');
+    const orderTypeCol = ordersHeaders.indexOf('ORDER_TYPE');
+    const orderNoCol = ordersHeaders.indexOf('ORDER_NO');
+    const tableNoCol = ordersHeaders.indexOf('TABLE_NO');
+    if (orderIdCol === -1) return { ok: false, error: 'ORDER_ID column not found' };
+
+    let orderRowIdx = -1;
+    let orderType = 'DINE-IN';
+    let orderNo = '';
+    let tableNo = '';
+    for (let i = 1; i < ordersData.length; i++) {
+      if (String(ordersData[i][orderIdCol]) === orderId) {
+        orderRowIdx = i + 1; // 1-based sheet row
+        orderType = orderTypeCol >= 0 ? String(ordersData[i][orderTypeCol] || 'DINE-IN') : 'DINE-IN';
+        orderNo = orderNoCol >= 0 ? ordersData[i][orderNoCol] : '';
+        tableNo = tableNoCol >= 0 ? String(ordersData[i][tableNoCol] || '') : '';
+        break;
+      }
+    }
+    if (orderRowIdx === -1) return { ok: false, error: 'Order not found: ' + orderId };
+
+    // Recalculate totals from new items
+    let subtotal = 0;
+    const validatedItems = newItems.map(function(item) {
+      const qty = parseInt(item.qty) || 1;
+      const unitPrice = parseFloat(item.price) || 0;
+      const lineTotal = unitPrice * qty;
+      subtotal += lineTotal;
+      return {
+        code: item.code || '',
+        name: item.name || '',
+        size: item.size || '',
+        sugar: item.sugar || '',
+        qty: qty,
+        unitPrice: unitPrice,
+        lineTotal: lineTotal,
+        notes: item.notes || ''
+      };
+    });
+    const serviceCharge = (orderType === 'DINE-IN') ? subtotal * 0.10 : 0;
+    const total = subtotal + serviceCharge;
+
+    // Delete existing ORDER_ITEMS rows for this order
+    if (orderItemsSheet) {
+      const itemsData = orderItemsSheet.getDataRange().getValues();
+      const itemsHeaders = itemsData[0];
+      const itemOrderIdCol = itemsHeaders.indexOf('ORDER_ID');
+      if (itemOrderIdCol >= 0) {
+        for (let i = itemsData.length - 1; i >= 1; i--) {
+          if (String(itemsData[i][itemOrderIdCol]) === orderId) {
+            orderItemsSheet.deleteRow(i + 1);
+          }
+        }
+      }
+    }
+
+    // Append new ORDER_ITEMS rows
+    const timestamp = manilaTimestamp();
+    for (const item of validatedItems) {
+      appendByHeaders(orderItemsSheet, {
+        ORDER_ID:            orderId,
+        ORDER_NO:            orderNo,
+        CREATED_AT:          timestamp,
+        TABLE_NO:            tableNo,
+        ITEM_CODE:           item.code,
+        ITEM_NAME_SNAPSHOT:  item.name,
+        UNIT_PRICE_SNAPSHOT: item.unitPrice,
+        QTY:                 item.qty,
+        LINE_TOTAL:          item.lineTotal,
+        ITEM_NOTES:          item.notes,
+        sizes_choice:        item.size,
+        sweetness_choice:    item.sugar,
+        total_receipt:       total,
+        Total:               total
+      });
+    }
+
+    // Update ORDERS row totals and ITEMS_JSON
+    updateByHeaders(ordersSheet, 'ORDER_ID', orderId, {
+      SUBTOTAL:       subtotal,
+      SERVICE_CHARGE: serviceCharge,
+      TOTAL:          total,
+      NET_REVENUE:    total,
+      ITEMS_JSON:     JSON.stringify(validatedItems)
+    });
+
+    logAction('ORDER_EDITED', orderId, tableNo, 'Admin',
+      'Items updated: ' + validatedItems.length + ' items | ₱' + total.toFixed(2), 'OK');
+    updateDailySales();
+
+    return { ok: true, orderId: orderId, subtotal: subtotal, serviceCharge: serviceCharge, total: total };
 
   } catch (e) {
     return { ok: false, error: e.message };
