@@ -628,6 +628,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
       <div style="text-align:center;margin-bottom:16px">
         <img id="menuEditImgPreview" src="" alt="" style="width:100px;height:100px;object-fit:cover;border-radius:10px;border:2px solid var(--mist);display:none">
         <div id="menuEditImgPlaceholder" style="width:100px;height:100px;border-radius:10px;border:2px dashed var(--mist);display:inline-flex;align-items:center;justify-content:center;color:var(--timber);font-size:.75rem">No Photo</div>
+        <div id="menuEditImgLocalBadge" style="display:none;margin-top:6px;font-size:.65rem;color:#065F46;background:#D1FAE5;border-radius:6px;padding:2px 8px;display:inline-block">✓ Local Vercel image</div>
       </div>
       <input type="hidden" id="menuEditId">
       <div style="margin-bottom:12px">
@@ -659,9 +660,21 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
         </div>
       </div>
       <div style="margin-bottom:12px">
-        <label style="font-size:.75rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">PHOTO URL</label>
-        <input id="menuEditImage" type="url" style="width:100%;padding:10px 12px;border:1.5px solid var(--mist);border-radius:8px;font-size:.85rem;font-family:var(--font-body)" placeholder="https://..." oninput="previewMenuImage(this.value)">
-        <div style="font-size:.68rem;color:var(--timber);margin-top:4px">Paste a direct image URL (Google Drive, Imgur, etc.)</div>
+        <label style="font-size:.75rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">PHOTO</label>
+        <!-- File upload -->
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+          <label style="flex:1;display:flex;align-items:center;gap:8px;padding:9px 12px;border:1.5px dashed var(--mist);border-radius:8px;cursor:pointer;font-size:.82rem;color:var(--timber);background:var(--mist-light)">
+            <span>📁</span>
+            <span id="menuEditFileLabel">Choose image file (PNG/JPG)</span>
+            <input type="file" id="menuEditFileInput" accept="image/png,image/jpeg,image/webp" style="display:none" onchange="onMenuPhotoFileChange(this)">
+          </label>
+          <button id="menuEditUploadBtn" onclick="uploadMenuPhoto()" style="display:none;padding:9px 14px;background:var(--terra);color:#fff;border:none;border-radius:8px;font-size:.8rem;font-weight:700;cursor:pointer;font-family:var(--font-body);white-space:nowrap">Upload</button>
+        </div>
+        <div id="menuEditUploadStatus" style="font-size:.72rem;margin-bottom:6px;display:none"></div>
+        <!-- Manual URL fallback -->
+        <div style="font-size:.7rem;color:var(--timber);margin-bottom:4px">Or paste a direct image URL:</div>
+        <input id="menuEditImage" type="url" style="width:100%;padding:9px 12px;border:1.5px solid var(--mist);border-radius:8px;font-size:.82rem;font-family:var(--font-body)" placeholder="https://..." oninput="previewMenuImage(this.value)">
+        <div style="font-size:.65rem;color:var(--timber);margin-top:3px">Uploaded photos go live within ~1 min after Vercel deploys.</div>
       </div>
       <div style="margin-bottom:20px">
         <label style="font-size:.75rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">STATUS</label>
@@ -743,7 +756,17 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 // CONFIG
 // ══════════════════════════════════════════════════════════
 var API_URL = '/api/pos';
+var UPLOAD_URL = '/api/upload-image';
 var POLL_INTERVAL = 5000;
+
+// Known non-PNG extensions for menu images
+var MENU_IMG_EXT = {
+  'C009':'jpg','C013':'jpg','C016':'jpeg','F001':'jpg','H008':'jpg','H010':'jpg'
+};
+function getLocalMenuImgPath(code) {
+  var ext = MENU_IMG_EXT[code] || 'png';
+  return '/images/' + code + '.' + ext;
+}
 var pollTimer = null;
 var currentFilter = 'ACTIVE';
 var allOrders = [];
@@ -2027,10 +2050,12 @@ function renderMenuMgrGrid() {
 
   grid.innerHTML = filtered.map(function(item) {
     var isActive = item.active;
-    var imgHtml = item.image
-      ? '<img src="' + esc(item.image) + '" class="mm-item-photo" alt="" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">' +
-        '<div class="mm-item-photo-placeholder" style="display:none"><span style="font-size:2rem">🍽</span><span>No Photo</span></div>'
-      : '<div class="mm-item-photo-placeholder"><span style="font-size:2rem">🍽</span><span>No Photo</span></div>';
+    // Use local Vercel path first; fallback to Google Drive URL if set
+    var localPath = getLocalMenuImgPath(item.code);
+    var imgSrc = localPath; // always try local first
+    var imgHtml = '<img src="' + imgSrc + '" class="mm-item-photo" alt="" ' +
+      'onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">' +
+      '<div class="mm-item-photo-placeholder" style="display:none"><span style="font-size:2rem">🍽</span><span>No Photo</span></div>';
     var statusBadge = isActive
       ? '<span class="mm-item-status-active">ACTIVE</span>'
       : '<span class="mm-item-status-inactive">INACTIVE</span>';
@@ -2075,7 +2100,9 @@ function openEditItemModal(itemCode) {
     document.getElementById('menuEditSizePrices').style.display = this.checked ? '' : 'none';
   };
 
-  previewMenuImage(item.image || '');
+  // Show local Vercel image if available, otherwise use stored URL
+  var localPath = getLocalMenuImgPath(item.code);
+  previewMenuImage(localPath || item.image || '');
   document.getElementById('menuEditOverlay').style.display = 'block';
 }
 
@@ -2102,19 +2129,127 @@ function openAddItemModal() {
 
 function closeMenuEditModal() {
   document.getElementById('menuEditOverlay').style.display = 'none';
+  // Reset photo upload state
+  _menuPhotoFile = null;
+  _menuPhotoBase64 = null;
+  var fileInput = document.getElementById('menuEditFileInput');
+  if (fileInput) fileInput.value = '';
+  var fileLabel = document.getElementById('menuEditFileLabel');
+  if (fileLabel) fileLabel.textContent = 'Choose image file (PNG/JPG)';
+  var uploadBtn = document.getElementById('menuEditUploadBtn');
+  if (uploadBtn) uploadBtn.style.display = 'none';
+  var statusEl = document.getElementById('menuEditUploadStatus');
+  if (statusEl) { statusEl.style.display = 'none'; statusEl.textContent = ''; }
 }
 
 function previewMenuImage(url) {
   var img = document.getElementById('menuEditImgPreview');
   var placeholder = document.getElementById('menuEditImgPlaceholder');
-  if (url && url.startsWith('http')) {
+  var localBadge = document.getElementById('menuEditImgLocalBadge');
+  if (url) {
     img.src = url;
     img.style.display = 'block';
     placeholder.style.display = 'none';
     img.onerror = function() { img.style.display='none'; placeholder.style.display='inline-flex'; };
+    // Show badge if it's a local Vercel path
+    if (localBadge) {
+      if (url.startsWith('/images/')) {
+        localBadge.style.display = 'inline-block';
+      } else {
+        localBadge.style.display = 'none';
+      }
+    }
   } else {
     img.style.display = 'none';
     placeholder.style.display = 'inline-flex';
+    if (localBadge) localBadge.style.display = 'none';
+  }
+}
+
+// ── Photo file picker ──────────────────────────────────
+var _menuPhotoFile = null;
+var _menuPhotoBase64 = null;
+
+function onMenuPhotoFileChange(input) {
+  var file = input.files && input.files[0];
+  if (!file) return;
+  var maxMB = 5;
+  if (file.size > maxMB * 1024 * 1024) {
+    alert('Image too large. Max ' + maxMB + 'MB.');
+    input.value = '';
+    return;
+  }
+  _menuPhotoFile = file;
+  document.getElementById('menuEditFileLabel').textContent = file.name;
+  document.getElementById('menuEditUploadBtn').style.display = 'inline-block';
+  // Show local preview
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    _menuPhotoBase64 = e.target.result.split(',')[1]; // strip data:...;base64,
+    previewMenuImageData(e.target.result);
+  };
+  reader.readAsDataURL(file);
+}
+
+function previewMenuImageData(dataUrl) {
+  var img = document.getElementById('menuEditImgPreview');
+  var placeholder = document.getElementById('menuEditImgPlaceholder');
+  var localBadge = document.getElementById('menuEditImgLocalBadge');
+  img.src = dataUrl;
+  img.style.display = 'block';
+  placeholder.style.display = 'none';
+  if (localBadge) localBadge.style.display = 'none'; // not uploaded yet
+}
+
+async function uploadMenuPhoto() {
+  var itemCode = document.getElementById('menuEditId').value.trim();
+  if (!itemCode) {
+    alert('Please save the item first before uploading a photo, or enter the item code.');
+    return;
+  }
+  if (!_menuPhotoFile || !_menuPhotoBase64) {
+    alert('No file selected.');
+    return;
+  }
+  var ext = _menuPhotoFile.name.split('.').pop().toLowerCase();
+  var statusEl = document.getElementById('menuEditUploadStatus');
+  var uploadBtn = document.getElementById('menuEditUploadBtn');
+
+  statusEl.style.display = 'block';
+  statusEl.style.color = 'var(--timber)';
+  statusEl.textContent = 'Uploading...';
+  uploadBtn.disabled = true;
+  uploadBtn.textContent = 'Uploading...';
+
+  try {
+    var resp = await fetch('/api/upload-image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: itemCode, ext: ext, base64: _menuPhotoBase64 })
+    });
+    var result = await resp.json();
+    if (result.ok) {
+      statusEl.style.color = '#065F46';
+      statusEl.textContent = '✓ Uploaded! Path: ' + result.path + ' — Live in ~1 min.';
+      // Auto-fill the URL field with the local path
+      document.getElementById('menuEditImage').value = result.path;
+      previewMenuImage(result.path);
+      // Reset file picker
+      _menuPhotoFile = null;
+      _menuPhotoBase64 = null;
+      document.getElementById('menuEditFileInput').value = '';
+      document.getElementById('menuEditFileLabel').textContent = 'Choose image file (PNG/JPG)';
+      uploadBtn.style.display = 'none';
+    } else {
+      statusEl.style.color = '#B5443A';
+      statusEl.textContent = '❌ ' + (result.error || 'Upload failed');
+    }
+  } catch (e) {
+    statusEl.style.color = '#B5443A';
+    statusEl.textContent = '❌ Network error: ' + e.message;
+  } finally {
+    uploadBtn.disabled = false;
+    uploadBtn.textContent = 'Upload';
   }
 }
 

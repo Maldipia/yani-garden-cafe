@@ -1035,11 +1035,50 @@ const SUGAR_LEVELS = [
 ];
 
 // ══════════════════════════════════════════════════════════
-// EMBEDDED MENU DATA
-// Update this array with your actual menu items.
-// Images use Google Drive thumbnail URLs.
+// MENU DATA — loaded dynamically from backend API
+// Fallback: hardcoded data used if API is unavailable
 // ══════════════════════════════════════════════════════════
-const MENU_DATA = [
+
+// Known image extensions per code (for fast local lookup)
+const IMG_EXT = {
+  'C009':'jpg','C013':'jpg','C016':'jpeg','F001':'jpg','H008':'jpg','H010':'jpg'
+};
+
+// Build local Vercel image path from item code
+function getLocalImgPath(code) {
+  var ext = IMG_EXT[code] || 'png';
+  return '/images/' + code + '.' + ext;
+}
+
+// Convert API response item → frontend item shape
+function apiItemToMenuData(item) {
+  var img = getLocalImgPath(item.code);
+  var sizes = null;
+  if (item.hasSizes) {
+    sizes = {
+      short:  parseFloat(item.priceShort)  || parseFloat(item.price) || 0,
+      medium: parseFloat(item.priceMedium) || parseFloat(item.price) || 0,
+      tall:   parseFloat(item.priceTall)   || parseFloat(item.price) || 0
+    };
+  }
+  return {
+    code:      item.code,
+    name:      item.name,
+    category:  item.category,
+    price:     parseFloat(item.price) || 0,
+    hasSizes:  !!item.hasSizes,
+    hasSugar:  !!item.hasSugar,
+    sizes:     sizes,
+    available: item.available !== false, // default true
+    img:       img
+  };
+}
+
+// MENU_DATA is populated on load; starts empty
+let MENU_DATA = [];
+
+// Fallback data used if API fails (prices may be stale)
+const MENU_DATA_FALLBACK = [
   // ── HOT BEVERAGE ──
   { code:'H001', name:'Hot Americano', category:'HOT BEVERAGE', price:120, hasSugar:false, hasSizes:false, available:true, img:'/images/H001.png' },
   { code:'H002', name:'Hot Spanish Latte', category:'HOT BEVERAGE', price:159, hasSugar:true, hasSizes:false, available:true, img:'/images/H002.png' },
@@ -1050,7 +1089,6 @@ const MENU_DATA = [
   { code:'H009', name:"Yani's Hot Chocolate", category:'HOT BEVERAGE', price:169, hasSugar:false, hasSizes:false, available:true, img:'/images/H009.png' },
   { code:'H005', name:'Mocha Caramel Latte', category:'HOT BEVERAGE', price:169, hasSugar:true, hasSizes:false, available:true, img:'/images/H005.png' },
   { code:'H006', name:'Coffee Delight', category:'HOT BEVERAGE', price:139, hasSugar:true, hasSizes:false, available:false, img:'/images/H006.png' },
-
   // ── COLD BEVERAGE ──
   { code:'H008', name:'Iced Vanilla Latte', category:'COLD BEVERAGE', price:139, hasSugar:true, hasSizes:true, sizes:{short:139,medium:160,tall:169}, available:true, img:'/images/H008.jpg' },
   { code:'C001', name:'Iced Dark Cocoa Ovaltine', category:'COLD BEVERAGE', price:149, hasSugar:true, hasSizes:true, sizes:{short:149,medium:170,tall:179}, available:true, img:'/images/C001.png' },
@@ -1082,11 +1120,9 @@ const MENU_DATA = [
   { code:'C030', name:'Tiramisu Macchiato Latte', category:'COLD BEVERAGE', price:199, hasSugar:true, hasSizes:false, available:true, img:'/images/C030.png' },
   { code:'S001', name:'Strawberry Soda', category:'COLD BEVERAGE', price:120, hasSugar:true, hasSizes:true, sizes:{short:120,medium:140,tall:149}, available:true, img:'/images/S001.png' },
   { code:'S002', name:'Blueberry Soda', category:'COLD BEVERAGE', price:120, hasSugar:true, hasSizes:true, sizes:{short:120,medium:140,tall:149}, available:true, img:'/images/S002.png' },
-
   // ── PASTRY ──
   { code:'P001', name:'Banana Bread Loaf', category:'PASTRY', price:179, hasSugar:false, hasSizes:false, available:true, img:'/images/P001.png' },
   { code:'P002', name:'Banana Bread Cupcake', category:'PASTRY', price:59, hasSugar:false, hasSizes:false, available:true, img:'/images/P002.png' },
-
   // ── MEAL ──
   { code:'F001', name:'French Fries (Sharing)', category:'MEAL', price:299, hasSugar:false, hasSizes:false, available:true, img:'/images/F001.jpg' },
   { code:'F002', name:'Fries w/ Chicken Pops', category:'MEAL', price:349, hasSugar:false, hasSizes:false, available:true, img:'/images/F002.png' },
@@ -1144,9 +1180,40 @@ window.addEventListener('DOMContentLoaded', function() {
     document.getElementById('headerTable').textContent = 'Walk-in Order';
   }
 
+  // Show loading spinner while fetching live menu
+  showMenuLoading();
+  fetchMenuFromAPI();
+});
+
+function showMenuLoading() {
+  document.getElementById('catTabs').innerHTML = '';
+  document.getElementById('menuGrid').innerHTML =
+    '<div class="loading-page" style="grid-column:1/-1">' +
+    '<div class="spinner"></div>' +
+    '<div>Loading menu…</div>' +
+    '</div>';
+  document.getElementById('emptyState').style.display = 'none';
+}
+
+async function fetchMenuFromAPI() {
+  try {
+    var result = await api('getMenu', {});
+    if (result && result.ok && Array.isArray(result.items) && result.items.length > 0) {
+      MENU_DATA = result.items.map(apiItemToMenuData);
+    } else {
+      // API returned error or empty — use fallback
+      console.warn('Menu API failed, using fallback:', result && result.error);
+      MENU_DATA = MENU_DATA_FALLBACK.slice();
+      toast('Menu loaded from cache. Prices may vary.', 4000);
+    }
+  } catch (e) {
+    console.error('fetchMenuFromAPI error:', e);
+    MENU_DATA = MENU_DATA_FALLBACK.slice();
+    toast('Offline mode — prices may vary.', 4000);
+  }
   renderCategories();
   renderMenu();
-});
+}
 
 // ══════════════════════════════════════════════════════════
 // UTILITY
@@ -1163,7 +1230,8 @@ function toast(msg, dur) {
 }
 
 function getImgUrl(item) {
-  return item.img || '';
+  // Always use local Vercel-hosted image path (fast CDN, not Google Drive)
+  return item.img || getLocalImgPath(item.code);
 }
 
 function getCategoryIcon(cat) {

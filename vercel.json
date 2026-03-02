@@ -5,10 +5,14 @@
   "functions": {
     "api/pos.js": {
       "maxDuration": 60
+    },
+    "api/upload-image.js": {
+      "maxDuration": 30
     }
   },
   "rewrites": [
-    { "source": "/api/pos", "destination": "/api/pos" }
+    { "source": "/api/pos", "destination": "/api/pos" },
+    { "source": "/api/upload-image", "destination": "/api/upload-image" }
   ],
   "headers": [
     {
