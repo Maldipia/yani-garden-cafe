@@ -110,11 +110,23 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 }
 .menu-card-body { padding:10px }
 .menu-card-name { font-weight:700; font-size:.85rem; margin-bottom:4px; line-height:1.3 }
+.menu-card-price-row {
+  display:flex; align-items:center; justify-content:space-between; margin-top:2px;
+}
 .menu-card-price { color:var(--terra); font-weight:700; font-size:.9rem }
 .menu-card-badge {
   display:inline-block; background:var(--mist-light); color:var(--timber);
   font-size:.6rem; font-weight:700; padding:2px 6px; border-radius:10px; margin-top:4px;
 }
+/* ── Card Add Button (visible + on every card) ── */
+.card-add-btn {
+  width:30px; height:30px; border-radius:50%; border:none; cursor:pointer;
+  background:var(--forest); color:#fff; font-size:1.3rem; font-weight:700;
+  display:flex; align-items:center; justify-content:center;
+  flex-shrink:0; transition:transform .15s, background .15s;
+  line-height:1;
+}
+.card-add-btn:active { transform:scale(.88) }
 .qty-control {
   display:flex; align-items:center; gap:8px; margin-top:8px;
 }
@@ -371,7 +383,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 <!-- ═══ VIEW 1: MENU ═══ -->
 <div class="view active" id="view1">
   <div class="info-box" style="margin-top:16px">
-    <strong>🛵 How it works:</strong> Browse our menu, add items to cart, fill in your delivery details, then pay via GCash or PayMaya. You book your own Lalamove or Grab Express courier.
+    <strong>📋 How it works:</strong> Browse our menu → add items to cart → enter your name, phone &amp; pickup time → pay via GCash, PayMaya, or Cash → upload your payment proof → we prepare your order! 🎉
   </div>
   <div class="cat-tabs" id="catTabs"></div>
   <div class="menu-grid" id="menuGrid">
@@ -564,6 +576,10 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 
 <!-- ═══ CART BAR ═══ -->
 <div class="cart-bar" id="cartBar">
+  <div style="position:relative;display:flex;align-items:center;margin-right:4px">
+    <span style="font-size:1.5rem">🛒</span>
+    <span id="cartBarBadge" style="position:absolute;top:-6px;right:-8px;background:var(--terra);color:#fff;border-radius:50%;width:18px;height:18px;font-size:.65rem;font-weight:700;display:flex;align-items:center;justify-content:center;line-height:1">0</span>
+  </div>
   <div class="cart-bar-info">
     <div class="cart-bar-count" id="cartBarCount">0 items</div>
     <div class="cart-bar-total" id="cartBarTotal">₱0</div>
@@ -672,18 +688,38 @@ function renderMenu(cat) {
     var hasSizes = item.hasSizes || item.has_sizes;
     var hasSugar = item.hasSugar || item.has_sugar_levels;
     
-    return '<div class="menu-card' + (inCart ? ' in-cart' : '') + '" id="card-' + esc(item.item_code || item.code) + '" onclick="onCardClick(\'' + esc(JSON.stringify(item).replace(/'/g, "\\'")) + '\')">' +
+    var itemJsonEsc = esc(JSON.stringify(item).replace(/'/g, "\\'"));
+    var code = esc(item.item_code || item.code);
+    // Price row: price on left, + button on right (always visible)
+    // When in cart AND no sizes/sugar: show −/qty/+ inline control instead
+    var priceAndBtn;
+    if (inCart && !hasSizes && !hasSugar) {
+      // Simple item already in cart: show inline qty control
+      priceAndBtn = '<div class="menu-card-price-row">' +
+        '<div class="menu-card-price">\u20b1' + price.toFixed(0) + '</div>' +
+        '<div class="qty-control" style="margin-top:0">' +
+          '<button class="qty-btn minus" onclick="event.stopPropagation();changeQty(\'' + code + '\',-1)">\u2212</button>' +
+          '<span class="qty-num">' + cartQty + '</span>' +
+          '<button class="qty-btn plus" onclick="event.stopPropagation();changeQty(\'' + code + '\',1)">+</button>' +
+        '</div>' +
+      '</div>';
+    } else {
+      // Not in cart, OR has sizes/sugar: show price + green + button
+      priceAndBtn = '<div class="menu-card-price-row">' +
+        '<div>' +
+          '<div class="menu-card-price">\u20b1' + price.toFixed(0) + (hasSizes ? '+' : '') + '</div>' +
+          (hasSizes ? '<span class="menu-card-badge">S / M / L</span>' : '') +
+          (hasSugar && !hasSizes ? '<span class="menu-card-badge" style="background:var(--terra-light,#FFF3E0);color:var(--terra)">Sugar level</span>' : '') +
+        '</div>' +
+        '<button class="card-add-btn" onclick="event.stopPropagation();onCardClick(\'' + itemJsonEsc + '\')" title="Add to cart">+</button>' +
+      '</div>';
+    }
+    return '<div class="menu-card' + (inCart ? ' in-cart' : '') + '" id="card-' + code + '" onclick="onCardClick(\'' + itemJsonEsc + '\')">' +
       (imgSrc ? '<img class="menu-card-img" src="' + imgSrc + '" alt="' + esc(item.name) + '" onerror="this.style.display=\'none\';var ph=document.createElement(\'div\');ph.className=\'menu-card-img no-img\';ph.textContent=\'\ud83c\udf7d\ufe0f\';this.parentNode.insertBefore(ph,this);">' : '<div class="menu-card-img no-img">\ud83c\udf7d\ufe0f</div>') +
       '<div class="menu-card-body">' +
         '<div class="menu-card-name">' + esc(item.name) + '</div>' +
-        '<div class="menu-card-price">\u20b1' + price.toFixed(0) + (hasSizes ? '+' : '') + '</div>' +
-        (hasSizes ? '<span class="menu-card-badge">S / M / L</span>' : '') +
-        (hasSugar && !hasSizes ? '<span class="menu-card-badge" style="background:var(--terra-light,#FFF3E0);color:var(--terra)">Sugar level</span>' : '') +
-        (inCart ? '<div class="qty-control">' +
-          '<button class="qty-btn minus" onclick="event.stopPropagation();changeQty(\'' + esc(item.item_code || item.code) + '\',-1)">\u2212</button>' +
-          '<span class="qty-num">' + cartQty + '</span>' +
-          '<button class="qty-btn plus" onclick="event.stopPropagation();changeQty(\'' + esc(item.item_code || item.code) + '\',1)">+</button>' +
-        '</div>' : '') +
+        priceAndBtn +
+        (inCart && (hasSizes || hasSugar) ? '<div style="margin-top:4px;font-size:.7rem;color:var(--forest);font-weight:600">\u2713 ' + cartQty + ' in cart</div>' : '') +
       '</div>' +
     '</div>';
   }).join('');
@@ -848,10 +884,22 @@ function addToCart(code, name, size, sugar, price, imagePath) {
 function changeQty(code, delta) {
   var items = cart.filter(function(c) { return c.code === code });
   if (!items.length) return;
-  var item = items[0];
-  item.quantity += delta;
-  if (item.quantity <= 0) {
-    cart = cart.filter(function(c) { return c.key !== item.key });
+  // If multiple variants (different sizes/sugars), adjusting by code alone is ambiguous
+  // For simple items (one variant), adjust directly
+  if (items.length === 1) {
+    var item = items[0];
+    item.quantity += delta;
+    if (item.quantity <= 0) {
+      cart = cart.filter(function(c) { return c.key !== item.key });
+    }
+  } else {
+    // Multiple variants: adjust the first one (card shows total qty)
+    // User can manage individual variants in the cart view
+    var item = items[0];
+    item.quantity += delta;
+    if (item.quantity <= 0) {
+      cart = cart.filter(function(c) { return c.key !== item.key });
+    }
   }
   updateCartUI();
   renderMenu(currentCat);
@@ -877,12 +925,15 @@ function updateCartUI() {
   
   // Cart bar
   var bar = document.getElementById('cartBar');
+  var badge = document.getElementById('cartBarBadge');
   if (count > 0 && currentStep === 1) {
     bar.classList.add('visible');
     document.getElementById('cartBarCount').textContent = count + ' item' + (count !== 1 ? 's' : '');
     document.getElementById('cartBarTotal').textContent = '₱' + total.toFixed(0);
+    if (badge) badge.textContent = count > 99 ? '99+' : count;
   } else {
     bar.classList.remove('visible');
+    if (badge) badge.textContent = '0';
   }
   
   // Cart proceed button
