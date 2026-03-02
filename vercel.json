@@ -30,6 +30,5 @@
         }
       ]
     }
-  ],
-  "_note": "redeploy-with-correct-github-token"
+  ]
 }
