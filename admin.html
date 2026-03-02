@@ -838,10 +838,15 @@ async function login() {
   btn.disabled = true;
 
   try {
+    // 55-second timeout (Vercel function max is 60s)
+    var controller = new AbortController();
+    var timeoutId = setTimeout(function(){ controller.abort(); }, 55000);
     var resp = await fetch(API_URL, {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ action:'verifyUserPin', pin: pin })
+      body: JSON.stringify({ action:'verifyUserPin', pin: pin }),
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
     var data = await resp.json();
 
     if (data.ok && data.userId) {
@@ -872,7 +877,11 @@ async function login() {
       }
     }
   } catch(e) {
-    alert('Connection error: ' + e.message);
+    if (e.name === 'AbortError') {
+      alert('⏱️ Login timed out. The server is slow — please try again.');
+    } else {
+      alert('Connection error: ' + e.message);
+    }
   }
   btn.textContent = 'Enter Dashboard';
   btn.disabled = false;
@@ -2019,7 +2028,8 @@ function renderMenuMgrGrid() {
   grid.innerHTML = filtered.map(function(item) {
     var isActive = item.active;
     var imgHtml = item.image
-      ? '<img src="' + esc(item.image) + '" class="mm-item-photo" alt="" onerror="this.outerHTML='<div class=mm-item-photo-placeholder><span style=font-size:2rem>🍽</span><span>No Photo</span></div>'">'
+      ? '<img src="' + esc(item.image) + '" class="mm-item-photo" alt="" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">' +
+        '<div class="mm-item-photo-placeholder" style="display:none"><span style="font-size:2rem">🍽</span><span>No Photo</span></div>'
       : '<div class="mm-item-photo-placeholder"><span style="font-size:2rem">🍽</span><span>No Photo</span></div>';
     var statusBadge = isActive
       ? '<span class="mm-item-status-active">ACTIVE</span>'

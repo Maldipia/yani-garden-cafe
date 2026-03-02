@@ -2,6 +2,11 @@
   "buildCommand": null,
   "outputDirectory": ".",
   "framework": null,
+  "functions": {
+    "api/pos.js": {
+      "maxDuration": 60
+    }
+  },
   "rewrites": [
     { "source": "/api/pos", "destination": "/api/pos" }
   ],
