@@ -1219,71 +1219,58 @@ async function deleteOrder(orderId) {
 
 // Bulk delete orders older than X days
 async function bulkDeleteOldOrders() {
-  var hoursAgo = 98; // Delete orders older than 98 hours
+  var hoursAgo = 98;
   var cutoffDate = new Date();
   cutoffDate.setTime(cutoffDate.getTime() - (hoursAgo * 60 * 60 * 1000));
-  
-  // Find old orders
+
+  // Count old completed orders locally for the confirmation message
   var oldOrders = allOrders.filter(function(o) {
-    var orderDate = new Date(o.createdAt);
-    return orderDate < cutoffDate;
+    return new Date(o.createdAt) < cutoffDate;
   });
-  
+
   if (oldOrders.length === 0) {
     alert('ℹ️ No orders older than ' + hoursAgo + ' hours found.');
     return;
   }
-  
+
   var msg = '⚠️ DELETE ' + oldOrders.length + ' ORDERS?\n\n';
-  msg += 'This will permanently delete all orders older than ' + hoursAgo + ' hours:\n\n';
-  msg += '• Total orders to delete: ' + oldOrders.length + '\n';
-  msg += '• Oldest order: ' + oldOrders[oldOrders.length - 1].orderId + '\n';
-  msg += '• Newest old order: ' + oldOrders[0].orderId + '\n\n';
+  msg += 'This will permanently delete all completed orders older than ' + hoursAgo + ' hours.\n\n';
+  msg += '• Orders to delete: ' + oldOrders.length + '\n';
+  msg += '• Oldest: ' + oldOrders[oldOrders.length - 1].orderId + '\n\n';
   msg += 'This action CANNOT be undone!\n\nContinue?';
-  
+
   if (!confirm(msg)) return;
-  
-  // Final confirmation
-  if (!confirm('⚠️ FINAL CONFIRMATION\n\nAre you ABSOLUTELY SURE you want to delete ' + oldOrders.length + ' orders?\n\nThis is your last chance to cancel.')) {
-    return;
-  }
-  
+  if (!confirm('⚠️ FINAL CONFIRMATION\n\nDelete ' + oldOrders.length + ' orders? Last chance to cancel.')) return;
+
   try {
-    var deleted = 0;
-    var failed = 0;
-    
-    for (var i = 0; i < oldOrders.length; i++) {
-      var result = await api('deleteOrder', { orderId: oldOrders[i].orderId });
-      
-      if (result.ok) {
-        deleted++;
-        allOrders = allOrders.filter(function(o) { return o.orderId !== oldOrders[i].orderId; });
-      } else {
-        failed++;
-        console.error('Failed to delete ' + oldOrders[i].orderId + ':', result.error);
-      }
-      
-      // Update UI every 5 orders
-      if (i % 5 === 0) {
-        renderStats();
-        renderFilters();
-        renderOrders();
-      }
+    // Single API call to delete all old orders at once
+    var result = await api('bulkDeleteOldOrders', { hoursAgo: hoursAgo });
+
+    if (!result.ok) {
+      alert('❌ Bulk delete failed: ' + (result.error || 'Unknown error'));
+      return;
     }
-    
-    // Final update
+
+    var deleted = result.deleted || 0;
+
+    // Remove deleted orders from local state
+    if (result.orderIds && result.orderIds.length) {
+      var deletedSet = {};
+      result.orderIds.forEach(function(id) { deletedSet[id] = true; });
+      allOrders = allOrders.filter(function(o) { return !deletedSet[o.orderId]; });
+    } else {
+      // Fallback: remove locally identified old orders
+      var oldIds = {};
+      oldOrders.forEach(function(o) { oldIds[o.orderId] = true; });
+      allOrders = allOrders.filter(function(o) { return !oldIds[o.orderId]; });
+    }
+
     renderStats();
     renderFilters();
     renderOrders();
-    
-    var summary = '✅ BULK DELETE COMPLETE\n\n';
-    summary += '• Deleted: ' + deleted + ' orders\n';
-    if (failed > 0) {
-      summary += '• Failed: ' + failed + ' orders\n';
-    }
-    
-    alert(summary);
-    
+
+    alert('✅ BULK DELETE COMPLETE\n\n• Deleted: ' + deleted + ' orders');
+
   } catch (error) {
     alert('❌ Error during bulk delete: ' + error.message);
   }

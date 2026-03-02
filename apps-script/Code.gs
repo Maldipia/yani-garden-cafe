@@ -168,6 +168,14 @@ function doPost(e) {
       return jsonResponse(deleteMenuItem(data));
     }
     
+    if (action === 'deleteOrder') {
+      return jsonResponse(deleteOrder(data));
+    }
+    
+    if (action === 'bulkDeleteOldOrders') {
+      return jsonResponse(bulkDeleteOldOrders(data));
+    }
+    
     return jsonResponse({ ok: false, error: 'Unknown action: ' + action });
     
   } catch (error) {
@@ -451,6 +459,130 @@ function deleteMenuItem(data) {
     const itemId = String(data.itemId || '').trim();
     if (!itemId) return { ok: false, error: 'itemId required' };
     return updateMenuItem({ itemId: itemId, status: 'INACTIVE' });
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// ORDER DELETION
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * Delete a single order by orderId.
+ * Removes the row from ORDERS sheet and all matching rows from ORDER_ITEMS sheet.
+ */
+function deleteOrder(data) {
+  try {
+    const orderId = String(data.orderId || '').trim();
+    if (!orderId) return { ok: false, error: 'orderId required' };
+
+    const ss = getSpreadsheet();
+    const ordersSheet = ss.getSheetByName(SHEET_NAMES.ORDERS);
+    const orderItemsSheet = ss.getSheetByName(SHEET_NAMES.ORDER_ITEMS);
+
+    // Delete from ORDERS sheet
+    const ordersData = ordersSheet.getDataRange().getValues();
+    const ordersHeaders = ordersData[0];
+    const orderIdCol = ordersHeaders.indexOf('ORDER_ID');
+    if (orderIdCol === -1) return { ok: false, error: 'ORDER_ID column not found in ORDERS sheet' };
+
+    let orderRowDeleted = false;
+    for (let i = ordersData.length - 1; i >= 1; i--) {
+      if (String(ordersData[i][orderIdCol]) === orderId) {
+        ordersSheet.deleteRow(i + 1);
+        orderRowDeleted = true;
+        break;
+      }
+    }
+
+    // Delete from ORDER_ITEMS sheet
+    if (orderItemsSheet) {
+      const itemsData = orderItemsSheet.getDataRange().getValues();
+      const itemsHeaders = itemsData[0];
+      const itemOrderIdCol = itemsHeaders.indexOf('ORDER_ID');
+      if (itemOrderIdCol >= 0) {
+        for (let i = itemsData.length - 1; i >= 1; i--) {
+          if (String(itemsData[i][itemOrderIdCol]) === orderId) {
+            orderItemsSheet.deleteRow(i + 1);
+          }
+        }
+      }
+    }
+
+    if (!orderRowDeleted) return { ok: false, error: 'Order not found: ' + orderId };
+
+    logAction('ORDER_DELETED', orderId, '', 'Admin', 'Order deleted by admin', 'OK');
+    return { ok: true, orderId: orderId, deleted: true };
+
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
+/**
+ * Bulk delete all COMPLETED orders older than `hoursAgo` hours.
+ * Returns count of deleted orders.
+ */
+function bulkDeleteOldOrders(data) {
+  try {
+    const hoursAgo = parseInt(data.hoursAgo || 98);
+    const cutoffMs = Date.now() - (hoursAgo * 60 * 60 * 1000);
+
+    const ss = getSpreadsheet();
+    const ordersSheet = ss.getSheetByName(SHEET_NAMES.ORDERS);
+    const orderItemsSheet = ss.getSheetByName(SHEET_NAMES.ORDER_ITEMS);
+
+    const ordersData = ordersSheet.getDataRange().getValues();
+    const headers = ordersData[0];
+    const orderIdCol = headers.indexOf('ORDER_ID');
+    const statusCol = headers.indexOf('STATUS');
+    const createdCol = headers.indexOf('CREATED_AT');
+
+    if (orderIdCol === -1 || statusCol === -1 || createdCol === -1) {
+      return { ok: false, error: 'Required columns not found in ORDERS sheet' };
+    }
+
+    // Collect order IDs and row numbers to delete (iterate in reverse)
+    const toDelete = [];
+    for (let i = ordersData.length - 1; i >= 1; i--) {
+      const status = String(ordersData[i][statusCol] || '').toUpperCase();
+      const createdAt = ordersData[i][createdCol];
+      const createdMs = createdAt ? new Date(createdAt).getTime() : 0;
+      if (status === 'COMPLETED' && createdMs > 0 && createdMs < cutoffMs) {
+        toDelete.push({ row: i + 1, orderId: String(ordersData[i][orderIdCol]) });
+      }
+    }
+
+    if (toDelete.length === 0) {
+      return { ok: true, deleted: 0, message: 'No orders older than ' + hoursAgo + ' hours found' };
+    }
+
+    // Delete rows from ORDERS (already in reverse order)
+    const deletedIds = toDelete.map(function(d) { return d.orderId; });
+    toDelete.forEach(function(d) {
+      ordersSheet.deleteRow(d.row);
+    });
+
+    // Delete matching rows from ORDER_ITEMS
+    if (orderItemsSheet) {
+      const itemsData = orderItemsSheet.getDataRange().getValues();
+      const itemsHeaders = itemsData[0];
+      const itemOrderIdCol = itemsHeaders.indexOf('ORDER_ID');
+      if (itemOrderIdCol >= 0) {
+        for (let i = itemsData.length - 1; i >= 1; i--) {
+          if (deletedIds.indexOf(String(itemsData[i][itemOrderIdCol])) >= 0) {
+            orderItemsSheet.deleteRow(i + 1);
+          }
+        }
+      }
+    }
+
+    logAction('BULK_DELETE', 'MULTIPLE', '', 'Admin',
+      'Bulk deleted ' + toDelete.length + ' orders older than ' + hoursAgo + ' hours', 'OK');
+
+    return { ok: true, deleted: toDelete.length, orderIds: deletedIds };
+
   } catch (e) {
     return { ok: false, error: e.message };
   }
