@@ -226,7 +226,7 @@ export default async function handler(req, res) {
       
       const order = Array.isArray(orders) ? orders[0] : orders;
       
-      // Insert order items
+      // Insert order items (subtotal is a generated column, do NOT insert it)
       const itemsToInsert = orderItems.map(item => ({
         order_id: order.id,
         order_ref: orderRef,
@@ -234,8 +234,7 @@ export default async function handler(req, res) {
         item_name: item.name,
         size: item.size || null,
         unit_price: parseFloat(item.price || item.unitPrice || 0),
-        quantity: parseInt(item.qty || item.quantity || 1),
-        subtotal: parseFloat(item.price || item.unitPrice || 0) * parseInt(item.qty || item.quantity || 1)
+        quantity: parseInt(item.qty || item.quantity || 1)
       }));
       
       await supabase('POST', 'online_order_items', itemsToInsert);
