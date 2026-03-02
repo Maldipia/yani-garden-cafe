@@ -698,6 +698,24 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
     <div id="menuMgrGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px;padding:16px"></div>
   </div>
 
+  <!-- Online Orders View (ADMIN/OWNER only) -->
+  <div id="onlineOrdersView" style="display:none;padding:0 0 100px">
+    <!-- Header bar -->
+    <div style="background:#fff;border-bottom:1.5px solid var(--mist);padding:14px 16px;position:sticky;top:0;z-index:10">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div>
+          <div style="font-weight:800;font-size:1.1rem;color:var(--forest-deep)">Online Orders</div>
+          <div id="onlineOrdersCount" style="font-size:.72rem;color:var(--timber);margin-top:1px">Loading...</div>
+        </div>
+        <button onclick="refreshOnlineOrders()" style="background:var(--forest);color:#fff;border:none;border-radius:10px;padding:10px 16px;font-size:.82rem;font-weight:700;cursor:pointer">🔄 Refresh</button>
+      </div>
+      <!-- Status filter tabs -->
+      <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none" id="onlineOrderFilterBtns"></div>
+    </div>
+    <!-- Orders grid -->
+    <div style="padding:16px" id="onlineOrdersGrid"></div>
+  </div>
+
   <!-- FAB: New Platform Order -->
   <button class="fab-platform" onclick="openPlatformOrder()" title="New Platform Order">+</button>
 
@@ -861,6 +879,9 @@ var lastOrderCount = 0;
 var allPayments = [];
 var pendingPayCount = 0;
 var payFilter = 'PENDING';
+var allOnlineOrders = [];
+var onlineOrderPendingCount = 0;
+var onlineOrderFilter = 'PENDING_PAYMENT';
 
 // Session data (Phase 1 Security)
 var currentUser = {
@@ -1112,6 +1133,10 @@ function renderFilters() {
   if (currentUser.role === 'ADMIN' || currentUser.role === 'OWNER') {
     tabs.push({ key:'MENU_MANAGER', label:'🍽️ Menu', count:'' });
   }
+  // Online Orders tab: ADMIN and OWNER only
+  if (currentUser.role === 'ADMIN' || currentUser.role === 'OWNER') {
+    tabs.push({ key:'ONLINE_ORDERS', label:'🛵 Online', count:onlineOrderPendingCount || '' });
+  }
 
   document.getElementById('filterBar').innerHTML = tabs.map(function(t) {
     return '<button class="filter-btn' + (currentFilter===t.key?' active':'') + '" onclick="setFilter(\'' + t.key + '\')">' +
@@ -1126,11 +1151,13 @@ function setFilter(f) {
   var orderGrid = document.getElementById('orderGrid');
   var paymentsView = document.getElementById('paymentsView');
   var menuManagerView = document.getElementById('menuManagerView');
+  var onlineOrdersView = document.getElementById('onlineOrdersView');
 
   // Hide all views first
   orderGrid.style.display = 'none';
   paymentsView.style.display = 'none';
   menuManagerView.style.display = 'none';
+  if (onlineOrdersView) onlineOrdersView.style.display = 'none';
 
   if (f === 'PAYMENTS') {
     paymentsView.style.display = 'block';
@@ -1138,6 +1165,9 @@ function setFilter(f) {
   } else if (f === 'MENU_MANAGER') {
     menuManagerView.style.display = 'block';
     loadMenuManager();
+  } else if (f === 'ONLINE_ORDERS') {
+    if (onlineOrdersView) onlineOrdersView.style.display = 'block';
+    loadOnlineOrders();
   } else {
     orderGrid.style.display = '';
     renderOrders();
@@ -2490,6 +2520,184 @@ async function saveMenuItemEdit() {
     alert('✅ ' + (isNew ? 'Item added!' : 'Item updated!'));
   } else {
     alert('❌ Failed: ' + (result.error || 'Unknown error'));
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// ONLINE ORDERS MANAGEMENT
+// ══════════════════════════════════════════════════════════
+async function loadOnlineOrders() {
+  document.getElementById('onlineOrdersCount').textContent = 'Loading...';
+  document.getElementById('onlineOrdersGrid').innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div><div class="empty-text">Loading online orders...</div></div>';
+  try {
+    var resp = await fetch('/api/online-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'getOnlineOrders', limit: 100 })
+    });
+    var data = await resp.json();
+    if (!data.ok) throw new Error(data.error || 'Failed to load');
+    allOnlineOrders = data.orders || [];
+    onlineOrderPendingCount = allOnlineOrders.filter(function(o) { return o.status === 'PENDING_PAYMENT' || o.status === 'PAYMENT_SUBMITTED'; }).length;
+    renderOnlineOrderFilters();
+    renderOnlineOrders();
+    renderFilters(); // Update tab count
+  } catch (e) {
+    document.getElementById('onlineOrdersCount').textContent = 'Error: ' + e.message;
+    document.getElementById('onlineOrdersGrid').innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">Failed to load: ' + esc(e.message) + '</div></div>';
+  }
+}
+
+function refreshOnlineOrders() { loadOnlineOrders(); }
+
+function renderOnlineOrderFilters() {
+  var counts = { ALL:0, PENDING_PAYMENT:0, PAYMENT_SUBMITTED:0, CONFIRMED:0, PREPARING:0, READY:0, COMPLETED:0, CANCELLED:0 };
+  allOnlineOrders.forEach(function(o) {
+    counts.ALL++;
+    if (counts[o.status] !== undefined) counts[o.status]++;
+    else counts[o.status] = 1;
+  });
+  var tabs = [
+    { key:'PAYMENT_SUBMITTED', label:'💳 Proof Submitted', count: counts.PAYMENT_SUBMITTED },
+    { key:'PENDING_PAYMENT', label:'⏳ Pending Pay', count: counts.PENDING_PAYMENT },
+    { key:'CONFIRMED', label:'✅ Confirmed', count: counts.CONFIRMED },
+    { key:'PREPARING', label:'👨\u200d🍳 Preparing', count: counts.PREPARING },
+    { key:'READY', label:'✨ Ready', count: counts.READY },
+    { key:'COMPLETED', label:'🎉 Done', count: counts.COMPLETED },
+    { key:'ALL', label:'All', count: counts.ALL }
+  ];
+  document.getElementById('onlineOrderFilterBtns').innerHTML = tabs.map(function(t) {
+    return '<button class="pay-filter-btn' + (onlineOrderFilter===t.key?' active':'') + '" onclick="setOnlineOrderFilter(\'' + t.key + '\')">' +
+      t.label + ' <span style="opacity:.6">' + t.count + '</span></button>';
+  }).join('');
+  document.getElementById('onlineOrdersCount').textContent = allOnlineOrders.length + ' total orders · ' + onlineOrderPendingCount + ' need attention';
+}
+
+function setOnlineOrderFilter(f) {
+  onlineOrderFilter = f;
+  renderOnlineOrderFilters();
+  renderOnlineOrders();
+}
+
+function renderOnlineOrders() {
+  var filtered = allOnlineOrders.filter(function(o) {
+    if (onlineOrderFilter === 'ALL') return true;
+    return o.status === onlineOrderFilter;
+  });
+  filtered.sort(function(a,b) {
+    var order = { PAYMENT_SUBMITTED:0, PENDING_PAYMENT:1, CONFIRMED:2, PREPARING:3, READY:4, COMPLETED:5, CANCELLED:6 };
+    var sa = order[a.status] !== undefined ? order[a.status] : 9;
+    var sb = order[b.status] !== undefined ? order[b.status] : 9;
+    if (sa !== sb) return sa - sb;
+    return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+  });
+  if (!filtered.length) {
+    document.getElementById('onlineOrdersGrid').innerHTML = '<div class="empty-state"><div class="empty-icon">🛕</div><div class="empty-text">No online orders here</div></div>';
+    return;
+  }
+  document.getElementById('onlineOrdersGrid').innerHTML = filtered.map(function(o) {
+    var statusColors = {
+      PENDING_PAYMENT: 'background:#FEF3C7;color:#92400E',
+      PAYMENT_SUBMITTED: 'background:#DBEAFE;color:#1E40AF',
+      CONFIRMED: 'background:#D1FAE5;color:#065F46',
+      PREPARING: 'background:#EDE9FE;color:#6D28D9',
+      READY: 'background:#D1FAE5;color:#065F46',
+      COMPLETED: 'background:var(--mist-light);color:var(--timber)',
+      CANCELLED: 'background:#FEE2E2;color:#991B1B'
+    };
+    var statusStyle = statusColors[o.status] || 'background:var(--mist-light);color:var(--timber)';
+    var timeStr = '';
+    try { var d = new Date(o.created_at); timeStr = d.toLocaleString('en-PH', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit', hour12:true }); } catch(e) {}
+    var html = '<div class="order-card" data-status="' + esc(o.status) + '" style="margin-bottom:12px">';
+    // Header
+    html += '<div class="oc-header">';
+    html += '<div class="oc-id">' + esc(o.order_ref || o.id) + '</div>';
+    html += '<span class="oc-status-badge" style="' + statusStyle + '">' + esc(o.status.replace(/_/g,' ')) + '</span>';
+    html += '<div class="oc-time">' + esc(timeStr) + '</div>';
+    html += '</div>';
+    // Customer info
+    html += '<div style="padding:0 16px 10px;font-size:.82rem">';
+    html += '<div style="font-weight:700">👤 ' + esc(o.customer_name || '') + '</div>';
+    html += '<div style="color:var(--timber);margin-top:2px">📱 ' + esc(o.customer_phone || '') + '</div>';
+    if (o.delivery_address) html += '<div style="color:var(--timber);margin-top:2px">📍 ' + esc(o.delivery_address) + '</div>';
+    if (o.courier_type) html += '<div style="color:var(--timber);margin-top:2px">🛵 Courier: ' + esc(o.courier_type) + '</div>';
+    html += '</div>';
+    // Items
+    if (o.items && o.items.length) {
+      html += '<div class="oc-items">';
+      o.items.forEach(function(item) {
+        html += '<div class="oc-item">';
+        html += '<div class="oc-item-qty">' + esc(String(item.quantity || 1)) + '</div>';
+        html += '<div class="oc-item-info">';
+        html += '<div class="oc-item-name">' + esc(item.item_name || item.name || '') + '</div>';
+        if (item.size && item.size !== 'REGULAR') html += '<div class="oc-item-opts">' + esc(item.size) + '</div>';
+        html += '</div>';
+        html += '<div style="font-size:.82rem;font-weight:700;color:var(--terra)">₱' + Number(item.subtotal || (item.unit_price * item.quantity) || 0).toFixed(0) + '</div>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+    // Total
+    html += '<div class="oc-total">Total: ₱' + Number(o.total_amount || 0).toFixed(0) + '</div>';
+    // Payment proof
+    if (o.payment_proof_url) {
+      html += '<div style="padding:6px 16px 10px">';
+      html += '<a href="' + esc(o.payment_proof_url) + '" target="_blank" style="font-size:.78rem;color:var(--forest);font-weight:600;text-decoration:none">📸 View Payment Proof</a>';
+      html += '</div>';
+    }
+    // Actions
+    html += '<div class="oc-actions" style="flex-wrap:wrap">';
+    if (o.status === 'PAYMENT_SUBMITTED') {
+      html += '<button class="oc-btn oc-btn-start" onclick="onlineOrderAction(\'' + esc(o.order_ref) + '\',\'CONFIRMED\')">✅ Confirm Payment</button>';
+      html += '<button class="oc-btn oc-btn-cancel" onclick="onlineOrderAction(\'' + esc(o.order_ref) + '\',\'CANCELLED\')">✕ Reject</button>';
+    } else if (o.status === 'CONFIRMED') {
+      html += '<button class="oc-btn oc-btn-start" onclick="onlineOrderAction(\'' + esc(o.order_ref) + '\',\'PREPARING\')">👨‍🍳 Start Preparing</button>';
+    } else if (o.status === 'PREPARING') {
+      html += '<button class="oc-btn oc-btn-ready" onclick="onlineOrderReadyAndSMS(\'' + esc(o.order_ref) + '\',\'' + esc(o.customer_phone || '') + '\',\'' + esc(o.customer_name || '') + '\')">✨ Mark Ready & SMS</button>';
+    } else if (o.status === 'READY') {
+      html += '<button class="oc-btn oc-btn-complete" onclick="onlineOrderAction(\'' + esc(o.order_ref) + '\',\'COMPLETED\')">🎉 Mark Completed</button>';
+    }
+    html += '</div>';
+    html += '</div>';
+    return html;
+  }).join('');
+}
+
+async function onlineOrderAction(orderRef, newStatus) {
+  var confirmMsg = 'Update order ' + orderRef + ' to ' + newStatus + '?';
+  if (newStatus === 'CANCELLED') {
+    confirmMsg = '⚠️ Cancel online order ' + orderRef + '?\n\nThis will notify the customer.';
+  }
+  if (!confirm(confirmMsg)) return;
+  try {
+    var resp = await fetch('/api/online-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'updateOnlineOrderStatus', orderRef: orderRef, status: newStatus, updatedBy: currentUser.username || 'Staff' })
+    });
+    var data = await resp.json();
+    if (!data.ok) throw new Error(data.error || 'Failed');
+    await loadOnlineOrders();
+  } catch (e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+async function onlineOrderReadyAndSMS(orderRef, phone, name) {
+  if (!confirm('Mark order ' + orderRef + ' as READY and send SMS to ' + phone + '?')) return;
+  try {
+    var resp = await fetch('/api/online-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'sendReadySMS', orderRef: orderRef, customerPhone: phone, customerName: name, updatedBy: currentUser.username || 'Staff' })
+    });
+    var data = await resp.json();
+    if (!data.ok) throw new Error(data.error || 'Failed');
+    var smsMsg = data.smsSent ? '✅ Order marked READY and SMS sent!' : '✅ Order marked READY (SMS: ' + (data.smsError || 'not configured') + ')';
+    alert(smsMsg);
+    await loadOnlineOrders();
+  } catch (e) {
+    alert('Error: ' + e.message);
   }
 }
 

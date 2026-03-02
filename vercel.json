@@ -8,6 +8,12 @@
     },
     "api/upload-image.js": {
       "maxDuration": 30
+    },
+    "api/online-order.js": {
+      "maxDuration": 30
+    },
+    "api/upload-proof.js": {
+      "maxDuration": 30
     }
   },
   "rewrites": [
@@ -18,6 +24,14 @@
     {
       "source": "/api/upload-image",
       "destination": "/api/upload-image"
+    },
+    {
+      "source": "/api/online-order",
+      "destination": "/api/online-order"
+    },
+    {
+      "source": "/api/upload-proof",
+      "destination": "/api/upload-proof"
     }
   ],
   "headers": [

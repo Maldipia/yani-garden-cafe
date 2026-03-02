@@ -1,0 +1,1102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Yani Garden Cafe — Online Order</title>
+<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --forest: #314C47;
+  --forest-deep: #1E3530;
+  --forest-light: #3D5E57;
+  --terra: #C4704B;
+  --terra-light: #D4916F;
+  --gold: #B8973A;
+  --timber: #6B7B6E;
+  --mist: #D2D5CD;
+  --mist-light: #EEF0EB;
+  --cream: #FAF8F4;
+  --white: #FFFFFF;
+  --font-soul: 'Crimson Pro', Georgia, serif;
+  --font-body: 'Quicksand', sans-serif;
+  --r-sm: 6px; --r-md: 10px; --r-lg: 14px; --r-xl: 20px;
+  --shadow-sm: 0 1px 4px rgba(0,0,0,.06);
+  --shadow-md: 0 4px 16px rgba(0,0,0,.1);
+}
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent }
+body { font-family:var(--font-body); background:var(--cream); color:var(--forest-deep); min-height:100dvh }
+
+/* ── Header ── */
+.header {
+  background:linear-gradient(160deg, var(--forest-deep) 0%, var(--forest) 60%, var(--forest-light) 100%);
+  color:var(--white); padding:16px 20px 20px;
+  text-align:center; position:sticky; top:0; z-index:100;
+  box-shadow:0 2px 16px rgba(0,0,0,.15);
+}
+.header::after {
+  content:''; position:absolute; bottom:-4px; left:0; right:0; height:4px;
+  background:linear-gradient(to right, var(--gold), var(--terra), var(--gold)); opacity:.6;
+}
+.header-logo { width:52px; height:52px; border-radius:50%; object-fit:cover; margin-bottom:8px; box-shadow:var(--shadow-md) }
+.header-title { font-family:var(--font-soul); font-size:1.5rem; font-weight:700; margin-bottom:2px }
+.header-sub { font-size:.75rem; opacity:.75; margin-bottom:8px }
+.header-badge {
+  display:inline-flex; align-items:center; gap:6px;
+  background:rgba(255,255,255,.15); border-radius:20px; padding:4px 12px;
+  font-size:.7rem; font-weight:600;
+}
+.header-dot { width:7px; height:7px; border-radius:50%; background:#4ADE80; animation:pulse 2s infinite }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+/* ── Step Indicator ── */
+.steps {
+  display:flex; justify-content:center; gap:0; padding:16px 20px 0;
+  background:var(--white); border-bottom:1px solid var(--mist);
+}
+.step-item {
+  flex:1; max-width:120px; text-align:center; padding:10px 4px;
+  position:relative; cursor:pointer;
+}
+.step-item::after {
+  content:''; position:absolute; bottom:0; left:0; right:0; height:3px;
+  background:transparent; transition:background .2s;
+}
+.step-item.active::after { background:var(--terra) }
+.step-num {
+  width:28px; height:28px; border-radius:50%; margin:0 auto 4px;
+  display:flex; align-items:center; justify-content:center;
+  font-size:.75rem; font-weight:700;
+  background:var(--mist-light); color:var(--timber); transition:all .2s;
+}
+.step-item.active .step-num { background:var(--terra); color:var(--white) }
+.step-item.done .step-num { background:var(--forest); color:var(--white) }
+.step-label { font-size:.65rem; font-weight:600; color:var(--timber) }
+.step-item.active .step-label { color:var(--terra) }
+
+/* ── Views ── */
+.view { display:none; padding:16px; max-width:600px; margin:0 auto; padding-bottom:120px }
+.view.active { display:block }
+
+/* ── Category Tabs ── */
+.cat-tabs {
+  display:flex; gap:8px; overflow-x:auto; padding:0 0 8px;
+  scrollbar-width:none; margin-bottom:16px;
+}
+.cat-tabs::-webkit-scrollbar { display:none }
+.cat-tab {
+  flex-shrink:0; padding:7px 16px; border-radius:20px; font-size:.78rem;
+  font-weight:700; font-family:var(--font-body); cursor:pointer; border:none;
+  background:var(--mist-light); color:var(--timber); transition:all .15s;
+}
+.cat-tab.active { background:var(--forest); color:var(--white) }
+
+/* ── Menu Grid ── */
+.menu-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px }
+.menu-card {
+  background:var(--white); border-radius:var(--r-lg); overflow:hidden;
+  box-shadow:var(--shadow-sm); cursor:pointer; transition:transform .15s, box-shadow .15s;
+  border:2px solid transparent;
+}
+.menu-card:active { transform:scale(.97) }
+.menu-card.in-cart { border-color:var(--forest) }
+.menu-card-img {
+  width:100%; aspect-ratio:4/3; object-fit:cover; background:var(--mist-light);
+  display:block;
+}
+.menu-card-img.no-img {
+  display:flex; align-items:center; justify-content:center;
+  font-size:2rem; background:var(--mist-light);
+}
+.menu-card-body { padding:10px }
+.menu-card-name { font-weight:700; font-size:.85rem; margin-bottom:4px; line-height:1.3 }
+.menu-card-price { color:var(--terra); font-weight:700; font-size:.9rem }
+.menu-card-badge {
+  display:inline-block; background:var(--mist-light); color:var(--timber);
+  font-size:.6rem; font-weight:700; padding:2px 6px; border-radius:10px; margin-top:4px;
+}
+.qty-control {
+  display:flex; align-items:center; gap:8px; margin-top:8px;
+}
+.qty-btn {
+  width:28px; height:28px; border-radius:50%; border:none; cursor:pointer;
+  font-size:1.1rem; font-weight:700; font-family:var(--font-body);
+  display:flex; align-items:center; justify-content:center;
+  transition:all .15s;
+}
+.qty-btn.minus { background:var(--mist-light); color:var(--timber) }
+.qty-btn.plus { background:var(--forest); color:var(--white) }
+.qty-num { font-weight:700; font-size:.9rem; min-width:20px; text-align:center }
+
+/* ── Size Modal ── */
+.size-overlay {
+  position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:200;
+  display:flex; align-items:flex-end; justify-content:center;
+}
+.size-overlay.hidden { display:none }
+.size-sheet {
+  background:var(--white); border-radius:var(--r-xl) var(--r-xl) 0 0;
+  padding:24px 20px 40px; width:100%; max-width:500px;
+}
+.size-title { font-family:var(--font-soul); font-size:1.2rem; font-weight:700; margin-bottom:4px }
+.size-sub { font-size:.78rem; color:var(--timber); margin-bottom:20px }
+.size-options { display:flex; flex-direction:column; gap:10px; margin-bottom:20px }
+.size-opt {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:14px 16px; border-radius:var(--r-md); border:2px solid var(--mist);
+  cursor:pointer; transition:all .15s;
+}
+.size-opt.selected { border-color:var(--forest); background:var(--mist-light) }
+.size-opt-name { font-weight:700; font-size:.9rem }
+.size-opt-price { font-weight:700; color:var(--terra) }
+.size-add-btn {
+  width:100%; padding:14px; background:var(--forest); color:var(--white);
+  border:none; border-radius:var(--r-md); font-size:.95rem; font-weight:700;
+  font-family:var(--font-body); cursor:pointer;
+}
+
+/* ── Cart Bar ── */
+.cart-bar {
+  position:fixed; bottom:0; left:0; right:0; z-index:150;
+  background:var(--forest-deep); color:var(--white);
+  padding:14px 20px; display:flex; align-items:center; gap:12px;
+  box-shadow:0 -4px 20px rgba(0,0,0,.2);
+  transform:translateY(100%); transition:transform .3s;
+}
+.cart-bar.visible { transform:translateY(0) }
+.cart-bar-info { flex:1 }
+.cart-bar-count { font-size:.72rem; opacity:.75 }
+.cart-bar-total { font-size:1.1rem; font-weight:700 }
+.cart-bar-btn {
+  padding:12px 24px; background:var(--terra); color:var(--white);
+  border:none; border-radius:var(--r-md); font-size:.9rem; font-weight:700;
+  font-family:var(--font-body); cursor:pointer;
+}
+
+/* ── Cart View ── */
+.cart-item {
+  background:var(--white); border-radius:var(--r-lg); padding:14px;
+  display:flex; gap:12px; align-items:center; margin-bottom:10px;
+  box-shadow:var(--shadow-sm);
+}
+.cart-item-img {
+  width:56px; height:56px; border-radius:var(--r-md); object-fit:cover;
+  background:var(--mist-light); flex-shrink:0;
+}
+.cart-item-info { flex:1 }
+.cart-item-name { font-weight:700; font-size:.88rem; margin-bottom:2px }
+.cart-item-size { font-size:.72rem; color:var(--timber) }
+.cart-item-price { font-weight:700; color:var(--terra); font-size:.9rem }
+.cart-item-controls { display:flex; align-items:center; gap:8px; margin-top:6px }
+.cart-remove { background:none; border:none; color:var(--terra); font-size:.72rem; cursor:pointer; font-family:var(--font-body); font-weight:600 }
+
+.cart-summary {
+  background:var(--white); border-radius:var(--r-lg); padding:16px;
+  margin-bottom:16px; box-shadow:var(--shadow-sm);
+}
+.cart-summary-row { display:flex; justify-content:space-between; padding:6px 0; font-size:.88rem }
+.cart-summary-row.total { font-weight:700; font-size:1rem; border-top:1px solid var(--mist); margin-top:6px; padding-top:12px }
+
+/* ── Checkout Form ── */
+.form-section { margin-bottom:20px }
+.form-section-title {
+  font-weight:800; font-size:.8rem; color:var(--timber); text-transform:uppercase;
+  letter-spacing:.5px; margin-bottom:10px; display:flex; align-items:center; gap:6px;
+}
+.form-group { margin-bottom:12px }
+.form-label { font-size:.75rem; font-weight:700; color:var(--timber); display:block; margin-bottom:4px }
+.form-input {
+  width:100%; padding:12px 14px; border:1.5px solid var(--mist); border-radius:var(--r-md);
+  font-size:.9rem; font-family:var(--font-body); outline:none; transition:border-color .2s;
+  background:var(--white);
+}
+.form-input:focus { border-color:var(--forest) }
+.form-input.error { border-color:var(--terra) }
+.form-textarea { resize:vertical; min-height:80px }
+.form-select { appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236B7B6E' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 12px center }
+
+/* ── Payment Section ── */
+.payment-methods { display:flex; gap:10px; margin-bottom:16px }
+.pay-method-btn {
+  flex:1; padding:12px; border:2px solid var(--mist); border-radius:var(--r-md);
+  background:var(--white); cursor:pointer; text-align:center; transition:all .15s;
+  font-family:var(--font-body);
+}
+.pay-method-btn.active { border-color:var(--forest); background:var(--mist-light) }
+.pay-method-icon { font-size:1.5rem; margin-bottom:4px }
+.pay-method-name { font-size:.72rem; font-weight:700; color:var(--forest-deep) }
+
+.qr-box {
+  background:var(--mist-light); border-radius:var(--r-lg); padding:20px;
+  text-align:center; margin-bottom:16px;
+}
+.qr-placeholder {
+  width:140px; height:140px; background:var(--white); border-radius:var(--r-md);
+  margin:0 auto 12px; display:flex; align-items:center; justify-content:center;
+  font-size:3rem; box-shadow:var(--shadow-sm);
+}
+.qr-label { font-size:.78rem; color:var(--timber); font-weight:600 }
+.qr-number { font-size:1.1rem; font-weight:700; color:var(--forest-deep); margin-top:4px }
+
+.proof-upload-area {
+  border:2px dashed var(--mist); border-radius:var(--r-lg); padding:24px;
+  text-align:center; cursor:pointer; transition:all .2s; background:var(--white);
+}
+.proof-upload-area:hover, .proof-upload-area.dragover { border-color:var(--forest); background:var(--mist-light) }
+.proof-upload-icon { font-size:2.5rem; margin-bottom:8px }
+.proof-upload-text { font-size:.82rem; color:var(--timber); font-weight:600 }
+.proof-preview { width:100%; max-height:200px; object-fit:contain; border-radius:var(--r-md); margin-top:12px }
+
+/* ── Buttons ── */
+.btn-primary {
+  width:100%; padding:16px; background:var(--forest); color:var(--white);
+  border:none; border-radius:var(--r-md); font-size:1rem; font-weight:700;
+  font-family:var(--font-body); cursor:pointer; transition:background .15s;
+}
+.btn-primary:active { background:var(--forest-light) }
+.btn-primary:disabled { background:var(--mist); color:var(--timber); cursor:not-allowed }
+.btn-secondary {
+  width:100%; padding:14px; background:var(--mist-light); color:var(--forest-deep);
+  border:none; border-radius:var(--r-md); font-size:.9rem; font-weight:700;
+  font-family:var(--font-body); cursor:pointer; margin-top:10px;
+}
+
+/* ── Success View ── */
+.success-card {
+  background:var(--white); border-radius:var(--r-xl); padding:32px 24px;
+  text-align:center; box-shadow:var(--shadow-md); margin:20px 0;
+}
+.success-icon { font-size:4rem; margin-bottom:16px }
+.success-title { font-family:var(--font-soul); font-size:1.6rem; font-weight:700; margin-bottom:8px }
+.success-ref {
+  background:var(--mist-light); border-radius:var(--r-md); padding:12px 20px;
+  font-size:1.1rem; font-weight:700; color:var(--forest); margin:16px 0;
+  font-family:monospace; letter-spacing:2px;
+}
+.success-steps { text-align:left; margin:20px 0 }
+.success-step {
+  display:flex; gap:12px; padding:10px 0; border-bottom:1px solid var(--mist-light);
+}
+.success-step:last-child { border-bottom:none }
+.success-step-num {
+  width:28px; height:28px; border-radius:50%; background:var(--forest);
+  color:var(--white); font-size:.75rem; font-weight:700;
+  display:flex; align-items:center; justify-content:center; flex-shrink:0;
+}
+.success-step-text { font-size:.82rem; color:var(--timber) }
+.success-step-text strong { color:var(--forest-deep) }
+
+/* ── Info Box ── */
+.info-box {
+  background:var(--mist-light); border-radius:var(--r-md); padding:14px 16px;
+  margin-bottom:16px; font-size:.8rem; color:var(--timber); line-height:1.6;
+}
+.info-box strong { color:var(--forest-deep) }
+.info-box.warning { background:#FEF3C7; color:#92400E }
+.info-box.success { background:#D1FAE5; color:#065F46 }
+
+/* ── Loading ── */
+.loading-overlay {
+  position:fixed; inset:0; background:rgba(255,255,255,.9); z-index:300;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px;
+}
+.loading-overlay.hidden { display:none }
+.spinner {
+  width:40px; height:40px; border:4px solid var(--mist);
+  border-top-color:var(--forest); border-radius:50%;
+  animation:spin .8s linear infinite;
+}
+@keyframes spin { to { transform:rotate(360deg) } }
+.loading-text { font-weight:600; color:var(--timber) }
+
+/* ── Toast ── */
+.toast {
+  position:fixed; bottom:80px; left:50%; transform:translateX(-50%) translateY(20px);
+  background:var(--forest-deep); color:var(--white); padding:12px 20px;
+  border-radius:var(--r-md); font-size:.82rem; font-weight:600; z-index:400;
+  opacity:0; transition:all .3s; pointer-events:none; white-space:nowrap;
+}
+.toast.show { opacity:1; transform:translateX(-50%) translateY(0) }
+.toast.error { background:var(--terra) }
+.toast.success { background:#065F46 }
+
+/* ── Responsive ── */
+@media (max-width:360px) {
+  .menu-grid { grid-template-columns:1fr }
+}
+</style>
+</head>
+<body>
+
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <div class="loading-text" id="loadingText">Loading menu...</div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Header -->
+<div class="header">
+  <img class="header-logo" src="/images/logo.png" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2250%22 fill=%22%23314C47%22/><text y=%22.9em%22 font-size=%2260%22 x=%2250%22 text-anchor=%22middle%22 fill=%22white%22>🌿</text></svg>'" alt="Yani Garden Cafe">
+  <div class="header-title">Yani Garden Cafe</div>
+  <div class="header-sub">Online Order · Delivery</div>
+  <div class="header-badge">
+    <span class="header-dot"></span>
+    <span>Order Online · Book Your Own Courier</span>
+  </div>
+</div>
+
+<!-- Step Indicator -->
+<div class="steps" id="stepBar">
+  <div class="step-item active" id="step1" onclick="goToStep(1)">
+    <div class="step-num">1</div>
+    <div class="step-label">Menu</div>
+  </div>
+  <div class="step-item" id="step2" onclick="goToStep(2)">
+    <div class="step-num">2</div>
+    <div class="step-label">Cart</div>
+  </div>
+  <div class="step-item" id="step3" onclick="goToStep(3)">
+    <div class="step-num">3</div>
+    <div class="step-label">Details</div>
+  </div>
+  <div class="step-item" id="step4" onclick="goToStep(4)">
+    <div class="step-num">4</div>
+    <div class="step-label">Payment</div>
+  </div>
+</div>
+
+<!-- ═══ VIEW 1: MENU ═══ -->
+<div class="view active" id="view1">
+  <div class="info-box" style="margin-top:16px">
+    <strong>🛵 How it works:</strong> Browse our menu, add items to cart, fill in your delivery details, then pay via GCash or PayMaya. You book your own Lalamove or Grab Express courier.
+  </div>
+  <div class="cat-tabs" id="catTabs"></div>
+  <div class="menu-grid" id="menuGrid">
+    <div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--timber)">Loading menu...</div>
+  </div>
+</div>
+
+<!-- ═══ VIEW 2: CART ═══ -->
+<div class="view" id="view2">
+  <div id="cartItems"></div>
+  <div class="cart-summary" id="cartSummary" style="display:none">
+    <div class="cart-summary-row">
+      <span>Subtotal</span>
+      <span id="cartSubtotal">₱0</span>
+    </div>
+    <div class="cart-summary-row" style="font-size:.78rem;color:var(--timber)">
+      <span>Delivery fee</span>
+      <span>Paid to courier</span>
+    </div>
+    <div class="cart-summary-row total">
+      <span>Order Total</span>
+      <span id="cartTotal">₱0</span>
+    </div>
+  </div>
+  <div class="info-box warning">
+    <strong>⚠️ Note:</strong> Delivery fee is paid directly to your courier (Lalamove/Grab Express). We only charge for the food items.
+  </div>
+  <button class="btn-primary" id="cartProceedBtn" onclick="goToStep(3)" disabled>Proceed to Details →</button>
+  <button class="btn-secondary" onclick="goToStep(1)">← Continue Shopping</button>
+</div>
+
+<!-- ═══ VIEW 3: CUSTOMER DETAILS ═══ -->
+<div class="view" id="view3">
+  <div class="form-section">
+    <div class="form-section-title">👤 Your Details</div>
+    <div class="form-group">
+      <label class="form-label">Full Name *</label>
+      <input class="form-input" id="custName" type="text" placeholder="Juan dela Cruz" autocomplete="name">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Mobile Number *</label>
+      <input class="form-input" id="custPhone" type="tel" placeholder="09XX XXX XXXX" autocomplete="tel">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Email (optional)</label>
+      <input class="form-input" id="custEmail" type="email" placeholder="juan@email.com" autocomplete="email">
+    </div>
+  </div>
+  <div class="form-section">
+    <div class="form-section-title">📍 Delivery Address</div>
+    <div class="form-group">
+      <label class="form-label">Complete Address *</label>
+      <textarea class="form-input form-textarea" id="custAddress" placeholder="House/Unit No., Street, Barangay, City, Province"></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Delivery Notes (optional)</label>
+      <input class="form-input" id="custNotes" type="text" placeholder="Landmark, gate code, etc.">
+    </div>
+  </div>
+  <div class="form-section">
+    <div class="form-section-title">🛵 Courier</div>
+    <div class="form-group">
+      <label class="form-label">Which courier will you use?</label>
+      <select class="form-input form-select" id="courierType">
+        <option value="LALAMOVE">Lalamove</option>
+        <option value="GRAB_EXPRESS">Grab Express</option>
+        <option value="OTHER">Other</option>
+      </select>
+    </div>
+    <div class="info-box">
+      <strong>📦 Pickup address:</strong> Yani Garden Cafe, [Address]. Our team will prepare your order and have it ready for your courier to pick up.
+    </div>
+  </div>
+  <button class="btn-primary" onclick="proceedToPayment()">Proceed to Payment →</button>
+  <button class="btn-secondary" onclick="goToStep(2)">← Back to Cart</button>
+</div>
+
+<!-- ═══ VIEW 4: PAYMENT ═══ -->
+<div class="view" id="view4">
+  <div class="info-box">
+    <strong>💳 Online Payment Only</strong> — We do not accept Cash on Delivery. Please pay via GCash or PayMaya and upload your proof of payment.
+  </div>
+  
+  <div class="form-section">
+    <div class="form-section-title">💳 Payment Method</div>
+    <div class="payment-methods">
+      <button class="pay-method-btn active" id="payGcash" onclick="selectPayMethod('GCASH')">
+        <div class="pay-method-icon">💙</div>
+        <div class="pay-method-name">GCash</div>
+      </button>
+      <button class="pay-method-btn" id="payMaya" onclick="selectPayMethod('PAYMAYA')">
+        <div class="pay-method-icon">💚</div>
+        <div class="pay-method-name">PayMaya</div>
+      </button>
+      <button class="pay-method-btn" id="payBank" onclick="selectPayMethod('BANK')">
+        <div class="pay-method-icon">🏦</div>
+        <div class="pay-method-name">Bank Transfer</div>
+      </button>
+    </div>
+  </div>
+
+  <div class="form-section">
+    <div class="form-section-title">📱 Payment Details</div>
+    <div class="qr-box">
+      <div class="qr-placeholder">📱</div>
+      <div class="qr-label">Send payment to:</div>
+      <div class="qr-number" id="paymentNumber">09XX XXX XXXX</div>
+      <div style="font-size:.72rem;color:var(--timber);margin-top:4px" id="paymentName">Yani Garden Cafe</div>
+    </div>
+    <div class="cart-summary">
+      <div class="cart-summary-row total">
+        <span>Amount to Pay</span>
+        <span id="payAmount" style="color:var(--terra)">₱0</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="form-section">
+    <div class="form-section-title">📸 Upload Proof of Payment</div>
+    <div class="proof-upload-area" id="proofUploadArea" onclick="document.getElementById('proofFileInput').click()" ondragover="onDragOver(event)" ondrop="onDrop(event)">
+      <div class="proof-upload-icon">📷</div>
+      <div class="proof-upload-text">Tap to upload screenshot or photo</div>
+      <div style="font-size:.7rem;color:var(--timber);margin-top:4px">JPG, PNG, or GIF · Max 5MB</div>
+      <img id="proofPreview" class="proof-preview" style="display:none" alt="Payment proof">
+    </div>
+    <input type="file" id="proofFileInput" accept="image/*" style="display:none" onchange="onProofFileChange(this)">
+  </div>
+
+  <button class="btn-primary" id="submitOrderBtn" onclick="submitOrder()">Place Order & Submit Payment →</button>
+  <button class="btn-secondary" onclick="goToStep(3)">← Back to Details</button>
+</div>
+
+<!-- ═══ VIEW 5: SUCCESS ═══ -->
+<div class="view" id="view5">
+  <div class="success-card">
+    <div class="success-icon">🎉</div>
+    <div class="success-title">Order Placed!</div>
+    <div style="font-size:.85rem;color:var(--timber);margin-bottom:8px">Your order reference number is:</div>
+    <div class="success-ref" id="successRef">YANI-OL-001</div>
+    <div style="font-size:.78rem;color:var(--timber)">Save this number to track your order</div>
+    
+    <div class="success-steps">
+      <div class="success-step">
+        <div class="success-step-num">1</div>
+        <div class="success-step-text"><strong>Payment Verification</strong><br>Our team will verify your payment within 30 minutes.</div>
+      </div>
+      <div class="success-step">
+        <div class="success-step-num">2</div>
+        <div class="success-step-text"><strong>Order Preparation</strong><br>Once verified, we'll start preparing your order.</div>
+      </div>
+      <div class="success-step">
+        <div class="success-step-num">3</div>
+        <div class="success-step-text"><strong>SMS Notification</strong><br>You'll receive an SMS when your order is ready for pickup by your courier.</div>
+      </div>
+      <div class="success-step">
+        <div class="success-step-num">4</div>
+        <div class="success-step-text"><strong>Book Your Courier</strong><br>Book Lalamove or Grab Express to pick up from Yani Garden Cafe.</div>
+      </div>
+    </div>
+    
+    <div class="info-box success" style="text-align:left">
+      <strong>📞 Questions?</strong> Contact us at [Phone Number] or message us on Facebook.
+    </div>
+    
+    <button class="btn-primary" onclick="startNewOrder()" style="margin-top:16px">Place Another Order</button>
+  </div>
+</div>
+
+<!-- ═══ SIZE PICKER MODAL ═══ -->
+<div class="size-overlay hidden" id="sizeOverlay" onclick="closeSizeModal(event)">
+  <div class="size-sheet" onclick="event.stopPropagation()">
+    <div class="size-title" id="sizeItemName">Item Name</div>
+    <div class="size-sub">Choose your size</div>
+    <div class="size-options" id="sizeOptions"></div>
+    <button class="size-add-btn" onclick="addSizeToCart()">Add to Cart</button>
+  </div>
+</div>
+
+<!-- ═══ CART BAR ═══ -->
+<div class="cart-bar" id="cartBar">
+  <div class="cart-bar-info">
+    <div class="cart-bar-count" id="cartBarCount">0 items</div>
+    <div class="cart-bar-total" id="cartBarTotal">₱0</div>
+  </div>
+  <button class="cart-bar-btn" onclick="goToStep(2)">View Cart →</button>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════════════
+const API = '/api/online-order';
+const UPLOAD_API = '/api/upload-proof';
+
+var menuData = [];
+var cart = [];
+var currentStep = 1;
+var currentCat = 'ALL';
+var selectedPayMethod = 'GCASH';
+var proofImageData = null;
+var proofMimeType = null;
+var proofFilename = null;
+var pendingOrderRef = null;
+var sizeItem = null;
+var selectedSize = null;
+
+// Payment details by method
+var PAYMENT_DETAILS = {
+  GCASH: { number: '09XX XXX XXXX', name: 'Yani Garden Cafe (GCash)' },
+  PAYMAYA: { number: '09XX XXX XXXX', name: 'Yani Garden Cafe (PayMaya)' },
+  BANK: { number: 'BDO: 1234 5678 9012', name: 'YANI GARDEN CAFE' }
+};
+
+// ══════════════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', function() {
+  loadMenu();
+});
+
+async function loadMenu() {
+  showLoading('Loading menu...');
+  try {
+    var resp = await fetch(API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'getOnlineMenu' })
+    });
+    var data = await resp.json();
+    if (!data.ok) throw new Error(data.error || 'Failed to load menu');
+    
+    menuData = data.items || [];
+    renderCatTabs(data.categories || []);
+    renderMenu('ALL');
+    hideLoading();
+  } catch (e) {
+    hideLoading();
+    document.getElementById('menuGrid').innerHTML = 
+      '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--terra)">⚠️ Failed to load menu. Please refresh.</div>';
+    showToast('Failed to load menu: ' + e.message, 'error');
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// MENU RENDERING
+// ══════════════════════════════════════════════════════════════
+function renderCatTabs(categories) {
+  var tabs = [{ name: 'ALL', display_order: 0 }].concat(categories);
+  document.getElementById('catTabs').innerHTML = tabs.map(function(c) {
+    return '<button class="cat-tab' + (c.name === 'ALL' ? ' active' : '') + '" onclick="filterCat(\'' + esc(c.name) + '\')">' +
+      (c.name === 'ALL' ? '🍽️ All' : esc(c.name)) + '</button>';
+  }).join('');
+}
+
+function filterCat(cat) {
+  currentCat = cat;
+  document.querySelectorAll('.cat-tab').forEach(function(b) {
+    b.classList.toggle('active', b.textContent.includes(cat) || (cat === 'ALL' && b.textContent.includes('All')));
+  });
+  renderMenu(cat);
+}
+
+function renderMenu(cat) {
+  var items = cat === 'ALL' ? menuData : menuData.filter(function(i) { return i.category_name === cat || (i.category && i.category === cat); });
+  
+  // Also handle by category_id mapping
+  if (cat !== 'ALL' && items.length === 0) {
+    // Try matching by category name from grouped data
+    items = menuData.filter(function(i) {
+      var catName = i.category_name || '';
+      return catName.toUpperCase() === cat.toUpperCase();
+    });
+  }
+  
+  if (!items.length) {
+    document.getElementById('menuGrid').innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--timber)">No items in this category.</div>';
+    return;
+  }
+  
+  document.getElementById('menuGrid').innerHTML = items.map(function(item) {
+    var cartQty = getCartQty(item.item_code || item.code);
+    var inCart = cartQty > 0;
+    var imgSrc = item.image_path ? 'https://yani-garden-cafe-d3l6.vercel.app' + item.image_path : '';
+    var price = parseFloat(item.base_price || item.price || 0);
+    var hasSizes = item.has_sizes;
+    
+    return '<div class="menu-card' + (inCart ? ' in-cart' : '') + '" id="card-' + esc(item.item_code || item.code) + '" onclick="onCardClick(\'' + esc(JSON.stringify(item).replace(/'/g, "\\'")) + '\')">' +
+      (imgSrc ? '<img class="menu-card-img" src="' + imgSrc + '" alt="' + esc(item.name) + '" onerror="this.parentNode.querySelector(\'.menu-card-img\').style.display=\'none\'">' : '<div class="menu-card-img no-img">🍽️</div>') +
+      '<div class="menu-card-body">' +
+        '<div class="menu-card-name">' + esc(item.name) + '</div>' +
+        '<div class="menu-card-price">₱' + price.toFixed(0) + (hasSizes ? '+' : '') + '</div>' +
+        (hasSizes ? '<span class="menu-card-badge">Multiple sizes</span>' : '') +
+        (inCart ? '<div class="qty-control">' +
+          '<button class="qty-btn minus" onclick="event.stopPropagation();changeQty(\'' + esc(item.item_code || item.code) + '\',-1)">−</button>' +
+          '<span class="qty-num">' + cartQty + '</span>' +
+          '<button class="qty-btn plus" onclick="event.stopPropagation();changeQty(\'' + esc(item.item_code || item.code) + '\',1)">+</button>' +
+        '</div>' : '') +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function onCardClick(itemJson) {
+  var item;
+  try { item = JSON.parse(itemJson); } catch(e) { return; }
+  
+  if (item.has_sizes) {
+    openSizeModal(item);
+  } else {
+    addToCart(item.item_code || item.code, item.name, 'REGULAR', parseFloat(item.base_price || item.price), item.image_path);
+  }
+}
+
+function getCartQty(code) {
+  return cart.filter(function(c) { return c.code === code; }).reduce(function(s,c) { return s + c.quantity; }, 0);
+}
+
+// ══════════════════════════════════════════════════════════════
+// SIZE MODAL
+// ══════════════════════════════════════════════════════════════
+function openSizeModal(item) {
+  sizeItem = item;
+  selectedSize = null;
+  document.getElementById('sizeItemName').textContent = item.name;
+  
+  var sizes = [];
+  if (item.price_short) sizes.push({ key:'SHORT', label:'Short (12oz)', price: parseFloat(item.price_short) });
+  if (item.price_medium) sizes.push({ key:'MEDIUM', label:'Medium (16oz)', price: parseFloat(item.price_medium) });
+  if (item.price_tall) sizes.push({ key:'TALL', label:'Tall (22oz)', price: parseFloat(item.price_tall) });
+  if (!sizes.length) sizes.push({ key:'REGULAR', label:'Regular', price: parseFloat(item.base_price || item.price) });
+  
+  document.getElementById('sizeOptions').innerHTML = sizes.map(function(s) {
+    return '<div class="size-opt" onclick="selectSize(\'' + s.key + '\', this)">' +
+      '<span class="size-opt-name">' + s.label + '</span>' +
+      '<span class="size-opt-price">₱' + s.price.toFixed(0) + '</span>' +
+    '</div>';
+  }).join('');
+  
+  document.getElementById('sizeOverlay').classList.remove('hidden');
+}
+
+function selectSize(key, el) {
+  document.querySelectorAll('.size-opt').forEach(function(o) { o.classList.remove('selected') });
+  el.classList.add('selected');
+  selectedSize = key;
+}
+
+function addSizeToCart() {
+  if (!sizeItem || !selectedSize) {
+    showToast('Please select a size', 'error');
+    return;
+  }
+  var sizes = {
+    SHORT: parseFloat(sizeItem.price_short),
+    MEDIUM: parseFloat(sizeItem.price_medium),
+    TALL: parseFloat(sizeItem.price_tall),
+    REGULAR: parseFloat(sizeItem.base_price || sizeItem.price)
+  };
+  var price = sizes[selectedSize] || parseFloat(sizeItem.base_price || sizeItem.price);
+  addToCart(sizeItem.item_code || sizeItem.code, sizeItem.name, selectedSize, price, sizeItem.image_path);
+  closeSizeModal();
+}
+
+function closeSizeModal(e) {
+  if (!e || e.target === document.getElementById('sizeOverlay')) {
+    document.getElementById('sizeOverlay').classList.add('hidden');
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// CART MANAGEMENT
+// ══════════════════════════════════════════════════════════════
+function addToCart(code, name, size, price, imagePath) {
+  var key = code + '_' + size;
+  var existing = cart.find(function(c) { return c.key === key });
+  if (existing) {
+    existing.quantity++;
+  } else {
+    cart.push({ key, code, name, size, unitPrice: price, quantity: 1, imagePath });
+  }
+  updateCartUI();
+  showToast(name + ' added to cart!', 'success');
+}
+
+function changeQty(code, delta) {
+  var items = cart.filter(function(c) { return c.code === code });
+  if (!items.length) return;
+  var item = items[0];
+  item.quantity += delta;
+  if (item.quantity <= 0) {
+    cart = cart.filter(function(c) { return c.key !== item.key });
+  }
+  updateCartUI();
+  renderMenu(currentCat);
+}
+
+function removeFromCart(key) {
+  cart = cart.filter(function(c) { return c.key !== key });
+  updateCartUI();
+  renderCartView();
+}
+
+function getCartTotal() {
+  return cart.reduce(function(s, c) { return s + c.unitPrice * c.quantity; }, 0);
+}
+
+function getCartCount() {
+  return cart.reduce(function(s, c) { return s + c.quantity; }, 0);
+}
+
+function updateCartUI() {
+  var count = getCartCount();
+  var total = getCartTotal();
+  
+  // Cart bar
+  var bar = document.getElementById('cartBar');
+  if (count > 0 && currentStep === 1) {
+    bar.classList.add('visible');
+    document.getElementById('cartBarCount').textContent = count + ' item' + (count !== 1 ? 's' : '');
+    document.getElementById('cartBarTotal').textContent = '₱' + total.toFixed(0);
+  } else {
+    bar.classList.remove('visible');
+  }
+  
+  // Cart proceed button
+  var btn = document.getElementById('cartProceedBtn');
+  if (btn) btn.disabled = count === 0;
+  
+  // Step 2 badge
+  var s2 = document.getElementById('step2');
+  if (s2) s2.querySelector('.step-num').textContent = count > 0 ? count : '2';
+}
+
+function renderCartView() {
+  var container = document.getElementById('cartItems');
+  var summary = document.getElementById('cartSummary');
+  
+  if (!cart.length) {
+    container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--timber)">Your cart is empty.<br><br><button class="btn-secondary" onclick="goToStep(1)" style="width:auto;padding:10px 24px">Browse Menu</button></div>';
+    summary.style.display = 'none';
+    return;
+  }
+  
+  container.innerHTML = cart.map(function(item) {
+    var imgSrc = item.imagePath ? 'https://yani-garden-cafe-d3l6.vercel.app' + item.imagePath : '';
+    return '<div class="cart-item">' +
+      (imgSrc ? '<img class="cart-item-img" src="' + imgSrc + '" alt="' + esc(item.name) + '" onerror="this.style.display=\'none\'">' : '<div class="cart-item-img" style="display:flex;align-items:center;justify-content:center;font-size:1.5rem">🍽️</div>') +
+      '<div class="cart-item-info">' +
+        '<div class="cart-item-name">' + esc(item.name) + '</div>' +
+        '<div class="cart-item-size">' + esc(item.size) + '</div>' +
+        '<div class="cart-item-price">₱' + (item.unitPrice * item.quantity).toFixed(0) + '</div>' +
+        '<div class="cart-item-controls">' +
+          '<button class="qty-btn minus" onclick="changeCartQty(\'' + esc(item.key) + '\',-1)">−</button>' +
+          '<span class="qty-num">' + item.quantity + '</span>' +
+          '<button class="qty-btn plus" onclick="changeCartQty(\'' + esc(item.key) + '\',1)">+</button>' +
+          '<button class="cart-remove" onclick="removeFromCart(\'' + esc(item.key) + '\')">Remove</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+  
+  var total = getCartTotal();
+  document.getElementById('cartSubtotal').textContent = '₱' + total.toFixed(0);
+  document.getElementById('cartTotal').textContent = '₱' + total.toFixed(0);
+  summary.style.display = 'block';
+}
+
+function changeCartQty(key, delta) {
+  var item = cart.find(function(c) { return c.key === key });
+  if (!item) return;
+  item.quantity += delta;
+  if (item.quantity <= 0) cart = cart.filter(function(c) { return c.key !== key });
+  updateCartUI();
+  renderCartView();
+}
+
+// ══════════════════════════════════════════════════════════════
+// STEP NAVIGATION
+// ══════════════════════════════════════════════════════════════
+function goToStep(step) {
+  if (step === 2 && cart.length === 0) { showToast('Add items to cart first', 'error'); return; }
+  if (step > currentStep + 1 && step !== 5) return; // Can't skip steps forward
+  
+  currentStep = step;
+  
+  // Update views
+  for (var i = 1; i <= 5; i++) {
+    var v = document.getElementById('view' + i);
+    if (v) v.classList.toggle('active', i === step);
+  }
+  
+  // Update step indicators
+  for (var i = 1; i <= 4; i++) {
+    var s = document.getElementById('step' + i);
+    if (s) {
+      s.classList.remove('active', 'done');
+      if (i === step) s.classList.add('active');
+      else if (i < step) s.classList.add('done');
+    }
+  }
+  
+  // Cart bar visibility
+  document.getElementById('cartBar').classList.toggle('visible', step === 1 && cart.length > 0);
+  
+  // Render cart when entering step 2
+  if (step === 2) renderCartView();
+  
+  // Update payment amount
+  if (step === 4) {
+    document.getElementById('payAmount').textContent = '₱' + getCartTotal().toFixed(0);
+  }
+  
+  window.scrollTo(0, 0);
+}
+
+// ══════════════════════════════════════════════════════════════
+// PAYMENT METHOD
+// ══════════════════════════════════════════════════════════════
+function selectPayMethod(method) {
+  selectedPayMethod = method;
+  ['GCASH','PAYMAYA','BANK'].forEach(function(m) {
+    var btn = document.getElementById('pay' + m.charAt(0) + m.slice(1).toLowerCase());
+    if (!btn) {
+      // Try alternate IDs
+      if (m === 'GCASH') btn = document.getElementById('payGcash');
+      if (m === 'PAYMAYA') btn = document.getElementById('payMaya');
+      if (m === 'BANK') btn = document.getElementById('payBank');
+    }
+    if (btn) btn.classList.toggle('active', m === method);
+  });
+  var details = PAYMENT_DETAILS[method] || PAYMENT_DETAILS.GCASH;
+  document.getElementById('paymentNumber').textContent = details.number;
+  document.getElementById('paymentName').textContent = details.name;
+}
+
+// ══════════════════════════════════════════════════════════════
+// PROOF UPLOAD
+// ══════════════════════════════════════════════════════════════
+function onProofFileChange(input) {
+  var file = input.files[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { showToast('File too large (max 5MB)', 'error'); return; }
+  
+  proofFilename = file.name;
+  proofMimeType = file.type;
+  
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    proofImageData = e.target.result;
+    var preview = document.getElementById('proofPreview');
+    preview.src = proofImageData;
+    preview.style.display = 'block';
+    document.querySelector('.proof-upload-text').textContent = file.name;
+    document.querySelector('.proof-upload-icon').textContent = '✅';
+  };
+  reader.readAsDataURL(file);
+}
+
+function onDragOver(e) {
+  e.preventDefault();
+  document.getElementById('proofUploadArea').classList.add('dragover');
+}
+
+function onDrop(e) {
+  e.preventDefault();
+  document.getElementById('proofUploadArea').classList.remove('dragover');
+  var file = e.dataTransfer.files[0];
+  if (file) {
+    var dt = new DataTransfer();
+    dt.items.add(file);
+    document.getElementById('proofFileInput').files = dt.files;
+    onProofFileChange(document.getElementById('proofFileInput'));
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// CHECKOUT VALIDATION
+// ══════════════════════════════════════════════════════════════
+function proceedToPayment() {
+  var name = document.getElementById('custName').value.trim();
+  var phone = document.getElementById('custPhone').value.trim();
+  var address = document.getElementById('custAddress').value.trim();
+  
+  var errors = [];
+  if (!name) errors.push('custName');
+  if (!phone || !/^(09|\+639)\d{9}$/.test(phone.replace(/\s/g,''))) errors.push('custPhone');
+  if (!address || address.length < 10) errors.push('custAddress');
+  
+  document.querySelectorAll('.form-input').forEach(function(i) { i.classList.remove('error') });
+  errors.forEach(function(id) { var el = document.getElementById(id); if (el) el.classList.add('error') });
+  
+  if (errors.length) {
+    showToast('Please fill in all required fields correctly', 'error');
+    return;
+  }
+  
+  goToStep(4);
+}
+
+// ══════════════════════════════════════════════════════════════
+// SUBMIT ORDER
+// ══════════════════════════════════════════════════════════════
+async function submitOrder() {
+  if (!proofImageData) {
+    showToast('Please upload your payment proof', 'error');
+    return;
+  }
+  
+  var btn = document.getElementById('submitOrderBtn');
+  btn.disabled = true;
+  btn.textContent = 'Placing order...';
+  showLoading('Placing your order...');
+  
+  try {
+    // 1. Place order
+    var orderResp = await fetch(API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'placeOnlineOrder',
+        customerName: document.getElementById('custName').value.trim(),
+        customerPhone: document.getElementById('custPhone').value.trim(),
+        customerEmail: document.getElementById('custEmail').value.trim(),
+        deliveryAddress: document.getElementById('custAddress').value.trim(),
+        deliveryNotes: document.getElementById('custNotes').value.trim(),
+        courierType: document.getElementById('courierType').value,
+        paymentMethod: selectedPayMethod,
+        items: cart.map(function(c) {
+          return { code: c.code, name: c.name, size: c.size, unitPrice: c.unitPrice, quantity: c.quantity };
+        })
+      })
+    });
+    
+    var orderData = await orderResp.json();
+    if (!orderData.ok) throw new Error(orderData.error || 'Failed to place order');
+    
+    var orderRef = orderData.orderRef;
+    pendingOrderRef = orderRef;
+    
+    // 2. Upload proof
+    showLoading('Uploading payment proof...');
+    var uploadResp = await fetch(UPLOAD_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        orderRef: orderRef,
+        imageData: proofImageData,
+        mimeType: proofMimeType,
+        filename: proofFilename
+      })
+    });
+    
+    var uploadData = await uploadResp.json();
+    if (!uploadData.ok) throw new Error('Payment proof upload failed: ' + uploadData.error);
+    
+    // 3. Submit proof URL
+    await fetch(API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'submitPaymentProof',
+        orderRef: orderRef,
+        proofUrl: uploadData.url,
+        proofFilename: proofFilename,
+        paymentMethod: selectedPayMethod
+      })
+    });
+    
+    hideLoading();
+    
+    // Show success
+    document.getElementById('successRef').textContent = orderRef;
+    goToStep(5);
+    
+  } catch (e) {
+    hideLoading();
+    btn.disabled = false;
+    btn.textContent = 'Place Order & Submit Payment →';
+    showToast('Error: ' + e.message, 'error');
+  }
+}
+
+function startNewOrder() {
+  cart = [];
+  proofImageData = null;
+  proofMimeType = null;
+  proofFilename = null;
+  pendingOrderRef = null;
+  document.getElementById('custName').value = '';
+  document.getElementById('custPhone').value = '';
+  document.getElementById('custEmail').value = '';
+  document.getElementById('custAddress').value = '';
+  document.getElementById('custNotes').value = '';
+  document.getElementById('proofPreview').style.display = 'none';
+  document.querySelector('.proof-upload-text').textContent = 'Tap to upload screenshot or photo';
+  document.querySelector('.proof-upload-icon').textContent = '📷';
+  updateCartUI();
+  goToStep(1);
+}
+
+// ══════════════════════════════════════════════════════════════
+// UTILITIES
+// ══════════════════════════════════════════════════════════════
+function esc(str) {
+  if (typeof str !== 'string') return String(str || '');
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function showLoading(text) {
+  document.getElementById('loadingText').textContent = text || 'Loading...';
+  document.getElementById('loadingOverlay').classList.remove('hidden');
+}
+
+function hideLoading() {
+  document.getElementById('loadingOverlay').classList.add('hidden');
+}
+
+var toastTimer;
+function showToast(msg, type) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (type ? ' ' + type : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function() { t.className = 'toast' }, 3000);
+}
+</script>
+</body>
+</html>
