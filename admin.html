@@ -586,7 +586,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 // ══════════════════════════════════════════════════════════
 // CONFIG
 // ══════════════════════════════════════════════════════════
-var API_URL = '/api/pos';
+var API_URL = 'https://script.google.com/macros/s/AKfycbytCV-jiFSOoon7Ijww5a-AABRYzhiNZPXVubaaa2zoVBOFxvcgkDH-6e4CfksMA7LC/exec';
 var POLL_INTERVAL = 5000;
 var pollTimer = null;
 var currentFilter = 'ACTIVE';
@@ -595,6 +595,13 @@ var lastOrderCount = 0;
 var allPayments = [];
 var pendingPayCount = 0;
 var payFilter = 'PENDING';
+
+// Session data (Phase 1 Security)
+var currentUser = {
+  userId: null,
+  username: null,
+  role: null
+};
 
 var STATUS_CONFIG = {
   NEW:       { icon:'🔔', label:'New',       badge:'new',       actions:['start','cancel'] },
@@ -607,6 +614,16 @@ var STATUS_CONFIG = {
 // ══════════════════════════════════════════════════════════
 // LOGIN
 // ══════════════════════════════════════════════════════════
+
+// SHA-256 hash function for PIN security
+async function sha256(message) {
+  const msgBuffer = new TextEncoder().encode(message);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return hashHex;
+}
+
 document.getElementById('pinInput').addEventListener('keyup', function(e) {
   if (e.key === 'Enter') login();
 });
@@ -620,13 +637,23 @@ async function login() {
   btn.disabled = true;
 
   try {
+    // Hash the PIN using SHA-256 (Phase 1 Security)
+    const pinHash = await sha256(pin);
+    
     var resp = await fetch(API_URL, {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ action:'verifyAdminPin', pin:pin })
+      body: JSON.stringify({ action:'verifyUserPin', pinHash: pinHash })
     });
     var data = await resp.json();
 
     if (data.ok && data.valid) {
+      // Store user session (Phase 1 Security)
+      currentUser.userId = data.userId;
+      currentUser.username = data.username;
+      currentUser.role = data.role;
+      
+      console.log('✅ Logged in:', currentUser.username, '(' + currentUser.role + ')');
+      
       document.getElementById('loginOverlay').classList.add('hidden');
       document.getElementById('dashboard').style.display = 'block';
       startPolling();
