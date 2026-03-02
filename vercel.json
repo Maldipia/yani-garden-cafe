@@ -11,15 +11,25 @@
     }
   },
   "rewrites": [
-    { "source": "/api/pos", "destination": "/api/pos" },
-    { "source": "/api/upload-image", "destination": "/api/upload-image" }
+    {
+      "source": "/api/pos",
+      "destination": "/api/pos"
+    },
+    {
+      "source": "/api/upload-image",
+      "destination": "/api/upload-image"
+    }
   ],
   "headers": [
     {
       "source": "/api/(.*)",
       "headers": [
-        { "key": "Cache-Control", "value": "no-store" }
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
       ]
     }
-  ]
+  ],
+  "_note": "redeploy-with-github-token"
 }
