@@ -219,9 +219,9 @@ export default async function handler(req, res) {
         courier_type: 'PICKUP',
         subtotal: subtotal,
         total_amount: parseFloat(total || subtotal),
-        payment_method: (paymentMethod || 'gcash').toLowerCase(),
-        status: 'pending',
-        payment_status: 'pending'
+        payment_method: (paymentMethod || 'gcash').toUpperCase(),
+        status: 'PENDING',
+        payment_status: 'PENDING'
       });
       
       const order = Array.isArray(orders) ? orders[0] : orders;
@@ -285,7 +285,7 @@ export default async function handler(req, res) {
         'limit': String(limit)
       };
       if (status && status !== 'ALL' && status !== 'all') {
-        params['status'] = `eq.${status.toLowerCase()}`;
+        params['status'] = `eq.${status.toUpperCase()}`;
       }
       
       const orders = await supabase('GET', 'online_orders', null, params);
@@ -307,7 +307,7 @@ export default async function handler(req, res) {
       if (!orderRef || !status) return res.status(400).json({ ok: false, error: 'Missing fields' });
       
       const updateData = { 
-        status: status.toLowerCase(),
+        status: status.toUpperCase(),
         updated_at: new Date().toISOString()
       };
       if (adminNotes) updateData.admin_notes = adminNotes;
@@ -317,7 +317,7 @@ export default async function handler(req, res) {
       // If status is 'ready', send SMS notification
       let smsSent = false;
       let smsNote = '';
-      if (status.toLowerCase() === 'ready') {
+      if (status.toUpperCase() === 'READY') {
         try {
           const orders = await supabase('GET', 'online_orders', null, {
             'order_ref': `eq.${orderRef}`,
@@ -353,8 +353,8 @@ export default async function handler(req, res) {
       const { orderRef, verified, rejectionReason } = payload;
       if (!orderRef) return res.status(400).json({ ok: false, error: 'Missing orderRef' });
       
-      const paymentStatus = verified ? 'verified' : 'rejected';
-      const orderStatus = verified ? 'confirmed' : 'pending';
+      const paymentStatus = verified ? 'VERIFIED' : 'REJECTED';
+      const orderStatus = verified ? 'CONFIRMED' : 'PENDING';
       
       await supabasePatch('online_orders', `order_ref=eq.${orderRef}`, { 
         payment_status: paymentStatus,
