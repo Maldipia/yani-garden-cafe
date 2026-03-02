@@ -4,7 +4,7 @@
 // (Avoids Supabase Storage RLS issues)
 // ══════════════════════════════════════════════════════════════
 const SUPABASE_URL = 'https://hnynvclpvfxzlfjphefj.supabase.co';
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhueW52Y2xwdmZ4emxmanBoZWZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI0NTg5MTMsImV4cCI6MjA4ODAzNDkxM30.PLACEHOLDER';
+const SUPABASE_ANON_KEY = 'sb_publishable_PQBb1nDY7U7SxNfgDYoXyg_GtoLowLM';
 
 export const config = {
   api: {
@@ -82,7 +82,7 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         payment_proof_url: proofUrl,
-        payment_status: 'proof_submitted',
+        payment_status: 'SUBMITTED',
         updated_at: new Date().toISOString()
       })
     });
