@@ -536,9 +536,80 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
     <div class="order-grid" id="payGrid"></div>
   </div>
 
+  <!-- Menu Manager View (ADMIN/OWNER only) -->
+  <div id="menuManagerView" style="display:none;padding:0 16px 100px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin:12px 0 16px">
+      <div style="font-weight:700;font-size:1.1rem;color:var(--forest)">Menu Manager</div>
+      <button onclick="openAddItemModal()" style="background:var(--forest);color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:.9rem;font-weight:600;cursor:pointer">+ Add Item</button>
+    </div>
+    <div id="menuMgrGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px"></div>
+  </div>
+
   <!-- FAB: New Platform Order -->
   <button class="fab-platform" onclick="openPlatformOrder()" title="New Platform Order">+</button>
 
+</div>
+
+<!-- ═══════════════ MENU ITEM EDIT MODAL ═══════════════ -->
+<div id="menuEditOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:500;overflow-y:auto;padding:20px 16px">
+  <div style="background:#fff;border-radius:16px;max-width:480px;margin:0 auto;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="background:var(--forest-deep);color:#fff;padding:18px 20px;display:flex;align-items:center;justify-content:space-between">
+      <div id="menuEditTitle" style="font-weight:700;font-size:1rem">Edit Menu Item</div>
+      <button onclick="closeMenuEditModal()" style="background:none;border:none;color:#fff;font-size:1.4rem;cursor:pointer;line-height:1">&times;</button>
+    </div>
+    <div style="padding:20px">
+      <!-- Photo preview -->
+      <div style="text-align:center;margin-bottom:16px">
+        <img id="menuEditImgPreview" src="" alt="" style="width:100px;height:100px;object-fit:cover;border-radius:10px;border:2px solid var(--mist);display:none">
+        <div id="menuEditImgPlaceholder" style="width:100px;height:100px;border-radius:10px;border:2px dashed var(--mist);display:inline-flex;align-items:center;justify-content:center;color:var(--timber);font-size:.75rem">No Photo</div>
+      </div>
+      <input type="hidden" id="menuEditId">
+      <div style="margin-bottom:12px">
+        <label style="font-size:.75rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">ITEM NAME</label>
+        <input id="menuEditName" type="text" style="width:100%;padding:10px 12px;border:1.5px solid var(--mist);border-radius:8px;font-size:.9rem;font-family:var(--font-body)">
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="font-size:.75rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">CATEGORY</label>
+        <input id="menuEditCategory" type="text" style="width:100%;padding:10px 12px;border:1.5px solid var(--mist);border-radius:8px;font-size:.9rem;font-family:var(--font-body)" placeholder="e.g. Coffee, Food, Drinks">
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="font-size:.75rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">BASE PRICE (₱)</label>
+        <input id="menuEditPrice" type="number" min="0" step="1" style="width:100%;padding:10px 12px;border:1.5px solid var(--mist);border-radius:8px;font-size:.9rem;font-family:var(--font-body)">
+      </div>
+      <div style="margin-bottom:12px;display:flex;gap:16px;align-items:center">
+        <label style="font-size:.75rem;font-weight:700;color:var(--timber)">
+          <input type="checkbox" id="menuEditHasSizes" style="margin-right:6px">Has Sizes (Short/Medium/Tall)
+        </label>
+        <label style="font-size:.75rem;font-weight:700;color:var(--timber)">
+          <input type="checkbox" id="menuEditHasSugar" style="margin-right:6px">Has Sweetness
+        </label>
+      </div>
+      <div id="menuEditSizePrices" style="display:none;margin-bottom:12px;background:var(--mist-light);border-radius:8px;padding:12px">
+        <div style="font-size:.75rem;font-weight:700;color:var(--timber);margin-bottom:8px">SIZE PRICES (₱)</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+          <div><label style="font-size:.68rem;color:var(--timber);display:block;margin-bottom:3px">SHORT</label><input id="menuEditShort" type="number" min="0" step="1" style="width:100%;padding:8px;border:1.5px solid var(--mist);border-radius:6px;font-size:.85rem;font-family:var(--font-body)"></div>
+          <div><label style="font-size:.68rem;color:var(--timber);display:block;margin-bottom:3px">MEDIUM</label><input id="menuEditMedium" type="number" min="0" step="1" style="width:100%;padding:8px;border:1.5px solid var(--mist);border-radius:6px;font-size:.85rem;font-family:var(--font-body)"></div>
+          <div><label style="font-size:.68rem;color:var(--timber);display:block;margin-bottom:3px">TALL</label><input id="menuEditTall" type="number" min="0" step="1" style="width:100%;padding:8px;border:1.5px solid var(--mist);border-radius:6px;font-size:.85rem;font-family:var(--font-body)"></div>
+        </div>
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="font-size:.75rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">PHOTO URL</label>
+        <input id="menuEditImage" type="url" style="width:100%;padding:10px 12px;border:1.5px solid var(--mist);border-radius:8px;font-size:.85rem;font-family:var(--font-body)" placeholder="https://..." oninput="previewMenuImage(this.value)">
+        <div style="font-size:.68rem;color:var(--timber);margin-top:4px">Paste a direct image URL (Google Drive, Imgur, etc.)</div>
+      </div>
+      <div style="margin-bottom:20px">
+        <label style="font-size:.75rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">STATUS</label>
+        <select id="menuEditStatus" style="width:100%;padding:10px 12px;border:1.5px solid var(--mist);border-radius:8px;font-size:.9rem;font-family:var(--font-body)">
+          <option value="ACTIVE">ACTIVE (visible on menu)</option>
+          <option value="INACTIVE">INACTIVE (hidden from menu)</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:10px">
+        <button onclick="saveMenuItemEdit()" style="flex:1;padding:13px;background:var(--forest);color:#fff;border:none;border-radius:8px;font-size:.9rem;font-weight:700;cursor:pointer;font-family:var(--font-body)">Save Changes</button>
+        <button onclick="closeMenuEditModal()" style="padding:13px 18px;background:var(--mist-light);color:var(--timber);border:none;border-radius:8px;font-size:.9rem;font-weight:600;cursor:pointer;font-family:var(--font-body)">Cancel</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ═══════════════ PLATFORM ORDER MODAL ═══════════════ -->
@@ -840,6 +911,10 @@ function renderFilters() {
   if (currentUser.role !== 'KITCHEN') {
     tabs.push({ key:'PAYMENTS', label:'💳 Payments', count:pendingPayCount });
   }
+  // Menu Manager tab: ADMIN and OWNER only
+  if (currentUser.role === 'ADMIN' || currentUser.role === 'OWNER') {
+    tabs.push({ key:'MENU_MANAGER', label:'🍽️ Menu', count:'' });
+  }
 
   document.getElementById('filterBar').innerHTML = tabs.map(function(t) {
     return '<button class="filter-btn' + (currentFilter===t.key?' active':'') + '" onclick="setFilter(\'' + t.key + '\')">' +
@@ -851,13 +926,23 @@ function setFilter(f) {
   currentFilter = f;
   renderFilters();
   
+  var orderGrid = document.getElementById('orderGrid');
+  var paymentsView = document.getElementById('paymentsView');
+  var menuManagerView = document.getElementById('menuManagerView');
+
+  // Hide all views first
+  orderGrid.style.display = 'none';
+  paymentsView.style.display = 'none';
+  menuManagerView.style.display = 'none';
+
   if (f === 'PAYMENTS') {
-    document.getElementById('orderGrid').style.display = 'none';
-    document.getElementById('paymentsView').style.display = 'block';
+    paymentsView.style.display = 'block';
     loadPayments();
+  } else if (f === 'MENU_MANAGER') {
+    menuManagerView.style.display = 'block';
+    loadMenuManager();
   } else {
-    document.getElementById('orderGrid').style.display = '';
-    document.getElementById('paymentsView').style.display = 'none';
+    orderGrid.style.display = '';
     renderOrders();
   }
 }
@@ -1798,6 +1883,152 @@ async function submitPlatformOrder() {
     alert('❌ Failed: ' + (result.error || 'Unknown error'));
   }
 }
+
+// ════════════════════════════════════════════════════════
+// MENU MANAGER
+// ════════════════════════════════════════════════════════
+var menuMgrItems = [];
+
+async function loadMenuManager() {
+  var grid = document.getElementById('menuMgrGrid');
+  grid.innerHTML = '<div style="text-align:center;padding:40px;color:var(--timber)">Loading menu...</div>';
+  var result = await api('getMenuAdmin');
+  if (!result.ok) {
+    grid.innerHTML = '<div style="text-align:center;padding:40px;color:#EF4444">❌ ' + (result.error || 'Failed to load menu') + '</div>';
+    return;
+  }
+  menuMgrItems = result.items || [];
+  renderMenuMgrGrid();
+}
+
+function renderMenuMgrGrid() {
+  var grid = document.getElementById('menuMgrGrid');
+  if (!menuMgrItems.length) {
+    grid.innerHTML = '<div style="text-align:center;padding:40px;color:var(--timber)">No menu items found.</div>';
+    return;
+  }
+  grid.innerHTML = menuMgrItems.map(function(item) {
+    var isActive = item.active;
+    var imgHtml = item.image
+      ? '<img src="' + esc(item.image) + '" alt="" style="width:100%;height:120px;object-fit:cover" onerror="this.style.display=\'none\'">'
+      : '<div style="width:100%;height:120px;background:var(--mist-light);display:flex;align-items:center;justify-content:center;color:var(--timber);font-size:.75rem">No Photo</div>';
+    var statusBadge = isActive
+      ? '<span style="background:#D1FAE5;color:#065F46;padding:2px 8px;border-radius:10px;font-size:.62rem;font-weight:700">ACTIVE</span>'
+      : '<span style="background:#FEE2E2;color:#991B1B;padding:2px 8px;border-radius:10px;font-size:.62rem;font-weight:700">INACTIVE</span>';
+    var priceDisplay = item.hasSizes
+      ? '₱' + item.priceShort + ' / ₱' + item.priceMedium + ' / ₱' + item.priceTall
+      : '₱' + item.price;
+    return '<div style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 6px rgba(0,0,0,.08);border:1.5px solid ' + (isActive ? 'var(--mist)' : '#FEE2E2') + '">'
+      + imgHtml
+      + '<div style="padding:10px 12px">'
+      +   '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">'
+      +     '<div style="font-weight:700;font-size:.88rem;line-height:1.3;flex:1;margin-right:6px">' + esc(item.name) + '</div>'
+      +     statusBadge
+      +   '</div>'
+      +   '<div style="font-size:.72rem;color:var(--timber);margin-bottom:4px">' + esc(item.category || '—') + '</div>'
+      +   '<div style="font-size:.8rem;font-weight:700;color:var(--terra);margin-bottom:10px">' + priceDisplay + '</div>'
+      +   '<button onclick="openEditItemModal(\'' + esc(item.code) + '\')" style="width:100%;padding:8px;background:var(--forest);color:#fff;border:none;border-radius:7px;font-size:.8rem;font-weight:700;cursor:pointer;font-family:var(--font-body)">Edit</button>'
+      + '</div>'
+      + '</div>';
+  }).join('');
+}
+
+function openEditItemModal(itemCode) {
+  var item = menuMgrItems.find(function(i){ return i.code === itemCode; });
+  if (!item) return;
+
+  document.getElementById('menuEditTitle').textContent = 'Edit: ' + item.name;
+  document.getElementById('menuEditId').value = item.code;
+  document.getElementById('menuEditName').value = item.name;
+  document.getElementById('menuEditCategory').value = item.category || '';
+  document.getElementById('menuEditPrice').value = item.price;
+  document.getElementById('menuEditHasSizes').checked = item.hasSizes;
+  document.getElementById('menuEditHasSugar').checked = item.hasSugar;
+  document.getElementById('menuEditShort').value = item.priceShort || '';
+  document.getElementById('menuEditMedium').value = item.priceMedium || '';
+  document.getElementById('menuEditTall').value = item.priceTall || '';
+  document.getElementById('menuEditImage').value = item.image || '';
+  document.getElementById('menuEditStatus').value = item.active ? 'ACTIVE' : 'INACTIVE';
+
+  document.getElementById('menuEditSizePrices').style.display = item.hasSizes ? '' : 'none';
+  document.getElementById('menuEditHasSizes').onchange = function() {
+    document.getElementById('menuEditSizePrices').style.display = this.checked ? '' : 'none';
+  };
+
+  previewMenuImage(item.image || '');
+  document.getElementById('menuEditOverlay').style.display = 'block';
+}
+
+function openAddItemModal() {
+  document.getElementById('menuEditTitle').textContent = 'Add New Item';
+  document.getElementById('menuEditId').value = '';
+  document.getElementById('menuEditName').value = '';
+  document.getElementById('menuEditCategory').value = '';
+  document.getElementById('menuEditPrice').value = '';
+  document.getElementById('menuEditHasSizes').checked = false;
+  document.getElementById('menuEditHasSugar').checked = false;
+  document.getElementById('menuEditShort').value = '';
+  document.getElementById('menuEditMedium').value = '';
+  document.getElementById('menuEditTall').value = '';
+  document.getElementById('menuEditImage').value = '';
+  document.getElementById('menuEditStatus').value = 'ACTIVE';
+  document.getElementById('menuEditSizePrices').style.display = 'none';
+  document.getElementById('menuEditHasSizes').onchange = function() {
+    document.getElementById('menuEditSizePrices').style.display = this.checked ? '' : 'none';
+  };
+  previewMenuImage('');
+  document.getElementById('menuEditOverlay').style.display = 'block';
+}
+
+function closeMenuEditModal() {
+  document.getElementById('menuEditOverlay').style.display = 'none';
+}
+
+function previewMenuImage(url) {
+  var img = document.getElementById('menuEditImgPreview');
+  var placeholder = document.getElementById('menuEditImgPlaceholder');
+  if (url && url.startsWith('http')) {
+    img.src = url;
+    img.style.display = 'block';
+    placeholder.style.display = 'none';
+    img.onerror = function() { img.style.display='none'; placeholder.style.display='inline-flex'; };
+  } else {
+    img.style.display = 'none';
+    placeholder.style.display = 'inline-flex';
+  }
+}
+
+async function saveMenuItemEdit() {
+  var itemId = document.getElementById('menuEditId').value.trim();
+  var name = document.getElementById('menuEditName').value.trim();
+  var category = document.getElementById('menuEditCategory').value.trim();
+  var price = parseFloat(document.getElementById('menuEditPrice').value) || 0;
+  var hasSizes = document.getElementById('menuEditHasSizes').checked;
+  var hasSugar = document.getElementById('menuEditHasSugar').checked;
+  var priceShort = parseFloat(document.getElementById('menuEditShort').value) || 0;
+  var priceMedium = parseFloat(document.getElementById('menuEditMedium').value) || 0;
+  var priceTall = parseFloat(document.getElementById('menuEditTall').value) || 0;
+  var image = document.getElementById('menuEditImage').value.trim();
+  var status = document.getElementById('menuEditStatus').value;
+
+  if (!name) { alert('Item name is required'); return; }
+
+  var isNew = !itemId;
+  var action = isNew ? 'addMenuItem' : 'updateMenuItem';
+  var payload = { name:name, category:category, price:price, hasSizes:hasSizes, hasSugar:hasSugar,
+    priceShort:priceShort, priceMedium:priceMedium, priceTall:priceTall, image:image, status:status };
+  if (!isNew) payload.itemId = itemId;
+
+  var result = await api(action, payload);
+  if (result.ok) {
+    closeMenuEditModal();
+    await loadMenuManager();
+    alert('✅ ' + (isNew ? 'Item added!' : 'Item updated!'));
+  } else {
+    alert('❌ Failed: ' + (result.error || 'Unknown error'));
+  }
+}
+
 </script>
 </body>
 </html>

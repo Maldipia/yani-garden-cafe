@@ -150,6 +150,24 @@ function doPost(e) {
       return jsonResponse(handleListPayments(data));
     }
     
+    // ── Menu Manager (ADMIN/OWNER) ──────────────────────────────────
+    
+    if (action === 'getMenuAdmin') {
+      return jsonResponse(getMenuAdmin());
+    }
+    
+    if (action === 'updateMenuItem') {
+      return jsonResponse(updateMenuItem(data));
+    }
+    
+    if (action === 'addMenuItem') {
+      return jsonResponse(addMenuItem(data));
+    }
+    
+    if (action === 'deleteMenuItem') {
+      return jsonResponse(deleteMenuItem(data));
+    }
+    
     return jsonResponse({ ok: false, error: 'Unknown action: ' + action });
     
   } catch (error) {
@@ -268,6 +286,173 @@ function getMenu() {
     
   } catch (error) {
     return { ok: false, error: error.message };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// MENU MANAGER (ADMIN/OWNER)
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * Returns ALL menu items (active + inactive) for the admin Menu Manager.
+ * Includes row index so the frontend can reference which row to update.
+ */
+function getMenuAdmin() {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const menuSheet = ss.getSheetByName(SHEET_NAMES.MENU);
+    if (!menuSheet) return { ok: false, error: 'YGC_MENU sheet not found' };
+
+    const data = menuSheet.getDataRange().getValues();
+    const headers = data[0];
+    const items = [];
+
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      if (!row[0] && !row[1]) continue; // skip completely empty rows
+      const rowData = {};
+      headers.forEach((h, idx) => { rowData[h] = row[idx]; });
+
+      const status = String(rowData['grabfood_status'] || '').trim().toUpperCase();
+      const hasSizes = String(rowData['sizes_choice'] || '').toUpperCase() === 'TRUE';
+      const hasSugar = String(rowData['sweetness_choice'] || '').toUpperCase() === 'TRUE';
+
+      items.push({
+        rowIndex:    i + 1,  // 1-based sheet row
+        code:        String(rowData['item_id'] || '').trim(),
+        name:        String(rowData['item_name'] || '').trim(),
+        category:    String(rowData['category'] || '').trim(),
+        status:      status,
+        active:      (status === 'ACTIVE' || status === 'TRUE'),
+        price:       parseFloat(rowData['base_price']) || 0,
+        hasSizes:    hasSizes,
+        hasSugar:    hasSugar,
+        priceShort:  parseFloat(rowData['size_short_price']) || 0,
+        priceMedium: parseFloat(rowData['size_medium_price']) || 0,
+        priceTall:   parseFloat(rowData['size_tall_price']) || 0,
+        image:       String(rowData['Product Image (Link)'] || '').trim()
+      });
+    }
+
+    // Return headers so frontend knows column order
+    return { ok: true, items: items, headers: headers };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
+/**
+ * Update a single menu item row by item_id.
+ * Accepts: { itemId, name, category, status, price, hasSizes, hasSugar,
+ *            priceShort, priceMedium, priceTall, image }
+ */
+function updateMenuItem(data) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const menuSheet = ss.getSheetByName(SHEET_NAMES.MENU);
+    if (!menuSheet) return { ok: false, error: 'YGC_MENU sheet not found' };
+
+    const sheetData = menuSheet.getDataRange().getValues();
+    const headers = sheetData[0];
+    const colIdx = {};
+    headers.forEach((h, i) => { colIdx[h] = i; });
+
+    // Find the row matching item_id
+    const itemId = String(data.itemId || '').trim();
+    let targetRow = -1;
+    for (let i = 1; i < sheetData.length; i++) {
+      if (String(sheetData[i][colIdx['item_id']] || '').trim() === itemId) {
+        targetRow = i + 1; // 1-based
+        break;
+      }
+    }
+    if (targetRow === -1) return { ok: false, error: 'Item not found: ' + itemId };
+
+    // Build update map
+    const updates = {};
+    if (data.name        !== undefined) updates['item_name']              = data.name;
+    if (data.category    !== undefined) updates['category']               = data.category;
+    if (data.price       !== undefined) updates['base_price']             = parseFloat(data.price) || 0;
+    if (data.hasSizes    !== undefined) updates['sizes_choice']           = data.hasSizes ? 'TRUE' : 'FALSE';
+    if (data.hasSugar    !== undefined) updates['sweetness_choice']       = data.hasSugar ? 'TRUE' : 'FALSE';
+    if (data.priceShort  !== undefined) updates['size_short_price']       = parseFloat(data.priceShort) || 0;
+    if (data.priceMedium !== undefined) updates['size_medium_price']      = parseFloat(data.priceMedium) || 0;
+    if (data.priceTall   !== undefined) updates['size_tall_price']        = parseFloat(data.priceTall) || 0;
+    if (data.image       !== undefined) updates['Product Image (Link)']   = data.image;
+    if (data.status      !== undefined) updates['grabfood_status']        = data.status; // 'ACTIVE' or 'INACTIVE'
+
+    // Apply updates
+    Object.keys(updates).forEach(key => {
+      const col = colIdx[key];
+      if (col !== undefined) {
+        menuSheet.getRange(targetRow, col + 1).setValue(updates[key]);
+      }
+    });
+
+    return { ok: true, message: 'Item updated: ' + itemId };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
+/**
+ * Add a new menu item row to YGC_MENU.
+ * Accepts same fields as updateMenuItem plus itemId.
+ */
+function addMenuItem(data) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const menuSheet = ss.getSheetByName(SHEET_NAMES.MENU);
+    if (!menuSheet) return { ok: false, error: 'YGC_MENU sheet not found' };
+
+    const headers = menuSheet.getRange(1, 1, 1, menuSheet.getLastColumn()).getValues()[0];
+    const colIdx = {};
+    headers.forEach((h, i) => { colIdx[h] = i; });
+
+    // Generate item_id if not provided
+    const itemId = data.itemId || ('ITEM_' + Date.now());
+
+    // Check for duplicate
+    const existingData = menuSheet.getDataRange().getValues();
+    for (let i = 1; i < existingData.length; i++) {
+      if (String(existingData[i][colIdx['item_id']] || '').trim() === itemId) {
+        return { ok: false, error: 'Item ID already exists: ' + itemId };
+      }
+    }
+
+    const newRow = new Array(headers.length).fill('');
+    const set = (key, val) => { if (colIdx[key] !== undefined) newRow[colIdx[key]] = val; };
+
+    set('item_id',                itemId);
+    set('item_name',              data.name        || '');
+    set('category',               data.category    || '');
+    set('base_price',             parseFloat(data.price) || 0);
+    set('sizes_choice',           data.hasSizes    ? 'TRUE' : 'FALSE');
+    set('sweetness_choice',       data.hasSugar    ? 'TRUE' : 'FALSE');
+    set('size_short_price',       parseFloat(data.priceShort)  || 0);
+    set('size_medium_price',      parseFloat(data.priceMedium) || 0);
+    set('size_tall_price',        parseFloat(data.priceTall)   || 0);
+    set('Product Image (Link)',   data.image       || '');
+    set('grabfood_status',        data.status      || 'ACTIVE');
+
+    menuSheet.appendRow(newRow);
+    return { ok: true, message: 'Item added: ' + itemId, itemId: itemId };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
+/**
+ * Soft-delete a menu item by setting grabfood_status to INACTIVE.
+ * Hard delete is not done to preserve order history integrity.
+ */
+function deleteMenuItem(data) {
+  try {
+    const itemId = String(data.itemId || '').trim();
+    if (!itemId) return { ok: false, error: 'itemId required' };
+    return updateMenuItem({ itemId: itemId, status: 'INACTIVE' });
+  } catch (e) {
+    return { ok: false, error: e.message };
   }
 }
 
