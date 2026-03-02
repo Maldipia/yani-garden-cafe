@@ -526,7 +526,7 @@ function deleteOrder(data) {
  */
 function bulkDeleteOldOrders(data) {
   try {
-    const hoursAgo = parseInt(data.hoursAgo || 98);
+    const hoursAgo = parseInt(data.hoursOld || data.hoursAgo || 98);
     const cutoffMs = Date.now() - (hoursAgo * 60 * 60 * 1000);
 
     const ss = getSpreadsheet();
@@ -546,10 +546,9 @@ function bulkDeleteOldOrders(data) {
     // Collect order IDs and row numbers to delete (iterate in reverse)
     const toDelete = [];
     for (let i = ordersData.length - 1; i >= 1; i--) {
-      const status = String(ordersData[i][statusCol] || '').toUpperCase();
       const createdAt = ordersData[i][createdCol];
       const createdMs = createdAt ? new Date(createdAt).getTime() : 0;
-      if (status === 'COMPLETED' && createdMs > 0 && createdMs < cutoffMs) {
+      if (createdMs > 0 && createdMs < cutoffMs) {
         toDelete.push({ row: i + 1, orderId: String(ordersData[i][orderIdCol]) });
       }
     }
