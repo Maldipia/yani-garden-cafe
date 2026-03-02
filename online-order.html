@@ -228,15 +228,15 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 .form-select { appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236B7B6E' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 12px center }
 
 /* ── Payment Section ── */
-.payment-methods { display:flex; gap:10px; margin-bottom:16px }
+.payment-methods { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px }
 .pay-method-btn {
-  flex:1; padding:12px; border:2px solid var(--mist); border-radius:var(--r-md);
+  flex:1 1 calc(20% - 8px); min-width:60px; padding:10px 6px; border:2px solid var(--mist); border-radius:var(--r-md);
   background:var(--white); cursor:pointer; text-align:center; transition:all .15s;
   font-family:var(--font-body);
 }
 .pay-method-btn.active { border-color:var(--forest); background:var(--mist-light) }
-.pay-method-icon { font-size:1.5rem; margin-bottom:4px }
-.pay-method-name { font-size:.72rem; font-weight:700; color:var(--forest-deep) }
+.pay-method-icon { font-size:1.3rem; margin-bottom:3px }
+.pay-method-name { font-size:.68rem; font-weight:700; color:var(--forest-deep) }
 
 .qr-box {
   background:var(--mist-light); border-radius:var(--r-lg); padding:20px;
@@ -454,7 +454,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
       </select>
     </div>
     <div class="info-box">
-      <strong>📦 Pickup address:</strong> Yani Garden Cafe, [Address]. Our team will prepare your order and have it ready for your courier to pick up.
+      <strong>📦 Pickup address:</strong> Yani Garden Cafe, Purok 8 Daang Malinaw, Loma, Amadeo, Cavite. Our team will prepare your order and have it ready for your courier to pick up.
     </div>
   </div>
   <button class="btn-primary" onclick="proceedToPayment()">Proceed to Payment →</button>
@@ -464,23 +464,31 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 <!-- ═══ VIEW 4: PAYMENT ═══ -->
 <div class="view" id="view4">
   <div class="info-box">
-    <strong>💳 Online Payment Only</strong> — We do not accept Cash on Delivery. Please pay via GCash or PayMaya and upload your proof of payment.
+    <strong>💳 Online Payment Only</strong> — We do not accept Cash on Delivery. Please choose a payment method below, send the exact amount, and upload your proof of payment.
   </div>
   
   <div class="form-section">
     <div class="form-section-title">💳 Payment Method</div>
     <div class="payment-methods">
       <button class="pay-method-btn active" id="payGcash" onclick="selectPayMethod('GCASH')">
-        <div class="pay-method-icon">💙</div>
+        <div class="pay-method-icon">💚</div>
         <div class="pay-method-name">GCash</div>
       </button>
-      <button class="pay-method-btn" id="payMaya" onclick="selectPayMethod('PAYMAYA')">
-        <div class="pay-method-icon">💚</div>
-        <div class="pay-method-name">PayMaya</div>
-      </button>
-      <button class="pay-method-btn" id="payBank" onclick="selectPayMethod('BANK')">
+      <button class="pay-method-btn" id="payInstapay" onclick="selectPayMethod('INSTAPAY')">
         <div class="pay-method-icon">🏦</div>
-        <div class="pay-method-name">Bank Transfer</div>
+        <div class="pay-method-name">InstaPay</div>
+      </button>
+      <button class="pay-method-btn" id="payBdo" onclick="selectPayMethod('BDO')">
+        <div class="pay-method-icon">🔵</div>
+        <div class="pay-method-name">BDO</div>
+      </button>
+      <button class="pay-method-btn" id="payBpi" onclick="selectPayMethod('BPI')">
+        <div class="pay-method-icon">🔴</div>
+        <div class="pay-method-name">BPI</div>
+      </button>
+      <button class="pay-method-btn" id="payUnionbank" onclick="selectPayMethod('UNIONBANK')">
+        <div class="pay-method-icon">🟠</div>
+        <div class="pay-method-name">UnionBank</div>
       </button>
     </div>
   </div>
@@ -488,10 +496,14 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
   <div class="form-section">
     <div class="form-section-title">📱 Payment Details</div>
     <div class="qr-box">
-      <div class="qr-placeholder">📱</div>
-      <div class="qr-label">Send payment to:</div>
-      <div class="qr-number" id="paymentNumber">09XX XXX XXXX</div>
-      <div style="font-size:.72rem;color:var(--timber);margin-top:4px" id="paymentName">Yani Garden Cafe</div>
+      <img id="qrCodeImg" src="/images/pay-gcash.jpg" alt="Payment QR Code"
+        style="width:180px;height:180px;object-fit:contain;border-radius:8px;margin:0 auto 12px;display:block;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.1);"
+        onerror="this.style.display='none';document.getElementById('qrFallback').style.display='flex'">
+      <div id="qrFallback" style="width:140px;height:140px;background:#fff;border-radius:8px;margin:0 auto 12px;display:none;align-items:center;justify-content:center;font-size:3rem;box-shadow:0 2px 8px rgba(0,0,0,.1);">📱</div>
+      <div class="qr-label">Account Name:</div>
+      <div class="qr-number" id="paymentName" style="font-size:.95rem">LEGERYN PIA</div>
+      <div class="qr-label" style="margin-top:8px" id="paymentNumLabel">Account No.:</div>
+      <div class="qr-number" id="paymentNumber" style="font-size:1rem;letter-spacing:.05em">—</div>
     </div>
     <div class="cart-summary">
       <div class="cart-summary-row total">
@@ -545,7 +557,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
     </div>
     
     <div class="info-box success" style="text-align:left">
-      <strong>📞 Questions?</strong> Contact us at [Phone Number] or message us on Facebook.
+      <strong>📞 Questions?</strong> Call or text us at <a href="tel:09674000040" style="color:var(--forest);font-weight:700">0967-400-0040</a> or message us on <a href="https://facebook.com/YANIgardencafe" target="_blank" style="color:var(--forest);font-weight:700">Facebook</a>.
     </div>
     
     <button class="btn-primary" onclick="startNewOrder()" style="margin-top:16px">Place Another Order</button>
@@ -609,9 +621,11 @@ var selectedSugar = null;
 
 // Payment details by method
 var PAYMENT_DETAILS = {
-  GCASH: { number: '09XX XXX XXXX', name: 'Yani Garden Cafe (GCash)' },
-  PAYMAYA: { number: '09XX XXX XXXX', name: 'Yani Garden Cafe (PayMaya)' },
-  BANK: { number: 'BDO: 1234 5678 9012', name: 'YANI GARDEN CAFE' }
+  GCASH:     { number: '',               name: 'LEGERYN PIA', numLabel: 'Scan QR to pay:',    img: '/images/pay-gcash.jpg' },
+  INSTAPAY:  { number: '',               name: 'LEGERYN PIA', numLabel: 'Scan QR to pay:',    img: '/images/pay-instapay.jpg' },
+  BDO:       { number: '0126-000-62617', name: 'LEGERYN PIA', numLabel: 'Account No.:',        img: '/images/pay-bdo.jpg' },
+  BPI:       { number: '1539-235-628',   name: 'LEGERYN PIA', numLabel: 'Account No.:',        img: '/images/pay-bpi.png' },
+  UNIONBANK: { number: '1093-2100-0528', name: 'LEGERYN PIA', numLabel: 'Account No.:',        img: '/images/pay-unionbank.jpg' }
 };
 
 // ══════════════════════════════════════════════════════════════
@@ -1035,19 +1049,22 @@ function goToStep(step) {
 // ══════════════════════════════════════════════════════════════
 function selectPayMethod(method) {
   selectedPayMethod = method;
-  ['GCASH','PAYMAYA','BANK'].forEach(function(m) {
-    var btn = document.getElementById('pay' + m.charAt(0) + m.slice(1).toLowerCase());
-    if (!btn) {
-      // Try alternate IDs
-      if (m === 'GCASH') btn = document.getElementById('payGcash');
-      if (m === 'PAYMAYA') btn = document.getElementById('payMaya');
-      if (m === 'BANK') btn = document.getElementById('payBank');
-    }
+  ['GCASH','INSTAPAY','BDO','BPI','UNIONBANK'].forEach(function(m) {
+    var idMap = { GCASH:'payGcash', INSTAPAY:'payInstapay', BDO:'payBdo', BPI:'payBpi', UNIONBANK:'payUnionbank' };
+    var btn = document.getElementById(idMap[m]);
     if (btn) btn.classList.toggle('active', m === method);
   });
   var details = PAYMENT_DETAILS[method] || PAYMENT_DETAILS.GCASH;
-  document.getElementById('paymentNumber').textContent = details.number;
+  // Update QR image
+  var qrImg = document.getElementById('qrCodeImg');
+  var qrFallback = document.getElementById('qrFallback');
+  qrImg.src = details.img;
+  qrImg.style.display = 'block';
+  qrFallback.style.display = 'none';
+  // Update account details
   document.getElementById('paymentName').textContent = details.name;
+  document.getElementById('paymentNumLabel').textContent = details.numLabel;
+  document.getElementById('paymentNumber').textContent = details.number || '—';
 }
 
 // ══════════════════════════════════════════════════════════════
