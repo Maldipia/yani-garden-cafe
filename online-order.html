@@ -544,9 +544,21 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 <div class="size-overlay hidden" id="sizeOverlay" onclick="closeSizeModal(event)">
   <div class="size-sheet" onclick="event.stopPropagation()">
     <div class="size-title" id="sizeItemName">Item Name</div>
-    <div class="size-sub">Choose your size</div>
-    <div class="size-options" id="sizeOptions"></div>
-    <button class="size-add-btn" onclick="addSizeToCart()">Add to Cart</button>
+    <div class="size-sub" id="sizeSubtitle">Choose your size</div>
+    <!-- SIZE STEP -->
+    <div id="sizeStep">
+      <div class="size-options" id="sizeOptions"></div>
+      <button class="size-add-btn" id="sizeNextBtn" onclick="onSizeNext()" disabled>Next →</button>
+    </div>
+    <!-- SUGAR STEP -->
+    <div id="sugarStep" style="display:none">
+      <div class="size-options" id="sugarOptions"></div>
+      <button class="size-add-btn" id="sugarAddBtn" onclick="onSugarDone()" disabled>Add to Cart</button>
+    </div>
+    <!-- DIRECT ADD (no size, no sugar) -->
+    <div id="directStep" style="display:none">
+      <button class="size-add-btn" onclick="addSizeToCart()">Add to Cart</button>
+    </div>
   </div>
 </div>
 
@@ -577,6 +589,7 @@ var proofFilename = null;
 var pendingOrderRef = null;
 var sizeItem = null;
 var selectedSize = null;
+var selectedSugar = null;
 
 // Payment details by method
 var PAYMENT_DETAILS = {
@@ -656,16 +669,18 @@ function renderMenu(cat) {
     var inCart = cartQty > 0;
     var imgSrc = item.image || '';
     var price = parseFloat(item.base_price || item.price || 0);
-    var hasSizes = item.has_sizes;
+    var hasSizes = item.hasSizes || item.has_sizes;
+    var hasSugar = item.hasSugar || item.has_sugar_levels;
     
     return '<div class="menu-card' + (inCart ? ' in-cart' : '') + '" id="card-' + esc(item.item_code || item.code) + '" onclick="onCardClick(\'' + esc(JSON.stringify(item).replace(/'/g, "\\'")) + '\')">' +
-      (imgSrc ? '<img class="menu-card-img" src="' + imgSrc + '" alt="' + esc(item.name) + '" onerror="this.style.display=\'none\';var ph=document.createElement(\'div\');ph.className=\'menu-card-img no-img\';ph.textContent=\'🍽️\';this.parentNode.insertBefore(ph,this);">' : '<div class="menu-card-img no-img">🍽️</div>') +
+      (imgSrc ? '<img class="menu-card-img" src="' + imgSrc + '" alt="' + esc(item.name) + '" onerror="this.style.display=\'none\';var ph=document.createElement(\'div\');ph.className=\'menu-card-img no-img\';ph.textContent=\'\ud83c\udf7d\ufe0f\';this.parentNode.insertBefore(ph,this);">' : '<div class="menu-card-img no-img">\ud83c\udf7d\ufe0f</div>') +
       '<div class="menu-card-body">' +
         '<div class="menu-card-name">' + esc(item.name) + '</div>' +
-        '<div class="menu-card-price">₱' + price.toFixed(0) + (hasSizes ? '+' : '') + '</div>' +
-        (hasSizes ? '<span class="menu-card-badge">Multiple sizes</span>' : '') +
+        '<div class="menu-card-price">\u20b1' + price.toFixed(0) + (hasSizes ? '+' : '') + '</div>' +
+        (hasSizes ? '<span class="menu-card-badge">S / M / L</span>' : '') +
+        (hasSugar && !hasSizes ? '<span class="menu-card-badge" style="background:var(--terra-light,#FFF3E0);color:var(--terra)">Sugar level</span>' : '') +
         (inCart ? '<div class="qty-control">' +
-          '<button class="qty-btn minus" onclick="event.stopPropagation();changeQty(\'' + esc(item.item_code || item.code) + '\',-1)">−</button>' +
+          '<button class="qty-btn minus" onclick="event.stopPropagation();changeQty(\'' + esc(item.item_code || item.code) + '\',-1)">\u2212</button>' +
           '<span class="qty-num">' + cartQty + '</span>' +
           '<button class="qty-btn plus" onclick="event.stopPropagation();changeQty(\'' + esc(item.item_code || item.code) + '\',1)">+</button>' +
         '</div>' : '') +
@@ -678,10 +693,12 @@ function onCardClick(itemJson) {
   var item;
   try { item = JSON.parse(itemJson); } catch(e) { return; }
   
-  if (item.has_sizes) {
+  if (item.hasSizes || item.has_sizes) {
     openSizeModal(item);
+  } else if (item.hasSugar || item.has_sugar_levels) {
+    openSugarOnlyModal(item);
   } else {
-    addToCart(item.item_code || item.code, item.name, 'REGULAR', parseFloat(item.base_price || item.price), item.image || '');
+    addToCart(item.item_code || item.code, item.name, '', '', parseFloat(item.base_price || item.price), item.image || '');
   }
 }
 
@@ -690,67 +707,139 @@ function getCartQty(code) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// SIZE MODAL
+// ITEM OPTIONS MODAL (Size → Sugar, matching POS flow)
 // ══════════════════════════════════════════════════════════════
+var SUGAR_LEVELS = [
+  { key: 'Grounded', label: 'Grounded (25%)' },
+  { key: 'YANI',     label: 'YANI (50%) — Signature' },
+  { key: 'Comfort',  label: 'Comfort (75%)' },
+  { key: 'Full Sweet', label: 'Full Sweet (100%)' }
+];
+
 function openSizeModal(item) {
   sizeItem = item;
   selectedSize = null;
+  selectedSugar = null;
   document.getElementById('sizeItemName').textContent = item.name;
-  
+  document.getElementById('sizeSubtitle').textContent = 'Choose your size';
+
+  // Build size options
   var sizes = [];
-  if (item.price_short) sizes.push({ key:'SHORT', label:'Short (12oz)', price: parseFloat(item.price_short) });
-  if (item.price_medium) sizes.push({ key:'MEDIUM', label:'Medium (16oz)', price: parseFloat(item.price_medium) });
-  if (item.price_tall) sizes.push({ key:'TALL', label:'Tall (22oz)', price: parseFloat(item.price_tall) });
-  if (!sizes.length) sizes.push({ key:'REGULAR', label:'Regular', price: parseFloat(item.base_price || item.price) });
-  
+  if (item.priceShort || item.price_short) sizes.push({ key:'Short',  label:'Short (12oz)',  price: parseFloat(item.priceShort  || item.price_short) });
+  if (item.priceMedium || item.price_medium) sizes.push({ key:'Medium', label:'Medium (16oz)', price: parseFloat(item.priceMedium || item.price_medium) });
+  if (item.priceTall || item.price_tall)   sizes.push({ key:'Tall',   label:'Tall (22oz)',   price: parseFloat(item.priceTall   || item.price_tall) });
+  if (!sizes.length) sizes.push({ key:'Regular', label:'Regular', price: parseFloat(item.price || item.base_price) });
+
   document.getElementById('sizeOptions').innerHTML = sizes.map(function(s) {
-    return '<div class="size-opt" onclick="selectSize(\'' + s.key + '\', this)">' +
+    return '<div class="size-opt" onclick="selectSize(\'' + s.key + '\', ' + s.price + ', this)">' +
       '<span class="size-opt-name">' + s.label + '</span>' +
       '<span class="size-opt-price">₱' + s.price.toFixed(0) + '</span>' +
     '</div>';
   }).join('');
-  
+
+  // Show size step, hide others
+  document.getElementById('sizeStep').style.display = '';
+  document.getElementById('sugarStep').style.display = 'none';
+  document.getElementById('directStep').style.display = 'none';
+  document.getElementById('sizeNextBtn').disabled = true;
   document.getElementById('sizeOverlay').classList.remove('hidden');
 }
 
-function selectSize(key, el) {
-  document.querySelectorAll('.size-opt').forEach(function(o) { o.classList.remove('selected') });
-  el.classList.add('selected');
-  selectedSize = key;
+function openSugarOnlyModal(item) {
+  sizeItem = item;
+  selectedSize = '';
+  selectedSugar = null;
+  document.getElementById('sizeItemName').textContent = item.name;
+  document.getElementById('sizeSubtitle').textContent = '₱' + parseFloat(item.price || item.base_price).toFixed(0) + ' — Choose sugar level';
+
+  // Hide size step, show sugar step
+  document.getElementById('sizeStep').style.display = 'none';
+  document.getElementById('directStep').style.display = 'none';
+  document.getElementById('sugarStep').style.display = '';
+  document.getElementById('sugarAddBtn').disabled = true;
+  renderSugarOptions('sugarOptions', 'selectSugar');
+  document.getElementById('sizeOverlay').classList.remove('hidden');
 }
 
-function addSizeToCart() {
-  if (!sizeItem || !selectedSize) {
-    showToast('Please select a size', 'error');
-    return;
+function renderSugarOptions(containerId, fnName) {
+  document.getElementById(containerId).innerHTML = SUGAR_LEVELS.map(function(s) {
+    return '<div class="size-opt" onclick="' + fnName + '(\'' + s.key + '\', this)">' +
+      '<span class="size-opt-name">' + s.label + '</span>' +
+    '</div>';
+  }).join('');
+}
+
+function selectSize(key, price, el) {
+  document.querySelectorAll('#sizeOptions .size-opt').forEach(function(o) { o.classList.remove('selected') });
+  el.classList.add('selected');
+  selectedSize = key;
+  sizeItem._selectedPrice = price;
+  document.getElementById('sizeNextBtn').disabled = false;
+}
+
+function onSizeNext() {
+  if (!selectedSize) { showToast('Please select a size', 'error'); return; }
+  var hasSugar = sizeItem.hasSugar || sizeItem.has_sugar_levels;
+  if (hasSugar) {
+    // Proceed to sugar step
+    document.getElementById('sizeStep').style.display = 'none';
+    document.getElementById('sugarStep').style.display = '';
+    document.getElementById('sugarAddBtn').disabled = true;
+    document.getElementById('sizeSubtitle').textContent = '₱' + sizeItem._selectedPrice.toFixed(0) + ' · ' + selectedSize + ' — Choose sugar level';
+    renderSugarOptions('sugarOptions', 'selectSugar');
+  } else {
+    // No sugar — add directly
+    finishAddToCart();
   }
-  var sizes = {
-    SHORT: parseFloat(sizeItem.price_short),
-    MEDIUM: parseFloat(sizeItem.price_medium),
-    TALL: parseFloat(sizeItem.price_tall),
-    REGULAR: parseFloat(sizeItem.base_price || sizeItem.price)
-  };
-  var price = sizes[selectedSize] || parseFloat(sizeItem.base_price || sizeItem.price);
-  addToCart(sizeItem.item_code || sizeItem.code, sizeItem.name, selectedSize, price, sizeItem.image || '');
+}
+
+function selectSugar(key, el) {
+  document.querySelectorAll('#sugarOptions .size-opt').forEach(function(o) { o.classList.remove('selected') });
+  el.classList.add('selected');
+  selectedSugar = key;
+  document.getElementById('sugarAddBtn').disabled = false;
+}
+
+function onSugarDone() {
+  if (!selectedSugar) { showToast('Please choose a sugar level', 'error'); return; }
+  finishAddToCart();
+}
+
+function finishAddToCart() {
+  var price = sizeItem._selectedPrice || parseFloat(sizeItem.price || sizeItem.base_price);
+  addToCart(
+    sizeItem.item_code || sizeItem.code,
+    sizeItem.name,
+    selectedSize || '',
+    selectedSugar || '',
+    price,
+    sizeItem.image || ''
+  );
   closeSizeModal();
+}
+
+// Legacy: called by directStep button (items with neither size nor sugar — shouldn't happen now)
+function addSizeToCart() {
+  finishAddToCart();
 }
 
 function closeSizeModal(e) {
   if (!e || e.target === document.getElementById('sizeOverlay')) {
     document.getElementById('sizeOverlay').classList.add('hidden');
+    sizeItem = null; selectedSize = null; selectedSugar = null;
   }
 }
 
 // ══════════════════════════════════════════════════════════════
 // CART MANAGEMENT
 // ══════════════════════════════════════════════════════════════
-function addToCart(code, name, size, price, imagePath) {
-  var key = code + '_' + size;
+function addToCart(code, name, size, sugar, price, imagePath) {
+  var key = code + '_' + (size || '') + '_' + (sugar || '');
   var existing = cart.find(function(c) { return c.key === key });
   if (existing) {
     existing.quantity++;
   } else {
-    cart.push({ key, code, name, size, unitPrice: price, quantity: 1, imagePath });
+    cart.push({ key: key, code: code, name: name, size: size || '', sugar: sugar || '', unitPrice: price, quantity: 1, imagePath: imagePath });
   }
   updateCartUI();
   showToast(name + ' added to cart!', 'success');
@@ -821,7 +910,7 @@ function renderCartView() {
       (imgSrc ? '<img class="cart-item-img" src="' + imgSrc + '" alt="' + esc(item.name) + '" onerror="this.style.display=\'none\'">' : '<div class="cart-item-img" style="display:flex;align-items:center;justify-content:center;font-size:1.5rem">🍽️</div>') +
       '<div class="cart-item-info">' +
         '<div class="cart-item-name">' + esc(item.name) + '</div>' +
-        '<div class="cart-item-size">' + esc(item.size) + '</div>' +
+        ((item.size || item.sugar) ? '<div class="cart-item-size">' + [item.size, item.sugar].filter(Boolean).map(esc).join(' · ') + '</div>' : '') +
         '<div class="cart-item-price">₱' + (item.unitPrice * item.quantity).toFixed(0) + '</div>' +
         '<div class="cart-item-controls">' +
           '<button class="qty-btn minus" onclick="changeCartQty(\'' + esc(item.key) + '\',-1)">−</button>' +
@@ -1000,7 +1089,9 @@ async function submitOrder() {
         courierType: document.getElementById('courierType').value,
         paymentMethod: selectedPayMethod,
         items: cart.map(function(c) {
-          return { code: c.code, name: c.name, size: c.size, unitPrice: c.unitPrice, quantity: c.quantity };
+          // Combine size and sugar into a single label for storage (e.g. "Medium · YANI")
+          var sizeLabel = [c.size, c.sugar].filter(Boolean).join(' · ');
+          return { code: c.code, name: c.name, size: sizeLabel, unitPrice: c.unitPrice, quantity: c.quantity };
         })
       })
     });
