@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Test Backend Connection</title>
+</head>
+<body>
+  <h1>Testing Google Apps Script Backend</h1>
+  <button onclick="testConnection()">Test Connection</button>
+  <pre id="result"></pre>
+
+  <script>
+    async function sha256(message) {
+      const msgBuffer = new TextEncoder().encode(message);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+      return hashHex;
+    }
+
+    async function testConnection() {
+      const result = document.getElementById('result');
+      result.textContent = 'Testing...\n';
+      
+      const API_URL = 'https://script.google.com/macros/s/AKfycbytCV-jiFSOoon7Ijww5a-AABRYzhiNZPXVubaaa2zoVBOFxvcgkDH-6e4CfksMA7LC/exec';
+      
+      // Test 1: Simple GET request
+      result.textContent += '\n=== TEST 1: GET Request ===\n';
+      try {
+        const response1 = await fetch(API_URL);
+        result.textContent += 'Status: ' + response1.status + '\n';
+        result.textContent += 'OK: ' + response1.ok + '\n';
+      } catch (e) {
+        result.textContent += 'GET Error: ' + e.message + '\n';
+      }
+      
+      // Test 2: POST with verifyUserPin
+      result.textContent += '\n=== TEST 2: POST verifyUserPin (PIN: 1111) ===\n';
+      try {
+        const pinHash = await sha256('1111');
+        result.textContent += 'PIN Hash: ' + pinHash + '\n';
+        
+        const response2 = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            action: 'verifyUserPin', 
+            pinHash: pinHash 
+          })
+        });
+        
+        result.textContent += 'Status: ' + response2.status + '\n';
+        result.textContent += 'OK: ' + response2.ok + '\n';
+        
+        const data = await response2.json();
+        result.textContent += 'Response: ' + JSON.stringify(data, null, 2) + '\n';
+      } catch (e) {
+        result.textContent += 'POST Error: ' + e.message + '\n';
+      }
+      
+      // Test 3: POST with getMenu
+      result.textContent += '\n=== TEST 3: POST getMenu ===\n';
+      try {
+        const response3 = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'getMenu' })
+        });
+        
+        result.textContent += 'Status: ' + response3.status + '\n';
+        const data3 = await response3.json();
+        result.textContent += 'Menu items: ' + (data3.menu ? data3.menu.length : 'error') + '\n';
+      } catch (e) {
+        result.textContent += 'Menu Error: ' + e.message + '\n';
+      }
+    }
+  </script>
+</body>
+</html>
