@@ -892,10 +892,9 @@ function addToCart(code, name, size, sugar, price, imagePath) {
     cart.push({ key: key, code: code, name: name, size: size || '', sugar: sugar || '', unitPrice: price, quantity: 1, imagePath: imagePath });
   }
   updateCartUI();
-  // Re-render menu cards so in-cart state (qty control) updates immediately
-  // Use setTimeout to avoid blocking the click handler (INP performance)
-  setTimeout(function() { renderMenu(currentCat); }, 0);
   showToast(name + ' added to cart!', 'success');
+  // Update only the affected card (avoid full re-render for INP performance)
+  requestAnimationFrame(function() { updateCardInPlace(code); });
 }
 
 function changeQty(code, delta) {
@@ -919,13 +918,59 @@ function changeQty(code, delta) {
     }
   }
   updateCartUI();
-  renderMenu(currentCat);
+  requestAnimationFrame(function() { updateCardInPlace(code); });
 }
 
 function removeFromCart(key) {
   cart = cart.filter(function(c) { return c.key !== key });
   updateCartUI();
   renderCartView();
+}
+
+// Targeted single-card update (avoids full renderMenu for INP performance)
+function updateCardInPlace(code) {
+  var cardEl = document.getElementById('card-' + code);
+  if (!cardEl) return; // card not visible (filtered out)
+  var item = menuData.find(function(i) { return (i.item_code || i.code) === code; });
+  if (!item) return;
+  var cartQty = getCartQty(code);
+  var inCart = cartQty > 0;
+  var price = parseFloat(item.base_price || item.price || 0);
+  var hasSizes = item.hasSizes || item.has_sizes;
+  var hasSugar = item.hasSugar || item.has_sugar_levels;
+  var esc = function(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); };
+  var itemJsonEsc = esc(JSON.stringify(item).replace(/'/g, "\\'"));
+  var escapedCode = esc(code);
+  // Update in-cart class
+  cardEl.classList.toggle('in-cart', inCart);
+  // Rebuild price row
+  var priceRow = cardEl.querySelector('.menu-card-price-row');
+  if (!priceRow) return;
+  if (inCart && !hasSizes && !hasSugar) {
+    priceRow.innerHTML = '<div class="menu-card-price">\u20b1' + price.toFixed(0) + '</div>' +
+      '<div class="qty-control" style="margin-top:0">' +
+        '<button class="qty-btn minus" onclick="event.stopPropagation();changeQty(\'' + escapedCode + '\',-1)">\u2212</button>' +
+        '<span class="qty-num">' + cartQty + '</span>' +
+        '<button class="qty-btn plus" onclick="event.stopPropagation();changeQty(\'' + escapedCode + '\',1)">+</button>' +
+      '</div>';
+  } else {
+    priceRow.innerHTML = '<div>' +
+        '<div class="menu-card-price">\u20b1' + price.toFixed(0) + (hasSizes ? '+' : '') + '</div>' +
+        (hasSizes ? '<span class="menu-card-badge">S / M / L</span>' : '') +
+        (hasSugar && !hasSizes ? '<span class="menu-card-badge" style="background:var(--terra-light,#FFF3E0);color:var(--terra)">Sugar level</span>' : '') +
+      '</div>' +
+      '<button class="card-add-btn" onclick="event.stopPropagation();onCardClick(\'' + itemJsonEsc + '\')" title="Add to cart">+</button>';
+  }
+  // Update in-cart badge for sized/sugar items
+  var existingBadge = cardEl.querySelector('.in-cart-badge');
+  if (existingBadge) existingBadge.remove();
+  if (inCart && (hasSizes || hasSugar)) {
+    var badge = document.createElement('div');
+    badge.className = 'in-cart-badge';
+    badge.style.cssText = 'margin-top:4px;font-size:.7rem;color:var(--forest);font-weight:600';
+    badge.textContent = '\u2713 ' + cartQty + ' in cart';
+    cardEl.querySelector('.menu-card-body').appendChild(badge);
+  }
 }
 
 function getCartTotal() {
