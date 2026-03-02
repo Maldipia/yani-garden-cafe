@@ -471,6 +471,54 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
   transition:transform .15s;
 }
 .fab-platform:active { transform:scale(.92) }
+/* ── Menu Manager ─────────────────────────────────────── */
+.mm-cat-btn {
+  flex-shrink:0; padding:6px 14px; border-radius:20px;
+  border:1.5px solid var(--mist); background:#fff;
+  font-size:.75rem; font-weight:700; color:var(--timber);
+  cursor:pointer; white-space:nowrap; transition:all .15s;
+  font-family:var(--font-body);
+}
+.mm-cat-btn:hover { border-color:var(--forest); color:var(--forest) }
+.mm-cat-btn.mm-cat-active { background:var(--forest); color:#fff; border-color:var(--forest) }
+.mm-item-card {
+  background:#fff; border-radius:14px; overflow:hidden;
+  box-shadow:0 2px 10px rgba(0,0,0,.07);
+  border:1.5px solid var(--mist);
+  transition:transform .15s, box-shadow .15s;
+  display:flex; flex-direction:column;
+}
+.mm-item-card:hover { transform:translateY(-2px); box-shadow:0 6px 20px rgba(0,0,0,.12) }
+.mm-item-card.inactive { opacity:.7; border-color:#FEE2E2 }
+.mm-item-photo {
+  width:100%; height:140px; object-fit:cover;
+  background:var(--mist-light);
+}
+.mm-item-photo-placeholder {
+  width:100%; height:140px;
+  background:linear-gradient(135deg,#f0f4f0,#e8ede8);
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  color:var(--timber); font-size:.7rem; gap:4px;
+}
+.mm-item-body { padding:12px; flex:1; display:flex; flex-direction:column }
+.mm-item-name { font-weight:700; font-size:.9rem; line-height:1.3; margin-bottom:3px; color:var(--forest-deep) }
+.mm-item-cat {
+  font-size:.65rem; font-weight:700; letter-spacing:.04em;
+  color:#fff; background:var(--terra); border-radius:6px;
+  padding:2px 7px; display:inline-block; margin-bottom:6px;
+  align-self:flex-start;
+}
+.mm-item-price { font-size:.82rem; font-weight:700; color:var(--terra); margin-bottom:10px; flex:1 }
+.mm-item-status-active { display:inline-block; background:#D1FAE5; color:#065F46; padding:2px 8px; border-radius:10px; font-size:.62rem; font-weight:700 }
+.mm-item-status-inactive { display:inline-block; background:#FEE2E2; color:#991B1B; padding:2px 8px; border-radius:10px; font-size:.62rem; font-weight:700 }
+.mm-edit-btn {
+  width:100%; padding:9px; background:var(--forest);
+  color:#fff; border:none; border-radius:8px;
+  font-size:.8rem; font-weight:700; cursor:pointer;
+  font-family:var(--font-body); transition:background .15s;
+}
+.mm-edit-btn:hover { background:var(--forest-deep) }
 </style>
 </head>
 <body>
@@ -537,12 +585,30 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
   </div>
 
   <!-- Menu Manager View (ADMIN/OWNER only) -->
-  <div id="menuManagerView" style="display:none;padding:0 16px 100px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin:12px 0 16px">
-      <div style="font-weight:700;font-size:1.1rem;color:var(--forest)">Menu Manager</div>
-      <button onclick="openAddItemModal()" style="background:var(--forest);color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:.9rem;font-weight:600;cursor:pointer">+ Add Item</button>
+  <div id="menuManagerView" style="display:none;padding:0 0 100px">
+    <!-- Header bar -->
+    <div style="background:#fff;border-bottom:1.5px solid var(--mist);padding:14px 16px;position:sticky;top:0;z-index:10">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div>
+          <div style="font-weight:800;font-size:1.1rem;color:var(--forest-deep)">Menu Manager</div>
+          <div id="menuMgrCount" style="font-size:.72rem;color:var(--timber);margin-top:1px">Loading...</div>
+        </div>
+        <button onclick="openAddItemModal()" style="background:var(--forest);color:#fff;border:none;border-radius:10px;padding:10px 20px;font-size:.88rem;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(0,0,0,.15)">+ Add Item</button>
+      </div>
+      <!-- Search bar -->
+      <div style="position:relative;margin-bottom:12px">
+        <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:1rem;opacity:.5">🔍</span>
+        <input id="menuMgrSearch" type="text" placeholder="Search menu items..." oninput="renderMenuMgrGrid()" style="width:100%;padding:9px 12px 9px 36px;border:1.5px solid var(--mist);border-radius:10px;font-size:.88rem;font-family:var(--font-body);box-sizing:border-box;outline:none">
+      </div>
+      <!-- Category + Status filter tabs -->
+      <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none">
+        <button id="mmCatAll" onclick="setMenuCat('ALL')" class="mm-cat-btn mm-cat-active">All</button>
+        <div id="mmCatBtns"></div>
+        <button id="mmStatusToggle" onclick="toggleMenuStatus()" class="mm-cat-btn" style="margin-left:auto;flex-shrink:0">Show Inactive</button>
+      </div>
     </div>
-    <div id="menuMgrGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px"></div>
+    <!-- Grid -->
+    <div id="menuMgrGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px;padding:16px"></div>
   </div>
 
   <!-- FAB: New Platform Order -->
@@ -1888,6 +1954,8 @@ async function submitPlatformOrder() {
 // MENU MANAGER
 // ════════════════════════════════════════════════════════
 var menuMgrItems = [];
+var menuMgrCat = 'ALL';
+var menuMgrShowInactive = false;
 
 async function loadMenuManager() {
   var grid = document.getElementById('menuMgrGrid');
@@ -1898,36 +1966,91 @@ async function loadMenuManager() {
     return;
   }
   menuMgrItems = result.items || [];
+  buildMenuCatTabs();
+  renderMenuMgrGrid();
+}
+
+function buildMenuCatTabs() {
+  var cats = [];
+  menuMgrItems.forEach(function(item) {
+    var c = (item.category || 'Other').trim();
+    if (cats.indexOf(c) === -1) cats.push(c);
+  });
+  cats.sort();
+  var container = document.getElementById('mmCatBtns');
+  if (!container) return;
+  container.innerHTML = cats.map(function(c) {
+    return '<button onclick="setMenuCat(\'' + c.replace(/'/g, "\\'") + '\')" class="mm-cat-btn" data-cat="' + c.replace(/"/g,'&quot;') + '">' + c + '</button>';
+  }).join('');
+}
+
+function setMenuCat(cat) {
+  menuMgrCat = cat;
+  var allBtn = document.getElementById('mmCatAll');
+  if (allBtn) allBtn.classList.toggle('mm-cat-active', cat === 'ALL');
+  var btns = document.querySelectorAll('#mmCatBtns .mm-cat-btn');
+  btns.forEach(function(b) {
+    b.classList.toggle('mm-cat-active', b.dataset.cat === cat);
+  });
+  renderMenuMgrGrid();
+}
+
+function toggleMenuStatus() {
+  menuMgrShowInactive = !menuMgrShowInactive;
+  var btn = document.getElementById('mmStatusToggle');
+  if (btn) {
+    btn.textContent = menuMgrShowInactive ? 'Hide Inactive' : 'Show Inactive';
+    btn.classList.toggle('mm-cat-active', menuMgrShowInactive);
+  }
   renderMenuMgrGrid();
 }
 
 function renderMenuMgrGrid() {
   var grid = document.getElementById('menuMgrGrid');
-  if (!menuMgrItems.length) {
-    grid.innerHTML = '<div style="text-align:center;padding:40px;color:var(--timber)">No menu items found.</div>';
+  var searchEl = document.getElementById('menuMgrSearch');
+  var search = searchEl ? searchEl.value.toLowerCase().trim() : '';
+
+  var filtered = menuMgrItems.filter(function(item) {
+    if (!menuMgrShowInactive && !item.active) return false;
+    if (menuMgrCat !== 'ALL' && (item.category || 'Other').trim() !== menuMgrCat) return false;
+    if (search && item.name.toLowerCase().indexOf(search) === -1 && (item.category || '').toLowerCase().indexOf(search) === -1) return false;
+    return true;
+  });
+
+  var countEl = document.getElementById('menuMgrCount');
+  if (countEl) {
+    var activeCount = menuMgrItems.filter(function(i) { return i.active; }).length;
+    var inactiveCount = menuMgrItems.length - activeCount;
+    countEl.textContent = filtered.length + ' items shown · ' + activeCount + ' active, ' + inactiveCount + ' inactive';
+  }
+
+  if (!filtered.length) {
+    grid.innerHTML = '<div style="text-align:center;padding:40px;color:var(--timber);grid-column:1/-1">No items found.</div>';
     return;
   }
-  grid.innerHTML = menuMgrItems.map(function(item) {
+
+  grid.innerHTML = filtered.map(function(item) {
     var isActive = item.active;
     var imgHtml = item.image
-      ? '<img src="' + esc(item.image) + '" alt="" style="width:100%;height:120px;object-fit:cover" onerror="this.style.display=\'none\'">'
-      : '<div style="width:100%;height:120px;background:var(--mist-light);display:flex;align-items:center;justify-content:center;color:var(--timber);font-size:.75rem">No Photo</div>';
+      ? '<img src="' + esc(item.image) + '" class="mm-item-photo" alt="" onerror="this.outerHTML='<div class=mm-item-photo-placeholder><span style=font-size:2rem>🍽</span><span>No Photo</span></div>'">'
+      : '<div class="mm-item-photo-placeholder"><span style="font-size:2rem">🍽</span><span>No Photo</span></div>';
     var statusBadge = isActive
-      ? '<span style="background:#D1FAE5;color:#065F46;padding:2px 8px;border-radius:10px;font-size:.62rem;font-weight:700">ACTIVE</span>'
-      : '<span style="background:#FEE2E2;color:#991B1B;padding:2px 8px;border-radius:10px;font-size:.62rem;font-weight:700">INACTIVE</span>';
+      ? '<span class="mm-item-status-active">ACTIVE</span>'
+      : '<span class="mm-item-status-inactive">INACTIVE</span>';
     var priceDisplay = item.hasSizes
       ? '₱' + item.priceShort + ' / ₱' + item.priceMedium + ' / ₱' + item.priceTall
       : '₱' + item.price;
-    return '<div style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 6px rgba(0,0,0,.08);border:1.5px solid ' + (isActive ? 'var(--mist)' : '#FEE2E2') + '">'
+    var catLabel = (item.category || 'Other').trim();
+    return '<div class="mm-item-card' + (isActive ? '' : ' inactive') + '">'
       + imgHtml
-      + '<div style="padding:10px 12px">'
-      +   '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">'
-      +     '<div style="font-weight:700;font-size:.88rem;line-height:1.3;flex:1;margin-right:6px">' + esc(item.name) + '</div>'
+      + '<div class="mm-item-body">'
+      +   '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:5px">'
+      +     '<div class="mm-item-name" style="flex:1;margin-right:6px">' + esc(item.name) + '</div>'
       +     statusBadge
       +   '</div>'
-      +   '<div style="font-size:.72rem;color:var(--timber);margin-bottom:4px">' + esc(item.category || '—') + '</div>'
-      +   '<div style="font-size:.8rem;font-weight:700;color:var(--terra);margin-bottom:10px">' + priceDisplay + '</div>'
-      +   '<button onclick="openEditItemModal(\'' + esc(item.code) + '\')" style="width:100%;padding:8px;background:var(--forest);color:#fff;border:none;border-radius:7px;font-size:.8rem;font-weight:700;cursor:pointer;font-family:var(--font-body)">Edit</button>'
+      +   '<span class="mm-item-cat">' + esc(catLabel) + '</span>'
+      +   '<div class="mm-item-price">' + priceDisplay + '</div>'
+      +   '<button class="mm-edit-btn" onclick="openEditItemModal(\'' + esc(item.code) + '\')">Edit</button>'
       + '</div>'
       + '</div>';
   }).join('');
