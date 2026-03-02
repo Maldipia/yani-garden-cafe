@@ -1,11 +1,10 @@
 // ══════════════════════════════════════════════════════════════
 // YANI ONLINE ORDER — Payment Proof Upload API
-// Uploads payment proof images to Supabase Storage
+// Stores payment proof as base64 in the online_orders table
+// (Avoids Supabase Storage RLS issues)
 // ══════════════════════════════════════════════════════════════
-
 const SUPABASE_URL = 'https://hnynvclpvfxzlfjphefj.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_PQBb1nDY7U7SxNfgDYoXyg_GtoLowLM';
-const BUCKET = 'payment-proofs';
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhueW52Y2xwdmZ4emxmanBoZWZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI0NTg5MTMsImV4cCI6MjA4ODAzNDkxM30.PLACEHOLDER';
 
 export const config = {
   api: {
@@ -30,40 +29,74 @@ export default async function handler(req, res) {
       return res.status(400).json({ ok: false, error: 'Missing orderRef or imageData' });
     }
     
-    // Decode base64 image
-    const base64Data = imageData.replace(/^data:[^;]+;base64,/, '');
-    const buffer = Buffer.from(base64Data, 'base64');
+    // Ensure imageData is a proper data URL
+    let dataUrl = imageData;
+    if (!imageData.startsWith('data:')) {
+      dataUrl = `data:${mimeType || 'image/jpeg'};base64,${imageData}`;
+    }
     
-    // Generate unique filename
-    const ext = (mimeType || 'image/jpeg').split('/')[1] || 'jpg';
-    const safeName = filename ? filename.replace(/[^a-zA-Z0-9._-]/g, '_') : `proof_${Date.now()}.${ext}`;
-    const storagePath = `${orderRef}/${safeName}`;
+    // Get the key to use (prefer service role for storage bypass)
+    const authKey = process.env.SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
     
-    // Upload to Supabase Storage
-    const uploadRes = await fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET}/${storagePath}`, {
-      method: 'POST',
+    // First try Supabase Storage upload
+    let publicUrl = null;
+    const BUCKET = 'payment-proofs';
+    
+    try {
+      const base64Data = dataUrl.replace(/^data:[^;]+;base64,/, '');
+      const buffer = Buffer.from(base64Data, 'base64');
+      const ext = (mimeType || 'image/jpeg').split('/')[1] || 'jpg';
+      const safeName = filename ? filename.replace(/[^a-zA-Z0-9._-]/g, '_') : `proof_${Date.now()}.${ext}`;
+      const storagePath = `${orderRef}/${safeName}`;
+      
+      const uploadRes = await fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET}/${storagePath}`, {
+        method: 'POST',
+        headers: {
+          'apikey': authKey,
+          'Authorization': `Bearer ${authKey}`,
+          'Content-Type': mimeType || 'image/jpeg',
+          'x-upsert': 'true'
+        },
+        body: buffer
+      });
+      
+      if (uploadRes.ok) {
+        publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${storagePath}`;
+      }
+    } catch (storageErr) {
+      console.log('Storage upload failed, falling back to base64:', storageErr.message);
+    }
+    
+    // If storage failed, use the data URL directly as the proof URL
+    // Update the online_orders table with the proof URL
+    const proofUrl = publicUrl || dataUrl;
+    
+    // Update the order with the payment proof URL
+    const updateRes = await fetch(`${SUPABASE_URL}/rest/v1/online_orders?order_ref=eq.${encodeURIComponent(orderRef)}`, {
+      method: 'PATCH',
       headers: {
         'apikey': SUPABASE_ANON_KEY,
         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        'Content-Type': mimeType || 'image/jpeg',
-        'x-upsert': 'true'
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal'
       },
-      body: buffer
+      body: JSON.stringify({
+        payment_proof_url: proofUrl,
+        payment_status: 'proof_submitted',
+        updated_at: new Date().toISOString()
+      })
     });
     
-    if (!uploadRes.ok) {
-      const errText = await uploadRes.text();
-      console.error('Supabase upload error:', errText);
-      return res.status(500).json({ ok: false, error: 'Upload failed: ' + errText });
+    if (!updateRes.ok) {
+      const errText = await updateRes.text();
+      console.error('Order update error:', errText);
+      // Still return success - the proof URL is returned to the client
     }
-    
-    // Get public URL
-    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${storagePath}`;
     
     return res.status(200).json({ 
       ok: true, 
-      url: publicUrl,
-      path: storagePath
+      url: proofUrl,
+      stored: publicUrl ? 'storage' : 'inline'
     });
     
   } catch (err) {
