@@ -637,22 +637,16 @@ async function login() {
   btn.disabled = true;
 
   try {
-    // Hash the PIN using SHA-256 (Phase 1 Security)
-    const pinHash = await sha256(pin);
-    
+    // Call the backend verifyAdminPin endpoint
     var resp = await fetch(API_URL, {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ action:'verifyUserPin', pinHash: pinHash })
+      body: JSON.stringify({ action:'verifyAdminPin', pin: pin })
     });
     var data = await resp.json();
 
-    if (data.ok && data.userId) {
-      // Store user session (Phase 1 Security)
-      currentUser.userId = data.userId;
-      currentUser.username = data.username;
-      currentUser.role = data.role;
-      
-      console.log('✅ Logged in:', currentUser.username, '(' + currentUser.role + ')');
+    if (data.ok && data.valid) {
+      // PIN verified successfully
+      console.log('✅ Logged in as admin');
       
       document.getElementById('loginOverlay').classList.add('hidden');
       document.getElementById('dashboard').style.display = 'block';
