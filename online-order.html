@@ -659,7 +659,7 @@ function renderMenu(cat) {
     var hasSizes = item.has_sizes;
     
     return '<div class="menu-card' + (inCart ? ' in-cart' : '') + '" id="card-' + esc(item.item_code || item.code) + '" onclick="onCardClick(\'' + esc(JSON.stringify(item).replace(/'/g, "\\'")) + '\')">' +
-      (imgSrc ? '<img class="menu-card-img" src="' + imgSrc + '" alt="' + esc(item.name) + '" onerror="this.parentNode.querySelector(\'.menu-card-img\').style.display=\'none\'">' : '<div class="menu-card-img no-img">🍽️</div>') +
+      (imgSrc ? '<img class="menu-card-img" src="' + imgSrc + '" alt="' + esc(item.name) + '" onerror="this.style.display=\'none\';var ph=document.createElement(\'div\');ph.className=\'menu-card-img no-img\';ph.textContent=\'🍽️\';this.parentNode.insertBefore(ph,this);">' : '<div class="menu-card-img no-img">🍽️</div>') +
       '<div class="menu-card-body">' +
         '<div class="menu-card-name">' + esc(item.name) + '</div>' +
         '<div class="menu-card-price">₱' + price.toFixed(0) + (hasSizes ? '+' : '') + '</div>' +
