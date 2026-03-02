@@ -1,15 +1,19 @@
 // ══════════════════════════════════════════════════════════════
-// Last updated: 2026-03-02 05:06
 // YANI POS — Image Upload Endpoint
 // Accepts a base64-encoded image and commits it to GitHub repo
 // so Vercel auto-deploys it to /images/{code}.{ext}
 // ══════════════════════════════════════════════════════════════
 
-const GITHUB_OWNER = 'Maldipia';
-const GITHUB_REPO  = 'yani-garden-cafe';
+const GITHUB_OWNER  = 'Maldipia';
+const GITHUB_REPO   = 'yani-garden-cafe';
 const GITHUB_BRANCH = 'main';
-// GitHub token must be set as Vercel environment variable: GITHUB_TOKEN
-// (Settings → Environment Variables in Vercel dashboard)
+const VERCEL_ALIAS  = 'yani-garden-cafe-d3l6.vercel.app';
+const VERCEL_PROJECT_ID = 'prj_sAaageyafER4acIM59K5FUhQ4020';
+
+// Required Vercel environment variables:
+//   GITHUB_TOKEN   — GitHub PAT with repo write access
+//   VERCEL_TOKEN   — Vercel API token (for alias promotion)
+//   VERCEL_TEAM_ID — Vercel team ID
 
 export default async function handler(req, res) {
   // CORS
@@ -20,14 +24,14 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed' });
 
   try {
-    const { code, ext, base64, pin } = req.body || {};
+    const { code, ext, base64 } = req.body || {};
 
     // Basic validation
     if (!code || !ext || !base64) {
       return res.status(400).json({ ok: false, error: 'Missing code, ext, or base64 data' });
     }
 
-    // Validate item code format (letters + digits only, 2-6 chars)
+    // Validate item code format (letters + digits only, 2-8 chars)
     if (!/^[A-Z0-9]{2,8}$/i.test(code)) {
       return res.status(400).json({ ok: false, error: 'Invalid item code format' });
     }
@@ -71,7 +75,7 @@ export default async function handler(req, res) {
     // Commit the image to GitHub
     const commitBody = {
       message: `feat: upload menu image for ${code.toUpperCase()}`,
-      content: base64, // must be base64-encoded
+      content: base64,
       branch: GITHUB_BRANCH
     };
     if (existingSha) commitBody.sha = existingSha;
@@ -96,6 +100,21 @@ export default async function handler(req, res) {
     const commitData = await commitResp.json();
     const localPath = `/images/${code.toUpperCase()}.${cleanExt}`;
 
+    // ── Promote latest READY deployment to production alias ──────────
+    // This ensures the uploaded image is served immediately after Vercel
+    // builds the new deployment triggered by the GitHub commit above.
+    // We do this asynchronously so it doesn't block the response.
+    const VERCEL_TOKEN  = process.env.VERCEL_TOKEN;
+    const VERCEL_TEAM_ID = process.env.VERCEL_TEAM_ID;
+    if (VERCEL_TOKEN && VERCEL_TEAM_ID) {
+      // Fire-and-forget alias promotion after a short delay
+      // (Vercel needs ~60-90s to build after the GitHub commit)
+      // We schedule it via a background fetch with no await
+      promoteLatestDeployment(VERCEL_TOKEN, VERCEL_TEAM_ID).catch(e => {
+        console.warn('Alias promotion failed (non-critical):', e.message);
+      });
+    }
+
     return res.status(200).json({
       ok: true,
       path: localPath,
@@ -106,5 +125,36 @@ export default async function handler(req, res) {
   } catch (err) {
     console.error('upload-image error:', err);
     return res.status(500).json({ ok: false, error: 'Server error: ' + err.message });
+  }
+}
+
+// Promote the latest READY deployment to the production alias
+async function promoteLatestDeployment(vercelToken, teamId) {
+  try {
+    // Wait 90 seconds for Vercel to build
+    await new Promise(r => setTimeout(r, 90_000));
+
+    // Get latest READY deployment
+    const listResp = await fetch(
+      `https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&teamId=${teamId}&limit=5`,
+      { headers: { 'Authorization': `Bearer ${vercelToken}` } }
+    );
+    if (!listResp.ok) return;
+    const listData = await listResp.json();
+    const latest = (listData.deployments || []).find(d => d.state === 'READY');
+    if (!latest) return;
+
+    // Assign alias
+    await fetch(
+      `https://api.vercel.com/v2/deployments/${latest.uid}/aliases?teamId=${teamId}`,
+      {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${vercelToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ alias: VERCEL_ALIAS })
+      }
+    );
+    console.log('Alias promoted to:', latest.uid);
+  } catch (e) {
+    console.warn('promoteLatestDeployment error:', e.message);
   }
 }
