@@ -878,6 +878,9 @@ function addToCart(code, name, size, sugar, price, imagePath) {
     cart.push({ key: key, code: code, name: name, size: size || '', sugar: sugar || '', unitPrice: price, quantity: 1, imagePath: imagePath });
   }
   updateCartUI();
+  // Re-render menu cards so in-cart state (qty control) updates immediately
+  // Use setTimeout to avoid blocking the click handler (INP performance)
+  setTimeout(function() { renderMenu(currentCat); }, 0);
   showToast(name + ' added to cart!', 'success');
 }
 
