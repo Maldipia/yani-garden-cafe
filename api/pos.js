@@ -15,6 +15,41 @@
 
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzprf6_LpDwcVujm8kcGFZE5JdkL0k9b6Wfg5l82gjZzFua8w1QWH8UoFFlhznc6EtL/exec';
 
+// ── Manila timezone offset ────────────────────────────────────────────────
+const MANILA_OFFSET_MS = 8 * 60 * 60 * 1000; // UTC+8
+
+/**
+ * Normalize a timestamp from GAS to a Manila-timezone ISO string.
+ * GAS returns Date objects serialized as UTC ISO (e.g. "2026-03-04T05:27:07.000Z").
+ * We convert to Manila time with +08:00 offset so browsers display the correct local time.
+ */
+function toManilaIso(ts) {
+  if (!ts) return ts;
+  try {
+    const d = new Date(ts);
+    if (isNaN(d.getTime())) return ts;
+    // Format as Manila ISO: yyyy-MM-ddTHH:mm:ss+08:00
+    const manila = new Date(d.getTime() + MANILA_OFFSET_MS);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${manila.getUTCFullYear()}-${pad(manila.getUTCMonth()+1)}-${pad(manila.getUTCDate())}T${pad(manila.getUTCHours())}:${pad(manila.getUTCMinutes())}:${pad(manila.getUTCSeconds())}+08:00`;
+  } catch (e) {
+    return ts;
+  }
+}
+
+/**
+ * Fix timestamps in a GAS getOrders response.
+ * Converts all createdAt fields from UTC ISO to Manila ISO strings.
+ */
+function fixOrderTimestamps(gasResult) {
+  if (!gasResult || !gasResult.ok || !Array.isArray(gasResult.orders)) return gasResult;
+  gasResult.orders = gasResult.orders.map(o => {
+    if (o.createdAt) o.createdAt = toManilaIso(o.createdAt);
+    return o;
+  });
+  return gasResult;
+}
+
 const SUPABASE_URL = 'https://hnynvclpvfxzlfjphefj.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_ANON_KEY || 'sb_publishable_PQBb1nDY7U7SxNfgDYoXyg_GtoLowLM';
 
@@ -297,8 +332,11 @@ export default async function handler(req, res) {
       }
     }
 
+     // ── Fix timestamps: normalize GAS UTC ISO dates to Manila +08:00 ────────────
+    if (action === 'getOrders') {
+      fixOrderTimestamps(gasResult);
+    }
     return res.status(200).json(gasResult);
-
   } catch (err) {
     console.error('Proxy error:', err);
     return res.status(500).json({ ok: false, error: 'Server error: ' + err.message });
