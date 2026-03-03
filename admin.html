@@ -716,6 +716,33 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
     <div style="padding:16px" id="onlineOrdersGrid"></div>
   </div>
 
+  <!-- Sheets View (ADMIN/OWNER only) -->
+  <div id="sheetsView" style="display:none;padding:0 0 100px">
+    <!-- Header bar -->
+    <div style="background:#fff;border-bottom:1.5px solid var(--mist);padding:14px 16px;position:sticky;top:0;z-index:10">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div>
+          <div style="font-weight:800;font-size:1.1rem;color:var(--forest-deep)">📊 Google Sheets Data</div>
+          <div id="sheetsDataCount" style="font-size:.72rem;color:var(--timber);margin-top:1px">Loading...</div>
+        </div>
+        <button onclick="loadSheetsData()" style="background:var(--forest);color:#fff;border:none;border-radius:10px;padding:10px 16px;font-size:.82rem;font-weight:700;cursor:pointer">🔄 Refresh</button>
+      </div>
+      <!-- Sub-tabs -->
+      <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none">
+        <button id="sheetsTabOrders" onclick="showSheetsTab('orders')" style="padding:7px 16px;border-radius:20px;border:none;font-size:.8rem;font-weight:700;cursor:pointer;background:var(--forest);color:#fff">🛵 Online Orders</button>
+        <button id="sheetsTabCustomers" onclick="showSheetsTab('customers')" style="padding:7px 16px;border-radius:20px;border:none;font-size:.8rem;font-weight:700;cursor:pointer;background:var(--mist-light);color:var(--timber)">👥 Customers</button>
+      </div>
+    </div>
+    <!-- Online Orders sub-view -->
+    <div id="sheetsOrdersPanel" style="padding:16px;overflow-x:auto">
+      <div id="sheetsOrdersTable"><div style="text-align:center;padding:40px;color:var(--timber)">Loading orders from Google Sheets...</div></div>
+    </div>
+    <!-- Customers sub-view -->
+    <div id="sheetsCustomersPanel" style="padding:16px;overflow-x:auto;display:none">
+      <div id="sheetsCustomersTable"><div style="text-align:center;padding:40px;color:var(--timber)">Loading customers from Google Sheets...</div></div>
+    </div>
+  </div>
+
   <!-- FAB: New Platform Order -->
   <button class="fab-platform" onclick="openPlatformOrder()" title="New Platform Order">+</button>
 
@@ -1137,6 +1164,10 @@ function renderFilters() {
   if (currentUser.role === 'ADMIN' || currentUser.role === 'OWNER') {
     tabs.push({ key:'ONLINE_ORDERS', label:'🛵 Online', count:onlineOrderPendingCount || '' });
   }
+  // Sheets tab: ADMIN and OWNER only
+  if (currentUser.role === 'ADMIN' || currentUser.role === 'OWNER') {
+    tabs.push({ key:'SHEETS', label:'📊 Sheets', count:'' });
+  }
 
   document.getElementById('filterBar').innerHTML = tabs.map(function(t) {
     return '<button class="filter-btn' + (currentFilter===t.key?' active':'') + '" onclick="setFilter(\'' + t.key + '\')">' +
@@ -1159,6 +1190,9 @@ function setFilter(f) {
   menuManagerView.style.display = 'none';
   if (onlineOrdersView) onlineOrdersView.style.display = 'none';
 
+  var sheetsView = document.getElementById('sheetsView');
+  if (sheetsView) sheetsView.style.display = 'none';
+
   if (f === 'PAYMENTS') {
     paymentsView.style.display = 'block';
     loadPayments();
@@ -1168,6 +1202,9 @@ function setFilter(f) {
   } else if (f === 'ONLINE_ORDERS') {
     if (onlineOrdersView) onlineOrdersView.style.display = 'block';
     loadOnlineOrders();
+  } else if (f === 'SHEETS') {
+    if (sheetsView) sheetsView.style.display = 'block';
+    loadSheetsData();
   } else {
     orderGrid.style.display = '';
     renderOrders();
@@ -2699,6 +2736,129 @@ async function onlineOrderReadyAndSMS(orderRef, phone, name) {
   } catch (e) {
     alert('Error: ' + e.message);
   }
+}
+
+// ══════════════════════════════════════════════════════════
+// SHEETS DATA VIEW (Online Orders + Customers from Google Sheets)
+// ══════════════════════════════════════════════════════════
+var sheetsOrdersData = [];
+var sheetsCustomersData = [];
+var currentSheetsTab = 'orders';
+
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbytCV-jiFSOoon7Ijww5a-AABRYzhiNZPXVubaaa2zoVBOFxvcgkDH-6e4CfksMA7LC/exec';
+
+async function loadSheetsData() {
+  var countEl = document.getElementById('sheetsDataCount');
+  if (countEl) countEl.textContent = 'Loading from Google Sheets...';
+  try {
+    // Fetch online orders from GAS
+    var resp = await fetch(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'getOnlineOrders' })
+    });
+    var data = await resp.json();
+    sheetsOrdersData = (data.success && data.orders) ? data.orders : [];
+
+    // Fetch customers from GAS (via getOnlineOrders which returns from ONLINE_ORDERS sheet)
+    // We also need customer data — fetch separately
+    var custResp = await fetch(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'getCustomers' })
+    });
+    var custData = await custResp.json();
+    sheetsCustomersData = (custData.success && custData.customers) ? custData.customers : [];
+
+    if (countEl) countEl.textContent = sheetsOrdersData.length + ' orders · ' + sheetsCustomersData.length + ' customers in Google Sheets';
+    showSheetsTab(currentSheetsTab);
+  } catch (e) {
+    if (countEl) countEl.textContent = 'Error: ' + e.message;
+    document.getElementById('sheetsOrdersTable').innerHTML = '<div style="text-align:center;padding:40px;color:#EF4444">⚠️ Failed to load: ' + esc(e.message) + '</div>';
+  }
+}
+
+function showSheetsTab(tab) {
+  currentSheetsTab = tab;
+  var ordersPanel = document.getElementById('sheetsOrdersPanel');
+  var customersPanel = document.getElementById('sheetsCustomersPanel');
+  var tabOrders = document.getElementById('sheetsTabOrders');
+  var tabCustomers = document.getElementById('sheetsTabCustomers');
+  if (tab === 'orders') {
+    ordersPanel.style.display = 'block';
+    customersPanel.style.display = 'none';
+    tabOrders.style.background = 'var(--forest)'; tabOrders.style.color = '#fff';
+    tabCustomers.style.background = 'var(--mist-light)'; tabCustomers.style.color = 'var(--timber)';
+    renderSheetsOrders();
+  } else {
+    ordersPanel.style.display = 'none';
+    customersPanel.style.display = 'block';
+    tabOrders.style.background = 'var(--mist-light)'; tabOrders.style.color = 'var(--timber)';
+    tabCustomers.style.background = 'var(--forest)'; tabCustomers.style.color = '#fff';
+    renderSheetsCustomers();
+  }
+}
+
+function renderSheetsOrders() {
+  var el = document.getElementById('sheetsOrdersTable');
+  if (!sheetsOrdersData.length) {
+    el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--timber)">No online orders in Google Sheets yet.<br><small>Orders will appear here after customers place orders online.</small></div>';
+    return;
+  }
+  var statusColors = {
+    'PENDING': '#FEF3C7', 'CONFIRMED': '#D1FAE5', 'PREPARING': '#EDE9FE',
+    'READY': '#D1FAE5', 'COMPLETED': '#F3F4F6', 'CANCELLED': '#FEE2E2'
+  };
+  var html = '<table style="width:100%;border-collapse:collapse;font-size:.82rem;min-width:700px">';
+  html += '<thead><tr style="background:var(--forest-deep);color:#fff">';
+  ['Order Ref','Date','Customer','Phone','Pickup','Items','Total','Payment','Status'].forEach(function(h) {
+    html += '<th style="padding:8px 10px;text-align:left;white-space:nowrap">' + h + '</th>';
+  });
+  html += '</tr></thead><tbody>';
+  sheetsOrdersData.forEach(function(o, i) {
+    var bg = i % 2 === 0 ? '#fff' : '#f9fafb';
+    var statusBg = statusColors[String(o['Order Status'] || '').toUpperCase()] || '#f3f4f6';
+    html += '<tr style="background:' + bg + ';border-bottom:1px solid #e5e7eb">';
+    html += '<td style="padding:8px 10px;font-weight:700;color:var(--forest-deep)">' + esc(String(o['Order Ref'] || '')) + '</td>';
+    html += '<td style="padding:8px 10px;white-space:nowrap">' + esc(String(o['Date'] || '')) + '</td>';
+    html += '<td style="padding:8px 10px;font-weight:600">' + esc(String(o['Customer Name'] || '')) + '</td>';
+    html += '<td style="padding:8px 10px">' + esc(String(o['Phone'] || '')) + '</td>';
+    html += '<td style="padding:8px 10px;white-space:nowrap">' + esc(String(o['Pickup Time'] || '')) + '</td>';
+    html += '<td style="padding:8px 10px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(String(o['Items Summary'] || '')) + '">' + esc(String(o['Items Summary'] || '')) + '</td>';
+    html += '<td style="padding:8px 10px;font-weight:700;color:var(--forest-deep)">₱' + parseFloat(o['Total Amount'] || 0).toLocaleString() + '</td>';
+    html += '<td style="padding:8px 10px">' + esc(String(o['Payment Method'] || '')) + '</td>';
+    html += '<td style="padding:8px 10px"><span style="background:' + statusBg + ';padding:3px 8px;border-radius:10px;font-size:.75rem;font-weight:700">' + esc(String(o['Order Status'] || '')) + '</span></td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+function renderSheetsCustomers() {
+  var el = document.getElementById('sheetsCustomersTable');
+  if (!sheetsCustomersData.length) {
+    el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--timber)">No customer data in Google Sheets yet.<br><small>Customer records are created automatically when orders are placed.</small></div>';
+    return;
+  }
+  var html = '<table style="width:100%;border-collapse:collapse;font-size:.82rem;min-width:500px">';
+  html += '<thead><tr style="background:var(--forest-deep);color:#fff">';
+  ['Phone','Customer Name','First Order','Last Order','Total Orders','Total Spend'].forEach(function(h) {
+    html += '<th style="padding:8px 10px;text-align:left;white-space:nowrap">' + h + '</th>';
+  });
+  html += '</tr></thead><tbody>';
+  sheetsCustomersData.forEach(function(c, i) {
+    var bg = i % 2 === 0 ? '#fff' : '#f9fafb';
+    html += '<tr style="background:' + bg + ';border-bottom:1px solid #e5e7eb">';
+    html += '<td style="padding:8px 10px;font-weight:600">' + esc(String(c['Phone'] || '')) + '</td>';
+    html += '<td style="padding:8px 10px;font-weight:700;color:var(--forest-deep)">' + esc(String(c['Customer Name'] || '')) + '</td>';
+    html += '<td style="padding:8px 10px;white-space:nowrap">' + esc(String(c['First Order Date'] || '')) + '</td>';
+    html += '<td style="padding:8px 10px;white-space:nowrap">' + esc(String(c['Last Order Date'] || '')) + '</td>';
+    html += '<td style="padding:8px 10px;text-align:center;font-weight:700">' + esc(String(c['Total Orders'] || 0)) + '</td>';
+    html += '<td style="padding:8px 10px;font-weight:700;color:var(--forest-deep)">₱' + parseFloat(c['Total Spend'] || 0).toLocaleString() + '</td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
 }
 
 </script>
