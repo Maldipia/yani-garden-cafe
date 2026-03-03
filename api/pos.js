@@ -11,7 +11,8 @@
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzprf6_LpDwcVujm8kcGFZE5JdkL0k9b6Wfg5l82gjZzFua8w1QWH8UoFFlhznc6EtL/exec';
 
 const SUPABASE_URL = 'https://hnynvclpvfxzlfjphefj.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_PQBb1nDY7U7SxNfgDYoXyg_GtoLowLM';
+// Use secret key (env var) for server-side ops — bypasses RLS for menu management
+const SUPABASE_KEY = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_ANON_KEY || 'sb_publishable_PQBb1nDY7U7SxNfgDYoXyg_GtoLowLM';
 
 // ── Category name → Supabase UUID map ─────────────────────────────────────
 // These are the fixed category IDs from the menu_categories table.

@@ -7,7 +7,8 @@
 // ══════════════════════════════════════════════════════════════
 
 const SUPABASE_URL = 'https://hnynvclpvfxzlfjphefj.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_PQBb1nDY7U7SxNfgDYoXyg_GtoLowLM';
+// Use secret key (env var) for server-side ops — bypasses RLS for image path updates
+const SUPABASE_KEY = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_ANON_KEY || 'sb_publishable_PQBb1nDY7U7SxNfgDYoXyg_GtoLowLM';
 
 const GITHUB_OWNER  = 'Maldipia';
 const GITHUB_REPO   = 'yani-garden-cafe';
@@ -36,8 +37,8 @@ export default async function handler(req, res) {
       return res.status(400).json({ ok: false, error: 'Missing code, ext, or base64 data' });
     }
 
-    // Validate item code format (letters + digits only, 2-8 chars)
-    if (!/^[A-Z0-9]{2,8}$/i.test(code)) {
+    // Validate item code format (letters + digits, 2-30 chars, allows underscore for ITEM_ codes)
+    if (!/^[A-Z0-9_]{2,30}$/i.test(code)) {
       return res.status(400).json({ ok: false, error: 'Invalid item code format' });
     }
 
