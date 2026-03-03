@@ -2509,20 +2509,27 @@ function onMenuPhotoFileChange(input) {
 // Falls back to main-thread encoding if Worker or OffscreenCanvas is unavailable
 async function _encodeMenuPhoto(file) {
   // Try Web Worker path first (Chrome, Edge, Firefox)
+  // Pass a blobUrl — zero copy, no main-thread file reading
   if (typeof Worker !== 'undefined') {
+    var blobUrl = URL.createObjectURL(file);
     try {
-      var arrayBuffer = await file.arrayBuffer();
       return await new Promise(function(resolve, reject) {
         var worker = new Worker('/image-encoder.worker.js');
         worker.onmessage = function(e) {
           worker.terminate();
+          URL.revokeObjectURL(blobUrl);
           if (e.data.ok) resolve(e.data.base64);
           else reject(new Error(e.data.error));
         };
-        worker.onerror = function(err) { worker.terminate(); reject(err); };
-        worker.postMessage({ arrayBuffer: arrayBuffer }, [arrayBuffer]);
+        worker.onerror = function(err) {
+          worker.terminate();
+          URL.revokeObjectURL(blobUrl);
+          reject(err);
+        };
+        worker.postMessage({ blobUrl: blobUrl });
       });
     } catch(e) {
+      URL.revokeObjectURL(blobUrl);
       // Worker failed — fall through to main-thread fallback
     }
   }
