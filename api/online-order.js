@@ -212,7 +212,9 @@ export default async function handler(req, res) {
           priceTall: item.price_tall ? parseFloat(item.price_tall) : null,
           hasSizes: item.has_sizes,
           hasSugar: item.has_sugar_levels,
-          image: item.image_path ? `https://${req.headers.host || 'yani-garden-cafe-d3l6.vercel.app'}${item.image_path}` : null
+          image: item.image_path
+            ? (item.image_path.startsWith('http') ? item.image_path : `https://${req.headers.host || 'yani-garden-cafe-d3l6.vercel.app'}${item.image_path}`)
+            : null
         };
         grouped[catName].push(mapped);
         return mapped;

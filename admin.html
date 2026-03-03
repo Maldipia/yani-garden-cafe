@@ -2361,11 +2361,17 @@ function renderMenuMgrGrid() {
 
   grid.innerHTML = filtered.map(function(item) {
     var isActive = item.active;
-    // Use local Vercel path first; fallback to Google Drive URL if set
+    // Use Supabase/external URL if available; otherwise fall back to local Vercel path
     var localPath = getLocalMenuImgPath(item.code);
-    var imgSrc = localPath; // always try local first
+    var hasExternalImg = item.image && item.image.startsWith('http');
+    var imgSrc = hasExternalImg ? item.image : localPath;
+    // If using local path, try external URL on error; if using external, try local on error
+    var fallbackSrc = hasExternalImg ? localPath : (item.image && item.image.startsWith('http') ? item.image : '');
+    var onerrorAttr = fallbackSrc
+      ? 'this.src=\'' + fallbackSrc + '\';this.onerror=function(){this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'}'
+      : 'this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'';
     var imgHtml = '<img src="' + imgSrc + '" class="mm-item-photo" alt="" ' +
-      'onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">' +
+      'onerror="' + onerrorAttr + '">' +
       '<div class="mm-item-photo-placeholder" style="display:none"><span style="font-size:2rem">🍽</span><span>No Photo</span></div>';
     var statusBadge = isActive
       ? '<span class="mm-item-status-active">ACTIVE</span>'

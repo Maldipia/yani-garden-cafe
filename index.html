@@ -1052,7 +1052,11 @@ function getLocalImgPath(code) {
 
 // Convert API response item → frontend item shape
 function apiItemToMenuData(item) {
-  var img = getLocalImgPath(item.code);
+  var localImg = getLocalImgPath(item.code);
+  // Prefer Supabase storage URL over local path (for newly uploaded items)
+  // Ignore Google Drive URLs as they don't display directly
+  var apiImg = item.image && item.image.startsWith('https://hnynvclpvfxzlfjphefj.supabase.co') ? item.image : null;
+  var img = apiImg || localImg;
   var sizes = null;
   if (item.hasSizes) {
     sizes = {
