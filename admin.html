@@ -1046,14 +1046,16 @@ async function login() {
       
       document.getElementById('loginOverlay').classList.add('hidden');
       document.getElementById('dashboard').style.display = 'block';
-      
-      applyRoleUI();
-      resetSessionTimer();
-      startPolling();
-      // Run health check for ADMIN/OWNER after login
-      if (data.role === 'ADMIN' || data.role === 'OWNER') {
-        setTimeout(runHealthCheck, 2000);
-      }
+      // Defer heavy rendering to next frame so browser can paint the dashboard first
+      setTimeout(function() {
+        applyRoleUI();
+        resetSessionTimer();
+        startPolling();
+        // Run health check for ADMIN/OWNER after login
+        if (data.role === 'ADMIN' || data.role === 'OWNER') {
+          setTimeout(runHealthCheck, 2000);
+        }
+      }, 0);
     } else {
       // Wrong PIN
       document.getElementById('pinInput').classList.add('error');
