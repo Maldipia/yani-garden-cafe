@@ -30,7 +30,7 @@ function getCategoryId(categoryName) {
 }
 
 // ── Supabase helper ────────────────────────────────────────────────────────
-async function supabaseRequest(method, table, body, params) {
+async function supabaseRequest(method, table, body, params, preferOverride) {
   let url = `${SUPABASE_URL}/rest/v1/${table}`;
   if (params) {
     const qs = Object.entries(params).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
@@ -40,7 +40,7 @@ async function supabaseRequest(method, table, body, params) {
     'apikey': SUPABASE_KEY,
     'Authorization': `Bearer ${SUPABASE_KEY}`,
     'Content-Type': 'application/json',
-    'Prefer': method === 'POST' ? 'return=representation' : 'return=minimal',
+    'Prefer': preferOverride || (method === 'POST' ? 'return=representation' : 'return=minimal'),
   };
   const opts = { method, headers };
   if (body) opts.body = JSON.stringify(body);
@@ -169,6 +169,27 @@ export default async function handler(req, res) {
     if (!body || !body.action) return res.status(400).json({ ok: false, error: 'Missing action' });
 
     const action = body.action;
+
+    // ── Special: direct Supabase upsert (for backfilling existing GAS items) ─
+    if (action === 'upsertToSupabase') {
+      const categoryId = getCategoryId(body.category);
+      const row = {
+        item_code:        body.itemId,
+        name:             body.name,
+        category_id:      categoryId,
+        base_price:       parseFloat(body.price) || 0,
+        has_sizes:        !!body.hasSizes,
+        has_sugar_levels: !!body.hasSugar,
+        price_short:      parseFloat(body.priceShort) || null,
+        price_medium:     parseFloat(body.priceMedium) || null,
+        price_tall:       parseFloat(body.priceTall) || null,
+        image_path:       body.image || null,
+        is_active:        (body.status || 'ACTIVE').toUpperCase() === 'ACTIVE',
+      };
+      const result = await supabaseRequest('POST', 'menu_items', row,
+        null, 'resolution=merge-duplicates');
+      return res.status(200).json({ ok: result.ok, data: result.data });
+    }
 
     // ── Forward to Apps Script first ──────────────────────────────────────
     let gasResult;
