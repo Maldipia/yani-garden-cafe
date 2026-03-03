@@ -2505,8 +2505,28 @@ function onMenuPhotoFileChange(input) {
   btn.textContent = 'Upload';
 }
 
-// Canvas resize + base64 encoding — only runs when user clicks Upload
+// Canvas resize + base64 encoding via Web Worker — runs off the main thread
+// Falls back to main-thread encoding if Worker or OffscreenCanvas is unavailable
 async function _encodeMenuPhoto(file) {
+  // Try Web Worker path first (Chrome, Edge, Firefox)
+  if (typeof Worker !== 'undefined') {
+    try {
+      var arrayBuffer = await file.arrayBuffer();
+      return await new Promise(function(resolve, reject) {
+        var worker = new Worker('/image-encoder.worker.js');
+        worker.onmessage = function(e) {
+          worker.terminate();
+          if (e.data.ok) resolve(e.data.base64);
+          else reject(new Error(e.data.error));
+        };
+        worker.onerror = function(err) { worker.terminate(); reject(err); };
+        worker.postMessage({ arrayBuffer: arrayBuffer }, [arrayBuffer]);
+      });
+    } catch(e) {
+      // Worker failed — fall through to main-thread fallback
+    }
+  }
+  // Fallback: main-thread canvas encode (Safari / older browsers)
   return new Promise(function(resolve, reject) {
     var reader = new FileReader();
     reader.onload = function(e) {
@@ -2557,12 +2577,15 @@ async function uploadMenuPhoto() {
 
   statusEl.style.display = 'block';
   statusEl.style.color = 'var(--timber)';
-  statusEl.textContent = 'Processing image...';
+  statusEl.textContent = 'Processing...';
   uploadBtn.disabled = true;
   uploadBtn.textContent = 'Uploading...';
 
+  // Yield to the browser to paint the disabled state BEFORE any heavy work
+  await new Promise(function(r) { requestAnimationFrame(function() { requestAnimationFrame(r); }); });
+
   try {
-    // Encode to base64 only now (at upload time) to keep file selection instant
+    // Encode off the main thread via Web Worker
     if (!_menuPhotoBase64) {
       _menuPhotoBase64 = await _encodeMenuPhoto(_menuPhotoFile);
     }
