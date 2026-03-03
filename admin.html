@@ -835,7 +835,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
         <!-- Manual URL fallback -->
         <div style="font-size:.7rem;color:var(--timber);margin-bottom:4px">Or paste a direct image URL:</div>
         <input id="menuEditImage" type="url" style="width:100%;padding:9px 12px;border:1.5px solid var(--mist);border-radius:8px;font-size:.82rem;font-family:var(--font-body)" placeholder="https://..." oninput="previewMenuImage(this.value)">
-        <div style="font-size:.65rem;color:var(--timber);margin-top:3px">Uploaded photos go live within ~1 min after Vercel deploys.</div>
+        <div style="font-size:.65rem;color:var(--timber);margin-top:3px">Uploaded photos appear on the menu immediately.</div>
       </div>
       <div style="margin-bottom:20px">
         <label style="font-size:.75rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">STATUS</label>
@@ -2478,6 +2478,7 @@ function previewMenuImage(url) {
 // ── Photo file picker ──────────────────────────────────
 var _menuPhotoFile = null;
 var _menuPhotoBase64 = null;
+var _menuObjectUrl = null;
 
 function onMenuPhotoFileChange(input) {
   var file = input.files && input.files[0];
@@ -2489,42 +2490,45 @@ function onMenuPhotoFileChange(input) {
     return;
   }
   _menuPhotoFile = file;
+  _menuPhotoBase64 = null; // will be encoded at upload time, not now
   document.getElementById('menuEditFileLabel').textContent = file.name;
-  // Show Upload button immediately so the browser paints before heavy work
+
+  // Instant preview using createObjectURL — zero blocking, no FileReader
+  if (_menuObjectUrl) { URL.revokeObjectURL(_menuObjectUrl); }
+  _menuObjectUrl = URL.createObjectURL(file);
+  previewMenuImageData(_menuObjectUrl);
+
+  // Show Upload button immediately — no processing needed at this point
   var btn = document.getElementById('menuEditUploadBtn');
   btn.style.display = 'inline-block';
-  btn.disabled = true;
-  btn.textContent = 'Processing...';
-  // Defer heavy FileReader + canvas resize off the critical paint path
-  setTimeout(function() { _processMenuPhoto(file); }, 0);
+  btn.disabled = false;
+  btn.textContent = 'Upload';
 }
 
-function _processMenuPhoto(file) {
-  var reader = new FileReader();
-  reader.onload = function(e) {
-    var img = new Image();
-    img.onload = function() {
-      // Resize to max 1200px on longest side to reduce base64 payload
-      var MAX = 1200;
-      var w = img.width, h = img.height;
-      if (w > MAX || h > MAX) {
-        if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
-        else { w = Math.round(w * MAX / h); h = MAX; }
-      }
-      var canvas = document.createElement('canvas');
-      canvas.width = w; canvas.height = h;
-      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-      var dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-      _menuPhotoBase64 = dataUrl.split(',')[1];
-      previewMenuImageData(dataUrl);
-      // Re-enable Upload button now that processing is done
-      var btn = document.getElementById('menuEditUploadBtn');
-      btn.disabled = false;
-      btn.textContent = 'Upload';
+// Canvas resize + base64 encoding — only runs when user clicks Upload
+async function _encodeMenuPhoto(file) {
+  return new Promise(function(resolve, reject) {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      var img = new Image();
+      img.onload = function() {
+        var MAX = 1200;
+        var w = img.width, h = img.height;
+        if (w > MAX || h > MAX) {
+          if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+          else { w = Math.round(w * MAX / h); h = MAX; }
+        }
+        var canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.85).split(',')[1]);
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
     };
-    img.src = e.target.result;
-  };
-  reader.readAsDataURL(file);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 function previewMenuImageData(dataUrl) {
@@ -2543,7 +2547,7 @@ async function uploadMenuPhoto() {
     alert('Please save the item first before uploading a photo, or enter the item code.');
     return;
   }
-  if (!_menuPhotoFile || !_menuPhotoBase64) {
+  if (!_menuPhotoFile) {
     alert('No file selected.');
     return;
   }
@@ -2553,11 +2557,16 @@ async function uploadMenuPhoto() {
 
   statusEl.style.display = 'block';
   statusEl.style.color = 'var(--timber)';
-  statusEl.textContent = 'Uploading...';
+  statusEl.textContent = 'Processing image...';
   uploadBtn.disabled = true;
   uploadBtn.textContent = 'Uploading...';
 
   try {
+    // Encode to base64 only now (at upload time) to keep file selection instant
+    if (!_menuPhotoBase64) {
+      _menuPhotoBase64 = await _encodeMenuPhoto(_menuPhotoFile);
+    }
+    statusEl.textContent = 'Uploading...';
     var resp = await fetch('/api/upload-image', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -2566,7 +2575,7 @@ async function uploadMenuPhoto() {
     var result = await resp.json();
     if (result.ok) {
       statusEl.style.color = '#065F46';
-      statusEl.textContent = '✓ Uploaded! Path: ' + result.path + ' — Live in ~1 min.';
+      statusEl.textContent = '✓ Uploaded! Image is live immediately.';
       // Auto-fill the URL field with the local path
       document.getElementById('menuEditImage').value = result.path;
       previewMenuImage(result.path);
