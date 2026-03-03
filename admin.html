@@ -90,6 +90,24 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 }
 .logout-btn:hover { background:rgba(255,255,255,.15) }
 
+/* ── System Health Alert Banner ── */
+.health-banner {
+  display:none; margin:0 16px 12px; border-radius:var(--r-md); padding:10px 14px;
+  font-size:.78rem; font-weight:600; border-left:4px solid;
+  animation:fadeIn .3s ease;
+}
+.health-banner.error { background:#FEF2F2; border-color:#EF4444; color:#991B1B }
+.health-banner.warn  { background:#FFFBEB; border-color:#F59E0B; color:#92400E }
+.health-banner-title { font-weight:800; margin-bottom:4px }
+.health-banner-actions { margin-top:8px; display:flex; gap:8px; flex-wrap:wrap }
+.health-banner-btn {
+  padding:4px 12px; border-radius:8px; border:1.5px solid currentColor;
+  background:transparent; color:inherit; font-size:.72rem; font-weight:700;
+  cursor:pointer; font-family:var(--font-body);
+}
+.health-banner-btn:active { opacity:.7 }
+@keyframes fadeIn { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:none} }
+
 /* ── Stats Bar ── */
 .stats-bar {
   display:flex; gap:1px; background:var(--mist); margin:16px; border-radius:var(--r-lg); overflow:hidden;
@@ -628,6 +646,17 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
     </div>
   </div>
 
+  <!-- System Health Alert Banner (ADMIN/OWNER only) -->
+  <div class="health-banner" id="healthBanner">
+    <div class="health-banner-title" id="healthBannerTitle">⚠️ System Alert</div>
+    <div id="healthBannerBody"></div>
+    <div class="health-banner-actions">
+      <button class="health-banner-btn" onclick="runHealthCheck()">🔄 Recheck</button>
+      <button class="health-banner-btn" onclick="runMenuSync()">🔧 Sync Menu Now</button>
+      <button class="health-banner-btn" onclick="document.getElementById('healthBanner').style.display='none'">✕ Dismiss</button>
+    </div>
+  </div>
+
   <div class="stats-bar" id="statsBar">
     <div class="stat-card"><div class="stat-value" id="statSales">₱0</div><div class="stat-label">Today's Sales</div></div>
     <div class="stat-card"><div class="stat-value" id="statOrders">0</div><div class="stat-label">Orders</div></div>
@@ -1021,6 +1050,10 @@ async function login() {
       applyRoleUI();
       resetSessionTimer();
       startPolling();
+      // Run health check for ADMIN/OWNER after login
+      if (data.role === 'ADMIN' || data.role === 'OWNER') {
+        setTimeout(runHealthCheck, 2000);
+      }
     } else {
       // Wrong PIN
       document.getElementById('pinInput').classList.add('error');
@@ -2859,6 +2892,63 @@ function renderSheetsCustomers() {
   });
   html += '</tbody></table>';
   el.innerHTML = html;
+}
+
+// ══════════════════════════════════════════════════════════
+// SYSTEM HEALTH CHECK & MENU SYNC
+// ══════════════════════════════════════════════════════════
+
+async function runHealthCheck() {
+  if (!currentUser || (currentUser.role !== 'ADMIN' && currentUser.role !== 'OWNER')) return;
+  try {
+    var resp = await fetch('/api/health');
+    var data = await resp.json();
+    var banner = document.getElementById('healthBanner');
+    var bannerTitle = document.getElementById('healthBannerTitle');
+    var bannerBody = document.getElementById('healthBannerBody');
+
+    if (!data.alerts || data.alerts.length === 0) {
+      banner.style.display = 'none';
+      return;
+    }
+
+    var hasError = data.alerts.some(function(a){ return a.level === 'ERROR'; });
+    banner.className = 'health-banner ' + (hasError ? 'error' : 'warn');
+    bannerTitle.textContent = hasError ? '🔴 System Issue Detected' : '⚠️ System Warning';
+
+    var lines = data.alerts.map(function(a) {
+      return '<div style="margin-bottom:3px"><strong>' + esc(a.source) + ':</strong> ' + esc(a.message) +
+        (a.impact ? ' <span style="opacity:.75">— ' + esc(a.impact) + '</span>' : '') + '</div>';
+    });
+
+    // Add menu sync status
+    if (data.menu && data.menu.drift !== null && data.menu.drift > 0) {
+      lines.push('<div style="margin-top:4px;opacity:.8">Menu drift: ' + data.menu.gasCount + ' items in GAS vs ' + data.menu.supabaseCount + ' in Supabase (' + data.menu.drift + ' out of sync)</div>');
+    }
+
+    bannerBody.innerHTML = lines.join('');
+    banner.style.display = 'block';
+  } catch(e) {
+    console.warn('Health check failed:', e.message);
+  }
+}
+
+async function runMenuSync() {
+  var btn = event && event.target;
+  if (btn) { btn.textContent = '⏳ Syncing...'; btn.disabled = true; }
+  try {
+    var resp = await fetch('/api/sync-menu', { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' });
+    var data = await resp.json();
+    if (data.ok) {
+      alert('✅ ' + (data.message || 'Menu sync complete'));
+      runHealthCheck();
+    } else {
+      alert('❌ Sync failed: ' + (data.error || 'Unknown error'));
+    }
+  } catch(e) {
+    alert('❌ Sync error: ' + e.message);
+  }
+  if (btn) { btn.textContent = '🔧 Sync Menu Now'; btn.disabled = false; }
 }
 
 </script>

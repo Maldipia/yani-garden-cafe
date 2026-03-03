@@ -1,21 +1,83 @@
 // ══════════════════════════════════════════════════════════════
-// YANI POS — Vercel Serverless API Proxy
+// YANI POS — Vercel Serverless API Proxy  (v2 — hardened)
 // Forwards requests from frontend → Apps Script (server-to-server)
 // Handles Apps Script's 302 redirect behavior
 //
 // DUAL-WRITE: addMenuItem / updateMenuItem / deleteMenuItem also
 // sync to Supabase so both dine-in POS (GAS/Sheets) and the
 // online order page (Supabase) stay in sync automatically.
+//
+// HARDENING (v2):
+//   • Rate limiting: 60 req/min per IP (in-memory, resets per instance)
+//   • Input validation on all menu mutation actions
+//   • GAS requests include X-YGC-Secret header for auth
 // ══════════════════════════════════════════════════════════════
 
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzprf6_LpDwcVujm8kcGFZE5JdkL0k9b6Wfg5l82gjZzFua8w1QWH8UoFFlhznc6EtL/exec';
 
 const SUPABASE_URL = 'https://hnynvclpvfxzlfjphefj.supabase.co';
-// Use secret key (env var) for server-side ops — bypasses RLS for menu management
 const SUPABASE_KEY = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_ANON_KEY || 'sb_publishable_PQBb1nDY7U7SxNfgDYoXyg_GtoLowLM';
 
+// GAS shared secret — set GAS_SECRET env var in Vercel AND in Code.gs
+// If not set, falls back to no-auth (backwards compatible)
+const GAS_SECRET = process.env.GAS_SECRET || null;
+
+// ── In-memory rate limiter (per IP, 60 req/min) ───────────────────────────
+const rateLimitMap = new Map();
+const RATE_LIMIT = 60;
+const RATE_WINDOW_MS = 60_000;
+
+function checkRateLimit(ip) {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip) || { count: 0, windowStart: now };
+  if (now - entry.windowStart > RATE_WINDOW_MS) {
+    entry.count = 1;
+    entry.windowStart = now;
+  } else {
+    entry.count++;
+  }
+  rateLimitMap.set(ip, entry);
+  // Clean up old entries every 1000 requests to prevent memory leak
+  if (rateLimitMap.size > 1000) {
+    for (const [k, v] of rateLimitMap) {
+      if (now - v.windowStart > RATE_WINDOW_MS) rateLimitMap.delete(k);
+    }
+  }
+  return entry.count <= RATE_LIMIT;
+}
+
+// ── Input validation helpers ──────────────────────────────────────────────
+function isNonEmptyString(v, maxLen = 200) {
+  return typeof v === 'string' && v.trim().length > 0 && v.length <= maxLen;
+}
+function isValidPrice(v) {
+  return v === null || v === undefined || (typeof v === 'number' && v >= 0 && v < 100000);
+}
+function isValidItemCode(v) {
+  return typeof v === 'string' && /^[A-Z0-9_]{2,40}$/i.test(v);
+}
+
+function validateMenuPayload(body, requireItemId = false) {
+  const errors = [];
+  if (requireItemId && !isValidItemCode(body.itemId)) {
+    errors.push('itemId must be a valid item code (letters, digits, underscores, 2-40 chars)');
+  }
+  if (body.name !== undefined && !isNonEmptyString(body.name, 100)) {
+    errors.push('name must be a non-empty string (max 100 chars)');
+  }
+  if (body.price !== undefined && !isValidPrice(Number(body.price))) {
+    errors.push('price must be a non-negative number under 100000');
+  }
+  if (body.priceShort  !== undefined && body.priceShort  !== null && !isValidPrice(Number(body.priceShort)))  errors.push('priceShort invalid');
+  if (body.priceMedium !== undefined && body.priceMedium !== null && !isValidPrice(Number(body.priceMedium))) errors.push('priceMedium invalid');
+  if (body.priceTall   !== undefined && body.priceTall   !== null && !isValidPrice(Number(body.priceTall)))   errors.push('priceTall invalid');
+  if (body.status !== undefined && !['ACTIVE', 'INACTIVE'].includes(String(body.status).toUpperCase())) {
+    errors.push('status must be ACTIVE or INACTIVE');
+  }
+  return errors;
+}
+
 // ── Category name → Supabase UUID map ─────────────────────────────────────
-// These are the fixed category IDs from the menu_categories table.
 const CATEGORY_MAP = {
   'COLD BEVERAGE': 'dc95fd8d-ba61-4171-90aa-3707fbb4bdf5',
   'COFFEE':        'ba50e0a2-b99a-4481-800d-c8e962d95b43',
@@ -26,8 +88,7 @@ const CATEGORY_MAP = {
 
 function getCategoryId(categoryName) {
   if (!categoryName) return null;
-  const upper = String(categoryName).trim().toUpperCase();
-  return CATEGORY_MAP[upper] || null;
+  return CATEGORY_MAP[String(categoryName).trim().toUpperCase()] || null;
 }
 
 // ── Supabase helper ────────────────────────────────────────────────────────
@@ -51,31 +112,24 @@ async function supabaseRequest(method, table, body, params, preferOverride) {
   catch { return { ok: resp.ok, status: resp.status, data: text }; }
 }
 
-// ── Sync a new menu item to Supabase ──────────────────────────────────────
+// ── Sync helpers ──────────────────────────────────────────────────────────
 async function syncAddToSupabase(payload, gasItemId) {
   try {
-    const categoryId = getCategoryId(payload.category);
-    // Normalise image_path: if it's a full URL keep as-is, otherwise use as path
-    let imagePath = payload.image || null;
-
     const row = {
       item_code:        gasItemId || payload.itemId || null,
       name:             payload.name,
-      category_id:      categoryId,
+      category_id:      getCategoryId(payload.category),
       base_price:       parseFloat(payload.price) || 0,
       has_sizes:        !!payload.hasSizes,
       has_sugar_levels: !!payload.hasSugar,
       price_short:      parseFloat(payload.priceShort) || null,
       price_medium:     parseFloat(payload.priceMedium) || null,
       price_tall:       parseFloat(payload.priceTall) || null,
-      image_path:       imagePath,
+      image_path:       payload.image || null,
       is_active:        (payload.status || 'ACTIVE').toUpperCase() === 'ACTIVE',
     };
-
     const result = await supabaseRequest('POST', 'menu_items', row);
-    if (!result.ok) {
-      console.warn('Supabase addMenuItem sync failed:', result.status, JSON.stringify(result.data));
-    }
+    if (!result.ok) console.warn('Supabase addMenuItem sync failed:', result.status, JSON.stringify(result.data));
     return result;
   } catch (e) {
     console.warn('Supabase addMenuItem sync error:', e.message);
@@ -83,12 +137,10 @@ async function syncAddToSupabase(payload, gasItemId) {
   }
 }
 
-// ── Sync an updated menu item to Supabase ─────────────────────────────────
 async function syncUpdateToSupabase(payload) {
   try {
     const itemCode = payload.itemId;
     if (!itemCode) return;
-
     const updates = {};
     if (payload.name      !== undefined) updates.name             = payload.name;
     if (payload.category  !== undefined) updates.category_id      = getCategoryId(payload.category);
@@ -100,13 +152,9 @@ async function syncUpdateToSupabase(payload) {
     if (payload.priceTall   !== undefined) updates.price_tall      = parseFloat(payload.priceTall) || null;
     if (payload.image     !== undefined) updates.image_path        = payload.image || null;
     if (payload.status    !== undefined) updates.is_active         = (payload.status || 'ACTIVE').toUpperCase() === 'ACTIVE';
-
     if (Object.keys(updates).length === 0) return;
-
     const result = await supabaseRequest('PATCH', 'menu_items', updates, { item_code: `eq.${itemCode}` });
-    if (!result.ok) {
-      console.warn('Supabase updateMenuItem sync failed:', result.status, JSON.stringify(result.data));
-    }
+    if (!result.ok) console.warn('Supabase updateMenuItem sync failed:', result.status, JSON.stringify(result.data));
     return result;
   } catch (e) {
     console.warn('Supabase updateMenuItem sync error:', e.message);
@@ -114,14 +162,11 @@ async function syncUpdateToSupabase(payload) {
   }
 }
 
-// ── Sync a deleted (deactivated) menu item to Supabase ────────────────────
 async function syncDeleteToSupabase(itemCode) {
   try {
     if (!itemCode) return;
     const result = await supabaseRequest('PATCH', 'menu_items', { is_active: false }, { item_code: `eq.${itemCode}` });
-    if (!result.ok) {
-      console.warn('Supabase deleteMenuItem sync failed:', result.status, JSON.stringify(result.data));
-    }
+    if (!result.ok) console.warn('Supabase deleteMenuItem sync failed:', result.status, JSON.stringify(result.data));
     return result;
   } catch (e) {
     console.warn('Supabase deleteMenuItem sync error:', e.message);
@@ -131,9 +176,12 @@ async function syncDeleteToSupabase(itemCode) {
 
 // ── Forward request to Apps Script ────────────────────────────────────────
 async function callAppsScript(body) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (GAS_SECRET) headers['X-YGC-Secret'] = GAS_SECRET;
+
   const postResponse = await fetch(APPS_SCRIPT_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(body),
     redirect: 'manual'
   });
@@ -165,14 +213,51 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed' });
 
+  // ── Rate limiting ────────────────────────────────────────────────────────
+  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
+  if (!checkRateLimit(ip)) {
+    return res.status(429).json({ ok: false, error: 'Too many requests. Please wait a moment.' });
+  }
+
   try {
     const body = req.body;
     if (!body || !body.action) return res.status(400).json({ ok: false, error: 'Missing action' });
 
-    const action = body.action;
+    const action = String(body.action).trim();
+
+    // ── Validate action name (prevent injection) ──────────────────────────
+    if (!/^[a-zA-Z][a-zA-Z0-9_]{1,60}$/.test(action)) {
+      return res.status(400).json({ ok: false, error: 'Invalid action name' });
+    }
+
+    // ── Input validation for menu mutations ───────────────────────────────
+    if (action === 'addMenuItem') {
+      if (!isNonEmptyString(body.name, 100)) {
+        return res.status(400).json({ ok: false, error: 'name is required and must be under 100 chars' });
+      }
+      const errs = validateMenuPayload(body, false);
+      if (errs.length) return res.status(400).json({ ok: false, error: errs.join('; ') });
+    }
+
+    if (action === 'updateMenuItem') {
+      if (!isValidItemCode(body.itemId)) {
+        return res.status(400).json({ ok: false, error: 'itemId is required and must be a valid item code' });
+      }
+      const errs = validateMenuPayload(body, false);
+      if (errs.length) return res.status(400).json({ ok: false, error: errs.join('; ') });
+    }
+
+    if (action === 'deleteMenuItem') {
+      if (!isValidItemCode(body.itemId)) {
+        return res.status(400).json({ ok: false, error: 'itemId is required and must be a valid item code' });
+      }
+    }
 
     // ── Special: direct Supabase upsert (for backfilling existing GAS items) ─
     if (action === 'upsertToSupabase') {
+      if (!isValidItemCode(body.itemId)) {
+        return res.status(400).json({ ok: false, error: 'itemId is required' });
+      }
       const categoryId = getCategoryId(body.category);
       const row = {
         item_code:        body.itemId,
@@ -187,23 +272,22 @@ export default async function handler(req, res) {
         image_path:       body.image || null,
         is_active:        (body.status || 'ACTIVE').toUpperCase() === 'ACTIVE',
       };
-      const result = await supabaseRequest('POST', 'menu_items', row,
-        null, 'resolution=merge-duplicates');
+      const result = await supabaseRequest('POST', 'menu_items', row, null, 'resolution=merge-duplicates');
       return res.status(200).json({ ok: result.ok, data: result.data });
     }
 
-    // ── Forward to Apps Script first ──────────────────────────────────────
+    // ── Forward to Apps Script ────────────────────────────────────────────
     let gasResult;
     try {
       gasResult = await callAppsScript(body);
     } catch (err) {
-      return res.status(502).json({ ok: false, error: err.message });
+      console.error('GAS call failed for action:', action, err.message);
+      return res.status(502).json({ ok: false, error: 'Backend unavailable: ' + err.message });
     }
 
     // ── Dual-write: sync menu changes to Supabase ─────────────────────────
     if (gasResult && gasResult.ok) {
       if (action === 'addMenuItem') {
-        // GAS returns the generated itemId in gasResult.itemId
         const gasItemId = gasResult.itemId || body.itemId || null;
         syncAddToSupabase(body, gasItemId).catch(() => {});
       } else if (action === 'updateMenuItem') {

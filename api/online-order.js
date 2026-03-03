@@ -22,6 +22,26 @@ const SEMAPHORE_API_KEY = process.env.SEMAPHORE_API_KEY || '';
 const SEMAPHORE_SENDER = process.env.SEMAPHORE_SENDER || 'YANI CAFE';
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbzprf6_LpDwcVujm8kcGFZE5JdkL0k9b6Wfg5l82gjZzFua8w1QWH8UoFFlhznc6EtL/exec';
 
+// ── In-memory rate limiter (30 req/min per IP for order placement) ─────────────────
+const _rlMap = new Map();
+function checkRateLimit(ip, limit = 30) {
+  const now = Date.now();
+  const e = _rlMap.get(ip) || { count: 0, windowStart: now };
+  if (now - e.windowStart > 60_000) { e.count = 1; e.windowStart = now; }
+  else e.count++;
+  _rlMap.set(ip, e);
+  if (_rlMap.size > 500) { for (const [k,v] of _rlMap) { if (now - v.windowStart > 60_000) _rlMap.delete(k); } }
+  return e.count <= limit;
+}
+
+// ── Input validation helpers ────────────────────────────────────────────────────
+function isPhoneValid(p) { return typeof p === 'string' && /^(09|\+639)[0-9]{9}$/.test(p.replace(/\s/g,'')); }
+function isNameValid(n) { return typeof n === 'string' && n.trim().length >= 2 && n.length <= 100; }
+function isItemsValid(items) {
+  if (!Array.isArray(items) || items.length === 0) return false;
+  return items.every(i => i && typeof i.id !== 'undefined' && typeof i.name === 'string' && Number(i.qty) >= 1 && Number(i.price) >= 0);
+}
+
 // ── Fire-and-forget GAS sync (non-blocking) ────────────────────────────────
 async function callGAS(payload) {
   try {
@@ -153,6 +173,15 @@ export default async function handler(req, res) {
   
   if (!action) return res.status(400).json({ ok: false, error: 'Missing action' });
 
+  // ── Rate limiting ──────────────────────────────────────────────────────────
+  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
+  // Stricter limit for order placement (10/min), relaxed for reads (60/min)
+  const isWriteAction = ['placeOnlineOrder','placeOrder','updateOrderStatus','verifyPayment','rejectPayment'].includes(action);
+  const rateLimit = isWriteAction ? 10 : 60;
+  if (!checkRateLimit(ip, rateLimit)) {
+    return res.status(429).json({ ok: false, error: 'Too many requests. Please wait a moment.' });
+  }
+
   try {
     // ── GET MENU ──────────────────────────────────────────────
     if (action === 'getOnlineMenu' || action === 'getMenu') {
@@ -205,11 +234,18 @@ export default async function handler(req, res) {
         items: orderItems, total
       } = payload;
       
-      if (!customerName || !customerPhone || !orderItems?.length) {
-        return res.status(400).json({ 
-          ok: false, 
-          error: 'Missing required fields: customerName, customerPhone, items' 
-        });
+      // ── Input validation ──────────────────────────────────────────────────
+      if (!isNameValid(customerName)) {
+        return res.status(400).json({ ok: false, error: 'Customer name must be 2-100 characters' });
+      }
+      if (!isPhoneValid(customerPhone)) {
+        return res.status(400).json({ ok: false, error: 'Phone number must be a valid PH mobile number (09XXXXXXXXX or +639XXXXXXXXX)' });
+      }
+      if (!isItemsValid(orderItems)) {
+        return res.status(400).json({ ok: false, error: 'Order must contain at least one valid item' });
+      }
+      if (orderItems.length > 50) {
+        return res.status(400).json({ ok: false, error: 'Order cannot contain more than 50 items' });
       }
       
       // Calculate subtotal from items
