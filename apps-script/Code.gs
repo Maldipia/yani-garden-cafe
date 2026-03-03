@@ -178,6 +178,15 @@ function doPost(e) {
     if (action === 'bulkDeleteOldOrders') {
       return jsonResponse(bulkDeleteOldOrders(data));
     }
+
+    // ── Online Order Sync ───────────────────────────────────────────
+    if (action === 'syncOnlineOrder') {
+      return jsonResponse(syncOnlineOrder(data));
+    }
+
+    if (action === 'updateOnlineOrderStatus') {
+      return jsonResponse(updateOnlineOrderStatus(data));
+    }
     
     return jsonResponse({ ok: false, error: 'Unknown action: ' + action });
     
@@ -3023,5 +3032,143 @@ function cleanupOrderItems() {
     // Print final headers
     var finalHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
     console.log('Final columns (' + finalHeaders.length + '): ' + finalHeaders.join(' | '));
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// ONLINE ORDER SYNC — Writes to ONLINE_ORDERS and CUSTOMERS sheets
+// Called from Vercel api/online-order.js via syncOnlineOrder action
+// Added: 2026-03-03 | Do NOT remove existing functions above
+// ═══════════════════════════════════════════════════════════════════════
+
+var ONLINE_ORDERS_HEADERS = [
+  'ORDER_REF', 'CREATED_AT', 'CUSTOMER_NAME', 'CUSTOMER_PHONE',
+  'PICKUP_TIME', 'ITEMS_SUMMARY', 'ITEM_COUNT', 'TOTAL_AMOUNT',
+  'PAYMENT_METHOD', 'PAYMENT_STATUS', 'ORDER_STATUS',
+  'PROOF_URL', 'SPECIAL_INSTRUCTIONS', 'SOURCE'
+];
+
+var CUSTOMERS_HEADERS = [
+  'PHONE', 'CUSTOMER_NAME', 'FIRST_ORDER_DATE', 'LAST_ORDER_DATE',
+  'TOTAL_ORDERS', 'TOTAL_SPEND', 'LAST_ORDER_REF'
+];
+
+function ensureOnlineSheet(ss, sheetName, headers) {
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    sheet = ss.insertSheet(sheetName);
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.getRange(1, 1, 1, headers.length)
+      .setBackground('#2d6a4f').setFontColor('#ffffff').setFontWeight('bold');
+    sheet.setFrozenRows(1);
+  } else {
+    var existing = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), 1)).getValues()[0];
+    if (!existing[0]) {
+      sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+      sheet.getRange(1, 1, 1, headers.length)
+        .setBackground('#2d6a4f').setFontColor('#ffffff').setFontWeight('bold');
+      sheet.setFrozenRows(1);
+    }
+  }
+  return sheet;
+}
+
+function syncOnlineOrder(data) {
+  try {
+    var ss = getSpreadsheet();
+    var olSheet = ensureOnlineSheet(ss, 'ONLINE_ORDERS', ONLINE_ORDERS_HEADERS);
+    var custSheet = ensureOnlineSheet(ss, 'CUSTOMERS', CUSTOMERS_HEADERS);
+
+    var orderRef   = data.orderRef || '';
+    var createdAt  = data.createdAt || manilaTimestamp();
+    var custName   = data.customerName || '';
+    var custPhone  = data.customerPhone || '';
+    var pickupTime = data.pickupTime || '';
+    var itemsSummary = data.itemsSummary || '';
+    var itemCount  = data.itemCount || 0;
+    var total      = data.totalAmount || 0;
+    var payMethod  = data.paymentMethod || '';
+    var payStatus  = data.paymentStatus || 'PENDING';
+    var ordStatus  = data.orderStatus || 'PENDING';
+    var proofUrl   = data.proofUrl || '';
+    var notes      = data.specialInstructions || '';
+
+    // ── Upsert ONLINE_ORDERS ──────────────────────────────────────
+    var olData = olSheet.getDataRange().getValues();
+    var olHdrs = olData[0].map(function(h) { return String(h).trim(); });
+    var refCol = olHdrs.indexOf('ORDER_REF');
+    var existingRow = -1;
+    for (var i = 1; i < olData.length; i++) {
+      if (String(olData[i][refCol]).trim() === orderRef) { existingRow = i + 1; break; }
+    }
+
+    var rowObj = {
+      ORDER_REF: orderRef, CREATED_AT: createdAt,
+      CUSTOMER_NAME: custName, CUSTOMER_PHONE: custPhone,
+      PICKUP_TIME: pickupTime, ITEMS_SUMMARY: itemsSummary,
+      ITEM_COUNT: itemCount, TOTAL_AMOUNT: total,
+      PAYMENT_METHOD: payMethod, PAYMENT_STATUS: payStatus,
+      ORDER_STATUS: ordStatus, PROOF_URL: proofUrl,
+      SPECIAL_INSTRUCTIONS: notes, SOURCE: 'ONLINE'
+    };
+
+    if (existingRow > 0) {
+      var upd = { ORDER_STATUS: ordStatus, PAYMENT_STATUS: payStatus };
+      if (proofUrl) upd['PROOF_URL'] = proofUrl;
+      if (payMethod) upd['PAYMENT_METHOD'] = payMethod;
+      updateByHeaders(olSheet, 'ORDER_REF', orderRef, upd);
+    } else {
+      appendByHeaders(olSheet, rowObj);
+    }
+
+    // ── Upsert CUSTOMERS ─────────────────────────────────────────
+    if (custPhone) {
+      var cData = custSheet.getDataRange().getValues();
+      var cHdrs = cData[0].map(function(h) { return String(h).trim(); });
+      var pCol = cHdrs.indexOf('PHONE');
+      var cRow = -1;
+      for (var j = 1; j < cData.length; j++) {
+        if (String(cData[j][pCol]).trim() === custPhone) { cRow = j + 1; break; }
+      }
+      if (cRow > 0) {
+        var cIdx = {};
+        cHdrs.forEach(function(h, k) { cIdx[h] = k; });
+        var prevOrders = Number(cData[cRow - 1][cIdx['TOTAL_ORDERS']]) || 0;
+        var prevSpend  = Number(cData[cRow - 1][cIdx['TOTAL_SPEND']])  || 0;
+        updateByHeaders(custSheet, 'PHONE', custPhone, {
+          CUSTOMER_NAME: custName || cData[cRow - 1][cIdx['CUSTOMER_NAME']],
+          LAST_ORDER_DATE: manilaDate(),
+          TOTAL_ORDERS: prevOrders + 1,
+          TOTAL_SPEND: prevSpend + total,
+          LAST_ORDER_REF: orderRef
+        });
+      } else {
+        appendByHeaders(custSheet, {
+          PHONE: custPhone, CUSTOMER_NAME: custName,
+          FIRST_ORDER_DATE: manilaDate(), LAST_ORDER_DATE: manilaDate(),
+          TOTAL_ORDERS: 1, TOTAL_SPEND: total, LAST_ORDER_REF: orderRef
+        });
+      }
+    }
+
+    return { ok: true, orderRef: orderRef, action: existingRow > 0 ? 'updated' : 'inserted' };
+  } catch (err) {
+    return { ok: false, error: 'syncOnlineOrder: ' + err.message };
+  }
+}
+
+function updateOnlineOrderStatus(data) {
+  try {
+    var ss = getSpreadsheet();
+    var olSheet = ss.getSheetByName('ONLINE_ORDERS');
+    if (!olSheet) return { ok: false, error: 'ONLINE_ORDERS sheet not found' };
+    var upd = {};
+    if (data.orderStatus)   upd['ORDER_STATUS']   = data.orderStatus;
+    if (data.paymentStatus) upd['PAYMENT_STATUS'] = data.paymentStatus;
+    if (data.proofUrl)      upd['PROOF_URL']       = data.proofUrl;
+    updateByHeaders(olSheet, 'ORDER_REF', data.orderRef, upd);
+    return { ok: true, orderRef: data.orderRef };
+  } catch (err) {
+    return { ok: false, error: 'updateOnlineOrderStatus: ' + err.message };
   }
 }

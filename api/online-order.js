@@ -20,6 +20,20 @@ const SUPABASE_URL = 'https://hnynvclpvfxzlfjphefj.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_PQBb1nDY7U7SxNfgDYoXyg_GtoLowLM';
 const SEMAPHORE_API_KEY = process.env.SEMAPHORE_API_KEY || '';
 const SEMAPHORE_SENDER = process.env.SEMAPHORE_SENDER || 'YANI CAFE';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbzprf6_LpDwcVujm8kcGFZE5JdkL0k9b6Wfg5l82gjZzFua8w1QWH8UoFFlhznc6EtL/exec';
+
+// ── Fire-and-forget GAS sync (non-blocking) ────────────────────────────────
+async function callGAS(payload) {
+  try {
+    await fetch(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+  } catch (e) {
+    console.warn('GAS sync failed (non-critical):', e.message);
+  }
+}
 
 // ── Supabase REST helper ───────────────────────────────────────
 async function supabase(method, path, body = null, params = null) {
@@ -238,6 +252,27 @@ export default async function handler(req, res) {
       }));
       
       await supabase('POST', 'online_order_items', itemsToInsert);
+
+      // ── Sync to Google Sheets (fire-and-forget) ────────────────────────
+      const itemsSummary = orderItems.map(i => {
+        const sizePart = i.size ? ` (${i.size})` : '';
+        return `${i.name}${sizePart} x${i.qty || i.quantity || 1}`;
+      }).join(', ');
+      callGAS({
+        action: 'syncOnlineOrder',
+        orderRef,
+        createdAt: new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila' }),
+        customerName: customerName.trim(),
+        customerPhone: customerPhone.trim(),
+        pickupTime: pickupTime || '',
+        itemsSummary,
+        itemCount: orderItems.length,
+        totalAmount: parseFloat(total || subtotal),
+        paymentMethod: (paymentMethod || 'gcash').toUpperCase(),
+        paymentStatus: 'PENDING',
+        orderStatus: 'PENDING',
+        specialInstructions: specialInstructions?.trim() || ''
+      });
       
       return res.status(200).json({ 
         ok: true, 
@@ -339,6 +374,13 @@ export default async function handler(req, res) {
         }
       }
       
+      // ── Sync status update to Google Sheets (fire-and-forget) ────────────
+      callGAS({
+        action: 'updateOnlineOrderStatus',
+        orderRef,
+        orderStatus: status.toUpperCase()
+      });
+
       return res.status(200).json({ 
         ok: true, 
         message: `Order ${orderRef} updated to ${status}`,
@@ -378,6 +420,14 @@ export default async function handler(req, res) {
         }
       } catch (e) {}
       
+      // ── Sync payment verification to Google Sheets (fire-and-forget) ──────
+      callGAS({
+        action: 'updateOnlineOrderStatus',
+        orderRef,
+        orderStatus: orderStatus,
+        paymentStatus: paymentStatus
+      });
+
       return res.status(200).json({ ok: true, message: `Payment ${paymentStatus} for ${orderRef}` });
     }
 

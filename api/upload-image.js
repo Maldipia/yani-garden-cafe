@@ -2,7 +2,12 @@
 // YANI POS — Image Upload Endpoint
 // Accepts a base64-encoded image and commits it to GitHub repo
 // so Vercel auto-deploys it to /images/{code}.{ext}
+// Also updates image_path in Supabase menu_items so the online
+// order page shows the new image immediately.
 // ══════════════════════════════════════════════════════════════
+
+const SUPABASE_URL = 'https://hnynvclpvfxzlfjphefj.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_PQBb1nDY7U7SxNfgDYoXyg_GtoLowLM';
 
 const GITHUB_OWNER  = 'Maldipia';
 const GITHUB_REPO   = 'yani-garden-cafe';
@@ -99,6 +104,23 @@ export default async function handler(req, res) {
 
     const commitData = await commitResp.json();
     const localPath = `/images/${code.toUpperCase()}.${cleanExt}`;
+
+    // ── Update image_path in Supabase so online order page shows image ──
+    // Fire-and-forget: non-blocking, won't fail the upload if Supabase is slow
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/menu_items?item_code=eq.${encodeURIComponent(code.toUpperCase())}`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify({ image_path: localPath })
+      });
+    } catch (e) {
+      console.warn('Supabase image_path update failed (non-critical):', e.message);
+    }
 
     // ── Promote latest READY deployment to production alias ──────────
     // This ensures the uploaded image is served immediately after Vercel
