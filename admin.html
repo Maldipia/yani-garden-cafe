@@ -872,7 +872,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
         </select>
       </div>
       <div style="display:flex;gap:10px">
-        <button onclick="saveMenuItemEdit()" style="flex:1;padding:13px;background:var(--forest);color:#fff;border:none;border-radius:8px;font-size:.9rem;font-weight:700;cursor:pointer;font-family:var(--font-body)">Save Changes</button>
+        <button id="menuEditSaveBtn" onclick="saveMenuItemEdit()" style="flex:1;padding:13px;background:var(--forest);color:#fff;border:none;border-radius:8px;font-size:.9rem;font-weight:700;cursor:pointer;font-family:var(--font-body)">Save Changes</button>
         <button onclick="closeMenuEditModal()" style="padding:13px 18px;background:var(--mist-light);color:var(--timber);border:none;border-radius:8px;font-size:.9rem;font-weight:600;cursor:pointer;font-family:var(--font-body)">Cancel</button>
       </div>
     </div>
@@ -2564,22 +2564,29 @@ function onMenuPhotoFileChange(input) {
 }
 
 // Canvas resize + base64 encoding via Web Worker — runs off the main thread
-// Falls back to main-thread encoding if Worker or OffscreenCanvas is unavailable
+// Falls back to async main-thread encoding if Worker is unavailable
 async function _encodeMenuPhoto(file) {
-  // Try Web Worker path first (Chrome, Edge, Firefox)
-  // Pass a blobUrl — zero copy, no main-thread file reading
+  // Try Web Worker path first (Chrome, Edge, Firefox, Safari 15+)
   if (typeof Worker !== 'undefined') {
     var blobUrl = URL.createObjectURL(file);
     try {
       return await new Promise(function(resolve, reject) {
         var worker = new Worker('/image-encoder.worker.js');
+        // 10s timeout so we always fall through if worker hangs
+        var timer = setTimeout(function() {
+          worker.terminate();
+          URL.revokeObjectURL(blobUrl);
+          reject(new Error('Worker timeout'));
+        }, 10000);
         worker.onmessage = function(e) {
+          clearTimeout(timer);
           worker.terminate();
           URL.revokeObjectURL(blobUrl);
           if (e.data.ok) resolve(e.data.base64);
           else reject(new Error(e.data.error));
         };
         worker.onerror = function(err) {
+          clearTimeout(timer);
           worker.terminate();
           URL.revokeObjectURL(blobUrl);
           reject(err);
@@ -2591,22 +2598,29 @@ async function _encodeMenuPhoto(file) {
       // Worker failed — fall through to main-thread fallback
     }
   }
-  // Fallback: main-thread canvas encode (Safari / older browsers)
+  // Fallback: main-thread canvas encode — fully async via FileReader + Image.onload
+  // The canvas.toDataURL call is the only synchronous part but it runs AFTER
+  // the browser has already painted the 'Uploading...' state, so INP is not affected.
   return new Promise(function(resolve, reject) {
     var reader = new FileReader();
     reader.onload = function(e) {
       var img = new Image();
       img.onload = function() {
-        var MAX = 1200;
-        var w = img.width, h = img.height;
-        if (w > MAX || h > MAX) {
-          if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
-          else { w = Math.round(w * MAX / h); h = MAX; }
-        }
-        var canvas = document.createElement('canvas');
-        canvas.width = w; canvas.height = h;
-        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL('image/jpeg', 0.85).split(',')[1]);
+        // Yield one more frame before the synchronous canvas work
+        requestAnimationFrame(function() {
+          try {
+            var MAX = 1200;
+            var w = img.width, h = img.height;
+            if (w > MAX || h > MAX) {
+              if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+              else { w = Math.round(w * MAX / h); h = MAX; }
+            }
+            var canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL('image/jpeg', 0.85).split(',')[1]);
+          } catch(err) { reject(err); }
+        });
       };
       img.onerror = reject;
       img.src = e.target.result;
@@ -2628,16 +2642,19 @@ function previewMenuImageData(dataUrl) {
 
 async function uploadMenuPhoto() {
   var itemCode = document.getElementById('menuEditId').value.trim();
+  var statusEl = document.getElementById('menuEditUploadStatus');
+  // Auto-generate a temp item code for new items so upload works before saving
   if (!itemCode) {
-    alert('Please save the item first before uploading a photo, or enter the item code.');
-    return;
+    itemCode = 'ITEM_' + Date.now();
+    document.getElementById('menuEditId').value = itemCode;
   }
   if (!_menuPhotoFile) {
-    alert('No file selected.');
+    statusEl.style.display = 'block';
+    statusEl.style.color = '#B5443A';
+    statusEl.textContent = '❌ No file selected. Please choose an image first.';
     return;
   }
   var ext = _menuPhotoFile.name.split('.').pop().toLowerCase();
-  var statusEl = document.getElementById('menuEditUploadStatus');
   var uploadBtn = document.getElementById('menuEditUploadBtn');
 
   statusEl.style.display = 'block';
@@ -2699,21 +2716,32 @@ async function saveMenuItemEdit() {
   var image = document.getElementById('menuEditImage').value.trim();
   var status = document.getElementById('menuEditStatus').value;
 
-  if (!name) { alert('Item name is required'); return; }
-
+   if (!name) {
+    var nameEl = document.getElementById('menuEditName');
+    nameEl.style.borderColor = '#B5443A';
+    nameEl.focus();
+    setTimeout(function() { nameEl.style.borderColor = ''; }, 2000);
+    return;
+  }
   var isNew = !itemId;
   var action = isNew ? 'addMenuItem' : 'updateMenuItem';
   var payload = { name:name, category:category, price:price, hasSizes:hasSizes, hasSugar:hasSugar,
     priceShort:priceShort, priceMedium:priceMedium, priceTall:priceTall, image:image, status:status };
   if (!isNew) payload.itemId = itemId;
-
+  var saveBtn = document.getElementById('menuEditSaveBtn');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving...'; }
   var result = await api(action, payload);
+  if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Changes'; }
   if (result.ok) {
     closeMenuEditModal();
     await loadMenuManager();
-    alert('✅ ' + (isNew ? 'Item added!' : 'Item updated!'));
+    // Show a brief non-blocking toast
+    showToast('✅ ' + (isNew ? 'Item added!' : 'Item updated!'));
   } else {
-    alert('❌ Failed: ' + (result.error || 'Unknown error'));
+    var uploadStatus = document.getElementById('menuEditUploadStatus');
+    uploadStatus.style.display = 'block';
+    uploadStatus.style.color = '#B5443A';
+    uploadStatus.textContent = '❌ Failed: ' + (result.error || 'Unknown error');
   }
 }
 
@@ -3093,6 +3121,21 @@ function ygcConfirm(title, msg, okLabel, cancelLabel) {
     document.getElementById('ygcConfirmCancelBtn').onclick = function() { cleanup(); resolve(false); };
     overlay.onclick = function(e) { if (e.target === overlay) { cleanup(); resolve(false); } };
   });
+}
+
+// Non-blocking toast notification (replaces alert() for success messages)
+function showToast(msg, durationMs) {
+  var existing = document.getElementById('ygcToast');
+  if (existing) existing.remove();
+  var toast = document.createElement('div');
+  toast.id = 'ygcToast';
+  toast.textContent = msg;
+  toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a3a2a;color:#fff;padding:12px 24px;border-radius:10px;font-size:.9rem;font-weight:600;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.3);pointer-events:none;transition:opacity .3s';
+  document.body.appendChild(toast);
+  setTimeout(function() {
+    toast.style.opacity = '0';
+    setTimeout(function() { if (toast.parentNode) toast.remove(); }, 350);
+  }, durationMs || 2500);
 }
 
 </script>
