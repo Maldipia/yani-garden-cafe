@@ -15,53 +15,6 @@
 
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzprf6_LpDwcVujm8kcGFZE5JdkL0k9b6Wfg5l82gjZzFua8w1QWH8UoFFlhznc6EtL/exec';
 
-// ── Manila timezone offset ────────────────────────────────────────────────
-const MANILA_OFFSET_MS = 8 * 60 * 60 * 1000; // UTC+8
-
-/**
- * Normalize a timestamp from GAS to a Manila-timezone ISO string.
- *
- * Two cases:
- *   1. GAS already returns a Manila ISO string with explicit offset (e.g. "2026-03-05T10:46:43+08:00")
- *      — this happens when the GAS is deployed with Utilities.formatDate.
- *      Pass it through unchanged (idempotent).
- *   2. GAS returns a bare UTC ISO string (e.g. "2026-03-05T02:46:43.000Z")
- *      — this happens with the old GAS code where getValue() serializes as UTC.
- *      Add 8 hours to convert to Manila time.
- *
- * The key: if the raw string already contains an explicit offset (+HH:MM or -HH:MM),
- * do NOT add 8 hours again.
- */
-function toManilaIso(ts) {
-  if (!ts) return ts;
-  try {
-    const str = String(ts);
-    // If the timestamp already has an explicit timezone offset, it is already Manila time
-    // from GAS Utilities.formatDate — return as-is to avoid double-offset.
-    if (/[+-]\d{2}:\d{2}$/.test(str)) return str;
-    // Bare UTC ISO (ends with Z or has no offset) — add 8h to get Manila time.
-    const d = new Date(str);
-    if (isNaN(d.getTime())) return ts;
-    const manila = new Date(d.getTime() + MANILA_OFFSET_MS);
-    const pad = (n) => String(n).padStart(2, '0');
-    return `${manila.getUTCFullYear()}-${pad(manila.getUTCMonth()+1)}-${pad(manila.getUTCDate())}T${pad(manila.getUTCHours())}:${pad(manila.getUTCMinutes())}:${pad(manila.getUTCSeconds())}+08:00`;
-  } catch (e) {
-    return ts;
-  }
-}
-
-/**
- * Fix timestamps in a GAS getOrders response.
- * Converts all createdAt fields from UTC ISO to Manila ISO strings.
- */
-function fixOrderTimestamps(gasResult) {
-  if (!gasResult || !gasResult.ok || !Array.isArray(gasResult.orders)) return gasResult;
-  gasResult.orders = gasResult.orders.map(o => {
-    if (o.createdAt) o.createdAt = toManilaIso(o.createdAt);
-    return o;
-  });
-  return gasResult;
-}
 
 const SUPABASE_URL = 'https://hnynvclpvfxzlfjphefj.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_ANON_KEY || 'sb_publishable_PQBb1nDY7U7SxNfgDYoXyg_GtoLowLM';
@@ -345,10 +298,6 @@ export default async function handler(req, res) {
       }
     }
 
-     // ── Fix timestamps: normalize GAS UTC ISO dates to Manila +08:00 ────────────
-    if (action === 'getOrders') {
-      fixOrderTimestamps(gasResult);
-    }
     return res.status(200).json(gasResult);
   } catch (err) {
     console.error('Proxy error:', err);

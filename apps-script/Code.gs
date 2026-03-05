@@ -1033,15 +1033,7 @@ function getOrders(data) {
       orders.push({
         orderId: orderId,
         orderNo: getValue('ORDER_NO'),
-        createdAt: (function(v) {
-          if (!v) return '';
-          try {
-            var d = (v instanceof Date) ? v : new Date(v);
-            if (isNaN(d.getTime())) return String(v);
-            // Return Manila time as ISO string with +08:00 so browser parses it correctly
-            return Utilities.formatDate(d, 'Asia/Manila', "yyyy-MM-dd'T'HH:mm:ss+08:00");
-          } catch(e) { return String(v); }
-        })(getValue('CREATED_AT')),
+        createdAt: getValue('CREATED_AT'),
         table: getValue('TABLE_NO'),
         customer: getValue('CUSTOMER_NAME') || '',
         status: orderStatus,
