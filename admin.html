@@ -617,6 +617,33 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
   cursor:pointer; font-family:var(--font-body);
 }
 .eo-cancel-order-btn:hover { background:#EF4444; color:#fff }
+
+/* ── Custom confirm dialog (replaces blocking confirm() to fix INP) ── */
+.ygc-confirm-overlay {
+  position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:9999;
+  display:none; align-items:center; justify-content:center;
+}
+.ygc-confirm-overlay.open { display:flex }
+.ygc-confirm-box {
+  background:var(--white); border-radius:var(--r-lg); padding:24px 28px;
+  max-width:340px; width:90%; box-shadow:0 8px 32px rgba(0,0,0,.3);
+  text-align:center;
+}
+.ygc-confirm-title { font-family:var(--font-soul); font-size:1.05rem; color:var(--forest); margin-bottom:8px }
+.ygc-confirm-msg { font-size:.9rem; color:var(--bark); margin-bottom:20px; line-height:1.5 }
+.ygc-confirm-btns { display:flex; gap:10px; justify-content:center }
+.ygc-confirm-ok {
+  background:#EF4444; color:#fff; border:none; border-radius:var(--r-md);
+  padding:9px 22px; font-size:.9rem; font-weight:700; cursor:pointer;
+  font-family:var(--font-body);
+}
+.ygc-confirm-ok:hover { background:#dc2626 }
+.ygc-confirm-cancel {
+  background:var(--cream); color:var(--bark); border:1.5px solid var(--sand);
+  border-radius:var(--r-md); padding:9px 22px; font-size:.9rem; cursor:pointer;
+  font-family:var(--font-body);
+}
+.ygc-confirm-cancel:hover { background:var(--sand) }
 </style>
 </head>
 <body>
@@ -1110,7 +1137,13 @@ async function loadOrders() {
   var result = await api('getOrders');
   if (!result.ok || !result.orders) return;
 
-  allOrders = result.orders;
+  // Deduplicate by orderId (keep first occurrence — most recent from GAS)
+  var seen = {};
+  allOrders = result.orders.filter(function(o) {
+    if (seen[o.orderId]) return false;
+    seen[o.orderId] = true;
+    return true;
+  });
   renderStats();
   renderFilters();
   renderOrders();
@@ -1138,7 +1171,10 @@ function renderStats() {
 
   var totalSales = 0;
   var completed = 0;
-  var active = 0;
+  // Active = ALL orders with active status (not just today's)
+  var active = allOrders.filter(function(o) {
+    return o.status === 'NEW' || o.status === 'PREPARING' || o.status === 'READY';
+  }).length;
 
   todayOrders.forEach(function(o) {
     if (o.status === 'COMPLETED') {
@@ -1150,9 +1186,6 @@ function renderStats() {
         o.items.forEach(function(it){ orderTotal += (it.price || 0) * (it.qty || 1) });
       }
       totalSales += orderTotal;
-    }
-    if (o.status === 'NEW' || o.status === 'PREPARING' || o.status === 'READY') {
-      active++;
     }
   });
 
@@ -1410,7 +1443,12 @@ function renderOrders() {
 // ══════════════════════════════════════════════════════════
 async function updateStatus(orderId, newStatus) {
   if (newStatus === 'CANCELLED') {
-    if (!confirm('Cancel order ' + orderId + '?')) return;
+    var confirmed = await ygcConfirm(
+      '✕ Cancel Order',
+      'Cancel order ' + orderId + '? This cannot be undone.',
+      'Yes, Cancel', 'Keep Order'
+    );
+    if (!confirmed) return;
   }
 
   var result = await api('updateOrderStatus', { orderId:orderId, status:newStatus });
@@ -1431,9 +1469,12 @@ async function updateStatus(orderId, newStatus) {
 // DELETE ORDER
 // ══════════════════════════════════════════════════════════
 async function deleteOrder(orderId) {
-  if (!confirm('⚠️ DELETE ORDER ' + orderId + '?\n\nThis will permanently remove the order from the database.\n\nThis action cannot be undone!')) {
-    return;
-  }
+  var confirmed = await ygcConfirm(
+    '⚠️ Delete Order',
+    'Permanently delete order ' + orderId + '? This cannot be undone.',
+    'Delete', 'Cancel'
+  );
+  if (!confirmed) return;
   
   try {
     var result = await api('deleteOrder', { orderId: orderId });
@@ -1568,7 +1609,8 @@ function eoAddItem(code) {
 
 async function eoCancelOrder() {
   if (!eoOrderId) return;
-  if (!confirm('Cancel order ' + eoOrderId + '? This cannot be undone.')) return;
+  var confirmed = await ygcConfirm('✕ Cancel Order', 'Cancel order ' + eoOrderId + '? This cannot be undone.', 'Yes, Cancel', 'Keep Order');
+  if (!confirmed) return;
   var result = await api('updateOrderStatus', { orderId: eoOrderId, status: 'CANCELLED' });
   if (result.ok) {
     allOrders.forEach(function(o) { if (o.orderId === eoOrderId) o.status = 'CANCELLED'; });
@@ -1583,7 +1625,8 @@ async function eoCancelOrder() {
 async function eoSaveChanges() {
   if (!eoOrderId) return;
   if (eoItems.length === 0) {
-    if (!confirm('No items in order. Cancel the order instead?')) return;
+    var confirmed = await ygcConfirm('Empty Order', 'No items in order. Cancel the order instead?', 'Yes, Cancel', 'Go Back');
+    if (!confirmed) return;
     return eoCancelOrder();
   }
   var btn = document.getElementById('eoSaveBtn');
@@ -1985,7 +2028,8 @@ function renderPayCards() {
 }
 
 async function doVerifyPayment(paymentId) {
-  if (!confirm('Verify payment ' + paymentId + '?\n\nThis will mark it as confirmed and move the screenshot to the processed folder.')) return;
+  var confirmed = await ygcConfirm('✅ Verify Payment', 'Verify payment ' + paymentId + '? This will mark it as confirmed.', 'Verify', 'Cancel');
+  if (!confirmed) return;
 
   var result = await api('verifyPayment', { paymentId: paymentId, verifiedBy: 'Staff' });
   if (result.ok) {
@@ -1994,7 +2038,10 @@ async function doVerifyPayment(paymentId) {
     // Also refresh orders to update payment badges
     var ordResult = await api('getOrders', { status:'ALL', limit:100 });
     if (ordResult.ok) {
-      allOrders = ordResult.orders || [];
+      var seen2 = {};
+      allOrders = (ordResult.orders || []).filter(function(o) {
+        if (seen2[o.orderId]) return false; seen2[o.orderId] = true; return true;
+      });
       renderStats();
     }
   } else {
@@ -2011,7 +2058,10 @@ async function doRejectPayment(paymentId) {
     loadPayments();
     var ordResult = await api('getOrders', { status:'ALL', limit:100 });
     if (ordResult.ok) {
-      allOrders = ordResult.orders || [];
+      var seen3 = {};
+      allOrders = (ordResult.orders || []).filter(function(o) {
+        if (seen3[o.orderId]) return false; seen3[o.orderId] = true; return true;
+      });
       renderStats();
     }
   } else {
@@ -2812,7 +2862,8 @@ async function onlineOrderAction(orderRef, newStatus) {
   if (newStatus === 'CANCELLED') {
     confirmMsg = '⚠️ Cancel online order ' + orderRef + '?\n\nThis will notify the customer.';
   }
-  if (!confirm(confirmMsg)) return;
+  var confirmed = await ygcConfirm('Update Order', confirmMsg, 'Confirm', 'Cancel');
+  if (!confirmed) return;
   try {
     var resp = await fetch('/api/online-order', {
       method: 'POST',
@@ -2828,7 +2879,8 @@ async function onlineOrderAction(orderRef, newStatus) {
 }
 
 async function onlineOrderReadyAndSMS(orderRef, phone, name) {
-  if (!confirm('Mark order ' + orderRef + ' as READY and send SMS to ' + phone + '?')) return;
+  var confirmed = await ygcConfirm('📨 Send SMS', 'Mark order ' + orderRef + ' as READY and send SMS to ' + phone + '?', 'Send SMS', 'Cancel');
+  if (!confirmed) return;
   try {
     var resp = await fetch('/api/online-order', {
       method: 'POST',
@@ -3025,6 +3077,37 @@ async function runMenuSync() {
   if (btn) { btn.textContent = '🔧 Sync Menu Now'; btn.disabled = false; }
 }
 
+// ══════════════════════════════════════════════════════════
+// NON-BLOCKING CONFIRM DIALOG (fixes INP on cancel/delete buttons)
+// ══════════════════════════════════════════════════════════
+function ygcConfirm(title, msg, okLabel, cancelLabel) {
+  return new Promise(function(resolve) {
+    var overlay = document.getElementById('ygcConfirmOverlay');
+    document.getElementById('ygcConfirmTitle').textContent = title || 'Confirm';
+    document.getElementById('ygcConfirmMsg').textContent = msg || '';
+    document.getElementById('ygcConfirmOkBtn').textContent = okLabel || 'OK';
+    document.getElementById('ygcConfirmCancelBtn').textContent = cancelLabel || 'Cancel';
+    overlay.classList.add('open');
+    function cleanup() { overlay.classList.remove('open'); }
+    document.getElementById('ygcConfirmOkBtn').onclick = function() { cleanup(); resolve(true); };
+    document.getElementById('ygcConfirmCancelBtn').onclick = function() { cleanup(); resolve(false); };
+    overlay.onclick = function(e) { if (e.target === overlay) { cleanup(); resolve(false); } };
+  });
+}
+
 </script>
+
+<!-- ── Custom confirm dialog (non-blocking, fixes INP on cancel/delete) ── -->
+<div class="ygc-confirm-overlay" id="ygcConfirmOverlay">
+  <div class="ygc-confirm-box">
+    <div class="ygc-confirm-title" id="ygcConfirmTitle">Confirm</div>
+    <div class="ygc-confirm-msg" id="ygcConfirmMsg"></div>
+    <div class="ygc-confirm-btns">
+      <button class="ygc-confirm-cancel" id="ygcConfirmCancelBtn">Keep</button>
+      <button class="ygc-confirm-ok" id="ygcConfirmOkBtn">Confirm</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

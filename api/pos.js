@@ -20,15 +20,28 @@ const MANILA_OFFSET_MS = 8 * 60 * 60 * 1000; // UTC+8
 
 /**
  * Normalize a timestamp from GAS to a Manila-timezone ISO string.
- * GAS returns Date objects serialized as UTC ISO (e.g. "2026-03-04T05:27:07.000Z").
- * We convert to Manila time with +08:00 offset so browsers display the correct local time.
+ *
+ * Two cases:
+ *   1. GAS already returns a Manila ISO string with explicit offset (e.g. "2026-03-05T10:46:43+08:00")
+ *      — this happens when the GAS is deployed with Utilities.formatDate.
+ *      Pass it through unchanged (idempotent).
+ *   2. GAS returns a bare UTC ISO string (e.g. "2026-03-05T02:46:43.000Z")
+ *      — this happens with the old GAS code where getValue() serializes as UTC.
+ *      Add 8 hours to convert to Manila time.
+ *
+ * The key: if the raw string already contains an explicit offset (+HH:MM or -HH:MM),
+ * do NOT add 8 hours again.
  */
 function toManilaIso(ts) {
   if (!ts) return ts;
   try {
-    const d = new Date(ts);
+    const str = String(ts);
+    // If the timestamp already has an explicit timezone offset, it is already Manila time
+    // from GAS Utilities.formatDate — return as-is to avoid double-offset.
+    if (/[+-]\d{2}:\d{2}$/.test(str)) return str;
+    // Bare UTC ISO (ends with Z or has no offset) — add 8h to get Manila time.
+    const d = new Date(str);
     if (isNaN(d.getTime())) return ts;
-    // Format as Manila ISO: yyyy-MM-ddTHH:mm:ss+08:00
     const manila = new Date(d.getTime() + MANILA_OFFSET_MS);
     const pad = (n) => String(n).padStart(2, '0');
     return `${manila.getUTCFullYear()}-${pad(manila.getUTCMonth()+1)}-${pad(manila.getUTCDate())}T${pad(manila.getUTCHours())}:${pad(manila.getUTCMinutes())}:${pad(manila.getUTCSeconds())}+08:00`;
