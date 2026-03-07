@@ -618,6 +618,54 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 }
 .eo-cancel-order-btn:hover { background:#EF4444; color:#fff }
 
+/* ── Online Order Edit Modal (OWNER only) ── */
+.ol-edit-overlay {
+  position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:300;
+  display:none; align-items:flex-end; justify-content:center;
+}
+.ol-edit-overlay.open { display:flex }
+.ol-edit-modal {
+  background:var(--cream); width:100%; max-width:600px; max-height:88vh;
+  border-radius:var(--r-xl) var(--r-xl) 0 0;
+  display:flex; flex-direction:column; overflow:hidden;
+  box-shadow:0 -4px 30px rgba(0,0,0,.25);
+}
+.ol-edit-header {
+  background:var(--forest); color:#fff; padding:16px 20px;
+  display:flex; align-items:center; gap:12px;
+}
+.ol-edit-header-title { flex:1; font-family:var(--font-soul); font-size:1.1rem; font-weight:700 }
+.ol-edit-close { background:none; border:none; color:#fff; font-size:1.5rem; cursor:pointer; padding:4px }
+.ol-edit-body { flex:1; overflow-y:auto; padding:20px }
+.ol-edit-footer {
+  background:var(--white); padding:14px 20px; border-top:2px solid var(--mist);
+  display:flex; gap:10px;
+}
+.ol-edit-save-btn {
+  flex:1; padding:13px; border:none; border-radius:var(--r-md);
+  background:var(--forest); color:#fff; font-size:.9rem; font-weight:700;
+  cursor:pointer; font-family:var(--font-body);
+}
+.ol-edit-save-btn:disabled { opacity:.4; cursor:not-allowed }
+.ol-edit-cancel-btn {
+  padding:13px 18px; border:2px solid #EF4444; border-radius:var(--r-md);
+  background:var(--white); color:#EF4444; font-size:.85rem; font-weight:700;
+  cursor:pointer; font-family:var(--font-body);
+}
+.ol-edit-cancel-btn:hover { background:#EF4444; color:#fff }
+.ol-edit-field { margin-bottom:14px }
+.ol-edit-label {
+  font-size:.72rem; font-weight:700; color:var(--timber); display:block;
+  margin-bottom:4px; text-transform:uppercase; letter-spacing:.04em;
+}
+.ol-edit-input {
+  width:100%; padding:11px 13px; border:1.5px solid var(--mist); border-radius:var(--r-md);
+  font-size:.9rem; font-family:var(--font-body); outline:none; transition:border-color .2s;
+  background:var(--white); box-sizing:border-box;
+}
+.ol-edit-input:focus { border-color:var(--forest) }
+.ol-edit-textarea { resize:vertical; min-height:72px }
+
 /* ── Custom confirm dialog (replaces blocking confirm() to fix INP) ── */
 .ygc-confirm-overlay {
   position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:9999;
@@ -714,6 +762,21 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
       <div class="eo-footer">
         <button class="eo-cancel-order-btn" id="eoCancelOrderBtn" onclick="eoCancelOrder()">✕ Cancel Order</button>
         <button class="eo-save-btn" id="eoSaveBtn" onclick="eoSaveChanges()">💾 Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Online Order Edit Modal (OWNER only) -->
+  <div class="ol-edit-overlay" id="olEditOverlay" onclick="closeOlEditModal(event)">
+    <div class="ol-edit-modal">
+      <div class="ol-edit-header">
+        <div class="ol-edit-header-title" id="olEditTitle">✏️ Edit Online Order</div>
+        <button class="ol-edit-close" onclick="closeOlEditModal(null)">&times;</button>
+      </div>
+      <div class="ol-edit-body" id="olEditBody"></div>
+      <div class="ol-edit-footer">
+        <button class="ol-edit-cancel-btn" onclick="olCancelOrder()">✕ Cancel Order</button>
+        <button class="ol-edit-save-btn" id="olEditSaveBtn" onclick="olSaveEdit()">💾 Save Changes</button>
       </div>
     </div>
   </div>
@@ -2903,20 +2966,32 @@ function renderOnlineOrders() {
       html += '</div>';
     }
     // Actions
+    var isOwner = (currentUser.role === 'OWNER');
+    var isActive = (o.status !== 'COMPLETED' && o.status !== 'CANCELLED');
     html += '<div class="oc-actions" style="flex-wrap:wrap">';
     if (o.status === 'PENDING' && o.payment_status === 'SUBMITTED') {
       html += '<button class="oc-btn oc-btn-start" onclick="onlineOrderAction(\'' + esc(o.order_ref) + '\',\'CONFIRMED\')">✅ Confirm Payment</button>';
       html += '<button class="oc-btn oc-btn-cancel" onclick="onlineOrderAction(\'' + esc(o.order_ref) + '\',\'CANCELLED\')">✕ Reject</button>';
     } else if (o.status === 'PENDING') {
       html += '<span style="font-size:.75rem;color:var(--timber);padding:4px 0">⏳ Waiting for payment proof</span>';
+      if (isOwner) html += '<button class="oc-btn oc-btn-cancel" onclick="onlineOrderAction(\'' + esc(o.order_ref) + '\',\'CANCELLED\')">✕ Cancel</button>';
     } else if (o.status === 'CONFIRMED') {
       html += '<button class="oc-btn oc-btn-start" onclick="onlineOrderAction(\'' + esc(o.order_ref) + '\',\'PREPARING\')">👨‍🍳 Start Preparing</button>';
+      if (isOwner) html += '<button class="oc-btn oc-btn-cancel" onclick="onlineOrderAction(\'' + esc(o.order_ref) + '\',\'CANCELLED\')">✕ Cancel</button>';
     } else if (o.status === 'PREPARING') {
       html += '<button class="oc-btn oc-btn-ready" onclick="onlineOrderReadyAndSMS(\'' + esc(o.order_ref) + '\',\'' + esc(o.customer_phone || '') + '\',\'' + esc(o.customer_name || '') + '\')">✨ Mark Ready & SMS</button>';
+      if (isOwner) html += '<button class="oc-btn oc-btn-cancel" onclick="onlineOrderAction(\'' + esc(o.order_ref) + '\',\'CANCELLED\')">✕ Cancel</button>';
     } else if (o.status === 'READY') {
       html += '<button class="oc-btn oc-btn-complete" onclick="onlineOrderAction(\'' + esc(o.order_ref) + '\',\'COMPLETED\')">🎉 Mark Completed</button>';
+      if (isOwner) html += '<button class="oc-btn oc-btn-cancel" onclick="onlineOrderAction(\'' + esc(o.order_ref) + '\',\'CANCELLED\')">✕ Cancel</button>';
     }
     html += '</div>';
+    // Owner-only Edit button row (for all active orders)
+    if (isOwner && isActive) {
+      html += '<div style="padding:0 12px 12px">';
+      html += '<button class="oc-btn" style="background:var(--gold);color:#fff;width:100%;font-size:.78rem" onclick="openOlEditModal(\'' + esc(o.order_ref) + '\')">✏️ Edit Order Details</button>';
+      html += '</div>';
+    }
     html += '</div>';
     return html;
   }).join('');
@@ -2962,9 +3037,109 @@ async function onlineOrderReadyAndSMS(orderRef, phone, name) {
   }
 }
 
-// ══════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════
+// ONLINE ORDER EDIT MODAL (OWNER only)
+// ════════════════════════════════════════════════════════
+var olEditOrderRef = null;
+
+function openOlEditModal(orderRef) {
+  var o = allOnlineOrders.find(function(x) { return x.order_ref === orderRef; });
+  if (!o) { showToast('Order not found', 'error'); return; }
+  olEditOrderRef = orderRef;
+  document.getElementById('olEditTitle').textContent = '✏️ Edit Online Order — ' + orderRef;
+  document.getElementById('olEditBody').innerHTML =
+    '<div class="ol-edit-field">' +
+      '<label class="ol-edit-label">Customer Name</label>' +
+      '<input class="ol-edit-input" id="olEditName" type="text" value="' + esc(o.customer_name || '') + '" placeholder="Full name">' +
+    '</div>' +
+    '<div class="ol-edit-field">' +
+      '<label class="ol-edit-label">Phone Number</label>' +
+      '<input class="ol-edit-input" id="olEditPhone" type="tel" value="' + esc(o.customer_phone || '') + '" placeholder="09XXXXXXXXX">' +
+    '</div>' +
+    '<div class="ol-edit-field">' +
+      '<label class="ol-edit-label">Pickup / Delivery Time</label>' +
+      '<input class="ol-edit-input" id="olEditPickup" type="text" value="' + esc(o.pickup_time || '') + '" placeholder="e.g. 12:00 PM">' +
+    '</div>' +
+    '<div class="ol-edit-field">' +
+      '<label class="ol-edit-label">Special Instructions</label>' +
+      '<textarea class="ol-edit-input ol-edit-textarea" id="olEditInstructions" placeholder="Any special requests...">' + esc(o.special_instructions || '') + '</textarea>' +
+    '</div>' +
+    '<div class="ol-edit-field">' +
+      '<label class="ol-edit-label">Admin Notes (internal)</label>' +
+      '<textarea class="ol-edit-input ol-edit-textarea" id="olEditAdminNotes" placeholder="Internal notes, not shown to customer...">' + esc(o.admin_notes || '') + '</textarea>' +
+    '</div>';
+  document.getElementById('olEditOverlay').classList.add('open');
+}
+
+function closeOlEditModal(evt) {
+  if (evt && evt.target !== document.getElementById('olEditOverlay')) return;
+  document.getElementById('olEditOverlay').classList.remove('open');
+  olEditOrderRef = null;
+}
+
+async function olSaveEdit() {
+  if (!olEditOrderRef) return;
+  var name = (document.getElementById('olEditName').value || '').trim();
+  var phone = (document.getElementById('olEditPhone').value || '').trim();
+  var pickup = (document.getElementById('olEditPickup').value || '').trim();
+  var instructions = (document.getElementById('olEditInstructions').value || '').trim();
+  var adminNotes = (document.getElementById('olEditAdminNotes').value || '').trim();
+  if (!name) { showToast('Customer name is required', 'error'); return; }
+  if (!phone) { showToast('Phone number is required', 'error'); return; }
+  var btn = document.getElementById('olEditSaveBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    var resp = await fetch('/api/online-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'editOnlineOrder',
+        orderRef: olEditOrderRef,
+        customerName: name,
+        customerPhone: phone,
+        pickupTime: pickup,
+        specialInstructions: instructions,
+        adminNotes: adminNotes,
+        updatedBy: currentUser.username || 'Owner'
+      })
+    });
+    var data = await resp.json();
+    if (!data.ok) throw new Error(data.error || 'Failed to save');
+    showToast('✅ Order updated successfully');
+    document.getElementById('olEditOverlay').classList.remove('open');
+    olEditOrderRef = null;
+    await loadOnlineOrders();
+  } catch (e) {
+    showToast('❌ Error: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '💾 Save Changes';
+  }
+}
+
+async function olCancelOrder() {
+  if (!olEditOrderRef) return;
+  var confirmed = await ygcConfirm('✕ Cancel Online Order', 'Cancel order ' + olEditOrderRef + '? This cannot be undone.', 'Yes, Cancel', 'Keep Order');
+  if (!confirmed) return;
+  try {
+    var resp = await fetch('/api/online-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'updateOnlineOrderStatus', orderRef: olEditOrderRef, status: 'CANCELLED', updatedBy: currentUser.username || 'Owner' })
+    });
+    var data = await resp.json();
+    if (!data.ok) throw new Error(data.error || 'Failed');
+    showToast('✅ Order cancelled');
+    document.getElementById('olEditOverlay').classList.remove('open');
+    olEditOrderRef = null;
+    await loadOnlineOrders();
+  } catch (e) {
+    showToast('❌ Error: ' + e.message, 'error');
+  }
+}
+
+// ════════════════════════════════════════════════════════
 // SHEETS DATA VIEW (Online Orders + Customers from Google Sheets)
-// ══════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════
 var sheetsOrdersData = [];
 var sheetsCustomersData = [];
 var currentSheetsTab = 'orders';

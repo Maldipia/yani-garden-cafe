@@ -562,6 +562,36 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, message: 'Payment proof submitted successfully' });
     }
 
+    if (action === 'editOnlineOrder') {
+      const { orderRef, customerName, customerPhone, pickupTime, specialInstructions, adminNotes, updatedBy } = payload;
+      if (!orderRef) return res.status(400).json({ ok: false, error: 'Missing orderRef' });
+      if (!customerName || customerName.trim().length < 2)
+        return res.status(400).json({ ok: false, error: 'Customer name must be at least 2 characters' });
+      if (!customerPhone || !/^(09|\+639)\d{9}$/.test(customerPhone.trim()))
+        return res.status(400).json({ ok: false, error: 'Phone must be a valid PH mobile number (09XXXXXXXXX or +639XXXXXXXXX)' });
+
+      const updateData = {
+        customer_name: customerName.trim(),
+        customer_phone: customerPhone.trim(),
+        pickup_time: pickupTime?.trim() || null,
+        special_instructions: specialInstructions?.trim() || null,
+        updated_at: new Date().toISOString()
+      };
+      if (adminNotes !== undefined) updateData.admin_notes = adminNotes.trim() || null;
+
+      await supabasePatch('online_orders', `order_ref=eq.${encodeURIComponent(orderRef)}`, updateData);
+
+      // Sync to GAS (fire-and-forget)
+      callGAS({
+        action: 'updateOnlineOrderStatus',
+        orderRef,
+        orderStatus: 'EDITED',
+        updatedBy: updatedBy || 'Owner'
+      });
+
+      return res.status(200).json({ ok: true, message: `Order ${orderRef} updated` });
+    }
+
     return res.status(400).json({ ok: false, error: `Unknown action: ${action}` });
 
   } catch (err) {
