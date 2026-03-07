@@ -209,8 +209,24 @@ export default async function handler(req, res) {
       const catMap = {};
       (categories || []).forEach(c => { catMap[c.id] = c.name; });
       
+      // Deduplicate items by normalized name — keep the best entry:
+      // Priority: (1) has image + proper category, (2) has image, (3) has proper category, (4) first seen
+      const deduped = [];
+      const seenNames = {};
+      (items || []).forEach(item => {
+        const key = (item.name || '').trim().toLowerCase();
+        const catName = catMap[item.category_id] || null;
+        const hasImage = !!(item.image_path);
+        const hasCategory = !!(item.category_id);
+        const score = (hasImage ? 2 : 0) + (hasCategory ? 1 : 0);
+        if (seenNames[key] === undefined || score > seenNames[key].score) {
+          seenNames[key] = { item, score };
+        }
+      });
+      const dedupedItems = Object.values(seenNames).map(v => v.item);
+
       const grouped = {};
-      const mappedItems = (items || []).map(item => {
+      const mappedItems = (dedupedItems || []).map(item => {
         const catName = catMap[item.category_id] || 'OTHER';
         if (!grouped[catName]) grouped[catName] = [];
         const mapped = {
