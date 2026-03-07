@@ -225,7 +225,14 @@ export default async function handler(req, res) {
           hasSizes: item.has_sizes,
           hasSugar: item.has_sugar_levels,
           image: item.image_path
-            ? (item.image_path.startsWith('http') ? item.image_path : `https://${req.headers.host || 'yani-garden-cafe-d3l6.vercel.app'}${item.image_path}`)
+            ? (function(p) {
+                // Convert Google Drive view URL to direct image URL
+                const driveMatch = p.match(/drive\.google\.com\/file\/d\/([^/]+)/);
+                if (driveMatch) return 'https://drive.google.com/uc?export=view&id=' + driveMatch[1];
+                // Relative path → absolute
+                if (!p.startsWith('http')) return 'https://' + (req.headers.host || 'yani-garden-cafe-d3l6.vercel.app') + p;
+                return p;
+              })(item.image_path)
             : null
         };
         grouped[catName].push(mapped);

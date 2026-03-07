@@ -147,8 +147,11 @@ a { color: var(--terra); text-decoration: none }
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
-  position: relative;
-  z-index: 1;
+  position: sticky;
+  top: 0;
+  z-index: 90;
+  background: var(--cream);
+  box-shadow: 0 2px 6px rgba(0,0,0,.06);
 }
 .cats::-webkit-scrollbar { display: none }
 .cat-tab {
@@ -1162,7 +1165,17 @@ let state = {
 // ══════════════════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════════════════
+function updateStickyOffsets() {
+  var header = document.querySelector('.header');
+  var cats = document.getElementById('catTabs');
+  if (header && cats) {
+    var hh = header.getBoundingClientRect().height;
+    cats.style.top = hh + 'px';
+  }
+}
 window.addEventListener('DOMContentLoaded', function() {
+  updateStickyOffsets();
+  window.addEventListener('resize', updateStickyOffsets);
   // Parse URL params
   var params = new URLSearchParams(window.location.search);
   state.tableNo = params.get('table') || '';
