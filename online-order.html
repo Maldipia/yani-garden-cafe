@@ -53,6 +53,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 .steps {
   display:flex; justify-content:center; gap:0; padding:16px 20px 0;
   background:var(--white); border-bottom:1px solid var(--mist);
+  position:sticky; top:0; z-index:95;
 }
 .step-item {
   flex:1; max-width:120px; text-align:center; padding:10px 4px;
@@ -81,7 +82,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 /* ── Category Tabs ── */
 .cat-tabs-sticky {
   position:sticky;
-  top:0;
+  top:0; /* updated dynamically by JS via updateStickyOffsets() */
   z-index:90;
   background:var(--cream);
   padding:10px 16px 8px;
@@ -643,9 +644,26 @@ var PAYMENT_DETAILS = {
 // ══════════════════════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════════════════════
+function updateStickyOffsets() {
+  // Calculate the combined height of all sticky elements above the category bar
+  // so each one stacks correctly below the previous
+  var header = document.querySelector('.header');
+  var steps  = document.getElementById('stepBar');
+  var catBar = document.getElementById('catTabsWrapper');
+  if (!header || !steps || !catBar) return;
+  var headerH = header.getBoundingClientRect().height;
+  var stepsH  = steps.getBoundingClientRect().height;
+  // Steps bar sticks just below the header
+  steps.style.top = headerH + 'px';
+  // Category bar sticks just below header + steps
+  catBar.style.top = (headerH + stepsH) + 'px';
+}
+
 window.addEventListener('DOMContentLoaded', function() {
+  updateStickyOffsets();
   loadMenu();
 });
+window.addEventListener('resize', updateStickyOffsets);
 
 async function loadMenu() {
   showLoading('Loading menu...');
