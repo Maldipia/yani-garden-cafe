@@ -233,8 +233,8 @@ export default async function handler(req, res) {
 
     // ── Input validation for menu mutations ───────────────────────────────
     if (action === 'addMenuItem') {
-      if (!isNonEmptyString(body.name, 100)) {
-        return res.status(400).json({ ok: false, error: 'name is required and must be under 100 chars' });
+      if (!isNonEmptyString(body.name, 100) || body.name.trim().length < 2) {
+        return res.status(400).json({ ok: false, error: 'name must be 2-100 characters' });
       }
       const errs = validateMenuPayload(body, false);
       if (errs.length) return res.status(400).json({ ok: false, error: errs.join('; ') });
