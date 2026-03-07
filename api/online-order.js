@@ -39,7 +39,19 @@ function isPhoneValid(p) { return typeof p === 'string' && /^(09|\+639)[0-9]{9}$
 function isNameValid(n) { return typeof n === 'string' && n.trim().length >= 2 && n.length <= 100; }
 function isItemsValid(items) {
   if (!Array.isArray(items) || items.length === 0) return false;
-  return items.every(i => i && typeof i.id !== 'undefined' && typeof i.name === 'string' && Number(i.qty) >= 1 && Number(i.price) >= 0);
+  return items.every(i => {
+    if (!i || typeof i.name !== 'string' || i.name.trim().length === 0) return false;
+    // Accept id OR code (Supabase items use item_code/code)
+    const hasId = (i.id !== undefined && i.id !== null) || (typeof i.code === 'string' && i.code.length > 0);
+    if (!hasId) return false;
+    // Accept qty OR quantity
+    const qty = Number(i.qty !== undefined ? i.qty : (i.quantity !== undefined ? i.quantity : 0));
+    if (qty < 1) return false;
+    // Accept price OR unitPrice (allow 0 for free items/add-ons)
+    const price = Number(i.price !== undefined ? i.price : (i.unitPrice !== undefined ? i.unitPrice : -1));
+    if (price < 0) return false;
+    return true;
+  });
 }
 
 // ── Fire-and-forget GAS sync (non-blocking) ────────────────────────────────
@@ -497,6 +509,51 @@ export default async function handler(req, res) {
         smsSent: smsResult.ok,
         message: smsResult.ok ? `SMS sent to ${order.customer_phone}` : `SMS failed: ${smsResult.error}`
       });
+    }
+
+    // ── SUBMIT PAYMENT PROOF (customer) ──────────────────────
+    if (action === 'submitPaymentProof') {
+      const { orderRef, proofUrl, proofFilename, paymentMethod } = payload;
+      if (!orderRef) return res.status(400).json({ ok: false, error: 'Missing orderRef' });
+      if (!proofUrl) return res.status(400).json({ ok: false, error: 'Missing proofUrl' });
+
+      // Update order status to PAYMENT_SUBMITTED
+      await supabasePatch('online_orders', `order_ref=eq.${encodeURIComponent(orderRef)}`, {
+        payment_proof_url: proofUrl,
+        payment_status: 'SUBMITTED',
+        status: 'PAYMENT_SUBMITTED',
+        updated_at: new Date().toISOString()
+      });
+
+      // Insert into online_payments table for admin review
+      try {
+        const orders = await supabase('GET', 'online_orders', null, {
+          'order_ref': `eq.${orderRef}`, 'limit': '1'
+        });
+        if (orders?.length) {
+          await supabase('POST', 'online_payments', {
+            order_id: orders[0].id,
+            order_ref: orderRef,
+            amount: orders[0].total_amount,
+            payment_method: (paymentMethod || orders[0].payment_method || 'GCASH').toUpperCase(),
+            proof_url: proofUrl,
+            proof_filename: proofFilename || null,
+            status: 'PENDING'
+          });
+        }
+      } catch (e) {
+        console.warn('online_payments insert failed (non-critical):', e.message);
+      }
+
+      // Sync to GAS (fire-and-forget)
+      callGAS({
+        action: 'updateOnlineOrderStatus',
+        orderRef,
+        orderStatus: 'PAYMENT_SUBMITTED',
+        paymentStatus: 'SUBMITTED'
+      });
+
+      return res.status(200).json({ ok: true, message: 'Payment proof submitted successfully' });
     }
 
     return res.status(400).json({ ok: false, error: `Unknown action: ${action}` });
