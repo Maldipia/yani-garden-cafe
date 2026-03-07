@@ -517,11 +517,11 @@ export default async function handler(req, res) {
       if (!orderRef) return res.status(400).json({ ok: false, error: 'Missing orderRef' });
       if (!proofUrl) return res.status(400).json({ ok: false, error: 'Missing proofUrl' });
 
-      // Update order status to PAYMENT_SUBMITTED
+      // Update order: keep status=PENDING, set payment_status=SUBMITTED
+      // (online_order_status enum only has PENDING and CONFIRMED)
       await supabasePatch('online_orders', `order_ref=eq.${encodeURIComponent(orderRef)}`, {
         payment_proof_url: proofUrl,
         payment_status: 'SUBMITTED',
-        status: 'PAYMENT_SUBMITTED',
         updated_at: new Date().toISOString()
       });
 
