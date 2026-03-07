@@ -692,6 +692,38 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
   font-family:var(--font-body);
 }
 .ygc-confirm-cancel:hover { background:var(--sand) }
+/* ── Custom prompt dialog (non-blocking, replaces prompt()) ── */
+.ygc-prompt-overlay {
+  display:none; position:fixed; inset:0; background:rgba(0,0,0,.45);
+  z-index:9000; align-items:center; justify-content:center;
+}
+.ygc-prompt-overlay.open { display:flex }
+.ygc-prompt-box {
+  background:#fff; border-radius:16px; padding:28px 24px;
+  max-width:360px; width:90%; box-shadow:0 8px 32px rgba(0,0,0,.18);
+}
+.ygc-prompt-title { font-family:var(--font-soul); font-size:1.05rem; color:var(--forest); margin-bottom:8px }
+.ygc-prompt-msg { font-size:.9rem; color:var(--timber); margin-bottom:12px; line-height:1.5 }
+.ygc-prompt-input {
+  width:100%; padding:10px 12px; border:1.5px solid var(--mist);
+  border-radius:8px; font-size:.95rem; font-family:var(--font-body);
+  box-sizing:border-box; margin-bottom:16px;
+  outline:none; transition:border-color .2s;
+}
+.ygc-prompt-input:focus { border-color:var(--forest) }
+.ygc-prompt-btns { display:flex; gap:10px; justify-content:center }
+.ygc-prompt-ok {
+  padding:10px 22px; background:#EF4444; color:#fff;
+  border:none; border-radius:8px; font-weight:700; cursor:pointer;
+  font-family:var(--font-body);
+}
+.ygc-prompt-ok:hover { background:#dc2626 }
+.ygc-prompt-cancel {
+  padding:10px 22px; background:var(--mist-light); color:var(--forest);
+  border:none; border-radius:8px; font-weight:700; cursor:pointer;
+  font-family:var(--font-body);
+}
+.ygc-prompt-cancel:hover { background:var(--mist) }
 </style>
 </head>
 <body>
@@ -1228,9 +1260,15 @@ async function loadMenuCache() {
 // STATS
 // ══════════════════════════════════════════════════════════
 function renderStats() {
-  var today = new Date().toDateString();
+  // Use Manila time (UTC+8) for 'today' to ensure correct date comparison regardless of browser timezone
+  var nowManila = new Date(new Date().getTime() + 8 * 3600000);
+  var todayStr = nowManila.toISOString().slice(0, 10); // 'YYYY-MM-DD' in Manila time
   var todayOrders = allOrders.filter(function(o) {
-    try { return new Date(o.createdAt).toDateString() === today } catch(e) { return false }
+    try {
+      var d = new Date(o.createdAt);
+      var manilaStr = new Date(d.getTime() + 8 * 3600000).toISOString().slice(0, 10);
+      return manilaStr === todayStr;
+    } catch(e) { return false }
   });
 
   var totalSales = 0;
@@ -2113,7 +2151,7 @@ async function doVerifyPayment(paymentId) {
 }
 
 async function doRejectPayment(paymentId) {
-  var reason = prompt('Reason for rejecting payment ' + paymentId + ':');
+  var reason = await ygcPrompt('✕ Reject Payment', 'Enter reason for rejecting payment ' + paymentId + ':', 'e.g. Wrong amount, expired screenshot');
   if (reason === null) return; // Cancelled
 
   var result = await api('rejectPayment', { paymentId: paymentId, reason: reason, verifiedBy: 'Staff' });
@@ -3382,6 +3420,33 @@ async function runMenuSync() {
 }
 
 // ══════════════════════════════════════════════════════════
+// NON-BLOCKING PROMPT DIALOG (fixes INP on reject payment button)
+// ══════════════════════════════════════════════════════════
+function ygcPrompt(title, msg, placeholder) {
+  return new Promise(function(resolve) {
+    var overlay = document.getElementById('ygcPromptOverlay');
+    document.getElementById('ygcPromptTitle').textContent = title || 'Enter value';
+    document.getElementById('ygcPromptMsg').textContent = msg || '';
+    var inp = document.getElementById('ygcPromptInput');
+    inp.value = '';
+    inp.placeholder = placeholder || '';
+    overlay.classList.add('open');
+    setTimeout(function() { inp.focus(); }, 50);
+    function cleanup() { overlay.classList.remove('open'); }
+    document.getElementById('ygcPromptOkBtn').onclick = function() {
+      var val = inp.value.trim();
+      cleanup(); resolve(val === '' ? null : val);
+    };
+    document.getElementById('ygcPromptCancelBtn').onclick = function() { cleanup(); resolve(null); };
+    overlay.onclick = function(e) { if (e.target === overlay) { cleanup(); resolve(null); } };
+    inp.onkeydown = function(e) {
+      if (e.key === 'Enter') { var val = inp.value.trim(); cleanup(); resolve(val === '' ? null : val); }
+      if (e.key === 'Escape') { cleanup(); resolve(null); }
+    };
+  });
+}
+
+// ══════════════════════════════════════════════════════════
 // NON-BLOCKING CONFIRM DIALOG (fixes INP on cancel/delete buttons)
 // ══════════════════════════════════════════════════════════
 function ygcConfirm(title, msg, okLabel, cancelLabel) {
@@ -3424,6 +3489,19 @@ function showToast(msg, durationMs) {
     <div class="ygc-confirm-btns">
       <button class="ygc-confirm-cancel" id="ygcConfirmCancelBtn">Keep</button>
       <button class="ygc-confirm-ok" id="ygcConfirmOkBtn">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Custom prompt dialog (non-blocking, replaces prompt()) ── -->
+<div class="ygc-prompt-overlay" id="ygcPromptOverlay">
+  <div class="ygc-prompt-box">
+    <div class="ygc-prompt-title" id="ygcPromptTitle">Enter value</div>
+    <div class="ygc-prompt-msg" id="ygcPromptMsg"></div>
+    <input class="ygc-prompt-input" id="ygcPromptInput" type="text" />
+    <div class="ygc-prompt-btns">
+      <button class="ygc-prompt-cancel" id="ygcPromptCancelBtn">Cancel</button>
+      <button class="ygc-prompt-ok" id="ygcPromptOkBtn">Submit</button>
     </div>
   </div>
 </div>
