@@ -3057,10 +3057,6 @@ function openOlEditModal(orderRef) {
       '<input class="ol-edit-input" id="olEditPhone" type="tel" value="' + esc(o.customer_phone || '') + '" placeholder="09XXXXXXXXX">' +
     '</div>' +
     '<div class="ol-edit-field">' +
-      '<label class="ol-edit-label">Pickup / Delivery Time</label>' +
-      '<input class="ol-edit-input" id="olEditPickup" type="text" value="' + esc(o.pickup_time || '') + '" placeholder="e.g. 12:00 PM">' +
-    '</div>' +
-    '<div class="ol-edit-field">' +
       '<label class="ol-edit-label">Special Instructions</label>' +
       '<textarea class="ol-edit-input ol-edit-textarea" id="olEditInstructions" placeholder="Any special requests...">' + esc(o.special_instructions || '') + '</textarea>' +
     '</div>' +
@@ -3081,7 +3077,6 @@ async function olSaveEdit() {
   if (!olEditOrderRef) return;
   var name = (document.getElementById('olEditName').value || '').trim();
   var phone = (document.getElementById('olEditPhone').value || '').trim();
-  var pickup = (document.getElementById('olEditPickup').value || '').trim();
   var instructions = (document.getElementById('olEditInstructions').value || '').trim();
   var adminNotes = (document.getElementById('olEditAdminNotes').value || '').trim();
   if (!name) { showToast('Customer name is required', 'error'); return; }
@@ -3097,7 +3092,6 @@ async function olSaveEdit() {
         orderRef: olEditOrderRef,
         customerName: name,
         customerPhone: phone,
-        pickupTime: pickup,
         specialInstructions: instructions,
         adminNotes: adminNotes,
         updatedBy: currentUser.username || 'Owner'

@@ -563,7 +563,7 @@ export default async function handler(req, res) {
     }
 
     if (action === 'editOnlineOrder') {
-      const { orderRef, customerName, customerPhone, pickupTime, specialInstructions, adminNotes, updatedBy } = payload;
+      const { orderRef, customerName, customerPhone, specialInstructions, adminNotes, updatedBy } = payload;
       if (!orderRef) return res.status(400).json({ ok: false, error: 'Missing orderRef' });
       if (!customerName || customerName.trim().length < 2)
         return res.status(400).json({ ok: false, error: 'Customer name must be at least 2 characters' });
@@ -573,7 +573,6 @@ export default async function handler(req, res) {
       const updateData = {
         customer_name: customerName.trim(),
         customer_phone: customerPhone.trim(),
-        pickup_time: pickupTime?.trim() || null,
         special_instructions: specialInstructions?.trim() || null,
         updated_at: new Date().toISOString()
       };
