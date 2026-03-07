@@ -225,8 +225,11 @@ export default async function handler(req, res) {
       });
       const dedupedItems = Object.values(seenNames).map(v => v.item);
 
+      // Filter out orphan items: no category AND no image (test/incomplete entries)
+      const cleanItems = (dedupedItems || []).filter(item => item.category_id || item.image_path);
+
       const grouped = {};
-      const mappedItems = (dedupedItems || []).map(item => {
+      const mappedItems = (cleanItems || []).map(item => {
         const catName = catMap[item.category_id] || 'OTHER';
         if (!grouped[catName]) grouped[catName] = [];
         const mapped = {
