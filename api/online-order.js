@@ -245,6 +245,7 @@ export default async function handler(req, res) {
       const { 
         customerName, customerPhone, customerEmail, 
         pickupTime, specialInstructions, paymentMethod,
+        deliveryAddress, deliveryNotes, courierType,
         items: orderItems, total
       } = payload;
       
@@ -279,8 +280,9 @@ export default async function handler(req, res) {
         customer_email: customerEmail?.trim() || null,
         pickup_time: pickupTime || null,
         special_instructions: specialInstructions?.trim() || null,
-        delivery_address: null,
-        courier_type: 'PICKUP',
+        delivery_address: deliveryAddress?.trim() || null,
+        courier_type: courierType?.trim() || 'PICKUP',
+        delivery_notes: deliveryNotes?.trim() || null,
         subtotal: subtotal,
         total_amount: parseFloat(total || subtotal),
         payment_method: (paymentMethod || 'gcash').toUpperCase(),
@@ -395,6 +397,10 @@ export default async function handler(req, res) {
         updated_at: new Date().toISOString()
       };
       if (adminNotes) updateData.admin_notes = adminNotes;
+      // When confirming payment, also mark payment as VERIFIED
+      if (status.toUpperCase() === 'CONFIRMED') updateData.payment_status = 'VERIFIED';
+      // When cancelling, also mark payment as REJECTED if it was submitted
+      if (status.toUpperCase() === 'CANCELLED') updateData.payment_status = 'REJECTED';
       
       await supabasePatch('online_orders', `order_ref=eq.${orderRef}`, updateData);
       

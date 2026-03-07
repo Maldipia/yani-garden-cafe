@@ -965,7 +965,7 @@ var pendingPayCount = 0;
 var payFilter = 'PENDING';
 var allOnlineOrders = [];
 var onlineOrderPendingCount = 0;
-var onlineOrderFilter = 'PENDING_PAYMENT';
+var onlineOrderFilter = 'ALL';
 
 // Session data (Phase 1 Security)
 var currentUser = {
@@ -991,7 +991,7 @@ var sessionTimer = null;
 function resetSessionTimer() {
   if (sessionTimer) clearTimeout(sessionTimer);
   sessionTimer = setTimeout(function() {
-    alert('⏰ Session expired after 30 minutes of inactivity. Please log in again.');
+    showToast('⏰ Session expired. Please log in again.', 'error');
     logout();
   }, SESSION_TIMEOUT_MS);
 }
@@ -1093,15 +1093,15 @@ async function login() {
       if (data.message) {
         // Show lockout message if applicable
         if (data.message.indexOf('locked') >= 0 || data.message.indexOf('disabled') >= 0) {
-          alert('⚠️ ' + data.message);
+          showToast('⚠️ ' + data.message, 'warn');
         }
       }
     }
   } catch(e) {
     if (e.name === 'AbortError') {
-      alert('⏱️ Login timed out. The server is slow — please try again.');
+      showToast('⏱️ Login timed out. Please try again.', 'error');
     } else {
-      alert('Connection error: ' + e.message);
+      showToast('Connection error: ' + e.message, 'error');
     }
   }
   btn.textContent = 'Enter Dashboard';
@@ -1462,7 +1462,7 @@ async function updateStatus(orderId, newStatus) {
     renderFilters();
     renderOrders();
   } else {
-    alert('Failed: ' + (result.error || 'Unknown error'));
+    showToast('Failed: ' + (result.error || 'Unknown error'), 'error');
   }
 }
 
@@ -1488,12 +1488,12 @@ async function deleteOrder(orderId) {
       renderFilters();
       renderOrders();
       
-      alert('✅ Order ' + orderId + ' deleted successfully');
+      showToast('✅ Order ' + orderId + ' deleted');
     } else {
-      alert('❌ Failed to delete: ' + (result.error || 'Unknown error'));
+      showToast('❌ Failed to delete: ' + (result.error || 'Unknown error'), 'error');
     }
   } catch (error) {
-    alert('❌ Error: ' + error.message);
+    showToast('❌ Error: ' + error.message, 'error');
   }
 }
 
@@ -1507,8 +1507,7 @@ var eoActiveCat = null;     // active category in add-items section
 
 function openEditOrder(orderId) {
   var o = allOrders.find(function(x) { return x.orderId === orderId; });
-  if (!o) { alert('Order not found'); return; }
-  eoOrderId = orderId;
+  if (!o) { showToast('Order not found', 'error'); return; }
   // Deep-copy items so we can mutate without affecting allOrders
   eoItems = (o.items || []).map(function(it) {
     return { code: it.code, name: it.name, size: it.size || '', sugar: it.sugar || '',
@@ -1619,7 +1618,7 @@ async function eoCancelOrder() {
     document.getElementById('eoOverlay').classList.remove('open');
     eoOrderId = null; eoItems = [];
   } else {
-    alert('❌ Failed to cancel: ' + (result.error || 'Unknown error'));
+    showToast('❌ Failed to cancel: ' + (result.error || 'Unknown error'), 'error');
   }
 }
 
@@ -1654,10 +1653,10 @@ async function eoSaveChanges() {
       document.getElementById('eoOverlay').classList.remove('open');
       eoOrderId = null; eoItems = [];
     } else {
-      alert('❌ Save failed: ' + (result.error || 'Unknown error'));
+      showToast('❌ Save failed: ' + (result.error || 'Unknown error'), 'error');
     }
   } catch (err) {
-    alert('❌ Error: ' + err.message);
+    showToast('❌ Error: ' + err.message, 'error');
   } finally {
     btn.disabled = false; btn.textContent = '💾 Save Changes';
   }
@@ -1668,7 +1667,7 @@ async function eoSaveChanges() {
 // ══════════════════════════════════════════════════════════
 function printReceipt(orderId) {
   var o = allOrders.find(function(x) { return x.orderId === orderId; });
-  if (!o) { alert('Order not found'); return; }
+  if (!o) { showToast('Order not found', 'error'); return; }
 
   // Calculate totals
   var itemsTotal = 0;
@@ -1859,7 +1858,7 @@ function printReceipt(orderId) {
     printWin.document.write(receiptHTML);
     printWin.document.close();
   } else {
-    alert('Pop-up blocked! Please allow pop-ups for this site to print receipts.');
+    showToast('Pop-up blocked! Please allow pop-ups to print receipts.', 'warn');
   }
 }
 
@@ -2046,7 +2045,7 @@ async function doVerifyPayment(paymentId) {
       renderStats();
     }
   } else {
-    alert('Failed: ' + (result.error || 'Unknown error'));
+    showToast('Failed: ' + (result.error || 'Unknown error'), 'error');
   }
 }
 
@@ -2066,7 +2065,7 @@ async function doRejectPayment(paymentId) {
       renderStats();
     }
   } else {
-    alert('Failed: ' + (result.error || 'Unknown error'));
+    showToast('Failed: ' + (result.error || 'Unknown error'), 'error');
   }
 }
 
@@ -2298,7 +2297,7 @@ function poCartRemove(idx) {
 }
 
 async function submitPlatformOrder() {
-  if (poCart.length === 0) return alert('Cart is empty');
+  if (poCart.length === 0) { showToast('Cart is empty', 'warn'); return; }
 
   var btn = document.getElementById('poSubmitBtn');
   btn.disabled = true;
@@ -2322,12 +2321,9 @@ async function submitPlatformOrder() {
     closePlatformOrder();
     // Refresh orders
     loadOrders();
-    alert('✅ ' + poSelectedPlatform + ' order placed!\n\nOrder: ' + result.orderId +
-      '\nTotal: ₱' + Number(result.total).toLocaleString() +
-      (result.commissionRate > 0 ? '\nCommission: ' + result.commissionRate + '% = ₱' + Number(result.commissionAmt).toLocaleString() : '') +
-      (result.platformRef ? '\nRef: ' + result.platformRef : ''));
+    showToast('✅ ' + poSelectedPlatform + ' order placed! Order: ' + result.orderId + ' · ₱' + Number(result.total).toLocaleString());
   } else {
-    alert('❌ Failed: ' + (result.error || 'Unknown error'));
+    showToast('❌ Failed: ' + (result.error || 'Unknown error'), 'error');
   }
 }
 
@@ -2546,7 +2542,7 @@ function onMenuPhotoFileChange(input) {
   if (!file) return;
   var maxMB = 5;
   if (file.size > maxMB * 1024 * 1024) {
-    alert('Image too large. Max ' + maxMB + 'MB.');
+    showToast('Image too large. Max ' + maxMB + 'MB.', 'error');
     input.value = '';
     return;
   }
@@ -2775,7 +2771,7 @@ async function loadOnlineOrders() {
     var data = await resp.json();
     if (!data.ok) throw new Error(data.error || 'Failed to load');
     allOnlineOrders = data.orders || [];
-    onlineOrderPendingCount = allOnlineOrders.filter(function(o) { return o.status === 'PENDING_PAYMENT' || o.status === 'PAYMENT_SUBMITTED'; }).length;
+    onlineOrderPendingCount = allOnlineOrders.filter(function(o) { return o.status === 'PENDING'; }).length;
     renderOnlineOrderFilters();
     renderOnlineOrders();
     renderFilters(); // Update tab count
@@ -2788,15 +2784,16 @@ async function loadOnlineOrders() {
 function refreshOnlineOrders() { loadOnlineOrders(); }
 
 function renderOnlineOrderFilters() {
-  var counts = { ALL:0, PENDING_PAYMENT:0, PAYMENT_SUBMITTED:0, CONFIRMED:0, PREPARING:0, READY:0, COMPLETED:0, CANCELLED:0 };
+  var counts = { ALL:0, PENDING:0, CONFIRMED:0, PREPARING:0, READY:0, COMPLETED:0, CANCELLED:0 };
+  var submittedCount = 0;
   allOnlineOrders.forEach(function(o) {
     counts.ALL++;
     if (counts[o.status] !== undefined) counts[o.status]++;
     else counts[o.status] = 1;
+    if (o.status === 'PENDING' && o.payment_status === 'SUBMITTED') submittedCount++;
   });
   var tabs = [
-    { key:'PAYMENT_SUBMITTED', label:'💳 Proof Submitted', count: counts.PAYMENT_SUBMITTED },
-    { key:'PENDING_PAYMENT', label:'⏳ Pending Pay', count: counts.PENDING_PAYMENT },
+    { key:'PENDING', label:'⏳ Pending', count: counts.PENDING },
     { key:'CONFIRMED', label:'✅ Confirmed', count: counts.CONFIRMED },
     { key:'PREPARING', label:'👨\u200d🍳 Preparing', count: counts.PREPARING },
     { key:'READY', label:'✨ Ready', count: counts.READY },
@@ -2822,9 +2819,16 @@ function renderOnlineOrders() {
     return o.status === onlineOrderFilter;
   });
   filtered.sort(function(a,b) {
-    var order = { PAYMENT_SUBMITTED:0, PENDING_PAYMENT:1, CONFIRMED:2, PREPARING:3, READY:4, COMPLETED:5, CANCELLED:6 };
-    var sa = order[a.status] !== undefined ? order[a.status] : 9;
-    var sb = order[b.status] !== undefined ? order[b.status] : 9;
+    var sortOrder = { PENDING:0, CONFIRMED:1, PREPARING:2, READY:3, COMPLETED:4, CANCELLED:5 };
+    // Within PENDING, put SUBMITTED proof first
+    var getSort = function(o) {
+      var base = sortOrder[o.status] !== undefined ? sortOrder[o.status] * 10 : 90;
+      if (o.status === 'PENDING' && o.payment_status === 'SUBMITTED') base = 0;
+      else if (o.status === 'PENDING') base = 5;
+      return base;
+    };
+    var sa = getSort(a);
+    var sb = getSort(b);
     if (sa !== sb) return sa - sb;
     return new Date(b.created_at || 0) - new Date(a.created_at || 0);
   });
@@ -2833,23 +2837,39 @@ function renderOnlineOrders() {
     return;
   }
   document.getElementById('onlineOrdersGrid').innerHTML = filtered.map(function(o) {
-    var statusColors = {
-      PENDING_PAYMENT: 'background:#FEF3C7;color:#92400E',
-      PAYMENT_SUBMITTED: 'background:#DBEAFE;color:#1E40AF',
-      CONFIRMED: 'background:#D1FAE5;color:#065F46',
-      PREPARING: 'background:#EDE9FE;color:#6D28D9',
-      READY: 'background:#D1FAE5;color:#065F46',
-      COMPLETED: 'background:var(--mist-light);color:var(--timber)',
-      CANCELLED: 'background:#FEE2E2;color:#991B1B'
-    };
-    var statusStyle = statusColors[o.status] || 'background:var(--mist-light);color:var(--timber)';
+    var displayStatus, statusStyle;
+    if (o.status === 'PENDING' && o.payment_status === 'SUBMITTED') {
+      displayStatus = 'PROOF SUBMITTED';
+      statusStyle = 'background:#DBEAFE;color:#1E40AF';
+    } else if (o.status === 'PENDING') {
+      displayStatus = 'AWAITING PAYMENT';
+      statusStyle = 'background:#FEF3C7;color:#92400E';
+    } else if (o.status === 'CONFIRMED') {
+      displayStatus = 'CONFIRMED';
+      statusStyle = 'background:#D1FAE5;color:#065F46';
+    } else if (o.status === 'PREPARING') {
+      displayStatus = 'PREPARING';
+      statusStyle = 'background:#EDE9FE;color:#6D28D9';
+    } else if (o.status === 'READY') {
+      displayStatus = 'READY';
+      statusStyle = 'background:#D1FAE5;color:#065F46';
+    } else if (o.status === 'COMPLETED') {
+      displayStatus = 'COMPLETED';
+      statusStyle = 'background:var(--mist-light);color:var(--timber)';
+    } else if (o.status === 'CANCELLED') {
+      displayStatus = 'CANCELLED';
+      statusStyle = 'background:#FEE2E2;color:#991B1B';
+    } else {
+      displayStatus = o.status;
+      statusStyle = 'background:var(--mist-light);color:var(--timber)';
+    }
     var timeStr = '';
     try { var d = new Date(o.created_at); timeStr = d.toLocaleString('en-PH', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit', hour12:true }); } catch(e) {}
     var html = '<div class="order-card" data-status="' + esc(o.status) + '" style="margin-bottom:12px">';
     // Header
     html += '<div class="oc-header">';
     html += '<div class="oc-id">' + esc(o.order_ref || o.id) + '</div>';
-    html += '<span class="oc-status-badge" style="' + statusStyle + '">' + esc(o.status.replace(/_/g,' ')) + '</span>';
+    html += '<span class="oc-status-badge" style="' + statusStyle + '">' + esc(displayStatus) + '</span>';
     html += '<div class="oc-time">' + esc(timeStr) + '</div>';
     html += '</div>';
     // Customer info
@@ -2884,9 +2904,11 @@ function renderOnlineOrders() {
     }
     // Actions
     html += '<div class="oc-actions" style="flex-wrap:wrap">';
-    if (o.status === 'PAYMENT_SUBMITTED') {
+    if (o.status === 'PENDING' && o.payment_status === 'SUBMITTED') {
       html += '<button class="oc-btn oc-btn-start" onclick="onlineOrderAction(\'' + esc(o.order_ref) + '\',\'CONFIRMED\')">✅ Confirm Payment</button>';
       html += '<button class="oc-btn oc-btn-cancel" onclick="onlineOrderAction(\'' + esc(o.order_ref) + '\',\'CANCELLED\')">✕ Reject</button>';
+    } else if (o.status === 'PENDING') {
+      html += '<span style="font-size:.75rem;color:var(--timber);padding:4px 0">⏳ Waiting for payment proof</span>';
     } else if (o.status === 'CONFIRMED') {
       html += '<button class="oc-btn oc-btn-start" onclick="onlineOrderAction(\'' + esc(o.order_ref) + '\',\'PREPARING\')">👨‍🍳 Start Preparing</button>';
     } else if (o.status === 'PREPARING') {
@@ -2917,7 +2939,7 @@ async function onlineOrderAction(orderRef, newStatus) {
     if (!data.ok) throw new Error(data.error || 'Failed');
     await loadOnlineOrders();
   } catch (e) {
-    alert('Error: ' + e.message);
+    showToast('Error: ' + e.message, 'error');
   }
 }
 
@@ -2933,10 +2955,10 @@ async function onlineOrderReadyAndSMS(orderRef, phone, name) {
     var data = await resp.json();
     if (!data.ok) throw new Error(data.error || 'Failed');
     var smsMsg = data.smsSent ? '✅ Order marked READY and SMS sent!' : '✅ Order marked READY (SMS: ' + (data.smsError || 'not configured') + ')';
-    alert(smsMsg);
+    showToast(smsMsg);
     await loadOnlineOrders();
   } catch (e) {
-    alert('Error: ' + e.message);
+    showToast('Error: ' + e.message, 'error');
   }
 }
 
@@ -3109,13 +3131,12 @@ async function runMenuSync() {
     var resp = await fetch('/api/sync-menu', { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' });
     var data = await resp.json();
     if (data.ok) {
-      alert('✅ ' + (data.message || 'Menu sync complete'));
-      runHealthCheck();
+      showToast('✅ ' + (data.message || 'Menu sync complete'));
     } else {
-      alert('❌ Sync failed: ' + (data.error || 'Unknown error'));
+      showToast('❌ Sync failed: ' + (data.error || 'Unknown error'), 'error');
     }
-  } catch(e) {
-    alert('❌ Sync error: ' + e.message);
+  } catch (e) {
+    showToast('❌ Sync error: ' + e.message, 'error');
   }
   if (btn) { btn.textContent = '🔧 Sync Menu Now'; btn.disabled = false; }
 }
