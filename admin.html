@@ -2998,11 +2998,19 @@ function renderOnlineOrders() {
 }
 
 async function onlineOrderAction(orderRef, newStatus) {
-  var confirmMsg = 'Update order ' + orderRef + ' to ' + newStatus + '?';
+  var confirmMsg, confirmTitle, confirmOk, confirmNo;
   if (newStatus === 'CANCELLED') {
-    confirmMsg = '⚠️ Cancel online order ' + orderRef + '?\n\nThis will notify the customer.';
+    confirmTitle = '⚠️ Cancel Order';
+    confirmMsg = 'Cancel online order ' + orderRef + '? This cannot be undone.';
+    confirmOk = 'Yes, Cancel Order';
+    confirmNo = 'Keep Order';
+  } else {
+    confirmTitle = 'Update Order';
+    confirmMsg = 'Update order ' + orderRef + ' to ' + newStatus + '?';
+    confirmOk = 'Confirm';
+    confirmNo = 'Go Back';
   }
-  var confirmed = await ygcConfirm('Update Order', confirmMsg, 'Confirm', 'Cancel');
+  var confirmed = await ygcConfirm(confirmTitle, confirmMsg, confirmOk, confirmNo);
   if (!confirmed) return;
   try {
     var resp = await fetch('/api/online-order', {
