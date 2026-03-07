@@ -819,6 +819,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
         <div id="menuEditImgLocalBadge" style="display:none;margin-top:6px;font-size:.65rem;color:#065F46;background:#D1FAE5;border-radius:6px;padding:2px 8px;display:inline-block">✓ Local Vercel image</div>
       </div>
       <input type="hidden" id="menuEditId">
+      <input type="hidden" id="menuEditIsNew" value="false">
       <div style="margin-bottom:12px">
         <label style="font-size:.75rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">ITEM NAME</label>
         <input id="menuEditName" type="text" style="width:100%;padding:10px 12px;border:1.5px solid var(--mist);border-radius:8px;font-size:.9rem;font-family:var(--font-body)">
@@ -2451,6 +2452,7 @@ function openEditItemModal(itemCode) {
 
   document.getElementById('menuEditTitle').textContent = 'Edit: ' + item.name;
   document.getElementById('menuEditId').value = item.code;
+  document.getElementById('menuEditIsNew').value = 'false';
   document.getElementById('menuEditName').value = item.name;
   document.getElementById('menuEditCategory').value = item.category || '';
   document.getElementById('menuEditPrice').value = item.price;
@@ -2476,6 +2478,7 @@ function openEditItemModal(itemCode) {
 function openAddItemModal() {
   document.getElementById('menuEditTitle').textContent = 'Add New Item';
   document.getElementById('menuEditId').value = '';
+  document.getElementById('menuEditIsNew').value = 'true';
   document.getElementById('menuEditName').value = '';
   document.getElementById('menuEditCategory').value = '';
   document.getElementById('menuEditPrice').value = '';
@@ -2644,9 +2647,12 @@ async function uploadMenuPhoto() {
   var itemCode = document.getElementById('menuEditId').value.trim();
   var statusEl = document.getElementById('menuEditUploadStatus');
   // Auto-generate a temp item code for new items so upload works before saving
+  // Store in menuEditId for the upload, but preserve menuEditIsNew so saveMenuItemEdit
+  // still knows this is a new item (not an update to an existing one).
   if (!itemCode) {
     itemCode = 'ITEM_' + Date.now();
     document.getElementById('menuEditId').value = itemCode;
+    // Do NOT change menuEditIsNew — it was set to 'true' by openAddItemModal
   }
   if (!_menuPhotoFile) {
     statusEl.style.display = 'block';
@@ -2723,11 +2729,20 @@ async function saveMenuItemEdit() {
     setTimeout(function() { nameEl.style.borderColor = ''; }, 2000);
     return;
   }
-  var isNew = !itemId;
+  // Use the explicit isNew flag (set by openAddItemModal/openMenuEditModal) so that
+  // uploading a photo before saving (which fills menuEditId with a temp code) does NOT
+  // accidentally turn an addMenuItem into an updateMenuItem.
+  var isNew = document.getElementById('menuEditIsNew').value === 'true';
   var action = isNew ? 'addMenuItem' : 'updateMenuItem';
   var payload = { name:name, category:category, price:price, hasSizes:hasSizes, hasSugar:hasSugar,
     priceShort:priceShort, priceMedium:priceMedium, priceTall:priceTall, image:image, status:status };
-  if (!isNew) payload.itemId = itemId;
+  if (!isNew) {
+    payload.itemId = itemId;
+  } else if (itemId) {
+    // If a photo was uploaded before saving, itemId holds the temp code used for the image.
+    // Pass it to GAS so the item code matches the uploaded image filename.
+    payload.itemId = itemId;
+  }
   var saveBtn = document.getElementById('menuEditSaveBtn');
   if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving...'; }
   var result = await api(action, payload);
