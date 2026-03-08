@@ -63,8 +63,8 @@ async function checkSupabase() {
 // ── Check menu drift: compare GAS item count vs Supabase ─────
 async function checkMenuDrift() {
   try {
-    // Get Supabase total item count (all, including inactive)
-    const sbResp = await fetch(`${SUPABASE_URL}/rest/v1/menu_items?select=item_code`, {
+    // Get Supabase active item count only (matches GAS which only returns active items)
+    const sbResp = await fetch(`${SUPABASE_URL}/rest/v1/menu_items?select=item_code&is_active=eq.true`, {
       headers: {
         'apikey': SUPABASE_KEY,
         'Authorization': `Bearer ${SUPABASE_KEY}`,
