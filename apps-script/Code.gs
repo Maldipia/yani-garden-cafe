@@ -2197,7 +2197,7 @@ function isThrottled(tableNo) {
     const data = ordersSheet.getDataRange().getValues();
     
     const throttleMinutes = parseInt(getSetting('THROTTLE_MINUTES')) || 5;
-    const throttleMax = parseInt(getSetting('THROTTLE_MAX_ORDERS')) || 5;
+    const throttleMax = parseInt(getSetting('THROTTLE_MAX_ORDERS')) || 30; // Increased from 5 to 30 for real cafe usage
     const cutoffTime = Date.now() - (throttleMinutes * 60 * 1000);
     
     let recentOrders = 0;
