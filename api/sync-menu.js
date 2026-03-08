@@ -10,11 +10,18 @@ const SUPABASE_URL    = 'https://hnynvclpvfxzlfjphefj.supabase.co';
 const SUPABASE_KEY    = process.env.SUPABASE_SECRET_KEY || 'sb_publishable_PQBb1nDY7U7SxNfgDYoXyg_GtoLowLM';
 
 const CATEGORY_MAP = {
-  'COLD BEVERAGE': 'dc95fd8d-ba61-4171-90aa-3707fbb4bdf5',
-  'COFFEE':        'ba50e0a2-b99a-4481-800d-c8e962d95b43',
-  'PASTRY':        '228b02da-1a81-46e4-aae2-794b5c88a990',
-  'SODA':          'd0fb0824-2b84-4889-9441-eeeaee11cd51',
-  'FOOD':          '4a072720-dc18-4065-9aa9-d8437bf01038',
+  // New categories (GAS → Supabase)
+  'HOT':                '069ee74a-350f-467a-86ef-876dd48ced3e',
+  'ICE AND ICE BLENDED':'9094c828-1da1-4802-838b-8eb4da3c16be',
+  'PASTRY':             '228b02da-1a81-46e4-aae2-794b5c88a990',
+  'PASTA':              '098a930f-3789-42fd-b7ca-bd704126ec08',
+  'WRAP':               '9abfbe5e-3c68-43cb-bed3-4ed5c63380c1',
+  'OTHER':              '1b803e7a-c69c-442a-991c-d62c99e6dd11',
+  // Legacy fallbacks (in case old category names appear)
+  'COLD BEVERAGE':      '9094c828-1da1-4802-838b-8eb4da3c16be',
+  'COFFEE':             '069ee74a-350f-467a-86ef-876dd48ced3e',
+  'SODA':               '9094c828-1da1-4802-838b-8eb4da3c16be',
+  'FOOD':               '1b803e7a-c69c-442a-991c-d62c99e6dd11',
 };
 
 function getCategoryId(name) {
