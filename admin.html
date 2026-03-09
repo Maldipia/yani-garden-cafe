@@ -119,6 +119,60 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 .stat-value { font-family:var(--font-soul); font-size:1.4rem; font-weight:700; color:var(--forest) }
 .stat-label { font-size:.65rem; color:var(--timber); font-weight:600; text-transform:uppercase; letter-spacing:.5px; margin-top:2px }
 
+/* ── Queue Monitor Panel ── */
+.queue-monitor {
+  margin:0 16px 12px; border-radius:var(--r-lg); overflow:hidden;
+  border:1.5px solid var(--mist); background:var(--white);
+  box-shadow:var(--shadow-sm);
+}
+.queue-monitor-header {
+  display:flex; align-items:center; gap:8px; padding:10px 14px;
+  background:var(--forest-deep); color:var(--white); cursor:pointer;
+  font-size:.78rem; font-weight:700;
+}
+.queue-monitor-header .qm-dot {
+  width:8px; height:8px; border-radius:50%; background:#4ADE80;
+  animation:pulse 2s infinite;
+}
+.queue-monitor-header .qm-dot.busy { background:#FBBF24 }
+.queue-monitor-header .qm-dot.error { background:#F87171; animation:none }
+.queue-monitor-body {
+  display:none; padding:12px 14px;
+}
+.queue-monitor-body.open { display:block }
+.queue-stats-row {
+  display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;
+}
+.queue-stat {
+  flex:1; min-width:70px; text-align:center; padding:8px 6px;
+  border-radius:var(--r-sm); background:var(--mist-light);
+}
+.queue-stat-val { font-size:1.1rem; font-weight:700; font-family:var(--font-soul) }
+.queue-stat-val.pending { color:var(--gold) }
+.queue-stat-val.processing { color:var(--terra) }
+.queue-stat-val.completed { color:#16A34A }
+.queue-stat-val.dead { color:#DC2626 }
+.queue-stat-label { font-size:.6rem; color:var(--timber); font-weight:600; text-transform:uppercase; margin-top:2px }
+.queue-actions { display:flex; gap:8px; flex-wrap:wrap }
+.queue-btn {
+  padding:7px 12px; border-radius:var(--r-sm); font-size:.72rem; font-weight:700;
+  border:none; cursor:pointer; font-family:var(--font-body);
+}
+.queue-btn.refresh { background:var(--forest); color:var(--white) }
+.queue-btn.retry-dead { background:var(--terra); color:var(--white) }
+.queue-btn.view-dead { background:var(--mist); color:var(--forest-deep) }
+.queue-dead-list { margin-top:10px; max-height:200px; overflow-y:auto }
+.queue-dead-item {
+  padding:8px 10px; border-radius:var(--r-sm); background:var(--mist-light);
+  margin-bottom:6px; font-size:.72rem;
+}
+.queue-dead-ref { font-weight:700; color:var(--forest-deep) }
+.queue-dead-err { color:var(--terra); margin-top:2px; word-break:break-all }
+.queue-dead-actions { margin-top:6px; display:flex; gap:6px }
+.queue-dead-retry-btn {
+  padding:4px 10px; border-radius:12px; font-size:.65rem; font-weight:700;
+  background:var(--terra); color:var(--white); border:none; cursor:pointer;
+}
 /* ── Filter Tabs ── */
 .filter-bar {
   display:flex; gap:6px; padding:0 16px 12px; overflow-x:auto;
@@ -783,6 +837,31 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
     </a>
   </div>
 
+  <!-- Queue Monitor Panel -->
+  <div class="queue-monitor" id="queueMonitor" style="display:none">
+    <div class="queue-monitor-header" onclick="toggleQueueMonitor()">
+      <span class="qm-dot" id="qmDot"></span>
+      <span>⚡ Order Queue</span>
+      <span id="qmSummary" style="margin-left:auto;font-weight:400;opacity:.8">Loading...</span>
+      <span id="qmToggleIcon" style="margin-left:8px">▼</span>
+    </div>
+    <div class="queue-monitor-body" id="qmBody">
+      <div class="queue-stats-row">
+        <div class="queue-stat"><div class="queue-stat-val pending" id="qmPending">-</div><div class="queue-stat-label">Pending</div></div>
+        <div class="queue-stat"><div class="queue-stat-val processing" id="qmProcessing">-</div><div class="queue-stat-label">Processing</div></div>
+        <div class="queue-stat"><div class="queue-stat-val completed" id="qmCompleted">-</div><div class="queue-stat-label">Completed</div></div>
+        <div class="queue-stat"><div class="queue-stat-val dead" id="qmDead">-</div><div class="queue-stat-label">Dead</div></div>
+      </div>
+      <div id="qmAvgTime" style="font-size:.7rem;color:var(--timber);margin-bottom:10px"></div>
+      <div class="queue-actions">
+        <button class="queue-btn refresh" onclick="loadQueueStats()">🔄 Refresh</button>
+        <button class="queue-btn retry-dead" id="qmRetryAllBtn" onclick="retryAllDead()" style="display:none">↩ Retry All Dead</button>
+        <button class="queue-btn view-dead" id="qmViewDeadBtn" onclick="toggleDeadList()" style="display:none">📋 View Dead Orders</button>
+      </div>
+      <div class="queue-dead-list" id="qmDeadList" style="display:none"></div>
+    </div>
+  </div>
+
   <!-- Edit Order Modal (ADMIN/OWNER only) -->
   <div class="eo-overlay" id="eoOverlay" onclick="closeEditOrder(event)">
     <div class="eo-modal" id="eoModal">
@@ -1177,6 +1256,8 @@ async function login() {
         // Run health check for ADMIN/OWNER after login
         if (data.role === 'ADMIN' || data.role === 'OWNER') {
           setTimeout(runHealthCheck, 2000);
+          // Initialize queue monitor panel
+          setTimeout(initQueueMonitor, 1000);
         }
       }, 0);
     } else {
@@ -3479,7 +3560,166 @@ function showToast(msg, durationMs) {
   }, durationMs || 2500);
 }
 
-</script>
+// ══════════════════════════════════════════════════════════════
+// QUEUE MONITOR — Admin panel for order queue visibility
+// ══════════════════════════════════════════════════════════════
+var _qmOpen = false;
+var _qmDeadOrders = [];
+var _qmDeadListOpen = false;
+var _qmRefreshTimer = null;
+
+function initQueueMonitor() {
+  const panel = document.getElementById('queueMonitor');
+  if (panel) {
+    panel.style.display = 'block';
+    loadQueueStats();
+    // Auto-refresh every 30 seconds
+    _qmRefreshTimer = setInterval(loadQueueStats, 30000);
+  }
+}
+
+function toggleQueueMonitor() {
+  _qmOpen = !_qmOpen;
+  const body = document.getElementById('qmBody');
+  const icon = document.getElementById('qmToggleIcon');
+  if (body) body.classList.toggle('open', _qmOpen);
+  if (icon) icon.textContent = _qmOpen ? '▲' : '▼';
+}
+
+async function loadQueueStats() {
+  const dot = document.getElementById('qmDot');
+  const summary = document.getElementById('qmSummary');
+  try {
+    const r = await fetch('/api/queue-status?action=getQueueStats');
+    const data = await r.json();
+    if (!data.ok) throw new Error(data.error);
+    const s = data.stats;
+    document.getElementById('qmPending').textContent = s.pending;
+    document.getElementById('qmProcessing').textContent = s.processing;
+    document.getElementById('qmCompleted').textContent = s.completed;
+    document.getElementById('qmDead').textContent = s.dead;
+    // Update dot color
+    if (dot) {
+      dot.className = 'qm-dot';
+      if (s.dead > 0) dot.classList.add('error');
+      else if (s.pending > 0 || s.processing > 0) dot.classList.add('busy');
+    }
+    // Summary text
+    if (summary) {
+      if (s.pending === 0 && s.processing === 0 && s.dead === 0) {
+        summary.textContent = 'All clear';
+      } else {
+        const parts = [];
+        if (s.pending > 0) parts.push(s.pending + ' pending');
+        if (s.processing > 0) parts.push(s.processing + ' processing');
+        if (s.dead > 0) parts.push(s.dead + ' dead');
+        summary.textContent = parts.join(' · ');
+      }
+    }
+    // Avg processing time
+    const avgEl = document.getElementById('qmAvgTime');
+    if (avgEl && s.avgProcessingTimeMs) {
+      avgEl.textContent = 'Avg processing time: ' + (s.avgProcessingTimeMs / 1000).toFixed(1) + 's (last 24h)';
+    }
+    // Show/hide dead order buttons
+    const retryBtn = document.getElementById('qmRetryAllBtn');
+    const viewBtn = document.getElementById('qmViewDeadBtn');
+    if (retryBtn) retryBtn.style.display = s.dead > 0 ? '' : 'none';
+    if (viewBtn) viewBtn.style.display = s.dead > 0 ? '' : 'none';
+  } catch (e) {
+    if (summary) summary.textContent = 'Error loading stats';
+    if (dot) { dot.className = 'qm-dot error'; }
+  }
+}
+
+async function toggleDeadList() {
+  _qmDeadListOpen = !_qmDeadListOpen;
+  const list = document.getElementById('qmDeadList');
+  const btn = document.getElementById('qmViewDeadBtn');
+  if (!_qmDeadListOpen) {
+    if (list) list.style.display = 'none';
+    if (btn) btn.textContent = '📋 View Dead Orders';
+    return;
+  }
+  if (btn) btn.textContent = '📋 Hide Dead Orders';
+  try {
+    const r = await fetch('/api/queue-status?action=getDeadOrders');
+    const data = await r.json();
+    _qmDeadOrders = data.orders || [];
+    renderDeadList();
+    if (list) list.style.display = 'block';
+  } catch (e) {
+    showToast('Failed to load dead orders: ' + e.message, 3000);
+  }
+}
+
+function renderDeadList() {
+  const list = document.getElementById('qmDeadList');
+  if (!list) return;
+  if (_qmDeadOrders.length === 0) {
+    list.innerHTML = '<div style="font-size:.72rem;color:var(--timber);padding:8px">No dead orders</div>';
+    return;
+  }
+  list.innerHTML = _qmDeadOrders.map(o => `
+    <div class="queue-dead-item">
+      <div class="queue-dead-ref">${o.order_ref} <span style="font-weight:400;color:var(--timber)">${new Date(o.created_at).toLocaleString('en-PH')}</span></div>
+      <div class="queue-dead-err">${o.error_message || 'No error message'}</div>
+      <div class="queue-dead-actions">
+        <button class="queue-dead-retry-btn" onclick="retrySingleDead('${o.order_ref}', ${o.id})">↩ Retry</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function retrySingleDead(orderRef, queueId) {
+  try {
+    const r = await fetch('/api/queue-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'retryDead', orderRef, queueId })
+    });
+    const data = await r.json();
+    if (data.ok) {
+      showToast('Order ' + orderRef + ' queued for retry', 2500);
+      loadQueueStats();
+      _qmDeadOrders = _qmDeadOrders.filter(o => o.order_ref !== orderRef);
+      renderDeadList();
+    } else {
+      showToast('Retry failed: ' + data.error, 3000);
+    }
+  } catch (e) {
+    showToast('Error: ' + e.message, 3000);
+  }
+}
+
+async function retryAllDead() {
+  if (!_qmDeadOrders.length) {
+    // Fetch dead orders first
+    const r = await fetch('/api/queue-status?action=getDeadOrders');
+    const data = await r.json();
+    _qmDeadOrders = data.orders || [];
+  }
+  if (_qmDeadOrders.length === 0) {
+    showToast('No dead orders to retry', 2000);
+    return;
+  }
+  let retried = 0;
+  for (const o of _qmDeadOrders) {
+    try {
+      await fetch('/api/queue-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'retryDead', orderRef: o.order_ref, queueId: o.id })
+      });
+      retried++;
+    } catch (e) {}
+  }
+  showToast(retried + ' dead orders queued for retry', 2500);
+  _qmDeadOrders = [];
+  loadQueueStats();
+  if (_qmDeadListOpen) renderDeadList();
+}
+</script>>
 
 <!-- ── Custom confirm dialog (non-blocking, fixes INP on cancel/delete) ── -->
 <div class="ygc-confirm-overlay" id="ygcConfirmOverlay">

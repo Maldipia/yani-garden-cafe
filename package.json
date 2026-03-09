@@ -2,5 +2,10 @@
   "name": "yani-garden-cafe-pos",
   "version": "3.0.0",
   "private": true,
-  "description": "Yani Garden Cafe QR Self-Order POS"
+  "description": "Yani Garden Cafe QR Self-Order POS",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.98.0",
+    "express": "^5.2.1",
+    "node-fetch": "^3.3.2"
+  }
 }

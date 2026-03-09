@@ -55,6 +55,8 @@ function isItemsValid(items) {
 }
 
 // ── Fire-and-forget GAS sync (non-blocking) ────────────────────────────────
+// NOTE: Direct GAS calls are now only used for non-order actions (status updates, etc.)
+// New orders are enqueued via enqueueOrderForGAS() to avoid the 30-concurrent-execution limit.
 async function callGAS(payload) {
   try {
     await fetch(GAS_URL, {
@@ -64,6 +66,39 @@ async function callGAS(payload) {
     });
   } catch (e) {
     console.warn('GAS sync failed (non-critical):', e.message);
+  }
+}
+
+// ── Enqueue order for GAS processing (queue-based, non-blocking) ─────────────
+// Writes to order_queue table; the queue-worker processes it sequentially.
+async function enqueueOrderForGAS(orderRef, orderType, gasPayload) {
+  try {
+    await supabase('POST', 'order_queue', {
+      order_ref: orderRef,
+      order_type: orderType || 'ONLINE',
+      order_data: gasPayload,
+      status: 'PENDING',
+      retry_count: 0,
+      max_retries: 3
+    });
+    // Trigger the worker immediately (fire-and-forget) to reduce latency
+    // Worker will process this order within seconds instead of waiting for cron
+    const workerUrl = process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}/api/queue-worker`
+      : null;
+    if (workerUrl) {
+      fetch(workerUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'process' })
+      }).catch(() => {}); // fire-and-forget
+    }
+    return true;
+  } catch (e) {
+    console.warn('Failed to enqueue order (falling back to direct GAS call):', e.message);
+    // Fallback: call GAS directly if queue insert fails
+    callGAS(gasPayload);
+    return false;
   }
 }
 
@@ -331,12 +366,13 @@ export default async function handler(req, res) {
       
       await supabase('POST', 'online_order_items', itemsToInsert);
 
-      // ── Sync to Google Sheets (fire-and-forget) ────────────────────────
+      // ── Enqueue to order_queue for sequential GAS processing ─────────────
+      // This replaces the direct GAS call to eliminate the 30-concurrent-execution limit.
       const itemsSummary = orderItems.map(i => {
         const sizePart = i.size ? ` (${i.size})` : '';
         return `${i.name}${sizePart} x${i.qty || i.quantity || 1}`;
       }).join(', ');
-      callGAS({
+      await enqueueOrderForGAS(orderRef, 'ONLINE', {
         action: 'syncOnlineOrder',
         orderRef,
         createdAt: new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila' }),
