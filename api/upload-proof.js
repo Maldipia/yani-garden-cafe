@@ -6,6 +6,25 @@
 const SUPABASE_URL = 'https://hnynvclpvfxzlfjphefj.supabase.co';
 const SUPABASE_ANON_KEY = process.env.SUPABASE_SECRET_KEY;
 
+const ALLOWED_ORIGINS = [
+  'https://yanigardencafe.com',
+  'https://pos.yanigardencafe.com',
+  'https://admin.yanigardencafe.com',
+  'https://yani-garden-cafe.vercel.app',
+  'https://yani-cafe.vercel.app',
+];
+
+function setCorsHeaders(req, res) {
+  const origin = req.headers.origin || '';
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Vary', 'Origin');
+}
+
+
 export const config = {
   api: {
     bodyParser: {
@@ -15,9 +34,7 @@ export const config = {
 };
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  setCorsHeaders(req, res);
   
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed' });

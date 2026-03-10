@@ -16,6 +16,25 @@
 // ══════════════════════════════════════════════════════════════
 
 const SUPABASE_URL = 'https://hnynvclpvfxzlfjphefj.supabase.co';
+
+const ALLOWED_ORIGINS = [
+  'https://yanigardencafe.com',
+  'https://pos.yanigardencafe.com',
+  'https://admin.yanigardencafe.com',
+  'https://yani-garden-cafe.vercel.app',
+  'https://yani-cafe.vercel.app',
+];
+
+function setCorsHeaders(req, res) {
+  const origin = req.headers.origin || '';
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Vary', 'Origin');
+}
+
 const SUPABASE_KEY = process.env.SUPABASE_SECRET_KEY;
 const WORKER_SECRET = process.env.QUEUE_WORKER_SECRET || null;
 const BATCH_SIZE = 20;
@@ -100,9 +119,7 @@ async function processSyncEntry(entry) {
 // MAIN HANDLER
 // ══════════════════════════════════════════════════════════════
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  setCorsHeaders(req, res);
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 

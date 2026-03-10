@@ -5,6 +5,25 @@
 // No GitHub token required — works permanently.
 // ══════════════════════════════════════════════════════════════
 const SUPABASE_URL = 'https://hnynvclpvfxzlfjphefj.supabase.co';
+
+const ALLOWED_ORIGINS = [
+  'https://yanigardencafe.com',
+  'https://pos.yanigardencafe.com',
+  'https://admin.yanigardencafe.com',
+  'https://yani-garden-cafe.vercel.app',
+  'https://yani-cafe.vercel.app',
+];
+
+function setCorsHeaders(req, res) {
+  const origin = req.headers.origin || '';
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Vary', 'Origin');
+}
+
 const SUPABASE_BUCKET = 'menu-images';
 
 // Use service role key (env var) for server-side storage uploads — bypasses RLS
@@ -15,9 +34,7 @@ const MAX_BASE64_LEN = 7_000_000; // ~5MB decoded
 
 export default async function handler(req, res) {
   // ── CORS headers ──────────────────────────────────────────
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  setCorsHeaders(req, res);
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') {
     return res.status(405).json({ ok: false, error: 'Method not allowed' });
