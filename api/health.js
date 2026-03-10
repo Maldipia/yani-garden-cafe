@@ -81,7 +81,7 @@ async function checkMenuDrift() {
       const gasResp = await fetch(APPS_SCRIPT_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'getMenuAdmin' }),
+        body: JSON.stringify({ action: 'getMenu' }),  // active items only — matches Supabase is_active=true filter
         redirect: 'follow'
       });
       if (gasResp.ok) {
