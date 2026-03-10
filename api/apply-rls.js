@@ -1,98 +1,70 @@
-// TEMPORARY — one-time RLS setup endpoint. DELETE AFTER USE.
-// Protected by a secret token so only we can call it.
+// TEMPORARY — one-time RLS setup via Supabase Management API
+// DELETE AFTER USE
 
-export const config = { api: { bodyParser: true } };
-
-const SUPABASE_URL = 'https://hnynvclpvfxzlfjphefj.supabase.co';
+const EXEC_SECRET = 'yani-rls-2026';
+const PROJECT_REF = 'hnynvclpvfxzlfjphefj';
 const SERVICE_KEY = process.env.SUPABASE_SECRET_KEY;
-const EXEC_SECRET = process.env.RLS_EXEC_SECRET || 'yani-rls-2026';
 
-// Execute SQL via Supabase's PostgREST RPC
-// We'll create the helper function first, use it, then drop it
-async function sbFetch(path, method = 'GET', body = null) {
-  const resp = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    method,
-    headers: {
-      'apikey': SERVICE_KEY,
-      'Authorization': `Bearer ${SERVICE_KEY}`,
-      'Content-Type': 'application/json',
-      'Prefer': 'return=representation',
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  return { status: resp.status, body: await resp.text() };
-}
-
-// Use Supabase's pg-meta internal API which IS accessible with service role
-async function execSQL(sql) {
-  const resp = await fetch(`${SUPABASE_URL}/pg/query`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${SERVICE_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ query: sql }),
-  });
-  return { status: resp.status, body: await resp.text() };
-}
-
-const RLS_STATEMENTS = [
-  // Enable RLS
-  'ALTER TABLE public.menu_items ENABLE ROW LEVEL SECURITY',
-  'ALTER TABLE public.menu_categories ENABLE ROW LEVEL SECURITY',
-  'ALTER TABLE public.dine_in_orders ENABLE ROW LEVEL SECURITY',
-  'ALTER TABLE public.dine_in_order_items ENABLE ROW LEVEL SECURITY',
-  'ALTER TABLE public.staff_users ENABLE ROW LEVEL SECURITY',
-  'ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY',
-  'ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY',
-  'ALTER TABLE public.sheets_sync_log ENABLE ROW LEVEL SECURITY',
-  'ALTER TABLE public.online_orders ENABLE ROW LEVEL SECURITY',
-
-  // Drop existing policies
-  `DO $$ DECLARE r RECORD; BEGIN FOR r IN SELECT tablename, policyname FROM pg_policies WHERE schemaname = 'public' LOOP EXECUTE 'DROP POLICY IF EXISTS "' || r.policyname || '" ON public.' || r.tablename; END LOOP; END $$`,
-
-  // menu_items: anon reads active only
+const STATEMENTS = [
+  `ALTER TABLE public.menu_items ENABLE ROW LEVEL SECURITY`,
+  `ALTER TABLE public.menu_categories ENABLE ROW LEVEL SECURITY`,
+  `ALTER TABLE public.dine_in_orders ENABLE ROW LEVEL SECURITY`,
+  `ALTER TABLE public.dine_in_order_items ENABLE ROW LEVEL SECURITY`,
+  `ALTER TABLE public.staff_users ENABLE ROW LEVEL SECURITY`,
+  `ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY`,
+  `ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY`,
+  `ALTER TABLE public.sheets_sync_log ENABLE ROW LEVEL SECURITY`,
+  `ALTER TABLE public.online_orders ENABLE ROW LEVEL SECURITY`,
+  `DROP POLICY IF EXISTS "anon_read_active_menu" ON public.menu_items`,
+  `DROP POLICY IF EXISTS "anon_read_categories" ON public.menu_categories`,
+  `DROP POLICY IF EXISTS "anon_read_settings" ON public.settings`,
   `CREATE POLICY "anon_read_active_menu" ON public.menu_items FOR SELECT TO anon USING (is_active = true)`,
-
-  // menu_categories: anon reads all
   `CREATE POLICY "anon_read_categories" ON public.menu_categories FOR SELECT TO anon USING (true)`,
-
-  // settings: anon reads all  
   `CREATE POLICY "anon_read_settings" ON public.settings FOR SELECT TO anon USING (true)`,
-
-  // Revoke dangerous defaults
-  'REVOKE ALL ON public.dine_in_orders FROM anon',
-  'REVOKE ALL ON public.dine_in_order_items FROM anon',
-  'REVOKE ALL ON public.staff_users FROM anon',
-  'REVOKE ALL ON public.payments FROM anon',
-  'REVOKE ALL ON public.sheets_sync_log FROM anon',
-  'REVOKE ALL ON public.online_orders FROM anon',
-
-  // Re-grant only what anon needs
-  'GRANT SELECT ON public.menu_items TO anon',
-  'GRANT SELECT ON public.menu_categories TO anon',
-  'GRANT SELECT ON public.settings TO anon',
+  `REVOKE INSERT, UPDATE, DELETE ON public.dine_in_orders FROM anon`,
+  `REVOKE INSERT, UPDATE, DELETE ON public.dine_in_order_items FROM anon`,
+  `REVOKE ALL ON public.staff_users FROM anon`,
+  `REVOKE ALL ON public.payments FROM anon`,
+  `REVOKE ALL ON public.sheets_sync_log FROM anon`,
+  `REVOKE INSERT, UPDATE, DELETE ON public.online_orders FROM anon`,
 ];
 
-export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', 'https://admin.yanigardencafe.com');
-  if (req.method === 'OPTIONS') return res.status(200).end();
+async function runSQL(sql, mgmtToken) {
+  const resp = await fetch(
+    `https://api.supabase.com/v1/projects/${PROJECT_REF}/database/query`,
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${mgmtToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ query: sql }),
+    }
+  );
+  const text = await resp.text();
+  return { status: resp.status, body: text.slice(0, 150) };
+}
 
-  // Auth check
+export default async function handler(req, res) {
   const token = req.headers['x-exec-secret'] || req.query.secret;
-  if (token !== EXEC_SECRET) {
-    return res.status(403).json({ ok: false, error: 'Forbidden' });
+  if (token !== EXEC_SECRET) return res.status(403).json({ error: 'Forbidden' });
+
+  // mgmt token can be passed as query param for one-time use
+  const mgmtToken = req.query.mgmt || req.headers['x-mgmt-token'];
+  if (!mgmtToken) {
+    return res.status(400).json({ 
+      error: 'Need Supabase Management API token',
+      hint: 'Pass as ?mgmt=YOUR_SUPABASE_PAT or x-mgmt-token header',
+      howToGet: 'https://supabase.com/dashboard/account/tokens → Generate new token'
+    });
   }
 
   const results = [];
-  for (const sql of RLS_STATEMENTS) {
-    try {
-      const r = await execSQL(sql);
-      results.push({ sql: sql.slice(0, 60) + '...', status: r.status, body: r.body.slice(0, 100) });
-    } catch (e) {
-      results.push({ sql: sql.slice(0, 60) + '...', error: e.message });
-    }
+  for (const sql of STATEMENTS) {
+    const r = await runSQL(sql, mgmtToken);
+    results.push({ sql: sql.slice(0, 55), status: r.status, body: r.body });
   }
 
-  return res.status(200).json({ ok: true, results });
+  const allOk = results.every(r => r.status < 300);
+  return res.status(200).json({ ok: allOk, results });
 }
