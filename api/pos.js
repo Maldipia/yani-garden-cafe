@@ -277,6 +277,52 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: result.ok, data: result.data });
     }
 
+    // ── Direct Supabase: updateOrderStatus (bypass GAS for reliability) ────
+    // GAS is slow/unreliable for status updates — handle directly in Supabase
+    // AND fire-and-forget to GAS so Google Sheets stays in sync.
+    if (action === 'updateOrderStatus') {
+      const orderId = String(body.orderId || '').trim();
+      const newStatus = String(body.status || '').trim().toUpperCase();
+      const validStatuses = ['NEW', 'PREPARING', 'READY', 'COMPLETED', 'CANCELLED'];
+      if (!orderId) return res.status(400).json({ ok: false, error: 'orderId is required' });
+      if (!validStatuses.includes(newStatus)) {
+        return res.status(400).json({ ok: false, error: 'Invalid status: ' + newStatus });
+      }
+      // 1. Update Supabase order_queue if the order is queued (raw URL to preserve PostgREST syntax)
+      try {
+        const queueStatus = newStatus === 'CANCELLED' ? 'CANCELLED' : 'PROCESSED';
+        const queueUrl = `${SUPABASE_URL}/rest/v1/order_queue?order_ref=eq.${encodeURIComponent(orderId)}&status=in.(PENDING,PROCESSING)`;
+        await fetch(queueUrl, {
+          method: 'PATCH',
+          headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+          body: JSON.stringify({ status: queueStatus })
+        });
+      } catch (e) { /* order may not be in queue — that's fine */ }
+      // 2. Fire-and-forget GAS sync (non-blocking — don't wait for it)
+      callAppsScript(body).catch(e => console.warn('GAS updateOrderStatus sync failed (non-critical):', e.message));
+      // 3. Return success immediately — UI is responsive
+      return res.status(200).json({ ok: true, orderId, status: newStatus });
+    }
+
+    // ── Direct GAS: deleteOrder (with Supabase queue cleanup) ─────────────
+    if (action === 'deleteOrder') {
+      const orderId = String(body.orderId || '').trim();
+      if (!orderId) return res.status(400).json({ ok: false, error: 'orderId is required' });
+      // 1. Clean up from order_queue in Supabase
+      try {
+        await supabaseRequest('DELETE', 'order_queue', null, { order_ref: `eq.${orderId}` });
+      } catch (e) { /* may not exist in queue */ }
+      // 2. Forward to GAS to delete from Google Sheets
+      let gasResult;
+      try {
+        gasResult = await callAppsScript(body);
+      } catch (err) {
+        console.error('GAS deleteOrder failed:', err.message);
+        return res.status(502).json({ ok: false, error: 'Delete failed: ' + err.message });
+      }
+      return res.status(200).json(gasResult);
+    }
+
     // ── Forward to Apps Script ────────────────────────────────────────────
     let gasResult;
     try {
