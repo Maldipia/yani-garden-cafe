@@ -1000,7 +1000,15 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
       </div>
       <div style="margin-bottom:12px">
         <label style="font-size:.75rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">CATEGORY</label>
-        <input id="menuEditCategory" type="text" style="width:100%;padding:10px 12px;border:1.5px solid var(--mist);border-radius:8px;font-size:.9rem;font-family:var(--font-body)" placeholder="e.g. Coffee, Food, Drinks">
+        <select id="menuEditCategory" style="width:100%;padding:10px 12px;border:1.5px solid var(--mist);border-radius:8px;font-size:.9rem;font-family:var(--font-body);background:var(--white);color:var(--forest-deep)">
+          <option value="Best With">Best With</option>
+          <option value="Hot">Hot</option>
+          <option value="Ice And Ice Blended">Ice And Ice Blended</option>
+          <option value="Other">Other</option>
+          <option value="Pasta">Pasta</option>
+          <option value="Pastry">Pastry</option>
+          <option value="Wrap">Wrap</option>
+        </select>
       </div>
       <div style="margin-bottom:12px">
         <label style="font-size:.75rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">BASE PRICE (₱)</label>
@@ -2675,7 +2683,7 @@ function openAddItemModal() {
   document.getElementById('menuEditId').value = '';
   document.getElementById('menuEditIsNew').value = 'true';
   document.getElementById('menuEditName').value = '';
-  document.getElementById('menuEditCategory').value = '';
+  document.getElementById('menuEditCategory').value = 'Other';
   document.getElementById('menuEditPrice').value = '';
   document.getElementById('menuEditHasSizes').checked = false;
   document.getElementById('menuEditHasSugar').checked = false;
