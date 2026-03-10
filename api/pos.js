@@ -65,18 +65,26 @@ function validateMenuPayload(body, requireItemId = false) {
   return errors;
 }
 
-// ── Category name → Supabase UUID map ─────────────────────────────────────
-const CATEGORY_MAP = {
-  'COLD BEVERAGE': 'dc95fd8d-ba61-4171-90aa-3707fbb4bdf5',
-  'COFFEE':        'ba50e0a2-b99a-4481-800d-c8e962d95b43',
-  'PASTRY':        '228b02da-1a81-46e4-aae2-794b5c88a990',
-  'SODA':          'd0fb0824-2b84-4889-9441-eeeaee11cd51',
-  'FOOD':          '4a072720-dc18-4065-9aa9-d8437bf01038',
+// ── Category UUID ↔ name maps (from menu_categories table) ──────────────────
+const CATEGORY_ID_TO_NAME = {
+  '228b02da-1a81-46e4-aae2-794b5c88a990': 'Pastry',
+  '069ee74a-350f-467a-86ef-876dd48ced3e': 'Hot',
+  '9094c828-1da1-4802-838b-8eb4da3c16be': 'Ice And Ice Blended',
+  '098a930f-3789-42fd-b7ca-bd704126ec08': 'Pasta',
+  '1b803e7a-c69c-442a-991c-d62c99e6dd11': 'Other',
+  '9abfbe5e-3c68-43cb-bed3-4ed5c63380c1': 'Wrap',
+  '5297871b-fa2e-4376-bd81-6d9b0c173be8': 'Best With',
 };
+const CATEGORY_NAME_TO_ID = Object.fromEntries(
+  Object.entries(CATEGORY_ID_TO_NAME).map(([id, name]) => [name.toUpperCase(), id])
+);
 
 function getCategoryId(categoryName) {
   if (!categoryName) return null;
-  return CATEGORY_MAP[String(categoryName).trim().toUpperCase()] || null;
+  return CATEGORY_NAME_TO_ID[String(categoryName).trim().toUpperCase()] || null;
+}
+function getCategoryName(categoryId) {
+  return CATEGORY_ID_TO_NAME[categoryId] || 'Other';
 }
 
 // ── Supabase REST helper ───────────────────────────────────────────────────
@@ -167,7 +175,7 @@ export default async function handler(req, res) {
       );
       if (!r.ok) return res.status(502).json({ ok: false, error: 'Failed to load menu' });
       const items = r.data.map(m => ({
-        itemId:      m.item_code,
+        code:        m.item_code,
         name:        m.name,
         price:       m.base_price,
         hasSizes:    m.has_sizes,
@@ -176,7 +184,8 @@ export default async function handler(req, res) {
         priceMedium: m.price_medium,
         priceTall:   m.price_tall,
         image:       m.image_path || '',
-        categoryId:  m.category_id,
+        category:    getCategoryName(m.category_id),
+        available:   true,
       }));
       return res.status(200).json({ ok: true, items });
     }
@@ -188,7 +197,7 @@ export default async function handler(req, res) {
       );
       if (!r.ok) return res.status(502).json({ ok: false, error: 'Failed to load menu' });
       const items = r.data.map(m => ({
-        itemId:      m.item_code,
+        code:        m.item_code,
         name:        m.name,
         price:       m.base_price,
         hasSizes:    m.has_sizes,
@@ -197,7 +206,8 @@ export default async function handler(req, res) {
         priceMedium: m.price_medium,
         priceTall:   m.price_tall,
         image:       m.image_path || '',
-        categoryId:  m.category_id,
+        category:    getCategoryName(m.category_id),
+        available:   m.is_active,
         status:      m.is_active ? 'ACTIVE' : 'INACTIVE',
       }));
       return res.status(200).json({ ok: true, items });
