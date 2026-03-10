@@ -792,7 +792,7 @@ export default async function handler(req, res) {
 
       // Check for locked accounts first
       const r = await supaFetch(
-        `${SUPABASE_URL}/rest/v1/staff_users?pin_hash=eq.${encodeURIComponent(pinHash)}&active=eq.true&select=user_id,username,display_name,role,locked_until`
+        `${SUPABASE_URL}/rest/v1/staff_users?pin_hash=eq.${encodeURIComponent(pinHash)}&active=eq.true&select=user_id,username,display_name,role,active,locked_until`
       );
 
       if (!r.ok || !r.data.length) {
