@@ -281,9 +281,11 @@ export default async function handler(req, res) {
     // Browser cannot call GAS directly (auth redirect). Route via this proxy.
     if (action === 'getOnlineOrders') {
       try {
-        const result = await supabaseRequest('GET', 'online_orders', null,
-          'order=created_at.desc&limit=200');
-        const rows = Array.isArray(result.data) ? result.data : [];
+        const olResp = await fetch(
+          `${SUPABASE_URL}/rest/v1/online_orders?order=created_at.desc&limit=200`,
+          { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
+        );
+        const rows = olResp.ok ? await olResp.json() : [];
         const orders = rows.map(o => ({
           orderRef:            o.order_ref,
           date:                o.created_at,
@@ -310,9 +312,11 @@ export default async function handler(req, res) {
     // ── Direct Supabase: getCustomers ──────────────────────────────────────
     if (action === 'getCustomers') {
       try {
-        const result = await supabaseRequest('GET', 'online_orders', null,
-          'order=created_at.asc&limit=500&select=customer_phone,customer_name,created_at,total_amount,order_ref');
-        const rows = Array.isArray(result.data) ? result.data : [];
+        const custResp = await fetch(
+          `${SUPABASE_URL}/rest/v1/online_orders?order=created_at.asc&limit=500&select=customer_phone,customer_name,created_at,total_amount,order_ref`,
+          { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
+        );
+        const rows = custResp.ok ? await custResp.json() : [];
         const custMap = {};
         rows.forEach(o => {
           const phone = o.customer_phone || 'Unknown';
