@@ -207,6 +207,7 @@ export default async function handler(req, res) {
         priceTall:   m.price_tall,
         image:       m.image_path || '',
         category:    getCategoryName(m.category_id),
+        active:      m.is_active,
         available:   m.is_active,
         status:      m.is_active ? 'ACTIVE' : 'INACTIVE',
       }));
