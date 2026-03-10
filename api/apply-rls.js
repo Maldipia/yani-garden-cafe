@@ -1,9 +1,6 @@
-// TEMPORARY — one-time RLS setup via Supabase Management API
-// DELETE AFTER USE
-
+// TEMPORARY — one-time RLS setup. DELETE AFTER USE.
 const EXEC_SECRET = 'yani-rls-2026';
-const PROJECT_REF = 'hnynvclpvfxzlfjphefj';
-const SERVICE_KEY = process.env.SUPABASE_SECRET_KEY;
+const PROJECT = 'hnynvclpvfxzlfjphefj';
 
 const STATEMENTS = [
   `ALTER TABLE public.menu_items ENABLE ROW LEVEL SECURITY`,
@@ -27,44 +24,40 @@ const STATEMENTS = [
   `REVOKE ALL ON public.payments FROM anon`,
   `REVOKE ALL ON public.sheets_sync_log FROM anon`,
   `REVOKE INSERT, UPDATE, DELETE ON public.online_orders FROM anon`,
+  `GRANT SELECT ON public.menu_items TO anon`,
+  `GRANT SELECT ON public.menu_categories TO anon`,
+  `GRANT SELECT ON public.settings TO anon`,
 ];
 
-async function runSQL(sql, mgmtToken) {
-  const resp = await fetch(
-    `https://api.supabase.com/v1/projects/${PROJECT_REF}/database/query`,
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${mgmtToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ query: sql }),
-    }
-  );
-  const text = await resp.text();
-  return { status: resp.status, body: text.slice(0, 150) };
-}
-
 export default async function handler(req, res) {
-  const token = req.headers['x-exec-secret'] || req.query.secret;
-  if (token !== EXEC_SECRET) return res.status(403).json({ error: 'Forbidden' });
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  if (req.method === 'OPTIONS') return res.status(200).end();
 
-  // mgmt token can be passed as query param for one-time use
-  const mgmtToken = req.query.mgmt || req.headers['x-mgmt-token'];
-  if (!mgmtToken) {
-    return res.status(400).json({ 
-      error: 'Need Supabase Management API token',
-      hint: 'Pass as ?mgmt=YOUR_SUPABASE_PAT or x-mgmt-token header',
-      howToGet: 'https://supabase.com/dashboard/account/tokens → Generate new token'
-    });
-  }
+  const secret = req.headers['x-exec-secret'] || req.query.secret;
+  if (secret !== EXEC_SECRET) return res.status(403).json({ error: 'Forbidden' });
+
+  const pat = req.headers['x-pat'] || req.query.pat;
+  if (!pat) return res.status(400).json({ error: 'Missing PAT — pass as x-pat header' });
 
   const results = [];
   for (const sql of STATEMENTS) {
-    const r = await runSQL(sql, mgmtToken);
-    results.push({ sql: sql.slice(0, 55), status: r.status, body: r.body });
+    try {
+      const r = await fetch(`https://api.supabase.com/v1/projects/${PROJECT}/database/query`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${pat}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query: sql }),
+      });
+      const text = await r.text();
+      const ok = r.status < 300 || text.toLowerCase().includes('already');
+      results.push({ sql: sql.slice(0, 55), status: r.status, ok, body: text.slice(0, 80) });
+    } catch (e) {
+      results.push({ sql: sql.slice(0, 55), status: 0, ok: false, body: e.message });
+    }
   }
 
-  const allOk = results.every(r => r.status < 300);
-  return res.status(200).json({ ok: allOk, results });
+  const allOk = results.every(r => r.ok);
+  return res.status(200).json({ ok: allOk, total: results.length, passed: results.filter(r=>r.ok).length, results });
 }
