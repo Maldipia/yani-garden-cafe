@@ -1,42 +1,11 @@
 // ══════════════════════════════════════════════════════════════
-// YANI SYSTEM HEALTH CHECK — Vercel Serverless API
-// Monitors GAS web app, Supabase, and menu sync status.
-// Used by the admin dashboard to show system health alerts.
+// YANI SYSTEM HEALTH CHECK — Vercel Serverless API  (v2 — GAS-free)
+// Monitors Supabase, sheets-sync status, and menu integrity.
+// GAS is no longer used — Google Sheets is a read-only mirror.
 // ══════════════════════════════════════════════════════════════
 
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzprf6_LpDwcVujm8kcGFZE5JdkL0k9b6Wfg5l82gjZzFua8w1QWH8UoFFlhznc6EtL/exec';
-const SUPABASE_URL    = 'https://hnynvclpvfxzlfjphefj.supabase.co';
-const SUPABASE_KEY    = process.env.SUPABASE_SECRET_KEY || 'sb_publishable_PQBb1nDY7U7SxNfgDYoXyg_GtoLowLM';
-
-// ── Check GAS web app health ──────────────────────────────────
-async function checkGAS() {
-  const start = Date.now();
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-    const resp = await fetch(APPS_SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'ping' }),
-      redirect: 'manual',
-      signal: controller.signal
-    });
-    clearTimeout(timeout);
-    const latency = Date.now() - start;
-
-    // GAS returns 302 redirect for valid requests — that's healthy
-    if (resp.status === 302 || resp.status === 200) {
-      return { ok: true, latency, status: resp.status };
-    }
-    return { ok: false, latency, status: resp.status, error: `Unexpected status ${resp.status}` };
-  } catch (e) {
-    const latency = Date.now() - start;
-    if (e.name === 'AbortError') {
-      return { ok: false, latency, error: 'GAS timed out (>8s)' };
-    }
-    return { ok: false, latency, error: e.message };
-  }
-}
+const SUPABASE_URL = 'https://hnynvclpvfxzlfjphefj.supabase.co';
+const SUPABASE_KEY = process.env.SUPABASE_SECRET_KEY || 'sb_publishable_PQBb1nDY7U7SxNfgDYoXyg_GtoLowLM';
 
 // ── Check Supabase health ─────────────────────────────────────
 async function checkSupabase() {
@@ -60,10 +29,35 @@ async function checkSupabase() {
   }
 }
 
-// ── Check menu drift: compare GAS item count vs Supabase ─────
-async function checkMenuDrift() {
+// ── Check sheets-sync backlog ─────────────────────────────────
+async function checkSheetsSync() {
   try {
-    // Get Supabase active item count only (matches GAS which only returns active items)
+    const resp = await fetch(
+      `${SUPABASE_URL}/rest/v1/sheets_sync_log?synced=eq.false&select=id&limit=1`,
+      {
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Prefer': 'count=exact',
+          'Range': '0-0'
+        }
+      }
+    );
+    const contentRange = resp.headers.get('content-range') || '';
+    const pendingCount = parseInt(contentRange.split('/')[1] || '0');
+    return {
+      ok: true,
+      pendingCount,
+      warning: pendingCount > 50 ? `${pendingCount} unsynced records pending Sheets mirror` : null
+    };
+  } catch (e) {
+    return { ok: false, pendingCount: null, error: e.message };
+  }
+}
+
+// ── Check menu integrity ──────────────────────────────────────
+async function checkMenuIntegrity() {
+  try {
     const sbResp = await fetch(`${SUPABASE_URL}/rest/v1/menu_items?select=item_code&is_active=eq.true`, {
       headers: {
         'apikey': SUPABASE_KEY,
@@ -73,60 +67,38 @@ async function checkMenuDrift() {
       }
     });
     const contentRange = sbResp.headers.get('content-range') || '';
-    const supabaseCount = parseInt(contentRange.split('/')[1] || '0');
-
-    // Get GAS item count via the Vercel proxy (/api/pos) which correctly filters
-    // to active-only items. Calling GAS directly returns all rows including inactive.
-    let gasCount = null;
-    try {
-      const origin = process.env.VERCEL_URL
-        ? `https://${process.env.VERCEL_URL}`
-        : 'https://yanigardencafe.com';
-      const gasResp = await fetch(`${origin}/api/pos`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'getMenu' })  // active items only
-      });
-      if (gasResp.ok) {
-        const text = await gasResp.text();
-        try {
-          const data = JSON.parse(text);
-          gasCount = Array.isArray(data.items) ? data.items.length : null;
-        } catch (_) {}
-      }
-    } catch (_) {}
-
-    const drift = gasCount !== null ? Math.abs(gasCount - supabaseCount) : null;
+    const activeCount = parseInt(contentRange.split('/')[1] || '0');
     return {
-      supabaseCount,
-      gasCount,
-      drift,
-      inSync: drift === 0,
-      warning: drift !== null && drift > 0 ? `${drift} item(s) out of sync between GAS and Supabase` : null
+      ok: true,
+      activeCount,
+      warning: activeCount === 0 ? 'No active menu items found!' : null
     };
   } catch (e) {
-    return { error: e.message, inSync: null };
+    return { ok: false, activeCount: null, error: e.message };
   }
 }
 
-// ── Log system event to Supabase logs table ─────────────────────────────
-// logs table schema: id, action, actor_id, order_id, details, created_at
-export async function logError(source, message, details = null) {
+// ── Check recent orders (last 24h) ────────────────────────────
+async function checkRecentOrders() {
   try {
-    await fetch(`${SUPABASE_URL}/rest/v1/logs`, {
-      method: 'POST',
-      headers: {
-        'apikey': SUPABASE_KEY,
-        'Authorization': `Bearer ${SUPABASE_KEY}`,
-        'Content-Type': 'application/json',
-        'Prefer': 'return=minimal'
-      },
-      body: JSON.stringify({
-        action: `SYSTEM_ERROR:${source}`,
-        details: JSON.stringify({ message, ...(details || {}) })
-      })
-    });
-  } catch (_) { /* silently ignore */ }
+    const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+    const resp = await fetch(
+      `${SUPABASE_URL}/rest/v1/dine_in_orders?created_at=gte.${encodeURIComponent(since)}&select=order_id`,
+      {
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Prefer': 'count=exact',
+          'Range': '0-0'
+        }
+      }
+    );
+    const contentRange = resp.headers.get('content-range') || '';
+    const count = parseInt(contentRange.split('/')[1] || '0');
+    return { ok: true, last24h: count };
+  } catch (e) {
+    return { ok: false, last24h: null, error: e.message };
+  }
 }
 
 // ── Log health alert to Supabase logs table ───────────────────────────
@@ -149,6 +121,25 @@ export async function logHealthAlert(alerts) {
   } catch (_) { /* silently ignore */ }
 }
 
+// ── Log system error ──────────────────────────────────────────
+export async function logError(source, message, details = null) {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/logs`, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify({
+        action: `SYSTEM_ERROR:${source}`,
+        details: JSON.stringify({ message, ...(details || {}) })
+      })
+    });
+  } catch (_) { /* silently ignore */ }
+}
+
 // ── Main handler ──────────────────────────────────────────────
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -157,70 +148,69 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
-    const [gasHealth, supabaseHealth, menuDrift] = await Promise.all([
-      checkGAS(),
+    const [supabaseHealth, sheetsSync, menuIntegrity, recentOrders] = await Promise.all([
       checkSupabase(),
-      checkMenuDrift()
+      checkSheetsSync(),
+      checkMenuIntegrity(),
+      checkRecentOrders(),
     ]);
 
-    const allOk = gasHealth.ok && supabaseHealth.ok;
+    const allOk = supabaseHealth.ok;
     const alerts = [];
-    // Log alerts to Supabase if any issues found
-    const shouldLog = !gasHealth.ok || !supabaseHealth.ok || menuDrift.warning;
-
-    if (!gasHealth.ok) {
-      alerts.push({
-        level: 'ERROR',
-        source: 'GAS',
-        message: `Google Apps Script is unreachable: ${gasHealth.error || 'Unknown error'}`,
-        impact: 'Dine-in orders and menu sync may not work'
-      });
-    } else if (gasHealth.latency > 5000) {
-      alerts.push({
-        level: 'WARN',
-        source: 'GAS',
-        message: `Google Apps Script is slow (${gasHealth.latency}ms)`,
-        impact: 'Dine-in POS may be sluggish'
-      });
-    }
 
     if (!supabaseHealth.ok) {
       alerts.push({
         level: 'ERROR',
         source: 'Supabase',
         message: `Database is unreachable: ${supabaseHealth.error || 'Unknown error'}`,
-        impact: 'Online orders and menu will not load'
+        impact: 'All orders and menu will not work'
       });
-    }
-
-    if (menuDrift.warning) {
+    } else if (supabaseHealth.latency > 3000) {
       alerts.push({
         level: 'WARN',
-        source: 'MenuSync',
-        message: menuDrift.warning,
-        impact: 'Some items may appear differently on dine-in POS vs online order page'
+        source: 'Supabase',
+        message: `Database is slow (${supabaseHealth.latency}ms)`,
+        impact: 'POS and ordering may be sluggish'
       });
     }
 
-    // Log to Supabase if any alerts were triggered
-    if (shouldLog && alerts.length > 0) {
+    if (sheetsSync.warning) {
+      alerts.push({
+        level: 'WARN',
+        source: 'SheetsSync',
+        message: sheetsSync.warning,
+        impact: 'Google Sheets mirror may be behind'
+      });
+    }
+
+    if (menuIntegrity.warning) {
+      alerts.push({
+        level: 'ERROR',
+        source: 'Menu',
+        message: menuIntegrity.warning,
+        impact: 'Customers cannot place orders'
+      });
+    }
+
+    if (alerts.length > 0) {
       logHealthAlert(alerts).catch(() => {});
     }
 
     return res.status(200).json({
       ok: allOk,
       timestamp: new Date().toISOString(),
+      architecture: 'supabase-native-v3',
       services: {
-        gas:      { ok: gasHealth.ok,      latency: gasHealth.latency,      error: gasHealth.error || null },
-        supabase: { ok: supabaseHealth.ok, latency: supabaseHealth.latency, error: supabaseHealth.error || null }
+        supabase:   { ok: supabaseHealth.ok, latency: supabaseHealth.latency, error: supabaseHealth.error || null },
+        sheetsSync: { ok: sheetsSync.ok, pendingCount: sheetsSync.pendingCount, warning: sheetsSync.warning || null },
+        menu:       { ok: menuIntegrity.ok, activeCount: menuIntegrity.activeCount, warning: menuIntegrity.warning || null },
       },
-      menu: {
-        supabaseCount: menuDrift.supabaseCount,
-        gasCount:      menuDrift.gasCount,
-        drift:         menuDrift.drift,
-        inSync:        menuDrift.inSync
+      orders: {
+        last24h: recentOrders.last24h,
       },
-      alerts
+      alerts,
+      // Legacy field for admin dashboard compatibility
+      gas: { ok: true, latency: 0, note: 'GAS removed — Supabase is now primary data store' },
     });
 
   } catch (err) {

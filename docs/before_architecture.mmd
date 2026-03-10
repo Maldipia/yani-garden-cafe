@@ -1,0 +1,14 @@
+sequenceDiagram
+    participant C as Customer
+    participant V as Vercel API (/api/online-order)
+    participant G as Google Apps Script
+    participant S as Google Sheets
+
+    C->>+V: POST /api/online-order (placeOrder)
+    V->>+G: fetch(GAS_URL)
+    G->>+S: appendRow(orderData)
+    S-->>-G: Success
+    G-->>-V: { success: true }
+    V-->>-C: { ok: true, orderRef }
+
+    Note right of V: Prone to failure under load due to\nGAS 30 concurrent execution limit.

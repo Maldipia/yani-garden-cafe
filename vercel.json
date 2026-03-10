@@ -16,7 +16,16 @@
       "maxDuration": 30
     },
     "api/queue-worker.js": {
-      "maxDuration": 60
+      "maxDuration": 30
+    },
+    "api/sheets-sync.js": {
+      "maxDuration": 30
+    },
+    "api/health.js": {
+      "maxDuration": 15
+    },
+    "api/sync-menu.js": {
+      "maxDuration": 15
     },
     "api/queue-status.js": {
       "maxDuration": 10
@@ -25,7 +34,11 @@
   "crons": [
     {
       "path": "/api/queue-worker",
-      "schedule": "* * * * *"
+      "schedule": "*/2 * * * *"
+    },
+    {
+      "path": "/api/sheets-sync",
+      "schedule": "*/2 * * * *"
     }
   ],
   "rewrites": [
@@ -52,6 +65,18 @@
     {
       "source": "/api/queue-status",
       "destination": "/api/queue-status"
+    },
+    {
+      "source": "/api/sheets-sync",
+      "destination": "/api/sheets-sync"
+    },
+    {
+      "source": "/api/health",
+      "destination": "/api/health"
+    },
+    {
+      "source": "/api/sync-menu",
+      "destination": "/api/sync-menu"
     }
   ],
   "headers": [

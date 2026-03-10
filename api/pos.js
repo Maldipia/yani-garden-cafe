@@ -1,27 +1,15 @@
-// ══════════════════════════════════════════════════════════════
-// YANI POS — Vercel Serverless API Proxy  (v2 — hardened)
-// Forwards requests from frontend → Apps Script (server-to-server)
-// Handles Apps Script's 302 redirect behavior
-//
-// DUAL-WRITE: addMenuItem / updateMenuItem / deleteMenuItem also
-// sync to Supabase so both dine-in POS (GAS/Sheets) and the
-// online order page (Supabase) stay in sync automatically.
-//
-// HARDENING (v2):
-//   • Rate limiting: 60 req/min per IP (in-memory, resets per instance)
-//   • Input validation on all menu mutation actions
-//   • GAS requests include X-YGC-Secret header for auth
-// ══════════════════════════════════════════════════════════════
-
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzprf6_LpDwcVujm8kcGFZE5JdkL0k9b6Wfg5l82gjZzFua8w1QWH8UoFFlhznc6EtL/exec';
-
+// YANI POS — Vercel Serverless API  (v3 — Supabase-native, GAS-free)
+// ══════════════════════════════════════════════════════════════════════
+// All actions now handled directly in Supabase.
+// Google Apps Script is no longer used.
+// Google Sheets is updated via the /api/sheets-sync endpoint (cron).
+// ══════════════════════════════════════════════════════════════════════
 
 const SUPABASE_URL = 'https://hnynvclpvfxzlfjphefj.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_ANON_KEY || 'sb_publishable_PQBb1nDY7U7SxNfgDYoXyg_GtoLowLM';
 
-// GAS shared secret — set GAS_SECRET env var in Vercel AND in Code.gs
-// If not set, falls back to no-auth (backwards compatible)
-const GAS_SECRET = process.env.GAS_SECRET || null;
+const SERVICE_CHARGE_RATE = 0.10;
+const ORDER_PREFIX = 'YANI';
 
 // ── In-memory rate limiter (per IP, 60 req/min) ───────────────────────────
 const rateLimitMap = new Map();
@@ -38,7 +26,6 @@ function checkRateLimit(ip) {
     entry.count++;
   }
   rateLimitMap.set(ip, entry);
-  // Clean up old entries every 1000 requests to prevent memory leak
   if (rateLimitMap.size > 1000) {
     for (const [k, v] of rateLimitMap) {
       if (now - v.windowStart > RATE_WINDOW_MS) rateLimitMap.delete(k);
@@ -92,8 +79,8 @@ function getCategoryId(categoryName) {
   return CATEGORY_MAP[String(categoryName).trim().toUpperCase()] || null;
 }
 
-// ── Supabase helper ────────────────────────────────────────────────────────
-async function supabaseRequest(method, table, body, params, preferOverride) {
+// ── Supabase REST helper ───────────────────────────────────────────────────
+async function supa(method, table, body, params, preferOverride) {
   let url = `${SUPABASE_URL}/rest/v1/${table}`;
   if (params) {
     const qs = Object.entries(params).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
@@ -113,96 +100,37 @@ async function supabaseRequest(method, table, body, params, preferOverride) {
   catch { return { ok: resp.ok, status: resp.status, data: text }; }
 }
 
-// ── Sync helpers ──────────────────────────────────────────────────────────
-async function syncAddToSupabase(payload, gasItemId) {
-  try {
-    const row = {
-      item_code:        gasItemId || payload.itemId || null,
-      name:             payload.name,
-      category_id:      getCategoryId(payload.category),
-      base_price:       parseFloat(payload.price) || 0,
-      has_sizes:        !!payload.hasSizes,
-      has_sugar_levels: !!payload.hasSugar,
-      price_short:      parseFloat(payload.priceShort) || null,
-      price_medium:     parseFloat(payload.priceMedium) || null,
-      price_tall:       parseFloat(payload.priceTall) || null,
-      image_path:       payload.image || null,
-      is_active:        (payload.status || 'ACTIVE').toUpperCase() === 'ACTIVE',
-    };
-    const result = await supabaseRequest('POST', 'menu_items', row);
-    if (!result.ok) console.warn('Supabase addMenuItem sync failed:', result.status, JSON.stringify(result.data));
-    return result;
-  } catch (e) {
-    console.warn('Supabase addMenuItem sync error:', e.message);
-    return { ok: false };
-  }
+// ── Raw Supabase fetch (for complex queries with filters) ──────────────────
+async function supaFetch(url, opts = {}) {
+  const headers = {
+    'apikey': SUPABASE_KEY,
+    'Authorization': `Bearer ${SUPABASE_KEY}`,
+    'Content-Type': 'application/json',
+    ...opts.headers,
+  };
+  const resp = await fetch(url, { ...opts, headers });
+  const text = await resp.text();
+  try { return { ok: resp.ok, status: resp.status, data: JSON.parse(text) }; }
+  catch { return { ok: resp.ok, status: resp.status, data: text }; }
 }
 
-async function syncUpdateToSupabase(payload) {
-  try {
-    const itemCode = payload.itemId;
-    if (!itemCode) return;
-    const updates = {};
-    if (payload.name      !== undefined) updates.name             = payload.name;
-    if (payload.category  !== undefined) updates.category_id      = getCategoryId(payload.category);
-    if (payload.price     !== undefined) updates.base_price        = parseFloat(payload.price) || 0;
-    if (payload.hasSizes  !== undefined) updates.has_sizes         = !!payload.hasSizes;
-    if (payload.hasSugar  !== undefined) updates.has_sugar_levels  = !!payload.hasSugar;
-    if (payload.priceShort  !== undefined) updates.price_short     = parseFloat(payload.priceShort) || null;
-    if (payload.priceMedium !== undefined) updates.price_medium    = parseFloat(payload.priceMedium) || null;
-    if (payload.priceTall   !== undefined) updates.price_tall      = parseFloat(payload.priceTall) || null;
-    if (payload.image     !== undefined) updates.image_path        = payload.image || null;
-    if (payload.status    !== undefined) updates.is_active         = (payload.status || 'ACTIVE').toUpperCase() === 'ACTIVE';
-    if (Object.keys(updates).length === 0) return;
-    const result = await supabaseRequest('PATCH', 'menu_items', updates, { item_code: `eq.${itemCode}` });
-    if (!result.ok) console.warn('Supabase updateMenuItem sync failed:', result.status, JSON.stringify(result.data));
-    return result;
-  } catch (e) {
-    console.warn('Supabase updateMenuItem sync error:', e.message);
-    return { ok: false };
-  }
+// ── SHA-256 hash (for PIN verification) ───────────────────────────────────
+async function sha256(text) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(text);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-async function syncDeleteToSupabase(itemCode) {
-  try {
-    if (!itemCode) return;
-    const result = await supabaseRequest('PATCH', 'menu_items', { is_active: false }, { item_code: `eq.${itemCode}` });
-    if (!result.ok) console.warn('Supabase deleteMenuItem sync failed:', result.status, JSON.stringify(result.data));
-    return result;
-  } catch (e) {
-    console.warn('Supabase deleteMenuItem sync error:', e.message);
-    return { ok: false };
-  }
-}
-
-// ── Forward request to Apps Script ────────────────────────────────────────
-async function callAppsScript(body) {
-  const headers = { 'Content-Type': 'application/json' };
-  if (GAS_SECRET) headers['X-YGC-Secret'] = GAS_SECRET;
-
-  const postResponse = await fetch(APPS_SCRIPT_URL, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-    redirect: 'manual'
-  });
-
-  let responseText;
-  if (postResponse.status === 302 || postResponse.status === 301) {
-    const redirectUrl = postResponse.headers.get('location');
-    if (!redirectUrl) throw new Error('Backend redirect missing location');
-    const getResponse = await fetch(redirectUrl, { method: 'GET', redirect: 'follow' });
-    responseText = await getResponse.text();
-  } else {
-    responseText = await postResponse.text();
-  }
-
-  try {
-    return JSON.parse(responseText);
-  } catch (e) {
-    console.error('Apps Script returned non-JSON:', responseText.substring(0, 300));
-    throw new Error('Backend returned invalid response');
-  }
+// ── Log to sheets_sync_log (fire-and-forget) ──────────────────────────────
+function logSync(tableName, recordId, action) {
+  supa('POST', 'sheets_sync_log', {
+    table_name: tableName,
+    record_id: String(recordId),
+    action,
+    synced: false,
+  }).catch(() => {});
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────
@@ -214,7 +142,6 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed' });
 
-  // ── Rate limiting ────────────────────────────────────────────────────────
   const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
   if (!checkRateLimit(ip)) {
     return res.status(429).json({ ok: false, error: 'Too many requests. Please wait a moment.' });
@@ -225,45 +152,133 @@ export default async function handler(req, res) {
     if (!body || !body.action) return res.status(400).json({ ok: false, error: 'Missing action' });
 
     const action = String(body.action).trim();
-
-    // ── Validate action name (prevent injection) ──────────────────────────
     if (!/^[a-zA-Z][a-zA-Z0-9_]{1,60}$/.test(action)) {
       return res.status(400).json({ ok: false, error: 'Invalid action name' });
     }
 
-    // ── Input validation for menu mutations ───────────────────────────────
+    // ══════════════════════════════════════════════════════════════════════
+    // MENU ACTIONS
+    // ══════════════════════════════════════════════════════════════════════
+
+    // ── getMenu ────────────────────────────────────────────────────────────
+    if (action === 'getMenu') {
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/menu_items?is_active=eq.true&order=name.asc&select=item_code,name,base_price,has_sizes,has_sugar_levels,price_short,price_medium,price_tall,image_path,category_id`
+      );
+      if (!r.ok) return res.status(502).json({ ok: false, error: 'Failed to load menu' });
+      const items = r.data.map(m => ({
+        itemId:      m.item_code,
+        name:        m.name,
+        price:       m.base_price,
+        hasSizes:    m.has_sizes,
+        hasSugar:    m.has_sugar_levels,
+        priceShort:  m.price_short,
+        priceMedium: m.price_medium,
+        priceTall:   m.price_tall,
+        image:       m.image_path || '',
+        categoryId:  m.category_id,
+      }));
+      return res.status(200).json({ ok: true, items });
+    }
+
+    // ── getMenuAdmin ───────────────────────────────────────────────────────
+    if (action === 'getMenuAdmin') {
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/menu_items?order=name.asc&select=item_code,name,base_price,has_sizes,has_sugar_levels,price_short,price_medium,price_tall,image_path,category_id,is_active`
+      );
+      if (!r.ok) return res.status(502).json({ ok: false, error: 'Failed to load menu' });
+      const items = r.data.map(m => ({
+        itemId:      m.item_code,
+        name:        m.name,
+        price:       m.base_price,
+        hasSizes:    m.has_sizes,
+        hasSugar:    m.has_sugar_levels,
+        priceShort:  m.price_short,
+        priceMedium: m.price_medium,
+        priceTall:   m.price_tall,
+        image:       m.image_path || '',
+        categoryId:  m.category_id,
+        status:      m.is_active ? 'ACTIVE' : 'INACTIVE',
+      }));
+      return res.status(200).json({ ok: true, items });
+    }
+
+    // ── addMenuItem ────────────────────────────────────────────────────────
     if (action === 'addMenuItem') {
       if (!isNonEmptyString(body.name, 100) || body.name.trim().length < 2) {
         return res.status(400).json({ ok: false, error: 'name must be 2-100 characters' });
       }
       const errs = validateMenuPayload(body, false);
       if (errs.length) return res.status(400).json({ ok: false, error: errs.join('; ') });
+
+      const row = {
+        item_code:        body.itemId || null,
+        name:             body.name.trim(),
+        category_id:      getCategoryId(body.category),
+        base_price:       parseFloat(body.price) || 0,
+        has_sizes:        !!body.hasSizes,
+        has_sugar_levels: !!body.hasSugar,
+        price_short:      body.priceShort  != null ? parseFloat(body.priceShort)  : null,
+        price_medium:     body.priceMedium != null ? parseFloat(body.priceMedium) : null,
+        price_tall:       body.priceTall   != null ? parseFloat(body.priceTall)   : null,
+        image_path:       body.image || null,
+        is_active:        (body.status || 'ACTIVE').toUpperCase() === 'ACTIVE',
+      };
+      const r = await supa('POST', 'menu_items', row);
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to add menu item: ' + JSON.stringify(r.data) });
+      const newItem = Array.isArray(r.data) ? r.data[0] : r.data;
+      logSync('menu_items', newItem?.item_code || body.itemId || 'new', 'INSERT');
+      return res.status(200).json({ ok: true, itemId: newItem?.item_code || body.itemId });
     }
 
+    // ── updateMenuItem ─────────────────────────────────────────────────────
     if (action === 'updateMenuItem') {
       if (!isValidItemCode(body.itemId)) {
         return res.status(400).json({ ok: false, error: 'itemId is required and must be a valid item code' });
       }
       const errs = validateMenuPayload(body, false);
       if (errs.length) return res.status(400).json({ ok: false, error: errs.join('; ') });
+
+      const updates = {};
+      if (body.name      !== undefined) updates.name             = body.name;
+      if (body.category  !== undefined) updates.category_id      = getCategoryId(body.category);
+      if (body.price     !== undefined) updates.base_price        = parseFloat(body.price) || 0;
+      if (body.hasSizes  !== undefined) updates.has_sizes         = !!body.hasSizes;
+      if (body.hasSugar  !== undefined) updates.has_sugar_levels  = !!body.hasSugar;
+      if (body.priceShort  !== undefined) updates.price_short     = body.priceShort  != null ? parseFloat(body.priceShort)  : null;
+      if (body.priceMedium !== undefined) updates.price_medium    = body.priceMedium != null ? parseFloat(body.priceMedium) : null;
+      if (body.priceTall   !== undefined) updates.price_tall      = body.priceTall   != null ? parseFloat(body.priceTall)   : null;
+      if (body.image     !== undefined) updates.image_path        = body.image || null;
+      if (body.status    !== undefined) updates.is_active         = (body.status || 'ACTIVE').toUpperCase() === 'ACTIVE';
+      if (Object.keys(updates).length === 0) return res.status(200).json({ ok: true });
+
+      const r = await supa('PATCH', 'menu_items', updates, { item_code: `eq.${body.itemId}` });
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to update menu item' });
+      logSync('menu_items', body.itemId, 'UPDATE');
+      return res.status(200).json({ ok: true });
     }
 
+    // ── deleteMenuItem ─────────────────────────────────────────────────────
     if (action === 'deleteMenuItem') {
       if (!isValidItemCode(body.itemId)) {
         return res.status(400).json({ ok: false, error: 'itemId is required and must be a valid item code' });
       }
+      // Soft delete — set is_active = false
+      const r = await supa('PATCH', 'menu_items', { is_active: false }, { item_code: `eq.${body.itemId}` });
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to delete menu item' });
+      logSync('menu_items', body.itemId, 'DELETE');
+      return res.status(200).json({ ok: true });
     }
 
-    // ── Special: direct Supabase upsert (for backfilling existing GAS items) ─
+    // ── upsertToSupabase (backfill helper) ─────────────────────────────────
     if (action === 'upsertToSupabase') {
       if (!isValidItemCode(body.itemId)) {
         return res.status(400).json({ ok: false, error: 'itemId is required' });
       }
-      const categoryId = getCategoryId(body.category);
       const row = {
         item_code:        body.itemId,
         name:             body.name,
-        category_id:      categoryId,
+        category_id:      getCategoryId(body.category),
         base_price:       parseFloat(body.price) || 0,
         has_sizes:        !!body.hasSizes,
         has_sugar_levels: !!body.hasSugar,
@@ -273,145 +288,603 @@ export default async function handler(req, res) {
         image_path:       body.image || null,
         is_active:        (body.status || 'ACTIVE').toUpperCase() === 'ACTIVE',
       };
-      const result = await supabaseRequest('POST', 'menu_items', row, null, 'resolution=merge-duplicates');
-      return res.status(200).json({ ok: result.ok, data: result.data });
+      const r = await supa('POST', 'menu_items', row, null, 'resolution=merge-duplicates');
+      return res.status(200).json({ ok: r.ok, data: r.data });
     }
 
-    // ── Direct Supabase: getOnlineOrders ─────────────────────────────────
-    // Browser cannot call GAS directly (auth redirect). Route via this proxy.
-    if (action === 'getOnlineOrders') {
-      try {
-        const olResp = await fetch(
-          `${SUPABASE_URL}/rest/v1/online_orders?order=created_at.desc&limit=200`,
-          { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
-        );
-        const rows = olResp.ok ? await olResp.json() : [];
-        const orders = rows.map(o => ({
-          orderRef:            o.order_ref,
-          date:                o.created_at,
-          customerName:        o.customer_name,
-          phone:               o.customer_phone,
-          email:               o.customer_email || '',
-          pickupTime:          o.pickup_time || '',
-          courierType:         o.courier_type || 'PICKUP',
-          subtotal:            o.subtotal,
-          totalAmount:         o.total_amount,
-          paymentMethod:       o.payment_method,
-          paymentStatus:       o.payment_status,
-          orderStatus:         o.status,
-          specialInstructions: o.special_instructions || '',
-          adminNotes:          o.admin_notes || '',
-          lastUpdated:         o.updated_at
-        }));
-        return res.status(200).json({ success: true, orders });
-      } catch (err) {
-        return res.status(502).json({ success: false, orders: [], error: err.message });
+    // ══════════════════════════════════════════════════════════════════════
+    // ORDER ACTIONS
+    // ══════════════════════════════════════════════════════════════════════
+
+    // ── placeOrder ─────────────────────────────────────────────────────────
+    if (action === 'placeOrder') {
+      const tableNo      = String(body.tableNo || '1').trim();
+      const customerName = String(body.customerName || 'Guest').trim().substring(0, 100);
+      const notes        = String(body.notes || '').trim().substring(0, 500);
+      const orderType    = String(body.orderType || 'DINE-IN').toUpperCase();
+      const items        = Array.isArray(body.items) ? body.items : [];
+
+      if (items.length === 0) return res.status(400).json({ ok: false, error: 'Order must have at least one item' });
+
+      // Look up prices from menu
+      const itemCodes = [...new Set(items.map(i => i.code))];
+      const menuR = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/menu_items?item_code=in.(${itemCodes.map(c => `"${c}"`).join(',')})&is_active=eq.true&select=item_code,name,base_price,has_sizes,price_short,price_medium,price_tall`
+      );
+      const menuMap = {};
+      if (menuR.ok && Array.isArray(menuR.data)) {
+        menuR.data.forEach(m => { menuMap[m.item_code] = m; });
       }
-    }
 
-    // ── Direct Supabase: getCustomers ──────────────────────────────────────
-    if (action === 'getCustomers') {
-      try {
-        const custResp = await fetch(
-          `${SUPABASE_URL}/rest/v1/online_orders?order=created_at.asc&limit=500&select=customer_phone,customer_name,created_at,total_amount,order_ref`,
-          { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
-        );
-        const rows = custResp.ok ? await custResp.json() : [];
-        const custMap = {};
-        rows.forEach(o => {
-          const phone = o.customer_phone || 'Unknown';
-          if (!custMap[phone]) {
-            custMap[phone] = {
-              phone,
-              customerName:   o.customer_name,
-              firstOrderDate: o.created_at,
-              lastOrderDate:  o.created_at,
-              totalOrders:    0,
-              totalSpend:     0
-            };
-          }
-          custMap[phone].lastOrderDate  = o.created_at;
-          custMap[phone].totalOrders   += 1;
-          custMap[phone].totalSpend    += parseFloat(o.total_amount || 0);
+      // Build order items with prices
+      const orderItems = [];
+      let subtotal = 0;
+      for (const item of items) {
+        const menuItem = menuMap[item.code];
+        if (!menuItem) continue; // skip unknown items
+        let unitPrice = menuItem.base_price;
+        if (menuItem.has_sizes && item.size) {
+          const sizeKey = { SHORT: 'price_short', MEDIUM: 'price_medium', TALL: 'price_tall' }[String(item.size).toUpperCase()];
+          if (sizeKey && menuItem[sizeKey] != null) unitPrice = menuItem[sizeKey];
+        }
+        const qty = Math.max(1, parseInt(item.qty) || 1);
+        subtotal += unitPrice * qty;
+        orderItems.push({
+          item_code:    item.code,
+          item_name:    menuItem.name,
+          unit_price:   unitPrice,
+          qty,
+          size_choice:  item.size || '',
+          sugar_choice: item.sugarLevel || item.sugar || '',
+          item_notes:   item.notes || '',
         });
-        const customers = Object.values(custMap)
-          .sort((a, b) => new Date(b.lastOrderDate) - new Date(a.lastOrderDate));
-        return res.status(200).json({ success: true, customers });
-      } catch (err) {
-        return res.status(502).json({ success: false, customers: [], error: err.message });
       }
+
+      if (orderItems.length === 0) return res.status(400).json({ ok: false, error: 'No valid items in order' });
+
+      const svcCharge = orderType === 'DINE-IN' ? Math.round(subtotal * SERVICE_CHARGE_RATE * 100) / 100 : 0;
+      const total     = Math.round((subtotal + svcCharge) * 100) / 100;
+
+      // Generate order ID using sequence
+      const seqR = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/rpc/get_next_order_number`,
+        { method: 'POST', body: '{}' }
+      );
+      const orderNo = seqR.ok ? (seqR.data || 1001) : Date.now() % 9000 + 1000;
+      const orderId = `${ORDER_PREFIX}-${orderNo}`;
+
+      // Insert order
+      const orderRow = {
+        order_id:       orderId,
+        order_no:       orderNo,
+        table_no:       tableNo,
+        customer_name:  customerName,
+        status:         'NEW',
+        order_type:     orderType,
+        subtotal:       subtotal,
+        service_charge: svcCharge,
+        total:          total,
+        notes:          notes,
+        source:         'QR',
+      };
+      const orderR = await supa('POST', 'dine_in_orders', orderRow);
+      if (!orderR.ok) {
+        console.error('placeOrder insert failed:', orderR.status, JSON.stringify(orderR.data));
+        return res.status(500).json({ ok: false, error: 'Failed to place order' });
+      }
+
+      // Insert order items
+      const itemRows = orderItems.map(it => ({
+        order_id:     orderId,
+        order_no:     orderNo,
+        table_no:     tableNo,
+        item_code:    it.item_code,
+        item_name:    it.item_name,
+        unit_price:   it.unit_price,
+        qty:          it.qty,
+        size_choice:  it.size_choice,
+        sugar_choice: it.sugar_choice,
+        item_notes:   it.item_notes,
+      }));
+      await supa('POST', 'dine_in_order_items', itemRows);
+
+      // Log for Sheets sync
+      logSync('dine_in_orders', orderId, 'INSERT');
+
+      return res.status(200).json({
+        ok: true,
+        orderId,
+        ORDER_ID: orderId,
+        orderNo,
+        subtotal,
+        serviceCharge: svcCharge,
+        total,
+      });
     }
 
-    // ── Direct Supabase: updateOrderStatus (bypass GAS for reliability) ────
-    // GAS is slow/unreliable for status updates — handle directly in Supabase
-    // AND fire-and-forget to GAS so Google Sheets stays in sync.
+    // ── getOrders ──────────────────────────────────────────────────────────
+    if (action === 'getOrders') {
+      const orderId = body.orderId ? String(body.orderId).trim() : null;
+      const status  = body.status  ? String(body.status).toUpperCase() : null;
+      const limit   = Math.min(parseInt(body.limit) || 200, 500);
+
+      let url = `${SUPABASE_URL}/rest/v1/dine_in_orders?order=created_at.desc&limit=${limit}`;
+      if (orderId) url += `&order_id=eq.${encodeURIComponent(orderId)}`;
+      else if (status && status !== 'ALL') url += `&status=eq.${encodeURIComponent(status)}`;
+
+      const ordersR = await supaFetch(url);
+      if (!ordersR.ok) return res.status(502).json({ ok: false, orders: [], error: 'Failed to load orders' });
+
+      // Fetch items for all orders
+      const orderIds = ordersR.data.map(o => o.order_id);
+      let itemsMap = {};
+      if (orderIds.length > 0) {
+        const itemsR = await supaFetch(
+          `${SUPABASE_URL}/rest/v1/dine_in_order_items?order_id=in.(${orderIds.map(id => `"${id}"`).join(',')})&order=id.asc`
+        );
+        if (itemsR.ok && Array.isArray(itemsR.data)) {
+          itemsR.data.forEach(it => {
+            if (!itemsMap[it.order_id]) itemsMap[it.order_id] = [];
+            itemsMap[it.order_id].push({
+              code:  it.item_code,
+              name:  it.item_name,
+              price: it.unit_price,
+              qty:   it.qty,
+              size:  it.size_choice || '',
+              sugar: it.sugar_choice || '',
+              notes: it.item_notes || '',
+            });
+          });
+        }
+      }
+
+      const orders = ordersR.data.map(o => ({
+        orderId:       o.order_id,
+        orderNo:       o.order_no,
+        tableNo:       o.table_no,
+        customerName:  o.customer_name,
+        status:        o.status,
+        orderType:     o.order_type,
+        subtotal:      o.subtotal,
+        serviceCharge: o.service_charge,
+        total:         o.total,
+        notes:         o.notes || '',
+        source:        o.source || 'QR',
+        platform:      o.platform || '',
+        platformRef:   o.platform_ref || '',
+        paymentMethod: o.payment_method || '',
+        paymentStatus: o.payment_status || '',
+        createdAt:     o.created_at,
+        updatedAt:     o.updated_at,
+        items:         itemsMap[o.order_id] || [],
+      }));
+
+      return res.status(200).json({ ok: true, orders });
+    }
+
+    // ── updateOrderStatus ──────────────────────────────────────────────────
     if (action === 'updateOrderStatus') {
-      const orderId = String(body.orderId || '').trim();
-      const newStatus = String(body.status || '').trim().toUpperCase();
+      const orderId   = String(body.orderId || '').trim();
+      const newStatus = String(body.status  || '').trim().toUpperCase();
       const validStatuses = ['NEW', 'PREPARING', 'READY', 'COMPLETED', 'CANCELLED'];
-      if (!orderId) return res.status(400).json({ ok: false, error: 'orderId is required' });
-      if (!validStatuses.includes(newStatus)) {
-        return res.status(400).json({ ok: false, error: 'Invalid status: ' + newStatus });
-      }
-      // 1. Update Supabase order_queue if the order is queued (raw URL to preserve PostgREST syntax)
-      try {
-        const queueStatus = newStatus === 'CANCELLED' ? 'CANCELLED' : 'PROCESSED';
-        const queueUrl = `${SUPABASE_URL}/rest/v1/order_queue?order_ref=eq.${encodeURIComponent(orderId)}&status=in.(PENDING,PROCESSING)`;
-        await fetch(queueUrl, {
-          method: 'PATCH',
-          headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
-          body: JSON.stringify({ status: queueStatus })
-        });
-      } catch (e) { /* order may not be in queue — that's fine */ }
-      // 2. Fire-and-forget GAS sync (non-blocking — don't wait for it)
-      callAppsScript(body).catch(e => console.warn('GAS updateOrderStatus sync failed (non-critical):', e.message));
-      // 3. Return success immediately — UI is responsive
+      if (!orderId)                        return res.status(400).json({ ok: false, error: 'orderId is required' });
+      if (!validStatuses.includes(newStatus)) return res.status(400).json({ ok: false, error: 'Invalid status: ' + newStatus });
+
+      const r = await supa('PATCH', 'dine_in_orders', { status: newStatus }, { order_id: `eq.${orderId}` });
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to update status' });
+
+      logSync('dine_in_orders', orderId, 'UPDATE');
       return res.status(200).json({ ok: true, orderId, status: newStatus });
     }
 
-    // ── Direct GAS: deleteOrder (with Supabase queue cleanup) ─────────────
+    // ── deleteOrder ────────────────────────────────────────────────────────
     if (action === 'deleteOrder') {
       const orderId = String(body.orderId || '').trim();
       if (!orderId) return res.status(400).json({ ok: false, error: 'orderId is required' });
-      // 1. Clean up from order_queue in Supabase
-      try {
-        await supabaseRequest('DELETE', 'order_queue', null, { order_ref: `eq.${orderId}` });
-      } catch (e) { /* may not exist in queue */ }
-      // 2. Forward to GAS to delete from Google Sheets
-      let gasResult;
-      try {
-        gasResult = await callAppsScript(body);
-      } catch (err) {
-        console.error('GAS deleteOrder failed:', err.message);
-        return res.status(502).json({ ok: false, error: 'Delete failed: ' + err.message });
+
+      // Delete items first (FK constraint), then order
+      await supa('DELETE', 'dine_in_order_items', null, { order_id: `eq.${orderId}` });
+      const r = await supa('DELETE', 'dine_in_orders', null, { order_id: `eq.${orderId}` });
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to delete order' });
+
+      logSync('dine_in_orders', orderId, 'DELETE');
+      return res.status(200).json({ ok: true, orderId });
+    }
+
+    // ── editOrderItems ─────────────────────────────────────────────────────
+    if (action === 'editOrderItems') {
+      const orderId = String(body.orderId || '').trim();
+      const items   = Array.isArray(body.items) ? body.items : [];
+      if (!orderId) return res.status(400).json({ ok: false, error: 'orderId is required' });
+
+      // Get order to check it exists and get order_no/table_no
+      const orderR = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=order_no,table_no`
+      );
+      if (!orderR.ok || !orderR.data.length) return res.status(404).json({ ok: false, error: 'Order not found' });
+      const { order_no, table_no } = orderR.data[0];
+
+      // Recalculate totals
+      let subtotal = 0;
+      const itemRows = items.map(it => {
+        const qty = Math.max(1, parseInt(it.qty) || 1);
+        const price = parseFloat(it.price) || 0;
+        subtotal += price * qty;
+        return {
+          order_id:     orderId,
+          order_no:     order_no,
+          table_no:     table_no,
+          item_code:    it.code || 'CUSTOM',
+          item_name:    it.name || 'Item',
+          unit_price:   price,
+          qty,
+          size_choice:  it.size || '',
+          sugar_choice: it.sugar || '',
+          item_notes:   it.notes || '',
+        };
+      });
+
+      const svcCharge = Math.round(subtotal * SERVICE_CHARGE_RATE * 100) / 100;
+      const total     = Math.round((subtotal + svcCharge) * 100) / 100;
+
+      // Delete old items and insert new ones
+      await supa('DELETE', 'dine_in_order_items', null, { order_id: `eq.${orderId}` });
+      if (itemRows.length > 0) await supa('POST', 'dine_in_order_items', itemRows);
+
+      // Update order totals
+      await supa('PATCH', 'dine_in_orders', { subtotal, service_charge: svcCharge, total }, { order_id: `eq.${orderId}` });
+
+      logSync('dine_in_orders', orderId, 'UPDATE');
+      return res.status(200).json({ ok: true, orderId, subtotal, serviceCharge: svcCharge, total });
+    }
+
+    // ── placePlatformOrder ─────────────────────────────────────────────────
+    if (action === 'placePlatformOrder') {
+      const platform    = String(body.platform    || '').trim().toUpperCase();
+      const platformRef = String(body.platformRef || '').trim().substring(0, 100);
+      const notes       = String(body.notes       || '').trim().substring(0, 500);
+      const items       = Array.isArray(body.items) ? body.items : [];
+
+      if (!platform) return res.status(400).json({ ok: false, error: 'platform is required' });
+      if (items.length === 0) return res.status(400).json({ ok: false, error: 'Order must have at least one item' });
+
+      // Look up prices from menu
+      const itemCodes = [...new Set(items.map(i => i.code))];
+      const menuR = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/menu_items?item_code=in.(${itemCodes.map(c => `"${c}"`).join(',')})&is_active=eq.true&select=item_code,name,base_price,has_sizes,price_short,price_medium,price_tall`
+      );
+      const menuMap = {};
+      if (menuR.ok && Array.isArray(menuR.data)) {
+        menuR.data.forEach(m => { menuMap[m.item_code] = m; });
       }
-      return res.status(200).json(gasResult);
-    }
 
-    // ── Forward to Apps Script ────────────────────────────────────────────
-    let gasResult;
-    try {
-      gasResult = await callAppsScript(body);
-    } catch (err) {
-      console.error('GAS call failed for action:', action, err.message);
-      return res.status(502).json({ ok: false, error: 'Backend unavailable: ' + err.message });
-    }
-
-    // ── Dual-write: sync menu changes to Supabase ─────────────────────────
-    if (gasResult && gasResult.ok) {
-      if (action === 'addMenuItem') {
-        const gasItemId = gasResult.itemId || body.itemId || null;
-        syncAddToSupabase(body, gasItemId).catch(() => {});
-      } else if (action === 'updateMenuItem') {
-        syncUpdateToSupabase(body).catch(() => {});
-      } else if (action === 'deleteMenuItem') {
-        syncDeleteToSupabase(body.itemId).catch(() => {});
+      const orderItems = [];
+      let subtotal = 0;
+      for (const item of items) {
+        const menuItem = menuMap[item.code];
+        if (!menuItem) continue;
+        let unitPrice = menuItem.base_price;
+        if (menuItem.has_sizes && item.size) {
+          const sizeKey = { SHORT: 'price_short', MEDIUM: 'price_medium', TALL: 'price_tall' }[String(item.size).toUpperCase()];
+          if (sizeKey && menuItem[sizeKey] != null) unitPrice = menuItem[sizeKey];
+        }
+        const qty = Math.max(1, parseInt(item.qty) || 1);
+        subtotal += unitPrice * qty;
+        orderItems.push({
+          item_code:    item.code,
+          item_name:    menuItem.name,
+          unit_price:   unitPrice,
+          qty,
+          size_choice:  item.size || '',
+          sugar_choice: item.sugarLevel || '',
+          item_notes:   '',
+        });
       }
+
+      if (orderItems.length === 0) return res.status(400).json({ ok: false, error: 'No valid items in order' });
+
+      const total = Math.round(subtotal * 100) / 100; // No service charge for platform orders
+
+      // Generate order ID
+      const seqR = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/rpc/get_next_order_number`,
+        { method: 'POST', body: '{}' }
+      );
+      const orderNo = seqR.ok ? (seqR.data || 1001) : Date.now() % 9000 + 1000;
+      const orderId = `${ORDER_PREFIX}-${orderNo}`;
+
+      const orderRow = {
+        order_id:       orderId,
+        order_no:       orderNo,
+        table_no:       '',
+        customer_name:  platform,
+        status:         'NEW',
+        order_type:     'PLATFORM',
+        subtotal:       subtotal,
+        service_charge: 0,
+        total:          total,
+        notes:          notes,
+        source:         'PLATFORM',
+        platform:       platform,
+        platform_ref:   platformRef,
+      };
+      const orderR = await supa('POST', 'dine_in_orders', orderRow);
+      if (!orderR.ok) return res.status(500).json({ ok: false, error: 'Failed to place platform order' });
+
+      const itemRows = orderItems.map(it => ({
+        order_id:     orderId,
+        order_no:     orderNo,
+        table_no:     '',
+        item_code:    it.item_code,
+        item_name:    it.item_name,
+        unit_price:   it.unit_price,
+        qty:          it.qty,
+        size_choice:  it.size_choice,
+        sugar_choice: it.sugar_choice,
+        item_notes:   it.item_notes,
+      }));
+      await supa('POST', 'dine_in_order_items', itemRows);
+      logSync('dine_in_orders', orderId, 'INSERT');
+
+      return res.status(200).json({ ok: true, orderId, total, subtotal });
     }
 
-    return res.status(200).json(gasResult);
+    // ── requestReceipt ─────────────────────────────────────────────────────
+    if (action === 'requestReceipt') {
+      const orderId = String(body.orderId || '').trim();
+      if (!orderId) return res.status(400).json({ ok: false, error: 'orderId is required' });
+
+      const updates = {
+        receipt_type:     body.receiptType     || '',
+        receipt_delivery: body.delivery        || '',
+        receipt_email:    body.email           || '',
+        receipt_name:     body.name            || '',
+        receipt_address:  body.address         || '',
+        receipt_tin:      body.tin             || '',
+      };
+      await supa('PATCH', 'dine_in_orders', updates, { order_id: `eq.${orderId}` });
+      return res.status(200).json({ ok: true });
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // PAYMENT ACTIONS
+    // ══════════════════════════════════════════════════════════════════════
+
+    // ── uploadPayment ──────────────────────────────────────────────────────
+    if (action === 'uploadPayment') {
+      const orderId      = String(body.orderId      || '').trim();
+      const tableNo      = String(body.tableNo      || '').trim();
+      const customerName = String(body.customerName || '').trim().substring(0, 100);
+      const amount       = parseFloat(body.amount) || 0;
+      const notes        = String(body.notes        || '').trim().substring(0, 500);
+      const imageData    = body.imageData || '';
+      const filename     = String(body.filename     || '').trim().substring(0, 200);
+
+      if (!orderId) return res.status(400).json({ ok: false, error: 'orderId is required' });
+      if (amount <= 0) return res.status(400).json({ ok: false, error: 'amount must be positive' });
+
+      // Generate payment ID
+      const paymentId = `PAY-${Date.now().toString(36).toUpperCase()}`;
+
+      // Store image as base64 data URL in proof_url (for now — can be upgraded to S3 later)
+      const proofUrl = imageData || '';
+
+      const payRow = {
+        payment_id:     paymentId,
+        order_id:       orderId,
+        order_type:     'DINE-IN',
+        amount,
+        payment_method: 'GCASH',
+        proof_url:      proofUrl,
+        proof_filename: filename,
+        status:         'PENDING',
+      };
+      const r = await supa('POST', 'payments', payRow);
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to submit payment' });
+
+      // Update order payment status
+      await supa('PATCH', 'dine_in_orders', {
+        payment_status: 'SUBMITTED',
+        payment_method: 'GCASH',
+      }, { order_id: `eq.${orderId}` });
+
+      logSync('payments', paymentId, 'INSERT');
+      return res.status(200).json({ ok: true, paymentId });
+    }
+
+    // ── listPayments ───────────────────────────────────────────────────────
+    if (action === 'listPayments') {
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/payments?order=created_at.desc&limit=200`
+      );
+      if (!r.ok) return res.status(502).json({ ok: false, payments: [], error: 'Failed to load payments' });
+
+      const payments = r.data.map(p => ({
+        paymentId:    p.payment_id,
+        orderId:      p.order_id,
+        orderType:    p.order_type,
+        amount:       p.amount,
+        paymentMethod: p.payment_method,
+        imageUrl:     p.proof_url,
+        filename:     p.proof_filename,
+        status:       p.status,
+        verifiedBy:   p.verified_by || '',
+        verifiedAt:   p.verified_at || '',
+        notes:        p.rejection_reason || '',
+        createdAt:    p.created_at,
+      }));
+
+      return res.status(200).json({ ok: true, payments });
+    }
+
+    // ── verifyPayment ──────────────────────────────────────────────────────
+    if (action === 'verifyPayment') {
+      const paymentId  = String(body.paymentId  || '').trim();
+      const verifiedBy = String(body.verifiedBy || 'Staff').trim().substring(0, 100);
+      if (!paymentId) return res.status(400).json({ ok: false, error: 'paymentId is required' });
+
+      const r = await supa('PATCH', 'payments', {
+        status:      'VERIFIED',
+        verified_by: verifiedBy,
+        verified_at: new Date().toISOString(),
+      }, { payment_id: `eq.${paymentId}` });
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to verify payment' });
+
+      // Get the order_id to update order payment status
+      const payR = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/payments?payment_id=eq.${encodeURIComponent(paymentId)}&select=order_id`
+      );
+      if (payR.ok && payR.data.length > 0) {
+        await supa('PATCH', 'dine_in_orders', { payment_status: 'VERIFIED' }, { order_id: `eq.${payR.data[0].order_id}` });
+      }
+
+      logSync('payments', paymentId, 'UPDATE');
+      return res.status(200).json({ ok: true, paymentId });
+    }
+
+    // ── rejectPayment ──────────────────────────────────────────────────────
+    if (action === 'rejectPayment') {
+      const paymentId  = String(body.paymentId  || '').trim();
+      const reason     = String(body.reason     || '').trim().substring(0, 500);
+      const verifiedBy = String(body.verifiedBy || 'Staff').trim().substring(0, 100);
+      if (!paymentId) return res.status(400).json({ ok: false, error: 'paymentId is required' });
+
+      const r = await supa('PATCH', 'payments', {
+        status:           'REJECTED',
+        verified_by:      verifiedBy,
+        verified_at:      new Date().toISOString(),
+        rejection_reason: reason,
+      }, { payment_id: `eq.${paymentId}` });
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to reject payment' });
+
+      // Get the order_id to update order payment status
+      const payR = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/payments?payment_id=eq.${encodeURIComponent(paymentId)}&select=order_id`
+      );
+      if (payR.ok && payR.data.length > 0) {
+        await supa('PATCH', 'dine_in_orders', { payment_status: 'REJECTED' }, { order_id: `eq.${payR.data[0].order_id}` });
+      }
+
+      logSync('payments', paymentId, 'UPDATE');
+      return res.status(200).json({ ok: true, paymentId });
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // AUTH ACTIONS
+    // ══════════════════════════════════════════════════════════════════════
+
+    // ── verifyUserPin ──────────────────────────────────────────────────────
+    if (action === 'verifyUserPin') {
+      const pin = String(body.pin || '').trim();
+      if (!pin || pin.length < 4) return res.status(400).json({ ok: false, error: 'PIN is required' });
+
+      const pinHash = await sha256(pin);
+
+      // Check for locked accounts first
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/staff_users?pin_hash=eq.${encodeURIComponent(pinHash)}&active=eq.true&select=user_id,username,display_name,role,locked_until`
+      );
+
+      if (!r.ok || !r.data.length) {
+        // Increment failed attempts on all users (we don't know which one)
+        // Just return invalid PIN
+        return res.status(200).json({ ok: false, error: 'Invalid PIN' });
+      }
+
+      const user = r.data[0];
+
+      // Check if locked
+      if (user.locked_until && new Date(user.locked_until) > new Date()) {
+        return res.status(200).json({ ok: false, error: 'Account locked. Please wait.' });
+      }
+
+      // Update last_login and reset failed_attempts
+      await supa('PATCH', 'staff_users', {
+        last_login:      new Date().toISOString(),
+        failed_attempts: 0,
+        locked_until:    null,
+      }, { user_id: `eq.${user.user_id}` });
+
+      // Return flat fields for admin.html compatibility
+      return res.status(200).json({
+        ok: true,
+        userId:      user.user_id,
+        username:    user.username,
+        displayName: user.display_name,
+        role:        user.role,
+        // Also include nested user object for future clients
+        user: {
+          userId:      user.user_id,
+          username:    user.username,
+          displayName: user.display_name,
+          role:        user.role,
+        },
+      });
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // ONLINE ORDER ACTIONS (pass-through to Supabase)
+    // ══════════════════════════════════════════════════════════════════════
+
+    // ── getOnlineOrders ────────────────────────────────────────────────────
+    if (action === 'getOnlineOrders') {
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/online_orders?order=created_at.desc&limit=200`
+      );
+      const rows = r.ok ? r.data : [];
+      const orders = rows.map(o => ({
+        orderRef:            o.order_ref,
+        date:                o.created_at,
+        customerName:        o.customer_name,
+        phone:               o.customer_phone,
+        email:               o.customer_email || '',
+        pickupTime:          o.pickup_time || '',
+        courierType:         o.courier_type || 'PICKUP',
+        subtotal:            o.subtotal,
+        totalAmount:         o.total_amount,
+        paymentMethod:       o.payment_method,
+        paymentStatus:       o.payment_status,
+        orderStatus:         o.status,
+        specialInstructions: o.special_instructions || '',
+        adminNotes:          o.admin_notes || '',
+        lastUpdated:         o.updated_at,
+      }));
+      return res.status(200).json({ success: true, orders });
+    }
+
+    // ── getCustomers ───────────────────────────────────────────────────────
+    if (action === 'getCustomers') {
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/online_orders?order=created_at.asc&limit=500&select=customer_phone,customer_name,created_at,total_amount,order_ref`
+      );
+      const rows = r.ok ? r.data : [];
+      const custMap = {};
+      rows.forEach(o => {
+        const phone = o.customer_phone || 'Unknown';
+        if (!custMap[phone]) {
+          custMap[phone] = {
+            phone,
+            customerName:   o.customer_name,
+            firstOrderDate: o.created_at,
+            lastOrderDate:  o.created_at,
+            totalOrders:    0,
+            totalSpend:     0,
+          };
+        }
+        custMap[phone].lastOrderDate  = o.created_at;
+        custMap[phone].totalOrders   += 1;
+        custMap[phone].totalSpend    += parseFloat(o.total_amount || 0);
+      });
+      const customers = Object.values(custMap)
+        .sort((a, b) => new Date(b.lastOrderDate) - new Date(a.lastOrderDate));
+      return res.status(200).json({ success: true, customers });
+    }
+
+    // ── Unknown action ─────────────────────────────────────────────────────
+    return res.status(400).json({ ok: false, error: `Unknown action: ${action}` });
+
   } catch (err) {
-    console.error('Proxy error:', err);
+    console.error('API error:', err);
     return res.status(500).json({ ok: false, error: 'Server error: ' + err.message });
   }
 }

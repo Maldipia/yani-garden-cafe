@@ -1,0 +1,28 @@
+sequenceDiagram
+    participant C as Customer
+    participant V_API as Vercel API (/api/online-order)
+    participant DB as Supabase (order_queue)
+    participant V_Worker as Vercel Cron (/api/queue-worker)
+    participant G as Google Apps Script
+    participant S as Google Sheets
+
+    C->>+V_API: POST /api/online-order (placeOrder)
+    V_API->>+DB: INSERT into order_queue (status: PENDING)
+    DB-->>-V_API: { ok: true }
+    V_API-->>-C: { ok: true, orderRef }
+
+    Note right of V_API: Enqueues order immediately.\nFast, reliable response to customer.
+
+    V_Worker->>+DB: 1. Claim PENDING orders (atomic UPDATE)
+    DB-->>-V_Worker: ordersToProcess[]
+
+    loop For each order
+        V_Worker->>+G: 2. fetch(GAS_URL)
+        G->>+S: appendRow(orderData)
+        S-->>-G: Success
+        G-->>-V_Worker: { success: true }
+        V_Worker->>+DB: 3. UPDATE order_queue (status: COMPLETED)
+        DB-->>-V_Worker: { ok: true }
+    end
+
+    Note over V_Worker,S: Worker processes queue sequentially,\neliminating GAS concurrency errors.\nIncludes retry and dead-letter logic.

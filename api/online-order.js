@@ -20,7 +20,8 @@ const SUPABASE_URL = 'https://hnynvclpvfxzlfjphefj.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_PQBb1nDY7U7SxNfgDYoXyg_GtoLowLM';
 const SEMAPHORE_API_KEY = process.env.SEMAPHORE_API_KEY || '';
 const SEMAPHORE_SENDER = process.env.SEMAPHORE_SENDER || 'YANI CAFE';
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbzprf6_LpDwcVujm8kcGFZE5JdkL0k9b6Wfg5l82gjZzFua8w1QWH8UoFFlhznc6EtL/exec';
+// GAS_URL removed — Google Sheets is now updated via sheets-sync cron job
+const SUPABASE_KEY = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_ANON_KEY || SUPABASE_ANON_KEY;
 
 // ── In-memory rate limiter (30 req/min per IP for order placement) ─────────────────
 const _rlMap = new Map();
@@ -54,20 +55,20 @@ function isItemsValid(items) {
   });
 }
 
-// ── Fire-and-forget GAS sync (non-blocking) ────────────────────────────────
-// NOTE: Direct GAS calls are now only used for non-order actions (status updates, etc.)
-// New orders are enqueued via enqueueOrderForGAS() to avoid the 30-concurrent-execution limit.
-async function callGAS(payload) {
-  try {
-    await fetch(GAS_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-  } catch (e) {
-    console.warn('GAS sync failed (non-critical):', e.message);
-  }
+// ── Log to sheets_sync_log for Sheets mirror (fire-and-forget) ──────────────
+function logSync(tableName, recordId, action) {
+  fetch(`${SUPABASE_URL}/rest/v1/sheets_sync_log`, {
+    method: 'POST',
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=minimal',
+    },
+    body: JSON.stringify({ table_name: tableName, record_id: String(recordId), action, synced: false }),
+  }).catch(() => {});
 }
+// callGAS removed — replaced by logSync for Sheets mirror
 
 // ── Enqueue order for GAS processing (queue-based, non-blocking) ─────────────
 // Writes to order_queue table; the queue-worker processes it sequentially.
@@ -96,8 +97,8 @@ async function enqueueOrderForGAS(orderRef, orderType, gasPayload) {
     return true;
   } catch (e) {
     console.warn('Failed to enqueue order (falling back to direct GAS call):', e.message);
-    // Fallback: call GAS directly if queue insert fails
-    callGAS(gasPayload);
+    // Fallback: log to sync queue if queue insert fails
+    logSync('online_orders', gasPayload?.orderRef || 'unknown', 'UPDATE');
     return false;
   }
 }
@@ -492,12 +493,8 @@ export default async function handler(req, res) {
         }
       }
       
-      // ── Sync status update to Google Sheets (fire-and-forget) ────────────
-      callGAS({
-        action: 'updateOnlineOrderStatus',
-        orderRef,
-        orderStatus: status.toUpperCase()
-      });
+      // ── Log to sheets_sync_log for Sheets mirror ────────────────────────
+      logSync('online_orders', orderRef, 'UPDATE');
 
       return res.status(200).json({ 
         ok: true, 
@@ -538,13 +535,8 @@ export default async function handler(req, res) {
         }
       } catch (e) {}
       
-      // ── Sync payment verification to Google Sheets (fire-and-forget) ──────
-      callGAS({
-        action: 'updateOnlineOrderStatus',
-        orderRef,
-        orderStatus: orderStatus,
-        paymentStatus: paymentStatus
-      });
+      // ── Log to sheets_sync_log for Sheets mirror ────────────────────────
+      logSync('online_orders', orderRef, 'UPDATE');
 
       return res.status(200).json({ ok: true, message: `Payment ${paymentStatus} for ${orderRef}` });
     }
@@ -613,13 +605,8 @@ export default async function handler(req, res) {
         console.warn('online_payments insert failed (non-critical):', e.message);
       }
 
-      // Sync to GAS (fire-and-forget)
-      callGAS({
-        action: 'updateOnlineOrderStatus',
-        orderRef,
-        orderStatus: 'PAYMENT_SUBMITTED',
-        paymentStatus: 'SUBMITTED'
-      });
+      // Log to sheets_sync_log for Sheets mirror
+      logSync('online_orders', orderRef, 'UPDATE');
 
       return res.status(200).json({ ok: true, message: 'Payment proof submitted successfully' });
     }
@@ -642,13 +629,8 @@ export default async function handler(req, res) {
 
       await supabasePatch('online_orders', `order_ref=eq.${encodeURIComponent(orderRef)}`, updateData);
 
-      // Sync to GAS (fire-and-forget)
-      callGAS({
-        action: 'updateOnlineOrderStatus',
-        orderRef,
-        orderStatus: 'EDITED',
-        updatedBy: updatedBy || 'Owner'
-      });
+      // Log to sheets_sync_log for Sheets mirror
+      logSync('online_orders', orderRef, 'UPDATE');
 
       return res.status(200).json({ ok: true, message: `Order ${orderRef} updated` });
     }
