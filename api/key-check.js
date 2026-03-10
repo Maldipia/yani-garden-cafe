@@ -5,5 +5,6 @@ export default async function handler(req, res) {
     keyPrefix: key.substring(0, 20),
     isSecret: key.startsWith('sb_secret_') || key.startsWith('eyJ'),
     isAnon: key.startsWith('sb_publishable_'),
+    nodeEnv: process.env.NODE_ENV,
   });
 }
