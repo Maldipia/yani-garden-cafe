@@ -1133,6 +1133,9 @@ function getLocalMenuImgPath(code) {
 var pollTimer = null;
 var currentFilter = 'ACTIVE';
 var allOrders = [];
+// Local status overrides — prevents polling from reverting optimistic UI updates.
+// Key: orderId, Value: { status, ts } — expires after 90s once GAS has synced.
+var _statusOverrides = {};
 var lastOrderCount = 0;
 var allPayments = [];
 var pendingPayCount = 0;
@@ -1321,6 +1324,17 @@ async function loadOrders() {
     seen[o.orderId] = true;
     return true;
   });
+
+  // Apply local status overrides so polling never reverts an optimistic UI update
+  // (e.g. cancel that hasn't synced back from GAS yet). Expires after 90s.
+  var now = Date.now();
+  Object.keys(_statusOverrides).forEach(function(oid) {
+    var ov = _statusOverrides[oid];
+    if (now - ov.ts > 90000) { delete _statusOverrides[oid]; return; }
+    var order = allOrders.find(function(o) { return o.orderId === oid; });
+    if (order) order.status = ov.status;
+  });
+
   renderStats();
   renderFilters();
   renderOrders();
@@ -1636,6 +1650,8 @@ async function updateStatus(orderId, newStatus) {
 
   var result = await api('updateOrderStatus', { orderId:orderId, status:newStatus });
   if (result.ok) {
+    // Pin this status so polling can't revert it before GAS syncs (90s window)
+    _statusOverrides[orderId] = { status: newStatus, ts: Date.now() };
     // Update local state immediately for responsiveness
     allOrders.forEach(function(o) {
       if (o.orderId === orderId) o.status = newStatus;
@@ -1643,6 +1659,7 @@ async function updateStatus(orderId, newStatus) {
     renderStats();
     renderFilters();
     renderOrders();
+    showToast(orderId + ' → ' + newStatus, 1800);
   } else {
     showToast('Failed: ' + (result.error || 'Unknown error'), 'error');
   }
