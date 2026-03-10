@@ -17,11 +17,11 @@
 // ══════════════════════════════════════════════════════════════
 
 const SUPABASE_URL = 'https://hnynvclpvfxzlfjphefj.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_PQBb1nDY7U7SxNfgDYoXyg_GtoLowLM';
+const SUPABASE_ANON_KEY = process.env.SUPABASE_SECRET_KEY;
 const SEMAPHORE_API_KEY = process.env.SEMAPHORE_API_KEY || '';
 const SEMAPHORE_SENDER = process.env.SEMAPHORE_SENDER || 'YANI CAFE';
 // GAS_URL removed — Google Sheets is now updated via sheets-sync cron job
-const SUPABASE_KEY = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_ANON_KEY || SUPABASE_ANON_KEY;
+const SUPABASE_KEY = process.env.SUPABASE_SECRET_KEY;
 
 // ── In-memory rate limiter (30 req/min per IP for order placement) ─────────────────
 const _rlMap = new Map();

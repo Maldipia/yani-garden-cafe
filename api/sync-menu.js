@@ -7,7 +7,7 @@
 // ══════════════════════════════════════════════════════════════
 
 const SUPABASE_URL = 'https://hnynvclpvfxzlfjphefj.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_SECRET_KEY || 'sb_publishable_PQBb1nDY7U7SxNfgDYoXyg_GtoLowLM';
+const SUPABASE_KEY = process.env.SUPABASE_SECRET_KEY;
 
 async function supabaseReq(method, path, body, params, prefer) {
   let url = `${SUPABASE_URL}/rest/v1/${path}`;

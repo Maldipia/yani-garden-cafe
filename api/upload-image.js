@@ -8,7 +8,7 @@ const SUPABASE_URL = 'https://hnynvclpvfxzlfjphefj.supabase.co';
 const SUPABASE_BUCKET = 'menu-images';
 
 // Use service role key (env var) for server-side storage uploads — bypasses RLS
-const SUPABASE_KEY = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_ANON_KEY || 'sb_publishable_PQBb1nDY7U7SxNfgDYoXyg_GtoLowLM';
+const SUPABASE_KEY = process.env.SUPABASE_SECRET_KEY;
 
 const ALLOWED_EXTS = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
 const MAX_BASE64_LEN = 7_000_000; // ~5MB decoded

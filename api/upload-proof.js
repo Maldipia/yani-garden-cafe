@@ -4,7 +4,7 @@
 // (Avoids Supabase Storage RLS issues)
 // ══════════════════════════════════════════════════════════════
 const SUPABASE_URL = 'https://hnynvclpvfxzlfjphefj.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_PQBb1nDY7U7SxNfgDYoXyg_GtoLowLM';
+const SUPABASE_ANON_KEY = process.env.SUPABASE_SECRET_KEY;
 
 export const config = {
   api: {
@@ -36,7 +36,7 @@ export default async function handler(req, res) {
     }
     
     // Get the key to use (prefer service role for storage bypass)
-    const authKey = process.env.SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
+    const authKey = process.env.SUPABASE_SECRET_KEY;
     
     // First try Supabase Storage upload
     let publicUrl = null;

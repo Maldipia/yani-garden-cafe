@@ -16,7 +16,7 @@
 // ══════════════════════════════════════════════════════════════
 
 const SUPABASE_URL = 'https://hnynvclpvfxzlfjphefj.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_ANON_KEY || 'sb_publishable_PQBb1nDY7U7SxNfgDYoXyg_GtoLowLM';
+const SUPABASE_KEY = process.env.SUPABASE_SECRET_KEY;
 const WORKER_SECRET = process.env.QUEUE_WORKER_SECRET || null;
 const BATCH_SIZE = 20;
 

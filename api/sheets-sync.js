@@ -18,7 +18,7 @@
 // ══════════════════════════════════════════════════════════════
 
 const SUPABASE_URL = 'https://hnynvclpvfxzlfjphefj.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_ANON_KEY || 'sb_publishable_PQBb1nDY7U7SxNfgDYoXyg_GtoLowLM';
+const SUPABASE_KEY = process.env.SUPABASE_SECRET_KEY;
 const SHEETS_ID    = process.env.GOOGLE_SHEETS_ID || '';
 const SA_JSON_STR  = process.env.GOOGLE_SERVICE_ACCOUNT_JSON || '';
 

@@ -10,7 +10,7 @@
 // ══════════════════════════════════════════════════════════════
 
 const SUPABASE_URL = 'https://hnynvclpvfxzlfjphefj.supabase.co';
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'sb_publishable_PQBb1nDY7U7SxNfgDYoXyg_GtoLowLM';
+const SUPABASE_ANON_KEY = process.env.SUPABASE_SECRET_KEY;
 
 async function sb(method, path, body = null, params = null) {
   let url = `${SUPABASE_URL}/rest/v1/${path}`;

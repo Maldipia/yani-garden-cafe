@@ -35,10 +35,6 @@
     {
       "path": "/api/queue-worker",
       "schedule": "*/2 * * * *"
-    },
-    {
-      "path": "/api/sheets-sync",
-      "schedule": "*/2 * * * *"
     }
   ],
   "rewrites": [
