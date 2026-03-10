@@ -277,6 +277,67 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: result.ok, data: result.data });
     }
 
+    // ── Direct Supabase: getOnlineOrders ─────────────────────────────────
+    // Browser cannot call GAS directly (auth redirect). Route via this proxy.
+    if (action === 'getOnlineOrders') {
+      try {
+        const result = await supabaseRequest('GET', 'online_orders', null,
+          'order=created_at.desc&limit=200');
+        const rows = Array.isArray(result.data) ? result.data : [];
+        const orders = rows.map(o => ({
+          orderRef:            o.order_ref,
+          date:                o.created_at,
+          customerName:        o.customer_name,
+          phone:               o.customer_phone,
+          email:               o.customer_email || '',
+          pickupTime:          o.pickup_time || '',
+          courierType:         o.courier_type || 'PICKUP',
+          subtotal:            o.subtotal,
+          totalAmount:         o.total_amount,
+          paymentMethod:       o.payment_method,
+          paymentStatus:       o.payment_status,
+          orderStatus:         o.status,
+          specialInstructions: o.special_instructions || '',
+          adminNotes:          o.admin_notes || '',
+          lastUpdated:         o.updated_at
+        }));
+        return res.status(200).json({ success: true, orders });
+      } catch (err) {
+        return res.status(502).json({ success: false, orders: [], error: err.message });
+      }
+    }
+
+    // ── Direct Supabase: getCustomers ──────────────────────────────────────
+    if (action === 'getCustomers') {
+      try {
+        const result = await supabaseRequest('GET', 'online_orders', null,
+          'order=created_at.asc&limit=500&select=customer_phone,customer_name,created_at,total_amount,order_ref');
+        const rows = Array.isArray(result.data) ? result.data : [];
+        const custMap = {};
+        rows.forEach(o => {
+          const phone = o.customer_phone || 'Unknown';
+          if (!custMap[phone]) {
+            custMap[phone] = {
+              phone,
+              customerName:   o.customer_name,
+              firstOrderDate: o.created_at,
+              lastOrderDate:  o.created_at,
+              totalOrders:    0,
+              totalSpend:     0
+            };
+          }
+          custMap[phone].lastOrderDate  = o.created_at;
+          custMap[phone].totalOrders   += 1;
+          custMap[phone].totalSpend    += parseFloat(o.total_amount || 0);
+        });
+        const customers = Object.values(custMap)
+          .sort((a, b) => new Date(b.lastOrderDate) - new Date(a.lastOrderDate));
+        return res.status(200).json({ success: true, customers });
+      } catch (err) {
+        return res.status(502).json({ success: false, customers: [], error: err.message });
+      }
+    }
+
     // ── Direct Supabase: updateOrderStatus (bypass GAS for reliability) ────
     // GAS is slow/unreliable for status updates — handle directly in Supabase
     // AND fire-and-forget to GAS so Google Sheets stays in sync.

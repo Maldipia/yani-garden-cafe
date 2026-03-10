@@ -3349,10 +3349,10 @@ var GAS_URL = 'https://script.google.com/macros/s/AKfycbzprf6_LpDwcVujm8kcGFZE5J
 
 async function loadSheetsData() {
   var countEl = document.getElementById('sheetsDataCount');
-  if (countEl) countEl.textContent = 'Loading from Google Sheets...';
+  if (countEl) countEl.textContent = 'Loading...';
   try {
-    // Fetch online orders from GAS
-    var resp = await fetch(GAS_URL, {
+    // Fetch online orders via Vercel proxy (avoids GAS auth redirect issue)
+    var resp = await fetch(API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'getOnlineOrders' })
@@ -3360,9 +3360,8 @@ async function loadSheetsData() {
     var data = await resp.json();
     sheetsOrdersData = (data.success && data.orders) ? data.orders : [];
 
-    // Fetch customers from GAS (via getOnlineOrders which returns from ONLINE_ORDERS sheet)
-    // We also need customer data — fetch separately
-    var custResp = await fetch(GAS_URL, {
+    // Fetch customers via Vercel proxy
+    var custResp = await fetch(API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'getCustomers' })
@@ -3370,7 +3369,7 @@ async function loadSheetsData() {
     var custData = await custResp.json();
     sheetsCustomersData = (custData.success && custData.customers) ? custData.customers : [];
 
-    if (countEl) countEl.textContent = sheetsOrdersData.length + ' orders · ' + sheetsCustomersData.length + ' customers in Google Sheets';
+    if (countEl) countEl.textContent = sheetsOrdersData.length + ' orders · ' + sheetsCustomersData.length + ' customers';
     showSheetsTab(currentSheetsTab);
   } catch (e) {
     if (countEl) countEl.textContent = 'Error: ' + e.message;
@@ -3411,23 +3410,24 @@ function renderSheetsOrders() {
   };
   var html = '<table style="width:100%;border-collapse:collapse;font-size:.82rem;min-width:700px">';
   html += '<thead><tr style="background:var(--forest-deep);color:#fff">';
-  ['Order Ref','Date','Customer','Phone','Pickup','Items','Total','Payment','Status'].forEach(function(h) {
+  ['Order Ref','Date','Customer','Phone','Type','Total','Payment','Pay Status','Order Status'].forEach(function(h) {
     html += '<th style="padding:8px 10px;text-align:left;white-space:nowrap">' + h + '</th>';
   });
   html += '</tr></thead><tbody>';
   sheetsOrdersData.forEach(function(o, i) {
     var bg = i % 2 === 0 ? '#fff' : '#f9fafb';
-    var statusBg = statusColors[String(o['Order Status'] || '').toUpperCase()] || '#f3f4f6';
+    var statusBg = statusColors[String(o.orderStatus || '').toUpperCase()] || '#f3f4f6';
+    var dateStr = o.date ? new Date(o.date).toLocaleString('en-PH', {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
     html += '<tr style="background:' + bg + ';border-bottom:1px solid #e5e7eb">';
-    html += '<td style="padding:8px 10px;font-weight:700;color:var(--forest-deep)">' + esc(String(o['Order Ref'] || '')) + '</td>';
-    html += '<td style="padding:8px 10px;white-space:nowrap">' + esc(String(o['Date'] || '')) + '</td>';
-    html += '<td style="padding:8px 10px;font-weight:600">' + esc(String(o['Customer Name'] || '')) + '</td>';
-    html += '<td style="padding:8px 10px">' + esc(String(o['Phone'] || '')) + '</td>';
-    html += '<td style="padding:8px 10px;white-space:nowrap">' + esc(String(o['Pickup Time'] || '')) + '</td>';
-    html += '<td style="padding:8px 10px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(String(o['Items Summary'] || '')) + '">' + esc(String(o['Items Summary'] || '')) + '</td>';
-    html += '<td style="padding:8px 10px;font-weight:700;color:var(--forest-deep)">₱' + parseFloat(o['Total Amount'] || 0).toLocaleString() + '</td>';
-    html += '<td style="padding:8px 10px">' + esc(String(o['Payment Method'] || '')) + '</td>';
-    html += '<td style="padding:8px 10px"><span style="background:' + statusBg + ';padding:3px 8px;border-radius:10px;font-size:.75rem;font-weight:700">' + esc(String(o['Order Status'] || '')) + '</span></td>';
+    html += '<td style="padding:8px 10px;font-weight:700;color:var(--forest-deep)">' + esc(String(o.orderRef || '')) + '</td>';
+    html += '<td style="padding:8px 10px;white-space:nowrap">' + esc(dateStr) + '</td>';
+    html += '<td style="padding:8px 10px;font-weight:600">' + esc(String(o.customerName || '')) + '</td>';
+    html += '<td style="padding:8px 10px">' + esc(String(o.phone || '')) + '</td>';
+    html += '<td style="padding:8px 10px">' + esc(String(o.courierType || 'PICKUP')) + '</td>';
+    html += '<td style="padding:8px 10px;font-weight:700;color:var(--forest-deep)">₱' + parseFloat(o.totalAmount || 0).toLocaleString() + '</td>';
+    html += '<td style="padding:8px 10px">' + esc(String(o.paymentMethod || '')) + '</td>';
+    html += '<td style="padding:8px 10px">' + esc(String(o.paymentStatus || '')) + '</td>';
+    html += '<td style="padding:8px 10px"><span style="background:' + statusBg + ';padding:3px 8px;border-radius:10px;font-size:.75rem;font-weight:700">' + esc(String(o.orderStatus || '')) + '</span></td>';
     html += '</tr>';
   });
   html += '</tbody></table>';
@@ -3448,13 +3448,15 @@ function renderSheetsCustomers() {
   html += '</tr></thead><tbody>';
   sheetsCustomersData.forEach(function(c, i) {
     var bg = i % 2 === 0 ? '#fff' : '#f9fafb';
+    var firstDate = c.firstOrderDate ? new Date(c.firstOrderDate).toLocaleDateString('en-PH', {month:'short',day:'numeric',year:'numeric'}) : '';
+    var lastDate  = c.lastOrderDate  ? new Date(c.lastOrderDate).toLocaleDateString('en-PH', {month:'short',day:'numeric',year:'numeric'}) : '';
     html += '<tr style="background:' + bg + ';border-bottom:1px solid #e5e7eb">';
-    html += '<td style="padding:8px 10px;font-weight:600">' + esc(String(c['Phone'] || '')) + '</td>';
-    html += '<td style="padding:8px 10px;font-weight:700;color:var(--forest-deep)">' + esc(String(c['Customer Name'] || '')) + '</td>';
-    html += '<td style="padding:8px 10px;white-space:nowrap">' + esc(String(c['First Order Date'] || '')) + '</td>';
-    html += '<td style="padding:8px 10px;white-space:nowrap">' + esc(String(c['Last Order Date'] || '')) + '</td>';
-    html += '<td style="padding:8px 10px;text-align:center;font-weight:700">' + esc(String(c['Total Orders'] || 0)) + '</td>';
-    html += '<td style="padding:8px 10px;font-weight:700;color:var(--forest-deep)">₱' + parseFloat(c['Total Spend'] || 0).toLocaleString() + '</td>';
+    html += '<td style="padding:8px 10px;font-weight:600">' + esc(String(c.phone || '')) + '</td>';
+    html += '<td style="padding:8px 10px;font-weight:700;color:var(--forest-deep)">' + esc(String(c.customerName || '')) + '</td>';
+    html += '<td style="padding:8px 10px;white-space:nowrap">' + esc(firstDate) + '</td>';
+    html += '<td style="padding:8px 10px;white-space:nowrap">' + esc(lastDate) + '</td>';
+    html += '<td style="padding:8px 10px;text-align:center;font-weight:700">' + esc(String(c.totalOrders || 0)) + '</td>';
+    html += '<td style="padding:8px 10px;font-weight:700;color:var(--forest-deep)">₱' + parseFloat(c.totalSpend || 0).toLocaleString() + '</td>';
     html += '</tr>';
   });
   html += '</tbody></table>';
