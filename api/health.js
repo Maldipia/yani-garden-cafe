@@ -75,14 +75,17 @@ async function checkMenuDrift() {
     const contentRange = sbResp.headers.get('content-range') || '';
     const supabaseCount = parseInt(contentRange.split('/')[1] || '0');
 
-    // Get GAS item count via POST
+    // Get GAS item count via the Vercel proxy (/api/pos) which correctly filters
+    // to active-only items. Calling GAS directly returns all rows including inactive.
     let gasCount = null;
     try {
-      const gasResp = await fetch(APPS_SCRIPT_URL, {
+      const origin = process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : 'https://yanigardencafe.com';
+      const gasResp = await fetch(`${origin}/api/pos`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'getMenu' }),  // active items only — matches Supabase is_active=true filter
-        redirect: 'follow'
+        body: JSON.stringify({ action: 'getMenu' })  // active items only
       });
       if (gasResp.ok) {
         const text = await gasResp.text();
