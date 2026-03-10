@@ -1,33 +1,19 @@
-// TEMPORARY: One-time RLS policy setup endpoint
-// DELETE THIS FILE after running once
+// TEMPORARY: One-time diagnostic endpoint
 export default async function handler(req, res) {
-  const SECRET = process.env.SUPABASE_SECRET_KEY;
-  const SUPABASE_URL = process.env.SUPABASE_URL || 'https://hnynvclpvfxzlfjphefj.supabase.co';
-
-  if (!SECRET) {
-    return res.status(500).json({ ok: false, error: 'No SUPABASE_SECRET_KEY env var set' });
-  }
-
-  // Use the service role key to write to menu_items directly
-  // This tests if the service key works
-  const testUrl = `${SUPABASE_URL}/rest/v1/menu_items?item_code=eq.C022`;
-  const testResp = await fetch(testUrl, {
-    method: 'PATCH',
-    headers: {
-      'apikey': SECRET,
-      'Authorization': `Bearer ${SECRET}`,
-      'Content-Type': 'application/json',
-      'Prefer': 'return=representation',
-    },
-    body: JSON.stringify({ category_id: '9094c828-1da1-4802-838b-8eb4da3c16be' }),
-  });
-  const testText = await testResp.text();
-
+  // Show all env var names (not values) to debug what's available
+  const envKeys = Object.keys(process.env).filter(k => 
+    k.includes('SUPA') || k.includes('KEY') || k.includes('SECRET') || k.includes('TOKEN')
+  );
+  
+  const SECRET = process.env.SUPABASE_SECRET_KEY || 
+                 process.env.SUPABASE_SERVICE_ROLE_KEY || 
+                 process.env.SUPABASE_SERVICE_KEY ||
+                 process.env.SERVICE_ROLE_KEY;
+  
   return res.status(200).json({
-    ok: testResp.ok,
-    status: testResp.status,
-    result: testText.substring(0, 500),
+    availableKeys: envKeys,
     hasSecret: !!SECRET,
-    secretPrefix: SECRET ? SECRET.substring(0, 20) + '...' : 'none',
+    secretPrefix: SECRET ? SECRET.substring(0, 25) + '...' : 'none',
+    nodeEnv: process.env.NODE_ENV,
   });
 }
