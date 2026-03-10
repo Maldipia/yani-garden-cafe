@@ -3,7 +3,7 @@ const path = require('path');
 // Node 22 has built-in fetch
 const app = express();
 
-const VERCEL = 'https://yani-cafe.vercel.app';
+const VERCEL = 'https://yanigardencafe.com';
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));

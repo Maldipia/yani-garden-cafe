@@ -284,7 +284,7 @@ export default async function handler(req, res) {
                 const driveMatch = p.match(/drive\.google\.com\/file\/d\/([^/]+)/);
                 if (driveMatch) return 'https://drive.google.com/uc?export=view&id=' + driveMatch[1];
                 // Relative path → absolute
-                if (!p.startsWith('http')) return 'https://' + (req.headers.host || 'yani-garden-cafe-d3l6.vercel.app') + p;
+                if (!p.startsWith('http')) return 'https://' + (req.headers.host || 'yanigardencafe.com') + p;
                 return p;
               })(item.image_path)
             : null
