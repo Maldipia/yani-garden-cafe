@@ -325,8 +325,8 @@ export default async function handler(req, res) {
       if (!isValidItemCode(body.itemId)) {
         return res.status(400).json({ ok: false, error: 'itemId is required and must be a valid item code' });
       }
-      // Soft delete — set is_active = false
-      const r = await supa('PATCH', 'menu_items', { is_active: false }, { item_code: `eq.${body.itemId}` });
+      // Hard delete — permanently removes menu item. Order items store snapshots so no FK risk.
+      const r = await supa('DELETE', 'menu_items', null, { item_code: `eq.${body.itemId}` });
       if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to delete menu item' });
       invalidateMenuCache();
       logSync('menu_items', body.itemId, 'DELETE');

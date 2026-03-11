@@ -585,12 +585,28 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 .mm-item-status-active { display:inline-block; background:#D1FAE5; color:#065F46; padding:2px 8px; border-radius:10px; font-size:.62rem; font-weight:700 }
 .mm-item-status-inactive { display:inline-block; background:#FEE2E2; color:#991B1B; padding:2px 8px; border-radius:10px; font-size:.62rem; font-weight:700 }
 .mm-edit-btn {
-  width:100%; padding:9px; background:var(--forest);
+  flex:1; padding:9px; background:var(--forest);
   color:#fff; border:none; border-radius:8px;
   font-size:.8rem; font-weight:700; cursor:pointer;
   font-family:var(--font-body); transition:background .15s;
 }
 .mm-edit-btn:hover { background:var(--forest-deep) }
+.mm-toggle-btn {
+  flex:1; padding:9px; border:none; border-radius:8px;
+  font-size:.75rem; font-weight:700; cursor:pointer;
+  font-family:var(--font-body); transition:background .15s;
+}
+.mm-toggle-btn.active { background:#FEF3C7; color:#92400E; }
+.mm-toggle-btn.active:hover { background:#FDE68A; }
+.mm-toggle-btn.inactive { background:#D1FAE5; color:#065F46; }
+.mm-toggle-btn.inactive:hover { background:#A7F3D0; }
+.mm-delete-btn {
+  padding:9px 11px; background:#FEE2E2; color:#EF4444; border:none; border-radius:8px;
+  font-size:.85rem; font-weight:700; cursor:pointer;
+  font-family:var(--font-body); transition:background .15s;
+}
+.mm-delete-btn:hover { background:#EF4444; color:#fff; }
+.mm-card-actions { display:flex; gap:6px; margin-top:auto; padding-top:10px; }
 /* ── Edit Order Modal ─────────────────────────────────── */
 .eo-overlay {
   position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:200;
@@ -2717,6 +2733,8 @@ function renderMenuMgrGrid() {
       ? '₱' + item.priceShort + ' / ₱' + item.priceMedium + ' / ₱' + item.priceTall
       : '₱' + item.price;
     var catLabel = (item.category || 'Other').trim();
+    var toggleLabel  = isActive ? '⏸ Set Unavailable' : '✅ Set Available';
+    var toggleClass  = isActive ? 'active' : 'inactive';
     return '<div class="mm-item-card' + (isActive ? '' : ' inactive') + '">'
       + imgHtml
       + '<div class="mm-item-body">'
@@ -2726,10 +2744,71 @@ function renderMenuMgrGrid() {
       +   '</div>'
       +   '<span class="mm-item-cat">' + esc(catLabel) + '</span>'
       +   '<div class="mm-item-price">' + priceDisplay + '</div>'
-      +   '<button class="mm-edit-btn" onclick="openEditItemModal(\'' + esc(item.code) + '\')">Edit</button>'
+      +   '<div class="mm-card-actions">'
+      +     '<button class="mm-edit-btn" onclick="openEditItemModal(\'' + esc(item.code) + '\')">✏️ Edit</button>'
+      +     '<button class="mm-toggle-btn ' + toggleClass + '" onclick="quickToggleItem(\'' + esc(item.code) + '\',' + (isActive?'true':'false') + ')" title="' + toggleLabel + '">' + toggleLabel + '</button>'
+      +     '<button class="mm-delete-btn" onclick="quickDeleteItem(\'' + esc(item.code) + '\',\'' + esc(item.name) + '\')" title="Delete item">🗑️</button>'
+      +   '</div>'
       + '</div>'
       + '</div>';
   }).join('');
+}
+
+// ── Quick toggle available / unavailable ─────────────────────────────────
+async function quickToggleItem(itemCode, currentlyActive) {
+  var item = menuMgrItems.find(function(i){ return i.code === itemCode; });
+  if (!item) return;
+  var newStatus = currentlyActive ? 'INACTIVE' : 'ACTIVE';
+  var label     = currentlyActive ? 'unavailable' : 'available';
+
+  // Optimistic UI update
+  item.active = !currentlyActive;
+  renderMenuMgrGrid();
+
+  var payload = {
+    userId:      currentUser && currentUser.userId,
+    action:      'updateMenuItem',
+    itemId:      itemCode,
+    name:        item.name,
+    category:    item.category,
+    price:       item.price,
+    hasSizes:    item.hasSizes,
+    hasSugar:    item.hasSugar,
+    priceShort:  item.priceShort,
+    priceMedium: item.priceMedium,
+    priceTall:   item.priceTall,
+    image:       item.image || '',
+    status:      newStatus,
+  };
+
+  var result = await api('updateMenuItem', payload);
+  if (!result || !result.ok) {
+    // Revert optimistic update on failure
+    item.active = currentlyActive;
+    renderMenuMgrGrid();
+    showToast('❌ Failed to update: ' + (result && result.error || 'Unknown error'), 'error');
+  } else {
+    showToast((currentlyActive ? '⏸ ' : '✅ ') + esc(item.name) + ' marked ' + label);
+  }
+}
+
+// ── Quick delete ─────────────────────────────────────────────────────────
+async function quickDeleteItem(itemCode, itemName) {
+  var confirmed = await ygcConfirm(
+    '🗑️ Delete "' + itemName + '"?',
+    'This will permanently remove the item from your menu. Past orders with this item are not affected.',
+    'Delete', 'Cancel'
+  );
+  if (!confirmed) return;
+
+  var result = await api('deleteMenuItem', { userId: currentUser && currentUser.userId, itemId: itemCode });
+  if (!result || !result.ok) {
+    showToast('❌ Delete failed: ' + (result && result.error || 'Unknown error'), 'error');
+  } else {
+    menuMgrItems = menuMgrItems.filter(function(i){ return i.code !== itemCode; });
+    renderMenuMgrGrid();
+    showToast('🗑️ ' + esc(itemName) + ' deleted');
+  }
 }
 
 function openEditItemModal(itemCode) {
