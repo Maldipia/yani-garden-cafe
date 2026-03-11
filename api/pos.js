@@ -832,12 +832,13 @@ export default async function handler(req, res) {
     // ── verifyPayment ──────────────────────────────────────────────────────
     if (action === 'verifyPayment') {
       const paymentId  = String(body.paymentId  || '').trim();
-      const verifiedBy = String(body.verifiedBy || 'Staff').trim().substring(0, 100);
+      const authVP     = await requireAdminRole(body);
+      if (!authVP.ok) return res.status(403).json({ ok: false, error: authVP.error });
       if (!paymentId) return res.status(400).json({ ok: false, error: 'paymentId is required' });
 
       const r = await supa('PATCH', 'payments', {
         status:      'VERIFIED',
-        verified_by: verifiedBy,
+        verified_by: String(body.userId || 'Staff').trim(),
         verified_at: new Date().toISOString(),
       }, { payment_id: `eq.${paymentId}` });
       if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to verify payment' });
