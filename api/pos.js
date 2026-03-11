@@ -447,6 +447,7 @@ export default async function handler(req, res) {
         item_name:    it.item_name,
         unit_price:   it.unit_price,
         qty:          it.qty,
+        line_total:   Math.round(it.unit_price * it.qty * 100) / 100,
         size_choice:  it.size_choice,
         sugar_choice: it.sugar_choice,
         item_notes:   it.item_notes,
@@ -473,7 +474,7 @@ export default async function handler(req, res) {
       const status  = body.status  ? String(body.status).toUpperCase() : null;
       const limit   = Math.min(parseInt(body.limit) || 200, 500);
 
-      let url = `${SUPABASE_URL}/rest/v1/dine_in_orders?order=created_at.desc&limit=${limit}`;
+      let url = `${SUPABASE_URL}/rest/v1/dine_in_orders?order=created_at.desc&limit=${limit}&is_deleted=eq.false`;
       if (orderId) url += `&order_id=eq.${encodeURIComponent(orderId)}`;
       else if (status && status !== 'ALL') url += `&status=eq.${encodeURIComponent(status)}`;
 
@@ -529,13 +530,28 @@ export default async function handler(req, res) {
 
     // ── updateOrderStatus ──────────────────────────────────────────────────
     if (action === 'updateOrderStatus') {
-      const orderId   = String(body.orderId || '').trim();
-      const newStatus = String(body.status  || '').trim().toUpperCase();
+      const orderId      = String(body.orderId || '').trim();
+      const newStatus    = String(body.status  || '').trim().toUpperCase();
+      const cancelReason = body.cancelReason ? String(body.cancelReason).trim() : null;
       const validStatuses = ['NEW', 'PREPARING', 'READY', 'COMPLETED', 'CANCELLED'];
-      if (!orderId)                        return res.status(400).json({ ok: false, error: 'orderId is required' });
+      if (!orderId)                           return res.status(400).json({ ok: false, error: 'orderId is required' });
       if (!validStatuses.includes(newStatus)) return res.status(400).json({ ok: false, error: 'Invalid status: ' + newStatus });
 
-      const r = await supa('PATCH', 'dine_in_orders', { status: newStatus }, { order_id: `eq.${orderId}` });
+      // Role guard — staff only (all roles permitted for kitchen workflow)
+      const userId = String(body.userId || '').trim();
+      if (!userId) return res.status(401).json({ ok: false, error: 'userId is required to update order status' });
+      const staffR = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/staff_users?user_id=eq.${encodeURIComponent(userId)}&active=eq.true&select=role`
+      );
+      if (!staffR.ok || !staffR.data.length) return res.status(403).json({ ok: false, error: 'Unauthorized: invalid user' });
+      const staffRole = staffR.data[0].role;
+      const allowedRoles = ['KITCHEN', 'CASHIER', 'ADMIN', 'OWNER'];
+      if (!allowedRoles.includes(staffRole)) return res.status(403).json({ ok: false, error: 'Unauthorized: insufficient role' });
+
+      const patch = { status: newStatus };
+      if (newStatus === 'CANCELLED' && cancelReason) patch.cancel_reason = cancelReason;
+
+      const r = await supa('PATCH', 'dine_in_orders', patch, { order_id: `eq.${orderId}` });
       if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to update status' });
 
       logSync('dine_in_orders', orderId, 'UPDATE');
@@ -547,9 +563,11 @@ export default async function handler(req, res) {
       const orderId = String(body.orderId || '').trim();
       if (!orderId) return res.status(400).json({ ok: false, error: 'orderId is required' });
 
-      // Delete items first (FK constraint), then order
-      await supa('DELETE', 'dine_in_order_items', null, { order_id: `eq.${orderId}` });
-      const r = await supa('DELETE', 'dine_in_orders', null, { order_id: `eq.${orderId}` });
+      // Soft delete — preserve order history for analytics/audit
+      const r = await supa('PATCH', 'dine_in_orders',
+        { is_deleted: true, deleted_at: new Date().toISOString() },
+        { order_id: `eq.${orderId}` }
+      );
       if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to delete order' });
 
       logSync('dine_in_orders', orderId, 'DELETE');
@@ -583,6 +601,7 @@ export default async function handler(req, res) {
           item_name:    it.name || 'Item',
           unit_price:   price,
           qty,
+          line_total:   Math.round(price * qty * 100) / 100,
           size_choice:  it.size || '',
           sugar_choice: it.sugar || '',
           item_notes:   it.notes || '',

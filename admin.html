@@ -1146,6 +1146,31 @@ var allOrders = [];
 var _statusOverrides = {};
 var lastOrderCount = 0;
 var allPayments = [];
+
+// ── Kitchen audio alert ──────────────────────────────────────────────────
+window._knownOrderIds = null; // null = first load (skip alert on init)
+var _audioCtx = null;
+function playNewOrderAlert() {
+  try {
+    if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    var ctx = _audioCtx;
+    function tone(freq, start, dur, vol) {
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.type = 'sine'; osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0, ctx.currentTime + start);
+      gain.gain.linearRampToValueAtTime(vol, ctx.currentTime + start + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
+      osc.start(ctx.currentTime + start);
+      osc.stop(ctx.currentTime + start + dur + 0.1);
+    }
+    tone(880,  0,   0.4, 0.3);
+    tone(1100, 0.2, 0.5, 0.3);
+    tone(880,  0.5, 0.6, 0.2);
+  } catch(e) { /* audio blocked */ }
+}
+
 var pendingPayCount = 0;
 var payFilter = 'PENDING';
 var allOnlineOrders = [];
@@ -1327,11 +1352,23 @@ async function loadOrders() {
 
   // Deduplicate by orderId (keep first occurrence — most recent from GAS)
   var seen = {};
-  allOrders = result.orders.filter(function(o) {
+  var freshOrders = result.orders.filter(function(o) {
     if (seen[o.orderId]) return false;
     seen[o.orderId] = true;
     return true;
   });
+
+  // ── Kitchen audio alert for new orders ──────────────────────────────────
+  if (window._knownOrderIds) {
+    var newArrivals = freshOrders.filter(function(o) {
+      return o.status === 'NEW' && !window._knownOrderIds[o.orderId];
+    });
+    if (newArrivals.length > 0) playNewOrderAlert();
+  }
+  window._knownOrderIds = {};
+  freshOrders.forEach(function(o) { window._knownOrderIds[o.orderId] = true; });
+
+  allOrders = freshOrders;
 
   // Apply local status overrides so polling never reverts an optimistic UI update
   // (e.g. cancel that hasn't synced back from GAS yet). Expires after 90s.
@@ -1648,15 +1685,33 @@ function renderOrders() {
 // ══════════════════════════════════════════════════════════
 async function updateStatus(orderId, newStatus) {
   if (newStatus === 'CANCELLED') {
-    var confirmed = await ygcConfirm(
-      '✕ Cancel Order',
-      'Cancel order ' + orderId + '? This cannot be undone.',
-      'Yes, Cancel', 'Keep Order'
+    // Ask for cancel reason
+    var reason = await ygcSelectPrompt(
+      '✕ Cancel Order — ' + orderId,
+      'Select a reason for cancellation:',
+      [
+        { value: 'wrong_order',       label: '🔄 Wrong order / Customer changed mind' },
+        { value: 'customer_left',     label: '🚶 Customer left' },
+        { value: 'duplicate',         label: '📋 Duplicate order' },
+        { value: 'test_order',        label: '🧪 Test order' },
+        { value: 'item_unavailable',  label: '❌ Item unavailable' },
+        { value: 'other',             label: '💬 Other' },
+      ]
     );
-    if (!confirmed) return;
+    if (!reason) return; // user dismissed
+    var result = await api('updateOrderStatus', { orderId:orderId, status:newStatus, cancelReason:reason, userId: currentUser && currentUser.userId });
+    if (result.ok) {
+      _statusOverrides[orderId] = { status: newStatus, ts: Date.now() };
+      allOrders.forEach(function(o) { if (o.orderId === orderId) { o.status = newStatus; o.cancelReason = reason; } });
+      renderStats(); renderFilters(); renderOrders();
+      showToast(orderId + ' → CANCELLED', 1800);
+    } else {
+      showToast('Failed: ' + (result.error || 'Unknown error'), 'error');
+    }
+    return;
   }
 
-  var result = await api('updateOrderStatus', { orderId:orderId, status:newStatus });
+  var result = await api('updateOrderStatus', { orderId:orderId, status:newStatus, userId: currentUser && currentUser.userId });
   if (result.ok) {
     // Pin this status so polling can't revert it before GAS syncs (90s window)
     _statusOverrides[orderId] = { status: newStatus, ts: Date.now() };
@@ -1816,11 +1871,18 @@ function eoAddItem(code) {
 
 async function eoCancelOrder() {
   if (!eoOrderId) return;
-  var confirmed = await ygcConfirm('✕ Cancel Order', 'Cancel order ' + eoOrderId + '? This cannot be undone.', 'Yes, Cancel', 'Keep Order');
-  if (!confirmed) return;
-  var result = await api('updateOrderStatus', { orderId: eoOrderId, status: 'CANCELLED' });
+  var reason = await ygcSelectPrompt('✕ Cancel Order — ' + eoOrderId, 'Select a reason for cancellation:', [
+    { value: 'wrong_order',      label: '🔄 Wrong order / Customer changed mind' },
+    { value: 'customer_left',    label: '🚶 Customer left' },
+    { value: 'duplicate',        label: '📋 Duplicate order' },
+    { value: 'test_order',       label: '🧪 Test order' },
+    { value: 'item_unavailable', label: '❌ Item unavailable' },
+    { value: 'other',            label: '💬 Other' },
+  ]);
+  if (!reason) return;
+  var result = await api('updateOrderStatus', { orderId: eoOrderId, status: 'CANCELLED', cancelReason: reason, userId: currentUser && currentUser.userId });
   if (result.ok) {
-    allOrders.forEach(function(o) { if (o.orderId === eoOrderId) o.status = 'CANCELLED'; });
+    allOrders.forEach(function(o) { if (o.orderId === eoOrderId) { o.status = 'CANCELLED'; o.cancelReason = reason; } });
     renderStats(); renderFilters(); renderOrders();
     document.getElementById('eoOverlay').classList.remove('open');
     eoOrderId = null; eoItems = [];
@@ -3529,6 +3591,42 @@ async function runMenuSync() {
 
 // ══════════════════════════════════════════════════════════
 // NON-BLOCKING PROMPT DIALOG (fixes INP on reject payment button)
+// ══════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════
+// SELECT PROMPT (cancel reason dropdown)
+// ══════════════════════════════════════════════════════════
+function ygcSelectPrompt(title, msg, options) {
+  return new Promise(function(resolve) {
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+    var box = document.createElement('div');
+    box.style.cssText = 'background:#fff;border-radius:16px;padding:24px;max-width:380px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3)';
+    var html = '<div style="font-weight:700;font-size:16px;margin-bottom:8px;color:#1a1a1a">'+title+'</div>'
+             + '<div style="font-size:13px;color:#666;margin-bottom:16px">'+msg+'</div>';
+    options.forEach(function(opt,i) {
+      html += '<label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;margin-bottom:6px;border:1.5px solid #e5e7eb;font-size:13px">'
+            + '<input type="radio" name="ygcReason" value="'+opt.value+'"'+(i===0?' checked':'')+' style="accent-color:#3b82f6">'
+            + opt.label+'</label>';
+    });
+    html += '<div style="display:flex;gap:10px;margin-top:18px">'
+          + '<button id="ygcSelCancel" style="flex:1;padding:10px;border-radius:8px;border:1.5px solid #e5e7eb;background:#fff;cursor:pointer;font-weight:600;color:#666">Keep Order</button>'
+          + '<button id="ygcSelOk" style="flex:1;padding:10px;border-radius:8px;border:none;background:#ef4444;color:#fff;cursor:pointer;font-weight:700">Cancel Order</button>'
+          + '</div>';
+    box.innerHTML = html;
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    function cleanup() { document.body.removeChild(overlay); }
+    document.getElementById('ygcSelOk').onclick = function() {
+      var sel = box.querySelector('input[name="ygcReason"]:checked');
+      cleanup(); resolve(sel ? sel.value : options[0].value);
+    };
+    document.getElementById('ygcSelCancel').onclick = function() { cleanup(); resolve(null); };
+    overlay.onclick = function(e) { if (e.target === overlay) { cleanup(); resolve(null); } };
+  });
+}
+
+// ══════════════════════════════════════════════════════════
+// NON-BLOCKING PROMPT DIALOG
 // ══════════════════════════════════════════════════════════
 function ygcPrompt(title, msg, placeholder) {
   return new Promise(function(resolve) {
