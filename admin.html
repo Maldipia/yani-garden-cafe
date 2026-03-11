@@ -1476,7 +1476,7 @@ function renderFilters() {
   allOrders.forEach(function(o) {
     counts.ALL++;
     counts[o.status] = (counts[o.status] || 0) + 1;
-    if (o.status === 'NEW' || o.status === 'PREPARING' || o.status === 'READY') counts.ACTIVE++;
+    if (!o.isTest && (o.status === 'NEW' || o.status === 'PREPARING' || o.status === 'READY')) counts.ACTIVE++;
     if (o.platform) counts.PLATFORM++;
   });
 
@@ -1564,7 +1564,7 @@ function setFilter(f) {
 function renderOrders() {
   var filtered = allOrders.filter(function(o) {
     if (currentFilter === 'ALL') return true;
-    if (currentFilter === 'ACTIVE') return o.status === 'NEW' || o.status === 'PREPARING' || o.status === 'READY';
+    if (currentFilter === 'ACTIVE') return !o.isTest && (o.status === 'NEW' || o.status === 'PREPARING' || o.status === 'READY');
     if (currentFilter === 'PLATFORM') return !!o.platform;
     return o.status === currentFilter;
   });
@@ -1612,8 +1612,9 @@ function renderOrders() {
       html += '<span class="oc-platform-badge ' + platClass + '">' + platIcon + ' ' + esc(o.platform) + '</span>';
     }
     
-    html += '<span class="oc-status-badge ' + cfg.badge + '">' + cfg.icon + ' ' + cfg.label + '</span>' +
-    '</div>';
+    html += '<span class="oc-status-badge ' + cfg.badge + '">' + cfg.icon + ' ' + cfg.label + '</span>';
+    if (o.isTest) html += '<span style="background:#f59e0b;color:#fff;font-size:.6rem;padding:2px 5px;border-radius:4px;font-weight:700;margin-left:4px">🧪 TEST</span>';
+    html += '</div>';
 
     // Platform ref (if exists)
     if (o.platformRef) {
@@ -1622,7 +1623,7 @@ function renderOrders() {
 
     // Meta
     var isPlatform = !!o.platform;
-    var tableLabel = isPlatform ? '📦 ' + esc(o.platform) : '🪑 Table ' + esc(String(o.table || '?'));
+    var tableLabel = isPlatform ? '📦 ' + esc(o.platform) : '🪑 Table ' + esc(String(o.tableNo || '?'));
     var typeIcon = isPlatform ? '🚴' : (o.orderType==='TAKE-OUT'?'🥡':'🍽️');
     var typeLabel = isPlatform ? 'Rider Pickup' : esc(o.orderType || '');
     
@@ -2005,7 +2006,7 @@ function printReceipt(orderId) {
   var scPct = subtotal > 0 ? ((serviceCharge / subtotal) * 100) : 0;
 
   var orderType = o.orderType || 'DINE-IN';
-  var tableNo = o.table || '?';
+  var tableNo = o.tableNo || '?';
   var customerName = o.customer || '';
   var orderNotes = (o.notes && typeof o.notes === 'string') ? o.notes.trim() : '';
   

@@ -544,6 +544,7 @@ export default async function handler(req, res) {
         paymentStatus: o.payment_status || '',
         createdAt:     o.created_at,
         updatedAt:     o.updated_at,
+        isTest:        o.is_test || false,
         items:         itemsMap[o.order_id] || [],
       }));
 
