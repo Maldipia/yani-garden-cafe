@@ -967,7 +967,7 @@ export default async function handler(req, res) {
     // ── getAnalytics ───────────────────────────────────────────────────────
     if (action === 'getAnalytics') {
       // OWNER / ADMIN only
-      const authA = await checkAdminRole(body);
+      const authA = await requireAdminRole(body);
       if (!authA.ok) return res.status(403).json({ ok: false, error: authA.error });
 
       const BASE = `${SUPABASE_URL}/rest/v1`;
