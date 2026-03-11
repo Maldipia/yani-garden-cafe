@@ -419,6 +419,11 @@ export default async function handler(req, res) {
       const orderId = `${ORDER_PREFIX}-${orderNo}`;
 
       // Insert order
+      const TEST_TABLES = ['T99', '0', 'T0'];
+      const TEST_NAMES  = ['juan dela cruz', 'maria santos', 'price test', 'guest', 'pia test', 'e2e test'];
+      const isTest = TEST_TABLES.includes(tableNo.toUpperCase()) ||
+                     TEST_NAMES.includes(customerName.toLowerCase());
+
       const orderRow = {
         order_id:       orderId,
         order_no:       orderNo,
@@ -431,6 +436,7 @@ export default async function handler(req, res) {
         total:          total,
         notes:          notes,
         source:         'QR',
+        is_test:        isTest,
       };
       const orderR = await supa('POST', 'dine_in_orders', orderRow);
       if (!orderR.ok) {
