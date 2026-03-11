@@ -15,9 +15,6 @@
     "api/upload-proof.js": {
       "maxDuration": 30
     },
-    "api/queue-worker.js": {
-      "maxDuration": 30
-    },
     "api/sheets-sync.js": {
       "maxDuration": 30
     },
@@ -31,12 +28,7 @@
       "maxDuration": 10
     }
   },
-  "crons": [
-    {
-      "path": "/api/queue-worker",
-      "schedule": "*/2 * * * *"
-    }
-  ],
+
   "rewrites": [
     {
       "source": "/api/pos",
@@ -53,10 +45,6 @@
     {
       "source": "/api/upload-proof",
       "destination": "/api/upload-proof"
-    },
-    {
-      "source": "/api/queue-worker",
-      "destination": "/api/queue-worker"
     },
     {
       "source": "/api/queue-status",

@@ -964,6 +964,117 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, customers });
     }
 
+    // ── getAnalytics ───────────────────────────────────────────────────────
+    if (action === 'getAnalytics') {
+      // OWNER / ADMIN only
+      const authA = await checkAdminRole(body);
+      if (!authA.ok) return res.status(403).json({ ok: false, error: authA.error });
+
+      const BASE = `${SUPABASE_URL}/rest/v1`;
+      const H    = { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` };
+
+      // ── Daily revenue last 30 days ─────────────────────────────────────
+      const thirtyAgo = new Date(Date.now() - 30*24*3600*1000).toISOString();
+      const ordersR = await fetch(
+        `${BASE}/dine_in_orders?status=eq.COMPLETED&is_test=eq.false&is_deleted=eq.false&created_at=gte.${thirtyAgo}&select=created_at,total,order_type`,
+        { headers: H }
+      );
+      const orders = ordersR.ok ? (await ordersR.json()) : [];
+
+      // Daily revenue map
+      const dailyMap = {};
+      orders.forEach(o => {
+        const day = o.created_at.slice(0,10);
+        if (!dailyMap[day]) dailyMap[day] = { revenue:0, count:0 };
+        dailyMap[day].revenue += parseFloat(o.total || 0);
+        dailyMap[day].count   += 1;
+      });
+      const daily = Object.entries(dailyMap)
+        .map(([day,v]) => ({ day, revenue: Math.round(v.revenue*100)/100, count: v.count }))
+        .sort((a,b) => a.day.localeCompare(b.day));
+
+      // Today vs yesterday
+      const todayStr     = new Date().toISOString().slice(0,10);
+      const yesterdayStr = new Date(Date.now()-86400000).toISOString().slice(0,10);
+      const todayData     = dailyMap[todayStr]     || { revenue:0, count:0 };
+      const yesterdayData = dailyMap[yesterdayStr] || { revenue:0, count:0 };
+
+      // Total last 7 days
+      const sevenAgoStr = new Date(Date.now()-7*86400000).toISOString().slice(0,10);
+      let rev7=0, cnt7=0;
+      daily.forEach(d => { if (d.day >= sevenAgoStr) { rev7+=d.revenue; cnt7+=d.count; } });
+
+      // ── Hourly distribution (today) ────────────────────────────────────
+      const hourly = Array.from({length:24}, (_,i) => ({ hour:i, count:0, revenue:0 }));
+      orders.filter(o => o.created_at.slice(0,10) === todayStr).forEach(o => {
+        const h = parseInt(o.created_at.slice(11,13));
+        hourly[h].count   += 1;
+        hourly[h].revenue += parseFloat(o.total || 0);
+      });
+
+      // ── Order type split (last 30d) ───────────────────────────────────
+      const typeSplit = { 'DINE-IN':0, 'TAKE-OUT':0 };
+      orders.forEach(o => { typeSplit[o.order_type] = (typeSplit[o.order_type]||0)+1; });
+
+      // ── Top items ─────────────────────────────────────────────────────
+      const itemsR = await fetch(
+        `${BASE}/dine_in_order_items?select=item_name_snapshot,qty,line_total,order_id`,
+        { headers: H }
+      );
+      const rawItems = itemsR.ok ? (await itemsR.json()) : [];
+
+      // Filter items to completed, non-test orders only
+      const completedOrderIds = new Set(orders.map(o => o.id));
+
+      // We need order ids — fetch with id included
+      const ordersWithId = await fetch(
+        `${BASE}/dine_in_orders?status=eq.COMPLETED&is_test=eq.false&is_deleted=eq.false&created_at=gte.${thirtyAgo}&select=id`,
+        { headers: H }
+      );
+      const completedIds = new Set((ordersWithId.ok ? await ordersWithId.json() : []).map(o=>o.id));
+
+      const itemMap = {};
+      rawItems.forEach(i => {
+        if (!completedIds.has(i.order_id)) return;
+        const name = i.item_name_snapshot || 'Unknown';
+        if (!itemMap[name]) itemMap[name] = { name, qty:0, revenue:0 };
+        itemMap[name].qty     += parseInt(i.qty || 0);
+        itemMap[name].revenue += parseFloat(i.line_total || 0);
+      });
+      const topItems = Object.values(itemMap)
+        .sort((a,b) => b.qty - a.qty)
+        .slice(0,10);
+
+      // ── Cancellation stats ────────────────────────────────────────────
+      const cancelR = await fetch(
+        `${BASE}/dine_in_orders?status=eq.CANCELLED&is_test=eq.false&is_deleted=eq.false&select=cancel_reason`,
+        { headers: H }
+      );
+      const cancelled = cancelR.ok ? (await cancelR.json()) : [];
+      const cancelMap = {};
+      cancelled.forEach(o => {
+        const r = o.cancel_reason || 'unspecified';
+        cancelMap[r] = (cancelMap[r]||0)+1;
+      });
+      const realCancels = cancelled.filter(o => o.cancel_reason !== 'migration_cleanup').length;
+
+      return res.status(200).json({
+        ok: true,
+        summary: {
+          today:     { revenue: Math.round(todayData.revenue*100)/100,     orders: todayData.count },
+          yesterday: { revenue: Math.round(yesterdayData.revenue*100)/100, orders: yesterdayData.count },
+          last7days: { revenue: Math.round(rev7*100)/100,                  orders: cnt7 },
+          realCancellations: realCancels,
+          totalOrders30d: orders.length,
+          typeSplit,
+        },
+        daily,
+        hourly,
+        topItems,
+        cancelBreakdown: cancelMap,
+      });
+    }
+
     // ── Unknown action ─────────────────────────────────────────────────────
     return res.status(400).json({ ok: false, error: `Unknown action: ${action}` });
 

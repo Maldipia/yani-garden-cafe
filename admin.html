@@ -946,6 +946,17 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
     <div style="padding:16px" id="onlineOrdersGrid"></div>
   </div>
 
+  <!-- Analytics View (ADMIN/OWNER only) -->
+  <div id="analyticsView" style="display:none;padding:0 0 100px">
+    <div style="background:#fff;border-bottom:1.5px solid var(--mist);padding:14px 16px;position:sticky;top:0;z-index:10">
+      <div style="font-weight:800;font-size:1.1rem;color:var(--forest-deep)">📈 Sales Analytics</div>
+      <div style="font-size:.8rem;color:var(--forest-mid);margin-top:2px">Last 30 days · Real orders only</div>
+    </div>
+    <div id="analyticsContent" style="padding:16px">
+      <div style="text-align:center;padding:40px;color:var(--forest-mid)">Loading analytics...</div>
+    </div>
+  </div>
+
   <!-- Sheets View (ADMIN/OWNER only) -->
   <div id="sheetsView" style="display:none;padding:0 0 100px">
     <!-- Header bar -->
@@ -1478,6 +1489,10 @@ function renderFilters() {
   if (currentUser.role === 'ADMIN' || currentUser.role === 'OWNER') {
     tabs.push({ key:'SHEETS', label:'📊 Sheets', count:'' });
   }
+  // Analytics tab: OWNER and ADMIN only
+  if (currentUser.role === 'ADMIN' || currentUser.role === 'OWNER') {
+    tabs.push({ key:'ANALYTICS', label:'📈 Analytics', count:'' });
+  }
 
   document.getElementById('filterBar').innerHTML = tabs.map(function(t) {
     return '<button class="filter-btn' + (currentFilter===t.key?' active':'') + '" onclick="setFilter(\'' + t.key + '\')">' +
@@ -1503,6 +1518,9 @@ function setFilter(f) {
   var sheetsView = document.getElementById('sheetsView');
   if (sheetsView) sheetsView.style.display = 'none';
 
+  var analyticsView = document.getElementById('analyticsView');
+  if (analyticsView) analyticsView.style.display = 'none';
+
   if (f === 'PAYMENTS') {
     paymentsView.style.display = 'block';
     loadPayments();
@@ -1515,6 +1533,9 @@ function setFilter(f) {
   } else if (f === 'SHEETS') {
     if (sheetsView) sheetsView.style.display = 'block';
     loadSheetsData();
+  } else if (f === 'ANALYTICS') {
+    if (analyticsView) analyticsView.style.display = 'block';
+    loadAnalytics();
   } else {
     orderGrid.style.display = '';
     renderOrders();
@@ -3414,6 +3435,141 @@ async function olCancelOrder() {
 var sheetsOrdersData = [];
 var sheetsCustomersData = [];
 var currentSheetsTab = 'orders';
+
+
+// ══════════════════════════════════════════════════════════
+// ANALYTICS DASHBOARD
+// ══════════════════════════════════════════════════════════
+function fmt(n) { return '₱' + Number(n).toLocaleString('en-PH', {minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+async function loadAnalytics() {
+  var el = document.getElementById('analyticsContent');
+  if (!el) return;
+  el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--forest-mid)">Loading...</div>';
+
+  try {
+    var r = await api('getAnalytics', { userId: currentUser && currentUser.userId });
+    if (!r || !r.ok) throw new Error(r && r.error || 'Failed');
+
+    var s   = r.summary;
+    var top = r.topItems || [];
+    var hourly = r.hourly || [];
+
+    // ── KPI cards ────────────────────────────────────────────────────────
+    var todayChange = s.yesterday.revenue > 0
+      ? ((s.today.revenue - s.yesterday.revenue) / s.yesterday.revenue * 100).toFixed(0)
+      : null;
+    var changeHtml = todayChange !== null
+      ? '<span style="font-size:.75rem;color:' + (todayChange>=0?'#16a34a':'#dc2626') + '">' + (todayChange>=0?'▲':'▼') + Math.abs(todayChange) + '% vs yesterday</span>'
+      : '';
+
+    var dineIn   = s.typeSplit['DINE-IN']  || 0;
+    var takeOut  = s.typeSplit['TAKE-OUT'] || 0;
+    var typeTotal = dineIn + takeOut || 1;
+
+    // ── Hourly bars (peak hours) ─────────────────────────────────────────
+    var peakHours = hourly.filter(h=>h.count>0).slice(0,24);
+    var maxCnt    = Math.max(1, ...hourly.map(h=>h.count));
+    var hourlyHtml = '';
+    var openHours  = [6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21];
+    openHours.forEach(function(h) {
+      var hd  = hourly[h] || { hour:h, count:0 };
+      var pct = Math.round(hd.count / maxCnt * 100);
+      var lbl = h < 12 ? h+'AM' : (h===12?'12PM':(h-12)+'PM');
+      hourlyHtml += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">' +
+        '<div style="width:40px;font-size:.72rem;color:var(--forest-mid);text-align:right">' + lbl + '</div>' +
+        '<div style="flex:1;background:#f0f4f0;border-radius:4px;height:18px;overflow:hidden">' +
+          '<div style="width:' + pct + '%;background:var(--forest);height:100%;border-radius:4px;transition:width .5s"></div>' +
+        '</div>' +
+        '<div style="width:28px;font-size:.72rem;color:var(--forest-mid)">' + (hd.count||'') + '</div>' +
+      '</div>';
+    });
+
+    // ── Top items bars ───────────────────────────────────────────────────
+    var maxQty   = Math.max(1, ...top.map(i=>i.qty));
+    var topHtml  = '';
+    top.forEach(function(item, idx) {
+      var pct = Math.round(item.qty / maxQty * 100);
+      topHtml += '<div style="margin-bottom:10px">' +
+        '<div style="display:flex;justify-content:space-between;font-size:.82rem;margin-bottom:3px">' +
+          '<span style="font-weight:600;color:var(--forest-deep)">' + (idx+1) + '. ' + esc(item.name) + '</span>' +
+          '<span style="color:var(--forest-mid)">' + item.qty + ' sold · ' + fmt(item.revenue) + '</span>' +
+        '</div>' +
+        '<div style="background:#f0f4f0;border-radius:4px;height:10px;overflow:hidden">' +
+          '<div style="width:' + pct + '%;background:var(--forest);height:100%;border-radius:4px"></div>' +
+        '</div>' +
+      '</div>';
+    });
+
+    // ── Daily sparkline (mini bars) ──────────────────────────────────────
+    var daily    = r.daily || [];
+    var maxRev   = Math.max(1, ...daily.map(d=>d.revenue));
+    var spark    = daily.slice(-14); // last 14 days
+    var sparkHtml = spark.map(function(d) {
+      var h = Math.max(4, Math.round(d.revenue/maxRev*40));
+      var isToday = d.day === new Date().toISOString().slice(0,10);
+      return '<div title="' + d.day + ': ' + fmt(d.revenue) + ' (' + d.count + ' orders)" ' +
+        'style="flex:1;display:flex;align-items:flex-end;padding:0 1px">' +
+        '<div style="width:100%;height:' + h + 'px;background:' + (isToday?'var(--forest)':'#a8c5a0') + ';border-radius:2px 2px 0 0"></div>' +
+        '</div>';
+    }).join('');
+
+    el.innerHTML =
+      // KPI row
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">' +
+        kpiCard('Today\'s Revenue', fmt(s.today.revenue), s.today.orders + ' orders', changeHtml, '💰') +
+        kpiCard('Last 7 Days', fmt(s.last7days.revenue), s.last7days.orders + ' orders', '', '📅') +
+        kpiCard('Dine-In', dineIn + ' orders', Math.round(dineIn/typeTotal*100) + '% of orders', '', '🪑') +
+        kpiCard('Take-Out', takeOut + ' orders', Math.round(takeOut/typeTotal*100) + '% of orders', '', '🥡') +
+      '</div>' +
+
+      // 14-day sparkline
+      '<div style="background:#fff;border:1.5px solid var(--mist);border-radius:12px;padding:14px;margin-bottom:16px">' +
+        '<div style="font-weight:700;font-size:.9rem;color:var(--forest-deep);margin-bottom:10px">📊 Daily Revenue — Last 14 Days</div>' +
+        '<div style="display:flex;align-items:flex-end;height:44px;gap:0">' + sparkHtml + '</div>' +
+        '<div style="display:flex;justify-content:space-between;font-size:.68rem;color:var(--forest-mid);margin-top:4px">' +
+          '<span>' + (spark[0]&&spark[0].day||'') + '</span><span>Today</span>' +
+        '</div>' +
+      '</div>' +
+
+      // Top items + Peak hours side by side
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">' +
+        '<div style="background:#fff;border:1.5px solid var(--mist);border-radius:12px;padding:14px">' +
+          '<div style="font-weight:700;font-size:.9rem;color:var(--forest-deep);margin-bottom:12px">🏆 Top Items (30d)</div>' +
+          (topHtml || '<div style="color:var(--forest-mid);font-size:.82rem">No data yet</div>') +
+        '</div>' +
+        '<div style="background:#fff;border:1.5px solid var(--mist);border-radius:12px;padding:14px">' +
+          '<div style="font-weight:700;font-size:.9rem;color:var(--forest-deep);margin-bottom:12px">⏰ Peak Hours (Today)</div>' +
+          (hourlyHtml || '<div style="color:var(--forest-mid);font-size:.82rem">No orders today</div>') +
+        '</div>' +
+      '</div>' +
+
+      // Cancellation breakdown
+      '<div style="background:#fff;border:1.5px solid var(--mist);border-radius:12px;padding:14px">' +
+        '<div style="font-weight:700;font-size:.9rem;color:var(--forest-deep);margin-bottom:8px">❌ Cancellation Breakdown</div>' +
+        '<div style="font-size:.82rem;color:var(--forest-mid);margin-bottom:8px">Real cancellations (excluding migration & test): <strong style="color:var(--forest-deep)">' + s.realCancellations + '</strong></div>' +
+        Object.entries(r.cancelBreakdown||{}).map(function(kv) {
+          return '<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--mist);font-size:.82rem">' +
+            '<span style="color:var(--forest-deep)">' + esc(kv[0]) + '</span>' +
+            '<span style="font-weight:700;color:var(--forest)">' + kv[1] + '</span>' +
+          '</div>';
+        }).join('') +
+      '</div>';
+
+  } catch(e) {
+    el.innerHTML = '<div style="color:#dc2626;padding:20px">Error: ' + esc(String(e.message)) + '</div>';
+  }
+}
+
+function kpiCard(title, value, sub, extra, icon) {
+  return '<div style="background:#fff;border:1.5px solid var(--mist);border-radius:12px;padding:14px">' +
+    '<div style="font-size:1.3rem;margin-bottom:4px">' + icon + '</div>' +
+    '<div style="font-size:.78rem;color:var(--forest-mid);font-weight:600;text-transform:uppercase;letter-spacing:.04em">' + title + '</div>' +
+    '<div style="font-size:1.3rem;font-weight:800;color:var(--forest-deep);margin:4px 0 2px">' + value + '</div>' +
+    '<div style="font-size:.78rem;color:var(--forest-mid)">' + sub + '</div>' +
+    (extra ? '<div style="margin-top:4px">' + extra + '</div>' : '') +
+  '</div>';
+}
 
 var GAS_URL = 'https://script.google.com/macros/s/AKfycbzprf6_LpDwcVujm8kcGFZE5JdkL0k9b6Wfg5l82gjZzFua8w1QWH8UoFFlhznc6EtL/exec';
 
