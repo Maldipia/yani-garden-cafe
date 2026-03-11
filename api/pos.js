@@ -410,6 +410,8 @@ export default async function handler(req, res) {
       const svcCharge = orderType === 'DINE-IN' ? Math.round(subtotal * SERVICE_CHARGE_RATE * 100) / 100 : 0;
       const total     = Math.round((subtotal + svcCharge) * 100) / 100;
 
+      if (total <= 0) return res.status(400).json({ ok: false, error: 'Order total must be greater than zero' });
+
       // Generate order ID using sequence
       const seqR = await supaFetch(
         `${SUPABASE_URL}/rest/v1/rpc/get_next_order_number`,
@@ -453,7 +455,6 @@ export default async function handler(req, res) {
         item_name:    it.item_name,
         unit_price:   it.unit_price,
         qty:          it.qty,
-        line_total:   Math.round(it.unit_price * it.qty * 100) / 100,
         size_choice:  it.size_choice,
         sugar_choice: it.sugar_choice,
         item_notes:   it.item_notes,
@@ -607,7 +608,6 @@ export default async function handler(req, res) {
           item_name:    it.name || 'Item',
           unit_price:   price,
           qty,
-          line_total:   Math.round(price * qty * 100) / 100,
           size_choice:  it.size || '',
           sugar_choice: it.sugar || '',
           item_notes:   it.notes || '',
@@ -784,6 +784,9 @@ export default async function handler(req, res) {
 
     // ── listPayments ───────────────────────────────────────────────────────
     if (action === 'listPayments') {
+      const authLP = await requireAdminRole(body);
+      if (!authLP.ok) return res.status(403).json({ ok: false, error: authLP.error });
+
       const r = await supaFetch(
         `${SUPABASE_URL}/rest/v1/payments?order=created_at.desc&limit=200`
       );
