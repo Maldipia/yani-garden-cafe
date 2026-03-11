@@ -49,31 +49,6 @@ async function checkSupabase() {
 }
 
 // ── Check sheets-sync backlog ─────────────────────────────────
-async function checkSheetsSync() {
-  try {
-    const resp = await fetch(
-      `${SUPABASE_URL}/rest/v1/sheets_sync_log?synced=eq.false&select=id&limit=1`,
-      {
-        headers: {
-          'apikey': SUPABASE_KEY,
-          'Authorization': `Bearer ${SUPABASE_KEY}`,
-          'Prefer': 'count=exact',
-          'Range': '0-0'
-        }
-      }
-    );
-    const contentRange = resp.headers.get('content-range') || '';
-    const pendingCount = parseInt(contentRange.split('/')[1] || '0');
-    return {
-      ok: true,
-      pendingCount,
-      warning: pendingCount > 50 ? `${pendingCount} unsynced records pending Sheets mirror` : null
-    };
-  } catch (e) {
-    return { ok: false, pendingCount: null, error: e.message };
-  }
-}
-
 // ── Check menu integrity ──────────────────────────────────────
 async function checkMenuIntegrity() {
   try {
@@ -167,9 +142,8 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
-    const [supabaseHealth, sheetsSync, menuIntegrity, recentOrders] = await Promise.all([
+    const [supabaseHealth, menuIntegrity, recentOrders] = await Promise.all([
       checkSupabase(),
-      checkSheetsSync(),
       checkMenuIntegrity(),
       checkRecentOrders(),
     ]);
@@ -193,15 +167,6 @@ export default async function handler(req, res) {
       });
     }
 
-    if (sheetsSync.warning) {
-      alerts.push({
-        level: 'WARN',
-        source: 'SheetsSync',
-        message: sheetsSync.warning,
-        impact: 'Google Sheets mirror may be behind'
-      });
-    }
-
     if (menuIntegrity.warning) {
       alerts.push({
         level: 'ERROR',
@@ -221,7 +186,6 @@ export default async function handler(req, res) {
       architecture: 'supabase-native-v3',
       services: {
         supabase:   { ok: supabaseHealth.ok, latency: supabaseHealth.latency, error: supabaseHealth.error || null },
-        sheetsSync: { ok: sheetsSync.ok, pendingCount: sheetsSync.pendingCount, warning: sheetsSync.warning || null },
         menu:       { ok: menuIntegrity.ok, activeCount: menuIntegrity.activeCount, warning: menuIntegrity.warning || null },
       },
       orders: {
