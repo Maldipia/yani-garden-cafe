@@ -427,37 +427,52 @@ export default async function handler(req, res) {
 
       if (total <= 0) return res.status(400).json({ ok: false, error: 'Order total must be greater than zero' });
 
-      // Generate order ID using sequence
-      const seqR = await supaFetch(
-        `${SUPABASE_URL}/rest/v1/rpc/get_next_order_number`,
-        { method: 'POST', body: '{}' }
-      );
-      const orderNo = seqR.ok ? (seqR.data || 1001) : Date.now() % 9000 + 1000;
-      const orderId = `${ORDER_PREFIX}-${orderNo}`;
-
-      // Insert order
+      // Generate order ID using sequence — with self-healing retry on duplicate key
       const TEST_TABLES = ['T99', '0', 'T0'];
       const TEST_NAMES  = ['juan dela cruz', 'maria santos', 'price test', 'guest', 'pia test', 'e2e test'];
       const isTest = TEST_TABLES.includes(tableNo.toUpperCase()) ||
                      TEST_NAMES.includes(customerName.toLowerCase());
 
-      const orderRow = {
-        order_id:       orderId,
-        order_no:       orderNo,
-        table_no:       tableNo,
-        customer_name:  customerName,
-        status:         'NEW',
-        order_type:     orderType,
-        subtotal:       subtotal,
-        service_charge: svcCharge,
-        total:          total,
-        notes:          notes,
-        source:         'QR',
-        is_test:        isTest,
-      };
-      const orderR = await supa('POST', 'dine_in_orders', orderRow);
-      if (!orderR.ok) {
-        console.error('placeOrder insert failed:', orderR.status, JSON.stringify(orderR.data));
+      let orderR, orderId, orderNo;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const seqR = await supaFetch(
+          `${SUPABASE_URL}/rest/v1/rpc/get_next_order_number`,
+          { method: 'POST', body: '{}' }
+        );
+        orderNo = seqR.ok ? (seqR.data || 1001) : Date.now() % 9000 + 1000;
+        orderId = `${ORDER_PREFIX}-${orderNo}`;
+
+        const orderRow = {
+          order_id:       orderId,
+          order_no:       orderNo,
+          table_no:       tableNo,
+          customer_name:  customerName,
+          status:         'NEW',
+          order_type:     orderType,
+          subtotal:       subtotal,
+          service_charge: svcCharge,
+          total:          total,
+          notes:          notes,
+          source:         'QR',
+          is_test:        isTest,
+        };
+        orderR = await supa('POST', 'dine_in_orders', orderRow);
+        if (orderR.ok) break; // success
+
+        const errCode = orderR.data && orderR.data.code;
+        if (errCode === '23505') {
+          // Duplicate key — sequence is behind actual data; auto-advance and retry
+          console.warn(`placeOrder: duplicate order_id ${orderId}, advancing sequence (attempt ${attempt+1})`);
+          await supaFetch(
+            `${SUPABASE_URL}/rest/v1/rpc/advance_order_sequence`,
+            { method: 'POST', body: '{}' }
+          ).catch(() => {}); // best-effort
+          continue;
+        }
+        break; // non-duplicate error, stop retrying
+      }
+      if (!orderR || !orderR.ok) {
+        console.error('placeOrder insert failed:', orderR && orderR.status, JSON.stringify(orderR && orderR.data));
         return res.status(500).json({ ok: false, error: 'Failed to place order' });
       }
 
