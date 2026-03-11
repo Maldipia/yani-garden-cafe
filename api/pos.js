@@ -49,6 +49,10 @@ function isValidPrice(v) {
 function isValidItemCode(v) {
   return typeof v === 'string' && /^[A-Z0-9_]{2,40}$/i.test(v);
 }
+function isValidOrderId(v) {
+  // Must match format: PREFIX-NUMBER e.g. YANI-1001, BRWN-0042
+  return typeof v === 'string' && /^[A-Z0-9]{2,10}-\d{1,8}$/.test(v);
+}
 
 function validateMenuPayload(body, requireItemId = false) {
   const errors = [];
@@ -542,6 +546,7 @@ export default async function handler(req, res) {
       const cancelReason = body.cancelReason ? String(body.cancelReason).trim() : null;
       const validStatuses = ['NEW', 'PREPARING', 'READY', 'COMPLETED', 'CANCELLED'];
       if (!orderId)                           return res.status(400).json({ ok: false, error: 'orderId is required' });
+      if (!isValidOrderId(orderId))           return res.status(400).json({ ok: false, error: 'Invalid orderId format' });
       if (!validStatuses.includes(newStatus)) return res.status(400).json({ ok: false, error: 'Invalid status: ' + newStatus });
 
       // Role guard — staff only (all roles permitted for kitchen workflow)
@@ -569,6 +574,7 @@ export default async function handler(req, res) {
     if (action === 'deleteOrder') {
       const orderId = String(body.orderId || '').trim();
       if (!orderId) return res.status(400).json({ ok: false, error: 'orderId is required' });
+      if (!isValidOrderId(orderId)) return res.status(400).json({ ok: false, error: 'Invalid orderId format' });
 
       // Soft delete — preserve order history for analytics/audit
       const r = await supa('PATCH', 'dine_in_orders',
@@ -586,6 +592,7 @@ export default async function handler(req, res) {
       const orderId = String(body.orderId || '').trim();
       const items   = Array.isArray(body.items) ? body.items : [];
       if (!orderId) return res.status(400).json({ ok: false, error: 'orderId is required' });
+      if (!isValidOrderId(orderId)) return res.status(400).json({ ok: false, error: 'Invalid orderId format' });
 
       // Get order to check it exists and get order_no/table_no
       const orderR = await supaFetch(
@@ -1080,6 +1087,17 @@ export default async function handler(req, res) {
         topItems,
         cancelBreakdown: cancelMap,
       });
+    }
+
+    // ── getStaff ───────────────────────────────────────────────────────────
+    if (action === 'getStaff') {
+      const authS = await requireAdminRole(body);
+      if (!authS.ok) return res.status(403).json({ ok: false, error: authS.error });
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/staff_users?active=eq.true&order=user_id.asc&select=user_id,username,display_name,role,last_login,failed_attempts`
+      );
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to fetch staff' });
+      return res.status(200).json({ ok: true, users: r.data || [] });
     }
 
     // ── Unknown action ─────────────────────────────────────────────────────
