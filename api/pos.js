@@ -368,12 +368,23 @@ export default async function handler(req, res) {
     // ── placeOrder ─────────────────────────────────────────────────────────
     if (action === 'placeOrder') {
       const tableNo      = String(body.tableNo || '1').trim();
+      const tableToken   = String(body.tableToken || '').trim();
       const customerName = String(body.customerName || 'Guest').trim().substring(0, 100);
       const notes        = String(body.notes || '').trim().substring(0, 500);
       const orderType    = String(body.orderType || 'DINE-IN').toUpperCase();
       const items        = Array.isArray(body.items) ? body.items : [];
 
       if (items.length === 0) return res.status(400).json({ ok: false, error: 'Order must have at least one item' });
+
+      // Validate table token against DB (skip for take-out with no tableNo)
+      if (tableToken) {
+        const tokenR = await supaFetch(
+          `${SUPABASE_URL}/rest/v1/cafe_tables?table_number=eq.${encodeURIComponent(tableNo)}&qr_token=eq.${encodeURIComponent(tableToken)}&select=table_number`
+        );
+        if (!tokenR.ok || !tokenR.data || tokenR.data.length === 0) {
+          return res.status(403).json({ ok: false, error: 'Invalid table token' });
+        }
+      }
 
       // Look up prices from menu
       const itemCodes = [...new Set(items.map(i => i.code))];
@@ -771,7 +782,8 @@ export default async function handler(req, res) {
         order_id:       orderId,
         order_type:     'DINE-IN',
         amount,
-        payment_method: 'GCASH',
+        method:         String(body.paymentMethod || 'GCASH').toUpperCase(), // DB column is 'method'
+        payment_method: String(body.paymentMethod || 'GCASH').toUpperCase(), // extra col for compat
         proof_url:      proofUrl,
         proof_filename: filename,
         status:         'PENDING',
@@ -1074,6 +1086,9 @@ export default async function handler(req, res) {
 
       return res.status(200).json({
         ok: true,
+        // Flat aliases for dashboard compatibility
+        todaySales:  Math.round(todayData.revenue*100)/100,
+        todayOrders: todayData.count,
         summary: {
           today:     { revenue: Math.round(todayData.revenue*100)/100,     orders: todayData.count },
           yesterday: { revenue: Math.round(yesterdayData.revenue*100)/100, orders: yesterdayData.count },
