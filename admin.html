@@ -3100,7 +3100,8 @@ async function saveMenuItemEdit() {
   var isNew = document.getElementById('menuEditIsNew').value === 'true';
   var action = isNew ? 'addMenuItem' : 'updateMenuItem';
   var payload = { name:name, category:category, price:price, hasSizes:hasSizes, hasSugar:hasSugar,
-    priceShort:priceShort, priceMedium:priceMedium, priceTall:priceTall, image:image, status:status };
+    priceShort:priceShort, priceMedium:priceMedium, priceTall:priceTall, image:image, status:status,
+    userId: currentUser && currentUser.userId };
   if (!isNew) {
     payload.itemId = itemId;
   } else if (itemId) {
