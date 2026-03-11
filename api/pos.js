@@ -1018,25 +1018,23 @@ export default async function handler(req, res) {
 
       // ── Top items ─────────────────────────────────────────────────────
       const itemsR = await fetch(
-        `${BASE}/dine_in_order_items?select=item_name_snapshot,qty,line_total,order_id`,
+        `${BASE}/dine_in_order_items?select=item_name,qty,line_total,order_id`,
         { headers: H }
       );
       const rawItems = itemsR.ok ? (await itemsR.json()) : [];
 
       // Filter items to completed, non-test orders only
-      const completedOrderIds = new Set(orders.map(o => o.id));
-
-      // We need order ids — fetch with id included
+      // dine_in_order_items.order_id matches dine_in_orders.order_id (e.g. "YANI-1063")
       const ordersWithId = await fetch(
-        `${BASE}/dine_in_orders?status=eq.COMPLETED&is_test=eq.false&is_deleted=eq.false&created_at=gte.${thirtyAgo}&select=id`,
+        `${BASE}/dine_in_orders?status=eq.COMPLETED&is_test=eq.false&is_deleted=eq.false&created_at=gte.${thirtyAgo}&select=order_id`,
         { headers: H }
       );
-      const completedIds = new Set((ordersWithId.ok ? await ordersWithId.json() : []).map(o=>o.id));
+      const completedIds = new Set((ordersWithId.ok ? await ordersWithId.json() : []).map(o=>o.order_id));
 
       const itemMap = {};
       rawItems.forEach(i => {
         if (!completedIds.has(i.order_id)) return;
-        const name = i.item_name_snapshot || 'Unknown';
+        const name = i.item_name || 'Unknown';
         if (!itemMap[name]) itemMap[name] = { name, qty:0, revenue:0 };
         itemMap[name].qty     += parseInt(i.qty || 0);
         itemMap[name].revenue += parseFloat(i.line_total || 0);
