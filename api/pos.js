@@ -677,6 +677,27 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, itemId, prepared });
     }
 
+    // ── setPaymentMethod ──────────────────────────────────────────────────
+    // Admin/Cashier/Owner sets how an order was paid (cash, card, gcash, etc.)
+    if (action === 'setPaymentMethod') {
+      const authP = await requireAuth(body, ['OWNER','ADMIN','CASHIER']);
+      if (!authP.ok) return res.status(401).json({ ok: false, error: authP.error });
+
+      const orderId = String(body.orderId || '').trim();
+      const method  = String(body.method  || '').trim().toUpperCase();
+      const VALID   = ['CASH','CARD','GCASH','INSTAPAY','BDO','BPI','UNIONBANK','MAYA','OTHER'];
+      if (!orderId) return res.status(400).json({ ok: false, error: 'orderId required' });
+      if (!isValidOrderId(orderId)) return res.status(400).json({ ok: false, error: 'Invalid orderId' });
+      if (!VALID.includes(method)) return res.status(400).json({ ok: false, error: 'Invalid payment method' });
+
+      const r = await supa('PATCH', 'dine_in_orders',
+        { payment_method: method, payment_status: 'VERIFIED', updated_at: new Date().toISOString() },
+        { order_id: `eq.${encodeURIComponent(orderId)}` }
+      );
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to update payment method' });
+      return res.status(200).json({ ok: true, orderId, method });
+    }
+
     // ── editOrderItems ─────────────────────────────────────────────────────
     if (action === 'editOrderItems') {
       const orderId = String(body.orderId || '').trim();

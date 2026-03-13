@@ -302,12 +302,72 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 /* ── Payment Badge ── */
 .oc-payment {
   display:inline-flex; align-items:center; gap:5px;
-  padding:6px 12px; margin:0 16px 10px; border-radius:var(--r-sm);
-  font-size:.72rem; font-weight:700;
+  padding:6px 12px; border-radius:var(--r-sm);
+  font-size:.72rem; font-weight:700; flex:1;
 }
 .oc-payment.submitted { background:#FEF3C7; color:#92400E }
 .oc-payment.verified { background:#D1FAE5; color:#065F46 }
 .oc-payment.none { background:var(--mist-light); color:var(--timber) }
+.oc-payment-row {
+  display:flex; align-items:center; gap:6px;
+  margin:0 16px 10px;
+}
+.oc-pm-set {
+  padding:5px 12px; border-radius:20px; border:none;
+  background:var(--forest); color:#fff;
+  font-size:.7rem; font-weight:700; cursor:pointer;
+  font-family:var(--font-body); white-space:nowrap;
+  flex-shrink:0;
+}
+.oc-pm-change {
+  padding:4px 10px; border-radius:20px;
+  border:1.5px solid var(--forest); background:#fff;
+  color:var(--forest); font-size:.68rem; font-weight:700;
+  cursor:pointer; font-family:var(--font-body); white-space:nowrap;
+  flex-shrink:0;
+}
+/* ── Payment Modal ── */
+.pm-overlay {
+  position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:500;
+  display:none; align-items:flex-end; justify-content:center;
+}
+.pm-overlay.open { display:flex; }
+.pm-modal {
+  background:#fff; width:100%; max-width:480px;
+  border-radius:20px 20px 0 0;
+  padding:20px 20px 36px;
+  box-shadow:0 -4px 30px rgba(0,0,0,.2);
+}
+.pm-title {
+  font-weight:800; font-size:1rem; color:var(--forest-deep);
+  margin-bottom:4px;
+}
+.pm-sub { font-size:.78rem; color:var(--timber); margin-bottom:18px; }
+.pm-grid {
+  display:grid; grid-template-columns:repeat(3,1fr); gap:10px;
+  margin-bottom:18px;
+}
+.pm-btn {
+  padding:14px 8px; border-radius:12px;
+  border:2px solid var(--mist); background:#fff;
+  cursor:pointer; text-align:center;
+  font-family:var(--font-body); transition:all .15s;
+}
+.pm-btn:hover { border-color:var(--forest); background:#f0f9f0; }
+.pm-btn.selected { border-color:var(--forest); background:var(--forest); color:#fff; }
+.pm-btn-icon { font-size:1.5rem; display:block; margin-bottom:4px; }
+.pm-btn-label { font-size:.75rem; font-weight:700; }
+.pm-confirm {
+  width:100%; padding:14px; border:none; border-radius:12px;
+  background:var(--forest); color:#fff;
+  font-size:.95rem; font-weight:800; cursor:pointer;
+  font-family:var(--font-body);
+}
+.pm-confirm:disabled { background:#ccc; cursor:not-allowed; }
+.pm-cancel-link {
+  display:block; text-align:center; margin-top:12px;
+  font-size:.78rem; color:var(--timber); cursor:pointer;
+}
 
 /* ── Quick Links ── */
 .quick-links {
@@ -1818,15 +1878,35 @@ function renderOrders() {
       ? ' <span style="font-size:.7rem;font-weight:500;color:var(--timber)">(incl. ₱' + o.serviceCharge.toLocaleString() + ' svc)</span>' : '';
     html += '<div class="oc-total">₱' + displayTotal.toLocaleString() + scLine + '</div>';
 
-    // Payment status
+    // Payment status + method selector
+    var canSetPayment = (currentUser.role === 'OWNER' || currentUser.role === 'ADMIN' || currentUser.role === 'CASHIER');
+    var pmIcons = { CASH:'💵', CARD:'💳', GCASH:'📱', INSTAPAY:'🏦', BDO:'🏦', BPI:'🏦', UNIONBANK:'🏦', MAYA:'📱', OTHER:'💰' };
     if (o.paymentStatus === 'PLATFORM_PAID') {
       html += '<div class="oc-payment verified">📦 Platform Handles Payment</div>';
+    } else if (o.paymentStatus === 'VERIFIED' && o.paymentMethod) {
+      var pmIcon = pmIcons[o.paymentMethod] || '💰';
+      html += '<div class="oc-payment-row">'
+        + '<div class="oc-payment verified">' + pmIcon + ' ' + esc(o.paymentMethod) + ' · Paid ✅</div>';
+      if (canSetPayment) {
+        html += '<button class="oc-pm-change" onclick="openPaymentModal(\'' + esc(o.orderId) + '\')">Change</button>';
+      }
+      html += '</div>';
     } else if (o.paymentStatus === 'SUBMITTED') {
-      html += '<div class="oc-payment submitted">💳 Payment Submitted · Pending Verification</div>';
-    } else if (o.paymentStatus === 'VERIFIED') {
-      html += '<div class="oc-payment verified">✅ Payment Verified</div>';
+      html += '<div class="oc-payment-row">'
+        + '<div class="oc-payment submitted">💳 Payment Submitted · Pending</div>';
+      if (canSetPayment) {
+        html += '<button class="oc-pm-change" onclick="openPaymentModal(\'' + esc(o.orderId) + '\')">Verify</button>';
+      }
+      html += '</div>';
     } else {
-      html += '<div class="oc-payment none">⏳ No payment yet</div>';
+      if (canSetPayment) {
+        html += '<div class="oc-payment-row">'
+          + '<div class="oc-payment none">⏳ No payment yet</div>'
+          + '<button class="oc-pm-set" onclick="openPaymentModal(\'' + esc(o.orderId) + '\')">Set Payment</button>'
+          + '</div>';
+      } else {
+        html += '<div class="oc-payment none">⏳ No payment yet</div>';
+      }
     }
 
     // Notes
@@ -4804,6 +4884,83 @@ document.addEventListener('click', function(e) {
     </div>
   </div>
 </div>
+
+<!-- Payment Method Modal -->
+<div class="pm-overlay" id="pmOverlay" onclick="if(event.target===this)closePaymentModal()">
+  <div class="pm-modal">
+    <div class="pm-title">Set Payment Method</div>
+    <div class="pm-sub" id="pmOrderLabel">Order: —</div>
+    <div class="pm-grid">
+      <button class="pm-btn" onclick="selectPM('CASH')"><span class="pm-btn-icon">💵</span><span class="pm-btn-label">Cash</span></button>
+      <button class="pm-btn" onclick="selectPM('CARD')"><span class="pm-btn-icon">💳</span><span class="pm-btn-label">Card</span></button>
+      <button class="pm-btn" onclick="selectPM('GCASH')"><span class="pm-btn-icon">📱</span><span class="pm-btn-label">GCash</span></button>
+      <button class="pm-btn" onclick="selectPM('MAYA')"><span class="pm-btn-icon">📲</span><span class="pm-btn-label">Maya</span></button>
+      <button class="pm-btn" onclick="selectPM('INSTAPAY')"><span class="pm-btn-icon">🏦</span><span class="pm-btn-label">InstaPay</span></button>
+      <button class="pm-btn" onclick="selectPM('BDO')"><span class="pm-btn-icon">🏛️</span><span class="pm-btn-label">BDO</span></button>
+      <button class="pm-btn" onclick="selectPM('BPI')"><span class="pm-btn-icon">🏛️</span><span class="pm-btn-label">BPI</span></button>
+      <button class="pm-btn" onclick="selectPM('UNIONBANK')"><span class="pm-btn-icon">🏛️</span><span class="pm-btn-label">UnionBank</span></button>
+      <button class="pm-btn" onclick="selectPM('OTHER')"><span class="pm-btn-icon">💰</span><span class="pm-btn-label">Other</span></button>
+    </div>
+    <button class="pm-confirm" id="pmConfirmBtn" disabled onclick="confirmPaymentMethod()">✅ Confirm Payment</button>
+    <span class="pm-cancel-link" onclick="closePaymentModal()">Cancel</span>
+  </div>
+</div>
+
+<script>
+var pmCurrentOrder = null;
+var pmSelectedMethod = null;
+
+function openPaymentModal(orderId) {
+  pmCurrentOrder = orderId;
+  pmSelectedMethod = null;
+  document.getElementById('pmOrderLabel').textContent = 'Order: ' + orderId;
+  document.querySelectorAll('.pm-btn').forEach(function(b){ b.classList.remove('selected'); });
+  document.getElementById('pmConfirmBtn').disabled = true;
+  document.getElementById('pmOverlay').classList.add('open');
+}
+
+function closePaymentModal() {
+  document.getElementById('pmOverlay').classList.remove('open');
+  pmCurrentOrder = null;
+  pmSelectedMethod = null;
+}
+
+function selectPM(method) {
+  pmSelectedMethod = method;
+  document.querySelectorAll('.pm-btn').forEach(function(b){
+    b.classList.toggle('selected', b.getAttribute('onclick') === "selectPM('" + method + "')");
+  });
+  document.getElementById('pmConfirmBtn').disabled = false;
+}
+
+async function confirmPaymentMethod() {
+  if (!pmCurrentOrder || !pmSelectedMethod) return;
+  var btn = document.getElementById('pmConfirmBtn');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+  try {
+    var r = await api('setPaymentMethod', {
+      userId: currentUser && currentUser.userId,
+      orderId: pmCurrentOrder,
+      method: pmSelectedMethod
+    });
+    if (r && r.ok) {
+      closePaymentModal();
+      await loadOrders();
+      showToast('\u2705 Payment set: ' + pmSelectedMethod);
+    } else {
+      showToast('\u274C ' + (r && r.error ? r.error : 'Failed to save'));
+      btn.disabled = false;
+      btn.textContent = '\u2705 Confirm Payment';
+    }
+  } catch(e) {
+    showToast('\u274C Network error');
+    btn.disabled = false;
+    btn.textContent = '\u2705 Confirm Payment';
+  }
+}
+</script>
+
 
 </body>
 </html>
