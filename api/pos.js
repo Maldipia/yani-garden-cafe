@@ -1239,6 +1239,41 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, sent: false, message: 'Receipt details saved. Print at counter.' });
     }
 
+    // ── resendReceipt ──────────────────────────────────────────────────────
+    // Staff-triggered: resend receipt email for any completed order
+    if (action === 'resendReceipt') {
+      const authR = await requireAuth(body, ['OWNER','ADMIN','CASHIER']);
+      if (!authR.ok) return res.status(401).json({ ok: false, error: authR.error });
+
+      const orderId   = String(body.orderId   || '').trim();
+      const toEmail   = String(body.email     || '').trim().toLowerCase();
+      const rcpType   = String(body.receiptType || 'simple').trim();
+
+      if (!orderId) return res.status(400).json({ ok: false, error: 'orderId required' });
+      if (!toEmail || !toEmail.includes('@')) return res.status(400).json({ ok: false, error: 'Valid email required' });
+
+      const orderR = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&limit=1`
+      );
+      if (!orderR.ok || !orderR.data.length)
+        return res.status(404).json({ ok: false, error: 'Order not found' });
+      const order = orderR.data[0];
+
+      const itemsR = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/dine_in_order_items?order_id=eq.${encodeURIComponent(orderId)}&order=id.asc`
+      );
+      const items = itemsR.ok ? (itemsR.data || []) : [];
+
+      try {
+        const emailId = await sendReceiptEmail({ toEmail, order, items, isBIR: rcpType === 'bir' });
+        auditLog({ orderId, action: 'RECEIPT_SENT', actor: { userId: body.userId },
+          newValue: `resend:${toEmail}`, details: { type: rcpType, emailId } });
+        return res.status(200).json({ ok: true, emailId, message: `Receipt resent to ${toEmail}` });
+      } catch (e) {
+        return res.status(500).json({ ok: false, error: `Email failed: ${e.message}` });
+      }
+    }
+
     // ══════════════════════════════════════════════════════════════════════
     // PAYMENT ACTIONS
     // ══════════════════════════════════════════════════════════════════════
@@ -1740,6 +1775,22 @@ export default async function handler(req, res) {
       });
       const realCancels = cancelled.filter(o => o.cancel_reason !== 'migration_cleanup').length;
 
+      // ── Payment method breakdown (last 30d completed orders) ──────────
+      const payR = await fetch(
+        `${BASE}/dine_in_orders?status=eq.COMPLETED&is_test=eq.false&is_deleted=eq.false&created_at=gte.${thirtyAgo}&select=payment_method,total,discounted_total,discount_amount`,
+        { headers: H }
+      );
+      const payOrders = payR.ok ? (await payR.json()) : [];
+      const payBreakdown = {};
+      let totalDiscounts30d = 0;
+      payOrders.forEach(o => {
+        const m = o.payment_method || 'UNRECORDED';
+        if (!payBreakdown[m]) payBreakdown[m] = { count:0, revenue:0 };
+        payBreakdown[m].count   += 1;
+        payBreakdown[m].revenue += parseFloat(o.discounted_total || o.total || 0);
+        totalDiscounts30d += parseFloat(o.discount_amount || 0);
+      });
+
       return res.status(200).json({
         ok: true,
         // Flat aliases for dashboard compatibility
@@ -1752,11 +1803,13 @@ export default async function handler(req, res) {
           realCancellations: realCancels,
           totalOrders30d: orders.length,
           typeSplit,
+          totalDiscounts30d: Math.round(totalDiscounts30d*100)/100,
         },
         daily,
         hourly,
         topItems,
         cancelBreakdown: cancelMap,
+        paymentBreakdown: payBreakdown,
       });
     }
 
@@ -1793,9 +1846,9 @@ export default async function handler(req, res) {
 
     // ── updateSetting ──────────────────────────────────────────────────────
     if (action === 'updateSetting') {
-      const { userId, key, value } = body;
-      const user = await requireAdminRole(userId);
-      if (!user.ok) return res.status(403).json({ ok: false, error: user.error });
+      const authUS = await requireAdminRole(body);
+      if (!authUS.ok) return res.status(403).json({ ok: false, error: authUS.error });
+      const { key, value } = body;
       if (!key) return res.status(400).json({ ok: false, error: 'key is required' });
       // Validate VAT-specific values
       if (key === 'VAT_ENABLED' && !['true','false'].includes(value)) {
