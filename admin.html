@@ -819,6 +819,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
     <div class="topbar-user" id="topbarUser" style="display:none">
       <span class="role-badge" id="roleBadge"></span>
       <span style="font-size:.72rem;font-weight:600;opacity:.85" id="usernameLabel"></span>
+      <button class="logout-btn" onclick="openChangePinModal()" style="background:rgba(255,255,255,.12);margin-right:4px">🔑 PIN</button>
       <button class="logout-btn" onclick="logout()">Logout</button>
     </div>
   </div>
@@ -2197,7 +2198,50 @@ function printReceipt(orderId) {
 
     // Auto-print
     '<script>window.onload=function(){window.print();}<\/script>' +
-    '</body></html>';
+    '
+<!-- ══ CHANGE PIN MODAL ══ -->
+<div id="changePinOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:700;display:none;align-items:center;justify-content:center;padding:20px">
+  <div style="background:#fff;border-radius:16px;width:100%;max-width:380px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.35)">
+    <div style="background:var(--forest-deep);color:#fff;padding:18px 20px;display:flex;align-items:center;justify-content:space-between">
+      <div style="font-weight:700;font-size:1rem">🔑 Change PIN</div>
+      <button onclick="closeChangePinModal()" style="background:none;border:none;color:#fff;font-size:1.4rem;cursor:pointer;line-height:1">&times;</button>
+    </div>
+    <div style="padding:20px;display:flex;flex-direction:column;gap:14px">
+      <!-- Staff selector (OWNER/ADMIN only) -->
+      <div id="changePinStaffRow">
+        <label style="font-size:.78rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">CHANGE PIN FOR</label>
+        <select id="changePinTarget" style="width:100%;border:1.5px solid var(--mist);border-radius:8px;padding:10px 12px;font-size:.9rem;outline:none;background:#fff;box-sizing:border-box">
+          <option value="USR_001">Owner</option>
+          <option value="USR_002">Admin</option>
+          <option value="USR_003">Cashier</option>
+          <option value="USR_004">Kitchen</option>
+        </select>
+      </div>
+      <div id="changePinCurrentRow" style="display:none">
+        <label style="font-size:.78rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">CURRENT PIN</label>
+        <input id="changePinCurrent" type="password" inputmode="numeric" maxlength="8" placeholder="Enter current PIN"
+          style="width:100%;border:1.5px solid var(--mist);border-radius:8px;padding:10px 12px;font-size:.9rem;outline:none;letter-spacing:6px;text-align:center;box-sizing:border-box">
+      </div>
+      <div>
+        <label style="font-size:.78rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">NEW PIN</label>
+        <input id="changePinNew" type="password" inputmode="numeric" maxlength="8" placeholder="4–8 digits"
+          style="width:100%;border:1.5px solid var(--mist);border-radius:8px;padding:10px 12px;font-size:.9rem;outline:none;letter-spacing:6px;text-align:center;box-sizing:border-box">
+      </div>
+      <div>
+        <label style="font-size:.78rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">CONFIRM NEW PIN</label>
+        <input id="changePinConfirm" type="password" inputmode="numeric" maxlength="8" placeholder="Re-enter new PIN"
+          style="width:100%;border:1.5px solid var(--mist);border-radius:8px;padding:10px 12px;font-size:.9rem;outline:none;letter-spacing:6px;text-align:center;box-sizing:border-box">
+      </div>
+      <div id="changePinErr" style="color:#ef4444;font-size:.82rem;min-height:18px;text-align:center"></div>
+      <button id="changePinBtn" onclick="submitChangePin()"
+        style="background:var(--forest);color:#fff;border:none;border-radius:10px;padding:14px;font-size:.95rem;font-weight:700;cursor:pointer;width:100%">
+        ✅ Update PIN
+      </button>
+    </div>
+  </div>
+</div>
+
+</body></html>';
 
   var printWin = window.open('', '_blank', 'width=320,height=600');
   if (printWin) {
@@ -4330,6 +4374,112 @@ async function submitReservation() {
     btn.disabled = false; btn.textContent = '✅ Confirm Reservation';
   }
 }
+
+
+// ══════════════════════════════════════════════════════════
+// CHANGE PIN
+// ══════════════════════════════════════════════════════════
+function openChangePinModal() {
+  var overlay = document.getElementById('changePinOverlay');
+  overlay.style.display = 'flex';
+
+  // If OWNER or ADMIN — can change any user's PIN (no current PIN needed)
+  // If CASHIER or KITCHEN — can only change own PIN (needs current PIN)
+  var isAdminOrOwner = currentUser.role === 'ADMIN' || currentUser.role === 'OWNER';
+
+  var staffRow    = document.getElementById('changePinStaffRow');
+  var currentRow  = document.getElementById('changePinCurrentRow');
+
+  if (isAdminOrOwner) {
+    staffRow.style.display   = 'block';
+    currentRow.style.display = 'none';
+    // Pre-select logged-in user but allow changing others
+    document.getElementById('changePinTarget').value = currentUser.userId || 'USR_001';
+  } else {
+    // Non-admin: can only change own PIN, must verify current
+    staffRow.style.display   = 'none';
+    currentRow.style.display = 'block';
+  }
+
+  // Clear fields
+  document.getElementById('changePinCurrent').value = '';
+  document.getElementById('changePinNew').value      = '';
+  document.getElementById('changePinConfirm').value  = '';
+  document.getElementById('changePinErr').textContent = '';
+  document.getElementById('changePinBtn').disabled   = false;
+  document.getElementById('changePinBtn').textContent = '✅ Update PIN';
+}
+
+function closeChangePinModal() {
+  document.getElementById('changePinOverlay').style.display = 'none';
+}
+
+async function submitChangePin() {
+  var isAdminOrOwner = currentUser.role === 'ADMIN' || currentUser.role === 'OWNER';
+  var targetUserId   = isAdminOrOwner
+    ? document.getElementById('changePinTarget').value
+    : currentUser.userId;
+  var currentPin  = document.getElementById('changePinCurrent').value.trim();
+  var newPin      = document.getElementById('changePinNew').value.trim();
+  var confirmPin  = document.getElementById('changePinConfirm').value.trim();
+  var errEl       = document.getElementById('changePinErr');
+
+  errEl.textContent = '';
+
+  if (!newPin || newPin.length < 4) {
+    errEl.textContent = 'New PIN must be at least 4 digits'; return;
+  }
+  if (!/^\d{4,8}$/.test(newPin)) {
+    errEl.textContent = 'PIN must be digits only (4–8 digits)'; return;
+  }
+  if (newPin !== confirmPin) {
+    errEl.textContent = 'PINs do not match'; return;
+  }
+  if (!isAdminOrOwner && !currentPin) {
+    errEl.textContent = 'Please enter your current PIN'; return;
+  }
+
+  var btn = document.getElementById('changePinBtn');
+  btn.disabled = true; btn.textContent = 'Updating...';
+
+  var payload = {
+    targetUserId: targetUserId,
+    newPin:       newPin,
+  };
+  if (isAdminOrOwner) {
+    payload.userId = currentUser.userId; // requester identity
+  } else {
+    payload.currentPin = currentPin; // self-change verification
+  }
+
+  var r = await api('changePin', payload);
+  if (r.ok) {
+    closeChangePinModal();
+    // Show brief success
+    var toast = document.createElement('div');
+    toast.textContent = '✅ PIN updated successfully!';
+    toast.style.cssText = 'position:fixed;bottom:24px;right:24px;background:#16a34a;color:#fff;padding:12px 20px;border-radius:10px;font-weight:700;z-index:999;font-size:.9rem;';
+    document.body.appendChild(toast);
+    setTimeout(function(){ toast.remove(); }, 3000);
+
+    // If user changed their own PIN, log them out so they re-login with new PIN
+    if (targetUserId === currentUser.userId) {
+      setTimeout(function(){
+        alert('Your PIN was changed. Please log in again with your new PIN.');
+        logout();
+      }, 1000);
+    }
+  } else {
+    errEl.textContent = r.error || 'Failed to update PIN';
+    btn.disabled = false; btn.textContent = '✅ Update PIN';
+  }
+}
+
+// Close modal on overlay click
+document.addEventListener('click', function(e) {
+  var overlay = document.getElementById('changePinOverlay');
+  if (e.target === overlay) closeChangePinModal();
+});
 
 </script>
 

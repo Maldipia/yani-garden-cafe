@@ -914,6 +914,59 @@ export default async function handler(req, res) {
     // AUTH ACTIONS
     // ══════════════════════════════════════════════════════════════════════
 
+    // ── changePin ──────────────────────────────────────────────────────────
+    if (action === 'changePin') {
+      // Requires OWNER or ADMIN to change any PIN
+      // OR the user themselves (must provide currentPin to verify identity)
+      const targetUserId = String(body.targetUserId || '').trim();
+      const newPin       = String(body.newPin || '').trim();
+      const currentPin   = String(body.currentPin || '').trim();
+
+      if (!targetUserId) return res.status(400).json({ ok: false, error: 'targetUserId is required' });
+      if (!newPin || newPin.length < 4) return res.status(400).json({ ok: false, error: 'New PIN must be at least 4 digits' });
+      if (!/^\d{4,8}$/.test(newPin)) return res.status(400).json({ ok: false, error: 'PIN must be 4-8 digits only' });
+
+      // Fetch the target user
+      const targetR = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/staff_users?user_id=eq.${encodeURIComponent(targetUserId)}&active=eq.true&select=user_id,pin_hash,role`
+      );
+      if (!targetR.ok || !targetR.data?.length) {
+        return res.status(404).json({ ok: false, error: 'User not found' });
+      }
+      const targetUser = targetR.data[0];
+
+      // Auth check: either requester is OWNER/ADMIN, or they provide correct currentPin
+      const requesterId = String(body.userId || '').trim();
+      let authorized = false;
+
+      if (requesterId && requesterId !== targetUserId) {
+        // Another user is changing the PIN — must be OWNER or ADMIN
+        const reqR = await supaFetch(
+          `${SUPABASE_URL}/rest/v1/staff_users?user_id=eq.${encodeURIComponent(requesterId)}&active=eq.true&select=role`
+        );
+        if (reqR.ok && reqR.data?.length) {
+          const role = reqR.data[0].role;
+          if (role === 'OWNER' || role === 'ADMIN') authorized = true;
+        }
+      } else if (currentPin) {
+        // User changing their own PIN — verify current PIN
+        authorized = await bcrypt.compare(currentPin, targetUser.pin_hash);
+        if (!authorized) return res.status(401).json({ ok: false, error: 'Current PIN is incorrect' });
+      }
+
+      if (!authorized) return res.status(401).json({ ok: false, error: 'Unauthorized to change this PIN' });
+
+      // Hash new PIN and save
+      const newHash = await bcrypt.hash(newPin, 12);
+      const upd = await supa('PATCH', 'staff_users',
+        { pin_hash: newHash, failed_attempts: 0, locked_until: null },
+        { user_id: `eq.${targetUserId}` }
+      );
+      if (!upd.ok) return res.status(500).json({ ok: false, error: 'Failed to update PIN' });
+
+      return res.status(200).json({ ok: true, message: 'PIN updated successfully' });
+    }
+
     // ── verifyUserPin ──────────────────────────────────────────────────────
     if (action === 'verifyUserPin') {
       const pin = String(body.pin || '').trim();
