@@ -176,14 +176,18 @@ function invalidateMenuCache() { menuCache.public = null; menuCache.admin = null
 
 // ── Admin role guard ──────────────────────────────────────────────────────
 // Verifies that body.userId belongs to an active ADMIN or OWNER staff user.
-async function requireAuth(body) {
+async function requireAuth(body, allowedRoles) {
   const userId = String(body.userId || '').trim();
   if (!userId) return { ok: false, error: 'userId is required for this action' };
   const r = await supaFetch(
     `${SUPABASE_URL}/rest/v1/staff_users?user_id=eq.${encodeURIComponent(userId)}&active=eq.true&select=role`
   );
   if (!r.ok || !r.data || !r.data.length) return { ok: false, error: 'Unauthorized: user not found' };
-  return { ok: true, role: r.data[0].role };
+  const role = r.data[0].role;
+  if (allowedRoles && allowedRoles.length && !allowedRoles.includes(role)) {
+    return { ok: false, error: 'Unauthorized: insufficient role' };
+  }
+  return { ok: true, role };
 }
 
 async function requireAdminRole(body) {
