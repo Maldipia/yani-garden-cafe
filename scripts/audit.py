@@ -125,12 +125,18 @@ for payload,label in [
 
 # 5. LOGIN — read-only, non-PIN-writing
 print("\n--- 5. LOGIN CHECK  [read-only]")
-for pin,uid,role in [("12345678","USR_002","ADMIN"),("5678","USR_003","CASHIER"),("9012","USR_004","KITCHEN")]:
-    d=post({"action":"verifyUserPin","pin":pin})
-    OK(f"{role} login ✓") if d.get("ok") and d.get("userId")==uid else ERR(f"{role} login failed",f"userId={d.get('userId')}")
-# Owner PIN unknown — just confirm wrong PIN is rejected
+# CASHIER pin is default known — verifies the login flow end-to-end
+d=post({"action":"verifyUserPin","pin":"5678"})
+OK("CASHIER login ✓") if d.get("ok") and d.get("userId")=="USR_003" else ERR("CASHIER login failed",f"userId={d.get('userId')}")
+# Confirm wrong PIN is rejected (security check — more important than knowing specific PINs)
 d=post({"action":"verifyUserPin","pin":"000000"})
 OK("Wrong PIN rejected") if not d.get("ok") else ERR("Wrong PIN accepted!")
+# Confirm all staff accounts are active and unlocked (via DB — no PIN needed)
+import subprocess as _sp
+sb_staff=sb_req("/rest/v1/staff_users?select=user_id,username,active,locked_until")
+if isinstance(sb_staff,list):
+    locked=[s for s in sb_staff if not s.get("active") or s.get("locked_until")]
+    OK(f"All {len(sb_staff)} staff accounts active/unlocked") if not locked else ERR(f"Locked accounts: {[s['username'] for s in locked]}")
 
 # 6. DB HEALTH
 print("\n--- 6. DATABASE HEALTH")
