@@ -952,8 +952,8 @@ export default async function handler(req, res) {
       if (requesterRole === 'OWNER' || requesterRole === 'ADMIN') {
         // OWNER/ADMIN can change any PIN — no current PIN required
         authorized = true;
-      } else if (requesterId === targetUserId && currentPin) {
-        // Non-admin changing their own PIN — must verify current PIN
+      } else if (currentPin) {
+        // Non-admin (or no userId sent) changing their own PIN — verify current PIN
         authorized = await bcrypt.compare(currentPin, targetUser.pin_hash);
         if (!authorized) return res.status(401).json({ ok: false, error: 'Current PIN is incorrect' });
       }
