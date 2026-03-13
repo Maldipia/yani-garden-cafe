@@ -1057,14 +1057,28 @@ export default async function handler(req, res) {
     // ── getCustomers ───────────────────────────────────────────────────────
     // ── createReservation ─────────────────────────────────────────────────
     if (action === 'createReservation') {
-      const authR = await requireAdminRole(body);
-      if (!authR.ok) return res.status(401).json({ ok: false, error: authR.error });
+      // ONLINE bookings (no userId) are allowed — staff bookings require admin role
+      const isOnline = !body.userId;
+      if (!isOnline) {
+        const authR = await requireAdminRole(body);
+        if (!authR.ok) return res.status(401).json({ ok: false, error: authR.error });
+      }
 
-      const { guestName, guestPhone, tableNo, pax, resDate, resTime, notes } = body;
-      if (!guestName || !tableNo || !resDate || !resTime)
-        return res.status(400).json({ ok: false, error: 'guestName, tableNo, resDate, resTime are required' });
-      if (tableNo < 1 || tableNo > 10)
+      const { guestName, guestPhone, guestEmail, tableNo, pax, resDate, resTime,
+              notes, occasion, seatingPref, dietary } = body;
+
+      if (!guestName || !resDate || !resTime)
+        return res.status(400).json({ ok: false, error: 'guestName, resDate, resTime are required' });
+
+      // Online bookings don't pick a specific table — staff assigns one
+      const table = tableNo ? parseInt(tableNo) : null;
+      if (table !== null && (table < 1 || table > 10))
         return res.status(400).json({ ok: false, error: 'tableNo must be 1-10' });
+
+      // Validate date not in the past
+      const today = new Date().toISOString().slice(0, 10);
+      if (resDate < today)
+        return res.status(400).json({ ok: false, error: 'Reservation date cannot be in the past' });
 
       // Get next res_id
       const seqR = await supaFetch(`${SUPABASE_URL}/rest/v1/rpc/get_next_res_id`, {
@@ -1073,15 +1087,20 @@ export default async function handler(req, res) {
       const resId = seqR.ok ? seqR.data : `RES-${Date.now()}`;
 
       const r = await supa('POST', 'reservations', {
-        res_id:      resId,
-        table_no:    parseInt(tableNo),
-        guest_name:  String(guestName).trim(),
-        guest_phone: guestPhone ? String(guestPhone).trim() : null,
-        pax:         parseInt(pax) || 1,
-        res_date:    resDate,
-        res_time:    resTime,
-        notes:       notes ? String(notes).trim() : null,
-        status:      'CONFIRMED',
+        res_id:       resId,
+        table_no:     table,
+        guest_name:   String(guestName).trim(),
+        guest_phone:  guestPhone  ? String(guestPhone).trim()  : null,
+        guest_email:  guestEmail  ? String(guestEmail).trim()  : null,
+        pax:          parseInt(pax) || 1,
+        res_date:     resDate,
+        res_time:     resTime,
+        notes:        notes       ? String(notes).trim()       : null,
+        occasion:     occasion    ? String(occasion).trim()    : null,
+        seating_pref: seatingPref ? String(seatingPref).trim() : null,
+        dietary:      dietary     ? String(dietary).trim()     : null,
+        source:       isOnline ? 'ONLINE' : 'STAFF',
+        status:       'CONFIRMED',
       });
       if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to create reservation' });
       return res.status(200).json({ ok: true, resId });
