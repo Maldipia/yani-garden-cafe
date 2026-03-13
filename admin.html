@@ -2198,50 +2198,7 @@ function printReceipt(orderId) {
 
     // Auto-print
     '<script>window.onload=function(){window.print();}<\/script>' +
-    '
-<!-- ══ CHANGE PIN MODAL ══ -->
-<div id="changePinOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:700;display:none;align-items:center;justify-content:center;padding:20px">
-  <div style="background:#fff;border-radius:16px;width:100%;max-width:380px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.35)">
-    <div style="background:var(--forest-deep);color:#fff;padding:18px 20px;display:flex;align-items:center;justify-content:space-between">
-      <div style="font-weight:700;font-size:1rem">🔑 Change PIN</div>
-      <button onclick="closeChangePinModal()" style="background:none;border:none;color:#fff;font-size:1.4rem;cursor:pointer;line-height:1">&times;</button>
-    </div>
-    <div style="padding:20px;display:flex;flex-direction:column;gap:14px">
-      <!-- Staff selector (OWNER/ADMIN only) -->
-      <div id="changePinStaffRow">
-        <label style="font-size:.78rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">CHANGE PIN FOR</label>
-        <select id="changePinTarget" style="width:100%;border:1.5px solid var(--mist);border-radius:8px;padding:10px 12px;font-size:.9rem;outline:none;background:#fff;box-sizing:border-box">
-          <option value="USR_001">Owner</option>
-          <option value="USR_002">Admin</option>
-          <option value="USR_003">Cashier</option>
-          <option value="USR_004">Kitchen</option>
-        </select>
-      </div>
-      <div id="changePinCurrentRow" style="display:none">
-        <label style="font-size:.78rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">CURRENT PIN</label>
-        <input id="changePinCurrent" type="password" inputmode="numeric" maxlength="8" placeholder="Enter current PIN"
-          style="width:100%;border:1.5px solid var(--mist);border-radius:8px;padding:10px 12px;font-size:.9rem;outline:none;letter-spacing:6px;text-align:center;box-sizing:border-box">
-      </div>
-      <div>
-        <label style="font-size:.78rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">NEW PIN</label>
-        <input id="changePinNew" type="password" inputmode="numeric" maxlength="8" placeholder="4–8 digits"
-          style="width:100%;border:1.5px solid var(--mist);border-radius:8px;padding:10px 12px;font-size:.9rem;outline:none;letter-spacing:6px;text-align:center;box-sizing:border-box">
-      </div>
-      <div>
-        <label style="font-size:.78rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">CONFIRM NEW PIN</label>
-        <input id="changePinConfirm" type="password" inputmode="numeric" maxlength="8" placeholder="Re-enter new PIN"
-          style="width:100%;border:1.5px solid var(--mist);border-radius:8px;padding:10px 12px;font-size:.9rem;outline:none;letter-spacing:6px;text-align:center;box-sizing:border-box">
-      </div>
-      <div id="changePinErr" style="color:#ef4444;font-size:.82rem;min-height:18px;text-align:center"></div>
-      <button id="changePinBtn" onclick="submitChangePin()"
-        style="background:var(--forest);color:#fff;border:none;border-radius:10px;padding:14px;font-size:.95rem;font-weight:700;cursor:pointer;width:100%">
-        ✅ Update PIN
-      </button>
-    </div>
-  </div>
-</div>
-
-</body></html>';
+    '</body></html>';
 
   var printWin = window.open('', '_blank', 'width=320,height=600');
   if (printWin) {
@@ -4260,11 +4217,11 @@ async function loadReservations(date) {
         '<div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">' +
           '<span style="font-size:.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:' + sc.border + ';color:#fff;">' + sc.label + '</span>' +
           (r.status === 'CONFIRMED' ?
-            '<button onclick="updateRes('' + r.res_id + '','SEATED')" style="background:#22c55e;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:.75rem;font-weight:700;cursor:pointer;">Seat</button>' +
-            '<button onclick="updateRes('' + r.res_id + '','NO_SHOW')" style="background:#f43f5e;color:#fff;border:none;border-radius:8px;padding:6px 10px;font-size:.75rem;font-weight:700;cursor:pointer;">No Show</button>' : '') +
+            '<button onclick="updateRes(\'' + r.res_id + '\',\'SEATED\')" style="background:#22c55e;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:.75rem;font-weight:700;cursor:pointer;">Seat</button>' +
+            '<button onclick="updateRes(\'' + r.res_id + '\',\'NO_SHOW\')" style="background:#f43f5e;color:#fff;border:none;border-radius:8px;padding:6px 10px;font-size:.75rem;font-weight:700;cursor:pointer;">No Show</button>' : '') +
           (r.status === 'SEATED' ?
-            '<button onclick="updateRes('' + r.res_id + '','COMPLETED')" style="background:#64748b;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:.75rem;font-weight:700;cursor:pointer;">Done</button>' : '') +
-          '<button onclick="updateRes('' + r.res_id + '','CANCELLED')" style="background:#fee2e2;color:#ef4444;border:none;border-radius:8px;padding:6px 10px;font-size:.75rem;cursor:pointer;font-weight:700;">✕</button>' +
+            '<button onclick="updateRes(\'' + r.res_id + '\',\'COMPLETED\')" style="background:#64748b;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:.75rem;font-weight:700;cursor:pointer;">Done</button>' : '') +
+          '<button onclick="updateRes(\'' + r.res_id + '\',\'CANCELLED\')" style="background:#fee2e2;color:#ef4444;border:none;border-radius:8px;padding:6px 10px;font-size:.75rem;cursor:pointer;font-weight:700;">✕</button>' +
         '</div>' +
       '</div>';
     }).join('');
@@ -4504,6 +4461,47 @@ document.addEventListener('click', function(e) {
     <div class="ygc-prompt-btns">
       <button class="ygc-prompt-cancel" id="ygcPromptCancelBtn">Cancel</button>
       <button class="ygc-prompt-ok" id="ygcPromptOkBtn">Submit</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ CHANGE PIN MODAL ══ -->
+<div id="changePinOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:700;align-items:center;justify-content:center;padding:20px">
+  <div style="background:#fff;border-radius:16px;width:100%;max-width:380px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.35)">
+    <div style="background:var(--forest-deep);color:#fff;padding:18px 20px;display:flex;align-items:center;justify-content:space-between">
+      <div style="font-weight:700;font-size:1rem">&#128273; Change PIN</div>
+      <button onclick="closeChangePinModal()" style="background:none;border:none;color:#fff;font-size:1.4rem;cursor:pointer;line-height:1">&times;</button>
+    </div>
+    <div style="padding:20px;display:flex;flex-direction:column;gap:14px">
+      <div id="changePinStaffRow">
+        <label style="font-size:.78rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">CHANGE PIN FOR</label>
+        <select id="changePinTarget" style="width:100%;border:1.5px solid var(--mist);border-radius:8px;padding:10px 12px;font-size:.9rem;outline:none;background:#fff;box-sizing:border-box">
+          <option value="USR_001">Owner</option>
+          <option value="USR_002">Admin</option>
+          <option value="USR_003">Cashier</option>
+          <option value="USR_004">Kitchen</option>
+        </select>
+      </div>
+      <div id="changePinCurrentRow" style="display:none">
+        <label style="font-size:.78rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">CURRENT PIN</label>
+        <input id="changePinCurrent" type="password" inputmode="numeric" maxlength="8" placeholder="Enter current PIN"
+          style="width:100%;border:1.5px solid var(--mist);border-radius:8px;padding:10px 12px;font-size:.9rem;outline:none;letter-spacing:6px;text-align:center;box-sizing:border-box">
+      </div>
+      <div>
+        <label style="font-size:.78rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">NEW PIN</label>
+        <input id="changePinNew" type="password" inputmode="numeric" maxlength="8" placeholder="4-8 digits"
+          style="width:100%;border:1.5px solid var(--mist);border-radius:8px;padding:10px 12px;font-size:.9rem;outline:none;letter-spacing:6px;text-align:center;box-sizing:border-box">
+      </div>
+      <div>
+        <label style="font-size:.78rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">CONFIRM NEW PIN</label>
+        <input id="changePinConfirm" type="password" inputmode="numeric" maxlength="8" placeholder="Re-enter new PIN"
+          style="width:100%;border:1.5px solid var(--mist);border-radius:8px;padding:10px 12px;font-size:.9rem;outline:none;letter-spacing:6px;text-align:center;box-sizing:border-box">
+      </div>
+      <div id="changePinErr" style="color:#ef4444;font-size:.82rem;min-height:18px;text-align:center"></div>
+      <button id="changePinBtn" onclick="submitChangePin()"
+        style="background:var(--forest);color:#fff;border:none;border-radius:10px;padding:14px;font-size:.95rem;font-weight:700;cursor:pointer;width:100%">
+        Update PIN
+      </button>
     </div>
   </div>
 </div>
