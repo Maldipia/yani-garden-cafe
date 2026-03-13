@@ -2529,7 +2529,7 @@ function capitalize(s) {
 // ══════════════════════════════════════════════════════════
 
 async function loadPayments() {
-  var result = await api('listPayments', {});
+  var result = await api('listPayments', { userId: currentUser && currentUser.userId });
   if (result.ok) {
     allPayments = result.payments || [];
     pendingPayCount = allPayments.filter(function(p){ return p.status === 'PENDING' }).length;
@@ -2678,7 +2678,7 @@ async function doVerifyPayment(paymentId) {
   var confirmed = await ygcConfirm('✅ Verify Payment', 'Verify payment ' + paymentId + '? This will mark it as confirmed.', 'Verify', 'Cancel');
   if (!confirmed) return;
 
-  var result = await api('verifyPayment', { paymentId: paymentId, verifiedBy: 'Staff' });
+  var result = await api('verifyPayment', { paymentId: paymentId, verifiedBy: 'Staff', userId: currentUser && currentUser.userId });
   if (result.ok) {
     // Refresh payments
     loadPayments();
@@ -2700,7 +2700,7 @@ async function doRejectPayment(paymentId) {
   var reason = await ygcPrompt('✕ Reject Payment', 'Enter reason for rejecting payment ' + paymentId + ':', 'e.g. Wrong amount, expired screenshot');
   if (reason === null) return; // Cancelled
 
-  var result = await api('rejectPayment', { paymentId: paymentId, reason: reason, verifiedBy: 'Staff' });
+  var result = await api('rejectPayment', { paymentId: paymentId, reason: reason, verifiedBy: 'Staff', userId: currentUser && currentUser.userId });
   if (result.ok) {
     loadPayments();
     var ordResult = await api('getOrders', { status:'ALL', limit:100 });
