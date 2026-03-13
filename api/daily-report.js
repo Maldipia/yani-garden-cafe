@@ -11,7 +11,7 @@ const SUPABASE_KEY = (() => {
 const RESEND_KEY    = process.env.RESEND_API_KEY || '';
 const REPORT_SECRET = process.env.REPORT_SECRET  || '';
 const REPORT_EMAIL  = process.env.REPORT_EMAIL   || 'tygfsb@gmail.com';
-const FROM_EMAIL    = process.env.REPORT_FROM    || 'reports@yanigardencafe.com';
+const FROM_EMAIL    = process.env.REPORT_FROM    || 'onboarding@resend.dev';
 
 async function supaFetch(path, opts = {}) {
   const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {

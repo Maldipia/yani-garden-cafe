@@ -737,6 +737,40 @@ export default async function handler(req, res) {
       logSync('dine_in_orders', orderId, 'INSERT');
       auditLog({ orderId, action: 'ORDER_PLACED', details: { tableNo, customerName, orderType, total, itemCount: orderItems.length } });
 
+      // Deduct inventory (fire-and-forget, non-blocking)
+      Promise.all(orderItems.map(async item => {
+        try {
+          const inv = await supaFetch(
+            `${SUPABASE_URL}/rest/v1/inventory?item_code=eq.${encodeURIComponent(item.item_code)}&select=stock_qty,auto_disable`
+          );
+          if (!inv.ok || !inv.data?.length) return;
+          const cur = inv.data[0];
+          const newQty = Math.max(0, parseFloat(cur.stock_qty) - parseFloat(item.qty || 1));
+          await supaFetch(
+            `${SUPABASE_URL}/rest/v1/inventory?item_code=eq.${encodeURIComponent(item.item_code)}`,
+            { method: 'PATCH', body: JSON.stringify({ stock_qty: newQty, updated_at: new Date().toISOString() }) }
+          );
+          if (newQty === 0 && cur.auto_disable) {
+            await supaFetch(
+              `${SUPABASE_URL}/rest/v1/menu_items?item_code=eq.${encodeURIComponent(item.item_code)}`,
+              { method: 'PATCH', body: JSON.stringify({ is_active: false }) }
+            );
+          }
+          await supaFetch(`${SUPABASE_URL}/rest/v1/inventory_log`, { method: 'POST',
+            body: JSON.stringify({ item_code: item.item_code, change_type: 'SALE',
+              qty_before: parseFloat(cur.stock_qty), qty_change: -parseFloat(item.qty || 1),
+              qty_after: newQty, order_id: orderId }) });
+        } catch (_) {}
+      })).catch(() => {});
+
+      // Auto-set table OCCUPIED
+      if (tableNo && tableNo !== '0' && orderType === 'DINE-IN') {
+        supaFetch(
+          `${SUPABASE_URL}/rest/v1/cafe_tables?table_number=eq.${encodeURIComponent(tableNo)}`,
+          { method: 'PATCH', body: JSON.stringify({ status: 'OCCUPIED' }) }
+        ).catch(() => {});
+      }
+
       // Push to Google Sheets (fire-and-forget)
       pushToSheets('syncOrder', { order: {
         orderId, tableNo, customerName, status: 'NEW',
@@ -868,6 +902,27 @@ export default async function handler(req, res) {
       auditLog({ orderId, action: 'STATUS_CHANGED', actor: { userId, role: staffRole }, oldValue: prevStatus, newValue: newStatus });
       // Push status update to Sheets
       pushToSheets('updateOrderStatus', { orderId, status: newStatus });
+
+      // Auto-release table when order COMPLETED or CANCELLED
+      if (newStatus === 'COMPLETED' || newStatus === 'CANCELLED') {
+        const orderRes = await supaFetch(
+          `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=table_no,order_type`
+        );
+        const tableNo = orderRes.data?.[0]?.table_no;
+        if (tableNo && tableNo !== '0' && tableNo !== '') {
+          // Only free if no other active orders on same table
+          const activeR = await supaFetch(
+            `${SUPABASE_URL}/rest/v1/dine_in_orders?table_no=eq.${encodeURIComponent(tableNo)}&status=in.(NEW,PREPARING,READY)&is_deleted=eq.false&select=order_id`
+          );
+          if (!activeR.data?.length) {
+            supaFetch(
+              `${SUPABASE_URL}/rest/v1/cafe_tables?table_number=eq.${encodeURIComponent(tableNo)}`,
+              { method: 'PATCH', body: JSON.stringify({ status: 'AVAILABLE' }) }
+            ).catch(() => {});
+          }
+        }
+      }
+
       return res.status(200).json({ ok: true, orderId, status: newStatus });
     }
 
@@ -1951,6 +2006,437 @@ export default async function handler(req, res) {
       );
       if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to update setting' });
       return res.status(200).json({ ok: true, key, value });
+    }
+
+
+    // ══════════════════════════════════════════════════════════════════════
+    // TABLE OCCUPANCY STATUS
+    // ══════════════════════════════════════════════════════════════════════
+
+    // ── getTableStatus ─────────────────────────────────────────────────────
+    if (action === 'getTableStatus') {
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/cafe_tables?select=id,table_number,table_name,capacity,qr_token,status&order=table_number.asc`
+      );
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to fetch tables' });
+      return res.status(200).json({ ok: true, tables: r.data || [] });
+    }
+
+    // ── setTableStatus ─────────────────────────────────────────────────────
+    if (action === 'setTableStatus') {
+      const auth = await requireAuth(body, ['OWNER','ADMIN','CASHIER']);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      const { tableNumber, status } = body;
+      const valid = ['AVAILABLE','OCCUPIED','RESERVED','MAINTENANCE'];
+      if (!valid.includes(status)) return res.status(400).json({ ok: false, error: 'Invalid status' });
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/cafe_tables?table_number=eq.${encodeURIComponent(tableNumber)}`,
+        { method: 'PATCH', body: JSON.stringify({ status }) }
+      );
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to update table status' });
+      return res.status(200).json({ ok: true, tableNumber, status });
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // RESERVATIONS ↔ TABLE AUTO-LINK
+    // ══════════════════════════════════════════════════════════════════════
+
+    // ── linkReservationTable ───────────────────────────────────────────────
+    if (action === 'linkReservationTable') {
+      const auth = await requireAuth(body, ['OWNER','ADMIN','CASHIER']);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      const { resId, tableNumber } = body;
+      if (!resId) return res.status(400).json({ ok: false, error: 'resId required' });
+
+      // Get table UUID from number
+      let tableId = null;
+      if (tableNumber) {
+        const tRes = await supaFetch(
+          `${SUPABASE_URL}/rest/v1/cafe_tables?table_number=eq.${encodeURIComponent(tableNumber)}&select=id`
+        );
+        if (tRes.ok && tRes.data && tRes.data[0]) tableId = tRes.data[0].id;
+      }
+
+      // Update reservation
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/reservations?res_id=eq.${encodeURIComponent(resId)}`,
+        { method: 'PATCH', body: JSON.stringify({
+          table_id: tableId,
+          confirmed_by: body.userId,
+          status: tableNumber ? 'CONFIRMED' : 'CONFIRMED'
+        })}
+      );
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to link reservation' });
+
+      // Auto-set table to RESERVED if tableNumber provided
+      if (tableNumber) {
+        await supaFetch(
+          `${SUPABASE_URL}/rest/v1/cafe_tables?table_number=eq.${encodeURIComponent(tableNumber)}`,
+          { method: 'PATCH', body: JSON.stringify({ status: 'RESERVED' }) }
+        );
+      }
+      return res.status(200).json({ ok: true, resId, tableNumber, tableId });
+    }
+
+    // ── seatReservation ────────────────────────────────────────────────────
+    if (action === 'seatReservation') {
+      const auth = await requireAuth(body, ['OWNER','ADMIN','CASHIER']);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      const { resId } = body;
+
+      // Get reservation to find linked table
+      const resRes = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/reservations?res_id=eq.${encodeURIComponent(resId)}&select=table_id,status`
+      );
+      if (!resRes.ok || !resRes.data || !resRes.data[0]) {
+        return res.status(404).json({ ok: false, error: 'Reservation not found' });
+      }
+      const res_rec = resRes.data[0];
+
+      // Mark reservation SEATED
+      await supaFetch(
+        `${SUPABASE_URL}/rest/v1/reservations?res_id=eq.${encodeURIComponent(resId)}`,
+        { method: 'PATCH', body: JSON.stringify({ status: 'SEATED' }) }
+      );
+
+      // Set table OCCUPIED
+      if (res_rec.table_id) {
+        await supaFetch(
+          `${SUPABASE_URL}/rest/v1/cafe_tables?id=eq.${res_rec.table_id}`,
+          { method: 'PATCH', body: JSON.stringify({ status: 'OCCUPIED' }) }
+        );
+      }
+      return res.status(200).json({ ok: true, resId, status: 'SEATED' });
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // INVENTORY
+    // ══════════════════════════════════════════════════════════════════════
+
+    // ── getInventory ───────────────────────────────────────────────────────
+    if (action === 'getInventory') {
+      const auth = await requireAuth(body, ['OWNER','ADMIN','CASHIER']);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/inventory?select=*&order=item_code.asc`
+      );
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to fetch inventory' });
+      // Attach menu item names
+      const menuR = await supaFetch(`${SUPABASE_URL}/rest/v1/menu_items?select=item_code,name,is_active`);
+      const menuMap = {};
+      (menuR.data || []).forEach(m => { menuMap[m.item_code] = m; });
+      const items = (r.data || []).map(i => ({
+        ...i,
+        item_name: menuMap[i.item_code]?.name || i.item_code,
+        item_active: menuMap[i.item_code]?.is_active ?? true,
+        low_stock: i.stock_qty <= i.low_stock_threshold,
+      }));
+      return res.status(200).json({ ok: true, items });
+    }
+
+    // ── upsertInventory ────────────────────────────────────────────────────
+    if (action === 'upsertInventory') {
+      const auth = await requireAdminRole(body);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      const { itemCode, stockQty, lowStockThreshold, unit, costPerUnit, autoDisable, restockNotes } = body;
+      if (!itemCode) return res.status(400).json({ ok: false, error: 'itemCode required' });
+      const row = {
+        item_code: itemCode,
+        stock_qty: parseFloat(stockQty) || 0,
+        low_stock_threshold: parseFloat(lowStockThreshold) || 10,
+        unit: unit || 'pcs',
+        cost_per_unit: parseFloat(costPerUnit) || 0,
+        auto_disable: !!autoDisable,
+        restock_notes: restockNotes || '',
+        last_restocked_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/inventory`,
+        { method: 'POST', body: JSON.stringify(row),
+          headers: { Prefer: 'resolution=merge-duplicates,return=representation' } }
+      );
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to save inventory' });
+      // Log restock
+      await supaFetch(`${SUPABASE_URL}/rest/v1/inventory_log`, {
+        method: 'POST',
+        body: JSON.stringify({
+          item_code: itemCode, change_type: 'RESTOCK',
+          qty_change: parseFloat(stockQty) || 0,
+          qty_after: parseFloat(stockQty) || 0,
+          notes: restockNotes || 'Manual restock', actor_id: body.userId,
+        })
+      });
+      return res.status(200).json({ ok: true, item: r.data?.[0] || row });
+    }
+
+    // ── adjustInventory ────────────────────────────────────────────────────
+    if (action === 'adjustInventory') {
+      const auth = await requireAdminRole(body);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      const { itemCode, adjustment, changeType, notes } = body;
+      if (!itemCode || adjustment === undefined) return res.status(400).json({ ok: false, error: 'itemCode + adjustment required' });
+      const validTypes = ['RESTOCK','ADJUSTMENT','WASTE','RETURN'];
+      const type = validTypes.includes(changeType) ? changeType : 'ADJUSTMENT';
+      // Get current
+      const cur = await supaFetch(`${SUPABASE_URL}/rest/v1/inventory?item_code=eq.${encodeURIComponent(itemCode)}&select=stock_qty,auto_disable`);
+      const current = cur.data?.[0];
+      if (!current) return res.status(404).json({ ok: false, error: 'Item not in inventory' });
+      const newQty = Math.max(0, parseFloat(current.stock_qty) + parseFloat(adjustment));
+      await supaFetch(`${SUPABASE_URL}/rest/v1/inventory?item_code=eq.${encodeURIComponent(itemCode)}`,
+        { method: 'PATCH', body: JSON.stringify({ stock_qty: newQty, updated_at: new Date().toISOString() }) });
+      // Auto-disable menu item if stock hits 0
+      if (newQty === 0 && current.auto_disable) {
+        await supaFetch(`${SUPABASE_URL}/rest/v1/menu_items?item_code=eq.${encodeURIComponent(itemCode)}`,
+          { method: 'PATCH', body: JSON.stringify({ is_active: false }) });
+      }
+      // Log
+      await supaFetch(`${SUPABASE_URL}/rest/v1/inventory_log`, { method: 'POST',
+        body: JSON.stringify({ item_code: itemCode, change_type: type,
+          qty_before: parseFloat(current.stock_qty), qty_change: parseFloat(adjustment),
+          qty_after: newQty, notes: notes || '', actor_id: body.userId }) });
+      return res.status(200).json({ ok: true, itemCode, qtyBefore: current.stock_qty, qtyAfter: newQty });
+    }
+
+    // ── getInventoryLog ────────────────────────────────────────────────────
+    if (action === 'getInventoryLog') {
+      const auth = await requireAuth(body, ['OWNER','ADMIN']);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      const limit = Math.min(parseInt(body.limit) || 50, 200);
+      const filter = body.itemCode ? `&item_code=eq.${encodeURIComponent(body.itemCode)}` : '';
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/inventory_log?select=*&order=created_at.desc&limit=${limit}${filter}`
+      );
+      return res.status(200).json({ ok: r.ok, logs: r.data || [] });
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // ADD-ONS / MODIFIERS
+    // ══════════════════════════════════════════════════════════════════════
+
+    // ── getAddons ──────────────────────────────────────────────────────────
+    if (action === 'getAddons') {
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/menu_addons?is_active=eq.true&order=sort_order.asc,name.asc`
+      );
+      return res.status(200).json({ ok: r.ok, addons: r.data || [] });
+    }
+
+    // ── getAddonsAdmin ─────────────────────────────────────────────────────
+    if (action === 'getAddonsAdmin') {
+      const auth = await requireAdminRole(body);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/menu_addons?order=sort_order.asc,name.asc`
+      );
+      return res.status(200).json({ ok: r.ok, addons: r.data || [] });
+    }
+
+    // ── saveAddon ──────────────────────────────────────────────────────────
+    if (action === 'saveAddon') {
+      const auth = await requireAdminRole(body);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      const { addonCode, name, price, appliesToAll, appliesToCodes, sortOrder } = body;
+      if (!name) return res.status(400).json({ ok: false, error: 'name required' });
+      const code = addonCode || 'ADD-' + Date.now();
+      const row = {
+        addon_code: code, name: String(name).trim().substring(0, 80),
+        price: parseFloat(price) || 0,
+        applies_to_all: appliesToAll !== false,
+        applies_to_codes: Array.isArray(appliesToCodes) ? appliesToCodes : [],
+        is_active: body.isActive !== false,
+        sort_order: parseInt(sortOrder) || 0,
+        updated_at: new Date().toISOString(),
+      };
+      const method = addonCode ? 'PATCH' : 'POST';
+      const url = addonCode
+        ? `${SUPABASE_URL}/rest/v1/menu_addons?addon_code=eq.${encodeURIComponent(addonCode)}`
+        : `${SUPABASE_URL}/rest/v1/menu_addons`;
+      const r = await supaFetch(url, { method, body: JSON.stringify(row),
+        headers: method === 'POST' ? { Prefer: 'return=representation' } : {} });
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to save addon' });
+      return res.status(200).json({ ok: true, addon: method === 'POST' ? r.data?.[0] : row });
+    }
+
+    // ── deleteAddon ────────────────────────────────────────────────────────
+    if (action === 'deleteAddon') {
+      const auth = await requireAdminRole(body);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      const { addonCode } = body;
+      if (!addonCode) return res.status(400).json({ ok: false, error: 'addonCode required' });
+      // Soft delete
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/menu_addons?addon_code=eq.${encodeURIComponent(addonCode)}`,
+        { method: 'PATCH', body: JSON.stringify({ is_active: false, updated_at: new Date().toISOString() }) }
+      );
+      return res.status(200).json({ ok: r.ok });
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // VOID / REFUND WORKFLOW
+    // ══════════════════════════════════════════════════════════════════════
+
+    // ── processRefund ──────────────────────────────────────────────────────
+    if (action === 'processRefund') {
+      const auth = await requireAuth(body, ['OWNER','ADMIN']);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      const { orderId, refundType, refundAmount, reasonCode, reasonNote, refundMethod, itemsRefunded } = body;
+      const validTypes = ['FULL','PARTIAL','VOID'];
+      const validReasons = ['WRONG_ORDER','DUPLICATE','COMPLAINT','OVERCHARGE','ITEM_UNAVAILABLE','OTHER'];
+      if (!orderId) return res.status(400).json({ ok: false, error: 'orderId required' });
+      if (!validTypes.includes(refundType)) return res.status(400).json({ ok: false, error: 'Invalid refundType' });
+      if (!validReasons.includes(reasonCode)) return res.status(400).json({ ok: false, error: 'Invalid reasonCode' });
+      if (parseFloat(refundAmount) < 0) return res.status(400).json({ ok: false, error: 'refundAmount cannot be negative' });
+
+      // Verify order exists
+      const orderRes = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=order_id,total,status`
+      );
+      if (!orderRes.ok || !orderRes.data?.length) return res.status(404).json({ ok: false, error: 'Order not found' });
+
+      const refundId = 'REF-' + Date.now();
+      const row = {
+        refund_id: refundId,
+        order_id: orderId,
+        refund_type: refundType,
+        refund_amount: parseFloat(refundAmount) || 0,
+        reason_code: reasonCode,
+        reason_note: reasonNote || '',
+        refund_method: refundMethod || '',
+        items_refunded: Array.isArray(itemsRefunded) ? itemsRefunded : [],
+        processed_by: body.userId,
+        status: 'PROCESSED',
+      };
+      const r = await supaFetch(`${SUPABASE_URL}/rest/v1/refunds`,
+        { method: 'POST', body: JSON.stringify(row), headers: { Prefer: 'return=representation' } });
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to save refund' });
+
+      // If VOID — cancel the order
+      if (refundType === 'VOID') {
+        await supaFetch(
+          `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}`,
+          { method: 'PATCH', body: JSON.stringify({ status: 'CANCELLED', cancel_reason: `VOID: ${reasonNote || reasonCode}` }) }
+        );
+      }
+      // Audit log
+      await supaFetch(`${SUPABASE_URL}/rest/v1/order_audit_logs`, { method: 'POST',
+        body: JSON.stringify({ order_id: orderId, action: 'REFUND_PROCESSED',
+          actor_id: body.userId, actor_name: auth.role,
+          details: { refundId, refundType, refundAmount, reasonCode } }) });
+
+      return res.status(200).json({ ok: true, refundId, refundType, refundAmount });
+    }
+
+    // ── getRefunds ─────────────────────────────────────────────────────────
+    if (action === 'getRefunds') {
+      const auth = await requireAuth(body, ['OWNER','ADMIN']);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      const limit = Math.min(parseInt(body.limit) || 50, 200);
+      const filter = body.orderId ? `&order_id=eq.${encodeURIComponent(body.orderId)}` : '';
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/refunds?select=*&order=created_at.desc&limit=${limit}${filter}`
+      );
+      return res.status(200).json({ ok: r.ok, refunds: r.data || [] });
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // CASH DRAWER / EOD RECONCILIATION
+    // ══════════════════════════════════════════════════════════════════════
+
+    // ── openCashSession ────────────────────────────────────────────────────
+    if (action === 'openCashSession') {
+      const auth = await requireAuth(body, ['OWNER','ADMIN','CASHIER']);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      // Check no session is already open
+      const existing = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/cash_sessions?status=eq.OPEN&select=session_id,opened_at,opened_by`
+      );
+      if (existing.ok && existing.data?.length) {
+        return res.status(200).json({ ok: false, error: 'A cash session is already open',
+          existingSession: existing.data[0] });
+      }
+      const sessionId = 'CASH-' + Date.now();
+      const row = {
+        session_id: sessionId,
+        shift: body.shift || 'AM',
+        opened_by: body.userId,
+        opening_float: parseFloat(body.openingFloat) || 0,
+        status: 'OPEN',
+        opened_at: new Date().toISOString(),
+      };
+      const r = await supaFetch(`${SUPABASE_URL}/rest/v1/cash_sessions`,
+        { method: 'POST', body: JSON.stringify(row), headers: { Prefer: 'return=representation' } });
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to open cash session' });
+      return res.status(200).json({ ok: true, sessionId, shift: row.shift, openingFloat: row.opening_float });
+    }
+
+    // ── closeCashSession ───────────────────────────────────────────────────
+    if (action === 'closeCashSession') {
+      const auth = await requireAuth(body, ['OWNER','ADMIN','CASHIER']);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      const { sessionId, closingCount, denominationBreakdown, notes } = body;
+      if (!sessionId) return res.status(400).json({ ok: false, error: 'sessionId required' });
+
+      // Get session + compute expected cash (cash sales since session opened)
+      const sessRes = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/cash_sessions?session_id=eq.${encodeURIComponent(sessionId)}&select=*`
+      );
+      if (!sessRes.ok || !sessRes.data?.length) return res.status(404).json({ ok: false, error: 'Session not found' });
+      const sess = sessRes.data[0];
+
+      // Sum cash sales since session opened
+      const salesRes = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/dine_in_orders?status=eq.COMPLETED&created_at=gte.${sess.opened_at}&select=total,payment_method,discounted_total`
+      );
+      const orders = salesRes.data || [];
+      const totalSales = orders.reduce((s, o) => s + parseFloat(o.discounted_total || o.total || 0), 0);
+      const cashSales = orders
+        .filter(o => (o.payment_method || '').toUpperCase().includes('CASH'))
+        .reduce((s, o) => s + parseFloat(o.discounted_total || o.total || 0), 0);
+      const expectedCash = parseFloat(sess.opening_float || 0) + cashSales;
+      const closing = parseFloat(closingCount) || 0;
+      const variance = closing - expectedCash;
+
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/cash_sessions?session_id=eq.${encodeURIComponent(sessionId)}`,
+        { method: 'PATCH', body: JSON.stringify({
+          closed_by: body.userId,
+          closing_count: closing,
+          expected_cash: expectedCash,
+          variance,
+          cash_sales: cashSales,
+          total_sales: totalSales,
+          denomination_breakdown: denominationBreakdown || {},
+          notes: notes || '',
+          status: 'CLOSED',
+          closed_at: new Date().toISOString(),
+        })}
+      );
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to close session' });
+      return res.status(200).json({
+        ok: true, sessionId, totalSales, cashSales,
+        openingFloat: sess.opening_float, expectedCash, closingCount: closing, variance,
+        overShort: variance >= 0 ? `OVER ₱${Math.abs(variance).toFixed(2)}` : `SHORT ₱${Math.abs(variance).toFixed(2)}`
+      });
+    }
+
+    // ── getCashSessions ────────────────────────────────────────────────────
+    if (action === 'getCashSessions') {
+      const auth = await requireAuth(body, ['OWNER','ADMIN']);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      const limit = Math.min(parseInt(body.limit) || 20, 100);
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/cash_sessions?select=*&order=created_at.desc&limit=${limit}`
+      );
+      return res.status(200).json({ ok: r.ok, sessions: r.data || [] });
+    }
+
+    // ── getOpenCashSession ─────────────────────────────────────────────────
+    if (action === 'getOpenCashSession') {
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/cash_sessions?status=eq.OPEN&select=*&order=opened_at.desc&limit=1`
+      );
+      return res.status(200).json({ ok: r.ok, session: r.data?.[0] || null });
     }
 
     // ── Unknown action ─────────────────────────────────────────────────────
