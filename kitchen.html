@@ -568,7 +568,7 @@ function buildCard(o) {
     const noteHtml = it.notes ? `<div class="item-note">⚠ ${it.notes}</div>` : '';
     const doneClass = it.prepared ? ' item-row-done' : '';
     const checkIcon = it.prepared ? '✅' : '⬜';
-    return `<div class="item-row${doneClass}" data-item-id="${it.id}" onclick="toggleItemPrep(this, '${o.orderId}', ${it.id}, ${it.prepared})" title="${it.prepared ? 'Mark as NOT prepared' : 'Mark as PREPARED'}">
+    return `<div class="item-row${doneClass}" data-item-id="${it.id}" onclick="toggleItemPrep(this, '${o.orderId}', ${it.id}, ${it.prepared ? 1 : 0})" title="${it.prepared ? 'Mark as NOT prepared' : 'Mark as PREPARED'}">
       <div class="item-check">${checkIcon}</div>
       <div class="item-qty">${it.qty}×</div>
       <div class="item-details">
@@ -655,7 +655,7 @@ async function toggleItemPrep(rowEl, orderId, itemId, currentPrepared) {
   // Optimistic UI update immediately
   rowEl.classList.toggle('item-row-done', newPrepared);
   rowEl.querySelector('.item-check').textContent = newPrepared ? '✅' : '⬜';
-  rowEl.setAttribute('onclick', `toggleItemPrep(this, '${orderId}', ${itemId}, ${newPrepared})`);
+  rowEl.setAttribute('onclick', `toggleItemPrep(this, '${orderId}', ${itemId}, ${newPrepared ? 1 : 0})`);
 
   // Update progress bar on the card
   const card = rowEl.closest('.order-card');
@@ -694,7 +694,7 @@ async function toggleItemPrep(rowEl, orderId, itemId, currentPrepared) {
       showToast('❌ Could not save — retrying...');
       rowEl.classList.toggle('item-row-done', currentPrepared);
       rowEl.querySelector('.item-check').textContent = currentPrepared ? '✅' : '⬜';
-      rowEl.setAttribute('onclick', `toggleItemPrep(this, '${orderId}', ${itemId}, ${currentPrepared})`);
+      rowEl.setAttribute('onclick', `toggleItemPrep(this, '${orderId}', ${itemId}, ${currentPrepared ? 1 : 0})`);
     }
   } catch(e) {
     showToast('❌ Network error');
