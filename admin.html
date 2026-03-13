@@ -1171,6 +1171,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 <!-- ══ SETTINGS VIEW (OWNER only) ══ -->
 <div id="staffView" style="display:none"></div>
 <div id="shiftView" style="display:none"></div>
+<div id="logsView" style="display:none"></div>
 <div id="settingsView" style="display:none;padding:16px 16px 100px;max-width:520px;margin:0 auto">
   <div style="font-weight:800;font-size:1.05rem;color:var(--forest-deep);margin-bottom:16px">⚙️ Cafe Settings</div>
 
@@ -1741,6 +1742,7 @@ function renderFilters() {
     tabs.push({ key:'SETTINGS', label:'⚙️ Settings', count:'' });
     tabs.push({ key:'STAFF', label:'👥 Staff', count:'' });
     tabs.push({ key:'SHIFT', label:'📋 Shift', count:'' });
+    tabs.push({ key:'LOGS', label:'📜 Logs', count:'' });
   }
 
   document.getElementById('filterBar').innerHTML = tabs.map(function(t) {
@@ -1779,6 +1781,8 @@ function setFilter(f) {
   if (staffView) staffView.style.display = 'none';
   var shiftView = document.getElementById('shiftView');
   if (shiftView) shiftView.style.display = 'none';
+  var logsView = document.getElementById('logsView');
+  if (logsView) logsView.style.display = 'none';
 
   if (f === 'PAYMENTS') {
     paymentsView.style.display = 'block';
@@ -1809,6 +1813,10 @@ function setFilter(f) {
     var shv = document.getElementById('shiftView');
     if (shv) shv.style.display = 'block';
     loadShiftSummary();
+  } else if (f === 'LOGS') {
+    var lv = document.getElementById('logsView');
+    if (lv) lv.style.display = 'block';
+    loadAuditLogs();
   } else {
     orderGrid.style.display = '';
     renderOrders();
@@ -5306,6 +5314,144 @@ async function submitDiscount() {
     btn.textContent = '✅ Apply Discount';
   }
 }
+
+// ══════════════════════════════════════════════════════════
+// AUDIT LOGS TAB
+// ══════════════════════════════════════════════════════════
+var _auditLogsCache = [];
+var _auditFilter = '';
+
+async function loadAuditLogs(filterOrderId) {
+  var view = document.getElementById('logsView');
+  if (!view) return;
+  view.innerHTML = '<div style="padding:24px;text-align:center;color:var(--bark)">Loading logs...</div>';
+
+  var payload = { userId: currentUser && currentUser.userId, limit: 200 };
+  if (filterOrderId) payload.orderId = filterOrderId;
+
+  var r = await api('getAuditLogs', payload);
+  if (!r || !r.ok) {
+    view.innerHTML = '<div style="padding:20px;color:#EF4444">Failed to load logs.</div>';
+    return;
+  }
+  _auditLogsCache = r.logs || [];
+  _auditFilter = filterOrderId || '';
+  renderAuditLogs();
+}
+
+function renderAuditLogs() {
+  var view = document.getElementById('logsView');
+  if (!view) return;
+
+  var actionMeta = {
+    ORDER_PLACED:         { icon:'🛎️',  color:'#059669', label:'Order Placed' },
+    STATUS_CHANGED:       { icon:'🔄',  color:'#2563EB', label:'Status Changed' },
+    ORDER_DELETED:        { icon:'🗑️',  color:'#EF4444', label:'Order Deleted' },
+    PAYMENT_SET:          { icon:'💳',  color:'#7C3AED', label:'Payment Set' },
+    DISCOUNT_APPLIED:     { icon:'🏷️',  color:'#D97706', label:'Discount Applied' },
+    DISCOUNT_REMOVED:     { icon:'✕',   color:'#6B7280', label:'Discount Removed' },
+    ORDER_EDITED:         { icon:'✏️',  color:'#0891B2', label:'Order Edited' },
+    PLATFORM_ORDER_PLACED:{ icon:'📦',  color:'#059669', label:'Platform Order' },
+  };
+
+  var logs = _auditLogsCache;
+  var searchVal = (document.getElementById('logSearch') || {}).value || '';
+  if (searchVal) {
+    var q = searchVal.toLowerCase();
+    logs = logs.filter(function(l) {
+      return (l.order_id||'').toLowerCase().includes(q)
+          || (l.action||'').toLowerCase().includes(q)
+          || (l.actor_name||'').toLowerCase().includes(q)
+          || (l.actor_id||'').toLowerCase().includes(q)
+          || (l.new_value||'').toLowerCase().includes(q)
+          || (l.old_value||'').toLowerCase().includes(q);
+    });
+  }
+
+  var html = '<div style="padding:14px 16px 100px">';
+
+  // Search bar + filter chip
+  html += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">'
+    + '<input id="logSearch" type="text" placeholder="Search orders, actions, staff…" value="' + escAttr(searchVal) + '" '
+    + 'oninput="renderAuditLogs()" '
+    + 'style="flex:1;padding:8px 12px;border:1.5px solid var(--mist);border-radius:10px;font-size:.82rem;font-family:var(--font-body)">'
+    + (_auditFilter
+        ? '<button onclick="loadAuditLogs()" style="padding:6px 12px;background:#EFF6FF;border:1.5px solid #BFDBFE;border-radius:8px;font-size:.72rem;font-weight:700;color:#1D4ED8;cursor:pointer;white-space:nowrap">✕ Clear filter</button>'
+        : '')
+    + '</div>';
+
+  html += '<div style="font-size:.72rem;color:#9CA3AF;margin-bottom:10px">'
+    + logs.length + ' log entr' + (logs.length===1?'y':'ies')
+    + (_auditFilter ? ' for ' + _auditFilter : '')
+    + '</div>';
+
+  if (logs.length === 0) {
+    html += '<div style="text-align:center;padding:40px 20px;color:#9CA3AF">'
+      + '<div style="font-size:2rem;margin-bottom:8px">📭</div>'
+      + '<div style="font-size:.85rem">No logs yet. Actions will appear here as orders are placed and updated.</div>'
+      + '</div>';
+  } else {
+    // Group by date
+    var byDate = {};
+    logs.forEach(function(l) {
+      var d = new Date(l.created_at);
+      var key = d.toLocaleDateString('en-PH', { weekday:'short', month:'short', day:'numeric', year:'numeric' });
+      if (!byDate[key]) byDate[key] = [];
+      byDate[key].push(l);
+    });
+
+    Object.keys(byDate).forEach(function(date) {
+      html += '<div style="font-size:.68rem;font-weight:800;color:var(--bark);text-transform:uppercase;letter-spacing:.06em;padding:8px 0 6px;">' + date + '</div>';
+
+      byDate[date].forEach(function(l) {
+        var m = actionMeta[l.action] || { icon:'📝', color:'#6B7280', label: l.action };
+        var time = new Date(l.created_at).toLocaleTimeString('en-PH', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+        var actor = l.actor_name || l.actor_id || 'System';
+
+        // Build detail string
+        var detail = '';
+        if (l.action === 'STATUS_CHANGED' && l.old_value && l.new_value) {
+          detail = l.old_value + ' → ' + l.new_value;
+        } else if (l.action === 'PAYMENT_SET' && l.new_value) {
+          detail = l.new_value;
+          if (l.details && l.details.notes) detail += ' · ' + l.details.notes;
+        } else if (l.action === 'DISCOUNT_APPLIED' && l.details) {
+          detail = l.new_value;
+          if (l.details.discountAmount) detail += ' · -₱' + parseFloat(l.details.discountAmount).toFixed(2);
+          if (l.details.discountedTotal) detail += ' → ₱' + parseFloat(l.details.discountedTotal).toFixed(2);
+        } else if (l.action === 'ORDER_PLACED' && l.details) {
+          detail = (l.details.orderType||'') + ' · ' + (l.details.itemCount||0) + ' item(s) · ₱' + parseFloat(l.details.total||0).toFixed(2);
+        } else if (l.action === 'ORDER_EDITED' && l.details) {
+          detail = (l.details.itemCount||0) + ' item(s) · New total ₱' + parseFloat(l.details.newTotal||0).toFixed(2);
+        } else if (l.new_value) {
+          detail = l.new_value;
+        }
+
+        html += '<div style="background:#fff;border-radius:12px;padding:10px 12px;margin-bottom:6px;display:flex;gap:10px;align-items:flex-start;box-shadow:0 1px 3px rgba(0,0,0,.06)">'
+          + '<div style="width:30px;height:30px;border-radius:50%;background:' + m.color + '18;display:flex;align-items:center;justify-content:center;font-size:.9rem;flex-shrink:0;margin-top:1px">' + m.icon + '</div>'
+          + '<div style="flex:1;min-width:0">'
+            + '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
+              + '<span style="font-weight:700;font-size:.8rem;color:' + m.color + '">' + m.label + '</span>'
+              + (l.order_id ? '<span onclick="loadAuditLogs(\'' + esc(l.order_id) + '\')" style="font-size:.68rem;color:#2563EB;background:#EFF6FF;padding:1px 7px;border-radius:10px;cursor:pointer;font-weight:600">' + l.order_id + '</span>' : '')
+            + '</div>'
+            + (detail ? '<div style="font-size:.75rem;color:#374151;margin-top:2px">' + esc(detail) + '</div>' : '')
+            + '<div style="font-size:.67rem;color:#9CA3AF;margin-top:3px">' + esc(actor) + ' · ' + time + '</div>'
+          + '</div>'
+          + '</div>';
+      });
+    });
+  }
+
+  html += '</div>';
+  view.innerHTML = html;
+  // Re-focus search if user was typing
+  if (searchVal) {
+    var s = document.getElementById('logSearch');
+    if (s) { s.focus(); s.setSelectionRange(s.value.length, s.value.length); }
+  }
+}
+
+function escAttr(s) { return String(s||'').replace(/"/g,'&quot;'); }
 
 // ══════════════════════════════════════════════════════════
 // STAFF TAB

@@ -26,6 +26,28 @@ async function getSetting(key) {
   return null;
 }
 
+// ── Audit logger — fire-and-forget, never throws ──────────────────────────
+// Inserts a row into order_audit_logs. Called after every mutating action.
+// actor: { userId, role, displayName }   (all optional)
+// meta:  { orderId, action, oldValue, newValue, details:{} }
+async function auditLog({ orderId, action, actor, oldValue, newValue, details } = {}) {
+  try {
+    await supaFetch(`${SUPABASE_URL}/rest/v1/order_audit_logs`, {
+      method: 'POST',
+      headers: { 'Prefer': 'return=minimal' },
+      body: JSON.stringify({
+        order_id:   orderId   || null,
+        action:     action    || 'UNKNOWN',
+        actor_id:   (actor && actor.userId)      || null,
+        actor_name: (actor && actor.displayName) || (actor && actor.role) || null,
+        old_value:  oldValue  != null ? String(oldValue)  : null,
+        new_value:  newValue  != null ? String(newValue)  : null,
+        details:    details   || null,
+      })
+    });
+  } catch (_) { /* never block the main action */ }
+}
+
 // ── Supabase-backed rate limiter (per IP, 60 req/min) ─────────────────────
 // Persists across Vercel cold starts via api_rate_limits table.
 // Falls open (allows request) if Supabase is unreachable — never blocks ops.
@@ -534,6 +556,7 @@ export default async function handler(req, res) {
 
       // Log for Sheets sync
       logSync('dine_in_orders', orderId, 'INSERT');
+      auditLog({ orderId, action: 'ORDER_PLACED', details: { tableNo, customerName, orderType, total, itemCount: orderItems.length } });
 
       return res.status(200).json({
         ok: true,
@@ -638,6 +661,10 @@ export default async function handler(req, res) {
       const allowedRoles = ['KITCHEN', 'CASHIER', 'ADMIN', 'OWNER'];
       if (!allowedRoles.includes(staffRole)) return res.status(403).json({ ok: false, error: 'Unauthorized: insufficient role' });
 
+      // Capture previous status for audit log
+      const prevR = await supaFetch(`${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=status&limit=1`);
+      const prevStatus = (prevR.ok && prevR.data && prevR.data[0]) ? prevR.data[0].status : null;
+
       const patch = { status: newStatus };
       if (newStatus === 'CANCELLED' && cancelReason) patch.cancel_reason = cancelReason;
 
@@ -645,6 +672,7 @@ export default async function handler(req, res) {
       if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to update status' });
 
       logSync('dine_in_orders', orderId, 'UPDATE');
+      auditLog({ orderId, action: 'STATUS_CHANGED', actor: { userId, role: staffRole }, oldValue: prevStatus, newValue: newStatus });
       return res.status(200).json({ ok: true, orderId, status: newStatus });
     }
 
@@ -664,6 +692,7 @@ export default async function handler(req, res) {
       if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to delete order' });
 
       logSync('dine_in_orders', orderId, 'DELETE');
+      auditLog({ orderId, action: 'ORDER_DELETED', actor: { userId: body.userId, role: user && user.role, displayName: user && user.display_name } });
       return res.status(200).json({ ok: true, orderId });
     }
 
@@ -717,6 +746,7 @@ export default async function handler(req, res) {
         { order_id: `eq.${encodeURIComponent(orderId)}` }
       );
       if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to update payment method' });
+      auditLog({ orderId, action: 'PAYMENT_SET', actor: { userId: body.userId, role: user && user.role, displayName: user && user.display_name }, newValue: method, details: { notes: body.notes || null } });
       return res.status(200).json({ ok: true, orderId, method, split: parts.length === 2 });
     }
 
@@ -758,6 +788,7 @@ export default async function handler(req, res) {
           { order_id: `eq.${encodeURIComponent(orderId)}` }
         );
         if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to remove discount' });
+        auditLog({ orderId, action: 'DISCOUNT_REMOVED', actor: { userId: body.userId, role: user && user.role, displayName: user && user.display_name } });
         return res.status(200).json({ ok: true, orderId, discountRemoved: true });
       }
 
@@ -788,6 +819,7 @@ export default async function handler(req, res) {
         { order_id: `eq.${encodeURIComponent(orderId)}` }
       );
       if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to apply discount' });
+      auditLog({ orderId, action: 'DISCOUNT_APPLIED', actor: { userId: body.userId, role: user && user.role, displayName: user && user.display_name }, newValue: type, details: { discountAmount, discountedTotal, note: body.note || null } });
       return res.status(200).json({ ok: true, orderId, type, discountAmount, discountedTotal, total });
     }
 
@@ -902,6 +934,7 @@ export default async function handler(req, res) {
       await supa('PATCH', 'dine_in_orders', { subtotal, service_charge: svcCharge, vat_amount: vatAmt2, total }, { order_id: `eq.${orderId}` });
 
       logSync('dine_in_orders', orderId, 'UPDATE');
+      auditLog({ orderId, action: 'ORDER_EDITED', actor: { userId: body.userId, role: user && user.role, displayName: user && user.display_name }, details: { newTotal: total, itemCount: newItems.length } });
       return res.status(200).json({ ok: true, orderId, subtotal, serviceCharge: svcCharge, total });
     }
 
@@ -992,6 +1025,7 @@ export default async function handler(req, res) {
       }));
       await supa('POST', 'dine_in_order_items', itemRows);
       logSync('dine_in_orders', orderId, 'INSERT');
+      auditLog({ orderId, action: 'PLATFORM_ORDER_PLACED', actor: { userId: body.userId }, details: { platform: body.platform, total } });
 
       return res.status(200).json({ ok: true, orderId, total, subtotal });
     }
@@ -1535,6 +1569,19 @@ export default async function handler(req, res) {
     }
 
     // ── getStaff ───────────────────────────────────────────────────────────
+    // ── getAuditLogs ───────────────────────────────────────────────────────
+    if (action === 'getAuditLogs') {
+      const authA = await requireAdminRole(body);
+      if (!authA.ok) return res.status(403).json({ ok: false, error: authA.error });
+      const orderId = body.orderId ? String(body.orderId).trim() : null;
+      const limit   = Math.min(parseInt(body.limit) || 100, 500);
+      let url = `${SUPABASE_URL}/rest/v1/order_audit_logs?order=created_at.desc&limit=${limit}`;
+      if (orderId) url += `&order_id=eq.${encodeURIComponent(orderId)}`;
+      const r = await supaFetch(url);
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to fetch audit logs' });
+      return res.status(200).json({ ok: true, logs: r.data || [] });
+    }
+
     if (action === 'getStaff') {
       const authS = await requireAdminRole(body);
       if (!authS.ok) return res.status(403).json({ ok: false, error: authS.error });
