@@ -522,6 +522,13 @@ function renderOrders(orders) {
   orders.forEach(order => {
     let card = main.querySelector(`.order-card[data-id="${order.orderId}"]`);
     if (card) {
+      // Force rebuild if prep UI is missing (e.g. after deployment)
+      const hasPrepUI = card.querySelector('.item-check') !== null;
+      if (!hasPrepUI) {
+        const newCard = buildCard(order);
+        card.replaceWith(newCard);
+        return;
+      }
       // Check if prep state changed (e.g. another device tapped an item)
       const existingPrepped = [...card.querySelectorAll('.item-row-done')].length;
       const newPrepped = order.items.filter(it => it.prepared).length;
