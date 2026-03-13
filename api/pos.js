@@ -583,17 +583,19 @@ export default async function handler(req, res) {
 
     // ── placeOrder ─────────────────────────────────────────────────────────
     if (action === 'placeOrder') {
-      const tableNo      = String(body.tableNo || '1').trim();
+      const isStaffOrder = body.staffOrder === true;
+      const rawTableNo   = body.tableNo;
+      const tableNo      = rawTableNo != null ? String(rawTableNo).trim() : '0';
       const tableToken   = String(body.tableToken || '').trim();
       const customerName = String(body.customerName || 'Guest').trim().substring(0, 100);
       const notes        = String(body.notes || '').trim().substring(0, 500);
-      const orderType    = String(body.orderType || 'DINE-IN').toUpperCase();
+      const orderType    = String(body.orderType || 'DINE-IN').toUpperCase().replace('_','-');
       const items        = Array.isArray(body.items) ? body.items : [];
 
       if (items.length === 0) return res.status(400).json({ ok: false, error: 'Order must have at least one item' });
 
       // Validate table token against DB (skip for take-out with no tableNo)
-      if (tableToken) {
+      if (tableToken && !isStaffOrder && tableToken !== 'staff' && tableToken !== 'takeout') {
         const tokenR = await supaFetch(
           `${SUPABASE_URL}/rest/v1/cafe_tables?table_number=eq.${encodeURIComponent(tableNo)}&qr_token=eq.${encodeURIComponent(tableToken)}&select=table_number`
         );

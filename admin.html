@@ -638,17 +638,61 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 .po-submit-btn:disabled { opacity:.4; cursor:not-allowed }
 .po-submit-btn:active:not(:disabled) { background:var(--forest-light) }
 
-/* Fab Button */
-.fab-platform {
+/* Fab Speed-dial */
+.fab-wrap {
   position:fixed; bottom:24px; right:24px; z-index:150;
+  display:flex; flex-direction:column; align-items:flex-end; gap:10px;
+}
+.fab-main {
   width:56px; height:56px; border-radius:50%;
   background:var(--terra); color:#fff; border:none;
   font-size:1.5rem; cursor:pointer;
   box-shadow:0 4px 16px rgba(196,112,75,.4);
   display:flex; align-items:center; justify-content:center;
-  transition:transform .15s;
+  transition:transform .15s, background .15s;
+  position:relative; z-index:2;
 }
-.fab-platform:active { transform:scale(.92) }
+.fab-main:active { transform:scale(.92) }
+.fab-main.open { background:var(--forest-deep); transform:rotate(45deg) }
+.fab-menu {
+  display:none; flex-direction:column; align-items:flex-end; gap:8px;
+}
+.fab-menu.open { display:flex }
+.fab-menu-item {
+  display:flex; align-items:center; gap:10px; cursor:pointer;
+  background:none; border:none; padding:0; font-family:var(--font-body);
+}
+.fab-menu-label {
+  background:#fff; color:var(--forest-deep); border-radius:10px;
+  padding:6px 14px; font-size:.82rem; font-weight:700;
+  box-shadow:0 2px 8px rgba(0,0,0,.12);
+  white-space:nowrap;
+}
+.fab-menu-icon {
+  width:44px; height:44px; border-radius:50%; border:none;
+  display:flex; align-items:center; justify-content:center;
+  font-size:1.2rem; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.15);
+}
+.fab-icon-pos { background:var(--forest); color:#fff; }
+.fab-icon-platform { background:var(--terra); color:#fff; }
+/* ── Staff POS overlay (reuses po- CSS) ─────────────────────── */
+.sp-type-btn {
+  flex:1; padding:14px 8px; border-radius:var(--r-md); border:2px solid var(--mist);
+  background:var(--white); font-family:var(--font-body); font-size:.85rem; font-weight:700;
+  cursor:pointer; text-align:center; transition:all .15s;
+}
+.sp-type-btn.active { border-color:var(--forest); background:var(--forest); color:#fff }
+.sp-table-grid {
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(72px,1fr)); gap:8px; margin-bottom:14px;
+}
+.sp-tbl-btn {
+  padding:10px 4px; border-radius:10px; border:1.5px solid var(--mist);
+  background:var(--white); font-size:.78rem; font-weight:700; color:var(--forest-deep);
+  cursor:pointer; text-align:center; transition:all .15s; font-family:var(--font-body);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.sp-tbl-btn.active { border-color:var(--forest); background:var(--forest); color:#fff }
+.sp-tbl-btn.occupied { border-color:#f59e0b; background:#fffbeb; color:#92400e }
 /* ── Menu Manager ─────────────────────────────────────── */
 .mm-cat-btn {
   flex-shrink:0; padding:6px 14px; border-radius:20px;
@@ -1179,8 +1223,81 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
     </div>
   </div>
 
-  <!-- FAB: New Platform Order -->
-  <button class="fab-platform" onclick="openPlatformOrder()" title="New Platform Order">+</button>
+  <!-- FAB Speed-dial: New Order -->
+  <div class="fab-wrap" id="fabWrap" style="display:none">
+    <div class="fab-menu" id="fabMenu">
+      <button class="fab-menu-item" onclick="closeFab();openStaffPOS()">
+        <span class="fab-menu-label">🏪 Walk-up Order</span>
+        <span class="fab-menu-icon fab-icon-pos">🛒</span>
+      </button>
+      <button class="fab-menu-item" onclick="closeFab();openPlatformOrder()">
+        <span class="fab-menu-label">📦 Platform Order</span>
+        <span class="fab-menu-icon fab-icon-platform">📱</span>
+      </button>
+    </div>
+    <button class="fab-main" id="fabMain" onclick="toggleFab()">＋</button>
+  </div>
+
+  <!-- ═══ STAFF POS OVERLAY ═══ -->
+  <div class="po-overlay" id="spOverlay">
+    <div class="po-modal">
+      <div class="po-header">
+        <div class="po-header-title">🛒 New Walk-up Order</div>
+        <button class="po-close" onclick="closeStaffPOS()">&times;</button>
+      </div>
+      <div class="po-body" id="spBody">
+
+        <!-- Order Type -->
+        <div style="display:flex;gap:8px;margin-bottom:16px">
+          <button class="sp-type-btn active" id="spTypeDineIn" onclick="spSelectType('DINE_IN')">🪑 Dine-in</button>
+          <button class="sp-type-btn" id="spTypeTakeOut" onclick="spSelectType('TAKE_OUT')">🥡 Take-out</button>
+        </div>
+
+        <!-- Table selector (dine-in only) -->
+        <div id="spTableSection" style="margin-bottom:14px">
+          <div style="font-size:.75rem;font-weight:700;color:var(--timber);margin-bottom:8px;text-transform:uppercase;letter-spacing:.4px">Select Table</div>
+          <div class="sp-table-grid" id="spTableGrid"></div>
+        </div>
+
+        <!-- Customer Name -->
+        <div style="margin-bottom:14px">
+          <div style="font-size:.75rem;font-weight:700;color:var(--timber);margin-bottom:6px;text-transform:uppercase;letter-spacing:.4px">Customer Name <span style="color:#94a3b8;font-weight:400;text-transform:none">(optional)</span></div>
+          <input id="spCustomerName" placeholder="e.g. Maria, Table 3 Group" class="po-ref-input" style="width:100%;box-sizing:border-box">
+        </div>
+
+        <!-- Category filter -->
+        <div style="font-size:.75rem;font-weight:700;color:var(--timber);margin-bottom:8px;text-transform:uppercase;letter-spacing:.4px">Menu</div>
+        <div class="po-cats" id="spCats"></div>
+
+        <!-- Menu grid -->
+        <div class="po-menu-grid" id="spMenuGrid"></div>
+
+        <!-- Cart -->
+        <div class="po-cart" id="spCart" style="display:none">
+          <div class="po-cart-title">🛒 Order Items</div>
+          <div id="spCartItems"></div>
+        </div>
+
+        <!-- Notes -->
+        <div style="margin-top:10px">
+          <input id="spNotes" placeholder="Special instructions (optional)" class="po-ref-input" style="width:100%;box-sizing:border-box">
+        </div>
+      </div>
+
+      <!-- Footer with totals -->
+      <div class="po-cart-footer" id="spFooter" style="display:none">
+        <div style="font-size:.78rem;color:var(--timber);margin-bottom:4px">
+          <div style="display:flex;justify-content:space-between"><span>Subtotal</span><span id="spSubtotal">₱0</span></div>
+          <div style="display:flex;justify-content:space-between" id="spServiceRow"><span>Service Charge (10%)</span><span id="spService">₱0</span></div>
+        </div>
+        <div class="po-cart-total">
+          <span>Total</span>
+          <span id="spTotal">₱0</span>
+        </div>
+        <button class="po-submit-btn" id="spSubmitBtn" onclick="submitStaffOrder()">✅ Place Order</button>
+      </div>
+    </div>
+  </div>
 
 </div>
 
@@ -1506,7 +1623,7 @@ function applyRoleUI() {
   
   // FAB (New Platform Order): SERVER, ADMIN, OWNER
   var canCreateOrder = (role !== 'KITCHEN');
-  document.querySelector('.fab-platform').style.display = canCreateOrder ? '' : 'none';
+  document.getElementById('fabWrap').style.display = canCreateOrder ? '' : 'none';
   
   // Quick links (Payments Sheet): SERVER, ADMIN, OWNER
   var canViewPayments = (role !== 'KITCHEN');
@@ -2814,6 +2931,237 @@ var poSelectedPlatform = 'GRAB';
 var poSelectedCat = 'ALL';
 var poAddingItem = null;  // item being configured (size/sugar)
 
+// ══════════════════════════════════════════════════════════
+// FAB SPEED-DIAL
+// ══════════════════════════════════════════════════════════
+var _fabOpen = false;
+function toggleFab() {
+  _fabOpen = !_fabOpen;
+  document.getElementById('fabMenu').classList.toggle('open', _fabOpen);
+  document.getElementById('fabMain').classList.toggle('open', _fabOpen);
+}
+function closeFab() {
+  _fabOpen = false;
+  document.getElementById('fabMenu').classList.remove('open');
+  document.getElementById('fabMain').classList.remove('open');
+}
+// Close fab on outside click
+document.addEventListener('click', function(e) {
+  var wrap = document.getElementById('fabWrap');
+  if (wrap && !wrap.contains(e.target)) closeFab();
+});
+
+// ══════════════════════════════════════════════════════════
+// STAFF POS — Walk-up Order
+// ══════════════════════════════════════════════════════════
+var spCart = [];
+var spOrderType = 'DINE_IN';
+var spTableNo = '';
+var spSelectedCat = 'ALL';
+var spAddingItem = null;
+var spMenuItems = [];
+
+function openStaffPOS() {
+  spCart = []; spOrderType = 'DINE_IN'; spTableNo = ''; spSelectedCat = 'ALL';
+  document.getElementById('spCustomerName').value = '';
+  document.getElementById('spNotes').value = '';
+  document.getElementById('spFooter').style.display = 'none';
+  document.getElementById('spCart').style.display = 'none';
+  document.getElementById('spOverlay').classList.add('open');
+  spSelectType('DINE_IN');
+  spLoadMenu();
+}
+
+function closeStaffPOS() {
+  document.getElementById('spOverlay').classList.remove('open');
+}
+
+function spSelectType(type) {
+  spOrderType = type;
+  spTableNo = '';
+  document.getElementById('spTypeDineIn').classList.toggle('active', type === 'DINE_IN');
+  document.getElementById('spTypeTakeOut').classList.toggle('active', type === 'TAKE_OUT');
+  var tblSection = document.getElementById('spTableSection');
+  if (tblSection) tblSection.style.display = type === 'DINE_IN' ? '' : 'none';
+  if (type === 'DINE_IN') spRenderTables();
+  spUpdateFooter();
+}
+
+function spRenderTables() {
+  var grid = document.getElementById('spTableGrid');
+  if (!grid) return;
+  // Map occupied tables
+  var occupied = {};
+  allOrders.forEach(function(o) {
+    if (['NEW','PREPARING','READY'].includes(o.status) && !o.isTest && o.tableNo) occupied[String(o.tableNo)] = true;
+  });
+  var tables = _allTables.length > 0 ? _allTables : [];
+  grid.innerHTML = tables.map(function(tbl) {
+    var tno = String(tbl.table_number);
+    var name = tbl.table_name || ('Table ' + tno);
+    var isOcc = !!occupied[tno];
+    var isActive = spTableNo === tno;
+    var cls = 'sp-tbl-btn' + (isActive ? ' active' : isOcc ? ' occupied' : '');
+    return '<button class="' + cls + '" onclick="spSelectTable(\'' + tno + '\')" title="' + esc(name) + '">' +
+      esc(name) + (isOcc ? '<br><span style="font-size:.58rem">🔴 busy</span>' : '') +
+    '</button>';
+  }).join('');
+}
+
+function spSelectTable(tno) {
+  spTableNo = tno;
+  spRenderTables();
+  spUpdateFooter();
+}
+
+async function spLoadMenu() {
+  if (spMenuItems.length === 0) {
+    var r = await api('getMenu', {});
+    if (r.ok) spMenuItems = r.items || [];
+  }
+  spRenderCats();
+  spRenderMenu();
+}
+
+function spRenderCats() {
+  var cats = ['ALL'];
+  spMenuItems.forEach(function(it) { if (it.category && cats.indexOf(it.category) < 0) cats.push(it.category); });
+  document.getElementById('spCats').innerHTML = cats.map(function(c) {
+    return '<button class="po-cat-btn' + (spSelectedCat===c?' active':'') + '" onclick="spSetCat(\'' + esc(c) + '\')">' +
+      (c==='ALL' ? '🍽️ All' : esc(c)) + '</button>';
+  }).join('');
+}
+
+function spSetCat(c) { spSelectedCat = c; spRenderCats(); spRenderMenu(); }
+
+function spRenderMenu() {
+  var filtered = spMenuItems.filter(function(it) {
+    return spSelectedCat === 'ALL' || it.category === spSelectedCat;
+  });
+  document.getElementById('spMenuGrid').innerHTML = filtered.map(function(it) {
+    var priceStr = it.hasSizes ? ('₱' + it.priceShort + '–₱' + it.priceTall) : ('₱' + it.price);
+    return '<div class="po-menu-item" onclick="spAddItem(\'' + esc(it.code) + '\')">' +
+      '<div class="po-menu-item-cat">' + esc(it.category||'') + '</div>' +
+      '<div class="po-menu-item-name">' + esc(it.name) + '</div>' +
+      '<div class="po-menu-item-price">' + priceStr + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function spAddItem(code) {
+  var item = spMenuItems.find(function(it){ return it.code === code; });
+  if (!item) return;
+  spAddingItem = { code:item.code, name:item.name, hasSizes:item.hasSizes, hasSugar:item.hasSugar,
+    price:item.price, priceShort:item.priceShort, priceMedium:item.priceMedium, priceTall:item.priceTall,
+    size:'', sugarLevel:'', qty:1 };
+  // Redirect po-popup callbacks to sp handlers
+  _spPopupMode = true;
+  if (item.hasSizes) showSizePopup();
+  else if (item.hasSugar) showSugarPopup();
+  else spFinishAdd();
+}
+
+var _spPopupMode = false;
+
+function spFinishAdd() {
+  _spPopupMode = false;
+  var it = spAddingItem;
+  if (!it) return;
+  var price = it.size === 'Short' ? it.priceShort : it.size === 'Medium' ? it.priceMedium : it.size === 'Tall' ? it.priceTall : it.price;
+  // Check if same item+size+sugar already in cart
+  var existing = spCart.find(function(c) { return c.code===it.code && c.size===it.size && c.sugarLevel===it.sugarLevel; });
+  if (existing) { existing.qty++; }
+  else { spCart.push({ code:it.code, name:it.name, size:it.size, sugarLevel:it.sugarLevel, price:price, qty:1 }); }
+  spAddingItem = null;
+  spRenderCart();
+}
+
+function spRenderCart() {
+  var cartEl = document.getElementById('spCart');
+  var itemsEl = document.getElementById('spCartItems');
+  if (spCart.length === 0) { cartEl.style.display='none'; spUpdateFooter(); return; }
+  cartEl.style.display = '';
+  itemsEl.innerHTML = spCart.map(function(it, idx) {
+    var opts = [it.size, it.sugarLevel].filter(Boolean).join(' · ');
+    return '<div class="po-cart-item">' +
+      '<div style="flex:1">' +
+        '<div class="po-cart-item-name">' + esc(it.name) + '</div>' +
+        (opts ? '<div class="po-cart-item-opts">' + esc(opts) + '</div>' : '') +
+      '</div>' +
+      '<div class="po-cart-qty">' +
+        '<button onclick="spQty(' + idx + ',-1)">−</button>' +
+        '<span style="font-size:.82rem;font-weight:700;min-width:20px;text-align:center">' + it.qty + '</span>' +
+        '<button onclick="spQty(' + idx + ',1)">+</button>' +
+      '</div>' +
+      '<div class="po-cart-item-price">₱' + (it.price * it.qty).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2}) + '</div>' +
+      '<span class="po-cart-remove" onclick="spRemove(' + idx + ')">✕</span>' +
+    '</div>';
+  }).join('');
+  spUpdateFooter();
+}
+
+function spQty(idx, delta) {
+  spCart[idx].qty += delta;
+  if (spCart[idx].qty <= 0) spCart.splice(idx, 1);
+  spRenderCart();
+}
+function spRemove(idx) { spCart.splice(idx,1); spRenderCart(); }
+
+function spUpdateFooter() {
+  var footer = document.getElementById('spFooter');
+  if (spCart.length === 0) { footer.style.display='none'; return; }
+  var subtotal = spCart.reduce(function(s,it){ return s + it.price*it.qty; }, 0);
+  var svcCharge = spOrderType === 'DINE_IN' ? subtotal * 0.10 : 0;
+  var total = subtotal + svcCharge;
+  document.getElementById('spSubtotal').textContent = '₱' + subtotal.toFixed(2);
+  document.getElementById('spService').textContent = '₱' + svcCharge.toFixed(2);
+  document.getElementById('spTotal').textContent = '₱' + total.toFixed(2);
+  var svcRow = document.getElementById('spServiceRow');
+  if (svcRow) svcRow.style.display = spOrderType === 'DINE_IN' ? '' : 'none';
+  footer.style.display = '';
+}
+
+async function submitStaffOrder() {
+  if (spCart.length === 0) { showToast('Add items to cart first', 'error'); return; }
+  if (spOrderType === 'DINE_IN' && !spTableNo) { showToast('Please select a table', 'error'); return; }
+
+  var btn = document.getElementById('spSubmitBtn');
+  btn.disabled = true; btn.textContent = '⏳ Placing…';
+
+  var subtotal = spCart.reduce(function(s,it){ return s + it.price*it.qty; }, 0);
+  var svcCharge = spOrderType === 'DINE_IN' ? Math.round(subtotal * 10) / 100 : 0;
+  var total = Math.round((subtotal + svcCharge) * 100) / 100;
+
+  var items = spCart.map(function(it) {
+    return { code:it.code, name:it.name, price:it.price, qty:it.qty,
+             size:it.size||null, sugarLevel:it.sugarLevel||null };
+  });
+
+  var payload = {
+    tableNo: spOrderType === 'DINE_IN' ? parseInt(spTableNo) : null,
+    tableToken: spOrderType === 'DINE_IN' ? ((_allTables.find(function(t){return String(t.table_number)===spTableNo;})||{}).qr_token || 'staff') : 'takeout',
+    orderType: spOrderType,
+    customerName: (document.getElementById('spCustomerName').value||'').trim() || 'Staff',
+    notes: (document.getElementById('spNotes').value||'').trim(),
+    items: items,
+    subtotal: subtotal,
+    serviceCharge: svcCharge,
+    total: total,
+    staffOrder: true
+  };
+
+  var r = await api('placeOrder', payload);
+  btn.disabled = false; btn.textContent = '✅ Place Order';
+
+  if (r.ok) {
+    closeStaffPOS();
+    showToast('✅ Order ' + (r.orderId||'') + ' placed!', 'success');
+    await loadOrders();
+  } else {
+    showToast('❌ ' + (r.error||'Failed to place order'), 'error');
+  }
+}
+
 function openPlatformOrder() {
   poCart = [];
   poSelectedPlatform = 'GRAB';
@@ -2908,7 +3256,7 @@ function poAddItem(code) {
 }
 
 function showSizePopup() {
-  var it = poAddingItem;
+  var it = _spPopupMode ? spAddingItem : poAddingItem;
   var html = '<div class="po-popup-title">' + esc(it.name) + '</div>'
     + '<div class="po-popup-sub">Choose size</div>'
     + '<div class="po-option" onclick="poSelectSize(\'Short\',' + it.priceShort + ')">'
@@ -2926,19 +3274,20 @@ function showSizePopup() {
 }
 
 function poSelectSize(size, price) {
-  poAddingItem.size = size;
-  poAddingItem.price = price;
+  var item = _spPopupMode ? spAddingItem : poAddingItem;
+  item.size = size;
+  item.price = price;
   document.getElementById('poPopup').classList.remove('open');
 
-  if (poAddingItem.hasSugar) {
+  if (item.hasSugar) {
     setTimeout(showSugarPopup, 200);
   } else {
-    poFinishAdd();
+    _spPopupMode ? spFinishAdd() : poFinishAdd();
   }
 }
 
 function showSugarPopup() {
-  var it = poAddingItem;
+  var it = _spPopupMode ? spAddingItem : poAddingItem;
   var sizeLabel = it.size ? ' · ' + it.size : '';
   var html = '<div class="po-popup-title">' + esc(it.name) + '</div>'
     + '<div class="po-popup-sub">₱' + it.price + sizeLabel + ' — Choose sugar level</div>'
@@ -2952,12 +3301,35 @@ function showSugarPopup() {
 }
 
 function poSelectSugar(level) {
-  poAddingItem.sugarLevel = level;
+  var item = _spPopupMode ? spAddingItem : poAddingItem;
+  item.sugarLevel = level;
   document.getElementById('poPopup').classList.remove('open');
-  poFinishAdd();
+  _spPopupMode ? spFinishAdd() : poFinishAdd();
 }
 
 function poFinishAdd() {
+  // Check if same item+size+sugar exists in cart → increment qty
+  var existing = poCart.find(function(c) {
+    return c.code === poAddingItem.code && c.size === poAddingItem.size && c.sugarLevel === poAddingItem.sugarLevel;
+  });
+
+  if (existing) {
+    existing.qty++;
+  } else {
+    poCart.push({
+      code: poAddingItem.code,
+      name: poAddingItem.name,
+      size: poAddingItem.size,
+      sugarLevel: poAddingItem.sugarLevel,
+      price: poAddingItem.price,
+      qty: 1
+    });
+  }
+
+  poAddingItem = null;
+  renderPoCart();
+}
+
   // Check if same item+size+sugar exists in cart → increment qty
   var existing = poCart.find(function(c) {
     return c.code === poAddingItem.code && c.size === poAddingItem.size && c.sugarLevel === poAddingItem.sugarLevel;
