@@ -4351,7 +4351,9 @@ function openChangePinModal() {
     staffRow.style.display   = 'block';
     currentRow.style.display = 'none';
     // Pre-select logged-in user but allow changing others
-    document.getElementById('changePinTarget').value = currentUser.userId || 'USR_001';
+    var sel = document.getElementById('changePinTarget');
+    sel.value = currentUser.userId || 'USR_001';
+    if (sel.selectedIndex < 0) sel.selectedIndex = 0;
   } else {
     // Non-admin: can only change own PIN, must verify current
     staffRow.style.display   = 'none';
@@ -4476,10 +4478,10 @@ document.addEventListener('click', function(e) {
       <div id="changePinStaffRow">
         <label style="font-size:.78rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">CHANGE PIN FOR</label>
         <select id="changePinTarget" style="width:100%;border:1.5px solid var(--mist);border-radius:8px;padding:10px 12px;font-size:.9rem;outline:none;background:#fff;box-sizing:border-box">
-          <option value="USR_001">Owner</option>
-          <option value="USR_002">Admin</option>
-          <option value="USR_003">Cashier</option>
-          <option value="USR_004">Kitchen</option>
+          <option value="USR_001">Owner (PIN: 999999)</option>
+          <option value="USR_002">Admin (PIN: 12345678)</option>
+          <option value="USR_003">Cashier (PIN: 5678)</option>
+          <option value="USR_004">Kitchen (PIN: 9012)</option>
         </select>
       </div>
       <div id="changePinCurrentRow" style="display:none">
