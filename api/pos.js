@@ -935,21 +935,25 @@ export default async function handler(req, res) {
       }
       const targetUser = targetR.data[0];
 
-      // Auth check: either requester is OWNER/ADMIN, or they provide correct currentPin
+      // Auth check:
+      // 1. OWNER/ADMIN changing any PIN (including their own) — always allowed, no currentPin needed
+      // 2. CASHIER/KITCHEN changing their own PIN — must provide currentPin
       const requesterId = String(body.userId || '').trim();
       let authorized = false;
+      let requesterRole = null;
 
-      if (requesterId && requesterId !== targetUserId) {
-        // Another user is changing the PIN — must be OWNER or ADMIN
+      if (requesterId) {
         const reqR = await supaFetch(
           `${SUPABASE_URL}/rest/v1/staff_users?user_id=eq.${encodeURIComponent(requesterId)}&active=eq.true&select=role`
         );
-        if (reqR.ok && reqR.data?.length) {
-          const role = reqR.data[0].role;
-          if (role === 'OWNER' || role === 'ADMIN') authorized = true;
-        }
-      } else if (currentPin) {
-        // User changing their own PIN — verify current PIN
+        if (reqR.ok && reqR.data?.length) requesterRole = reqR.data[0].role;
+      }
+
+      if (requesterRole === 'OWNER' || requesterRole === 'ADMIN') {
+        // OWNER/ADMIN can change any PIN — no current PIN required
+        authorized = true;
+      } else if (requesterId === targetUserId && currentPin) {
+        // Non-admin changing their own PIN — must verify current PIN
         authorized = await bcrypt.compare(currentPin, targetUser.pin_hash);
         if (!authorized) return res.status(401).json({ ok: false, error: 'Current PIN is incorrect' });
       }
