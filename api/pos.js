@@ -359,9 +359,12 @@ function invalidateMenuCache() { menuCache.public = null; menuCache.admin = null
 
 // ── Admin role guard ──────────────────────────────────────────────────────
 // Verifies that body.userId belongs to an active ADMIN or OWNER staff user.
+const VALID_USER_ID = /^USR_\d{3,6}$/;
+
 async function requireAuth(body, allowedRoles) {
   const userId = String(body.userId || '').trim();
   if (!userId) return { ok: false, error: 'userId is required for this action' };
+  if (!VALID_USER_ID.test(userId)) return { ok: false, error: 'Invalid userId format' };
   const r = await supaFetch(
     `${SUPABASE_URL}/rest/v1/staff_users?user_id=eq.${encodeURIComponent(userId)}&active=eq.true&select=role`
   );
@@ -376,6 +379,7 @@ async function requireAuth(body, allowedRoles) {
 async function requireAdminRole(body) {
   const userId = String(body.userId || '').trim();
   if (!userId) return { ok: false, error: 'userId is required for this action' };
+  if (!VALID_USER_ID.test(userId)) return { ok: false, error: 'Invalid userId format' };
   const r = await supaFetch(
     `${SUPABASE_URL}/rest/v1/staff_users?user_id=eq.${encodeURIComponent(userId)}&active=eq.true&select=role`
   );
