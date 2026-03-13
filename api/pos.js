@@ -702,6 +702,139 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, orderId, method });
     }
 
+    // ── applyDiscount ─────────────────────────────────────────────────────
+    // OWNER/ADMIN/CASHIER can apply PWD, SENIOR, PROMO, or CUSTOM discount
+    if (action === 'applyDiscount') {
+      const authD = await requireAuth(body, ['OWNER','ADMIN','CASHIER']);
+      if (!authD.ok) return res.status(401).json({ ok: false, error: authD.error });
+
+      const orderId   = String(body.orderId || '').trim();
+      const type      = String(body.discountType || '').toUpperCase(); // PWD | SENIOR | BOTH | PROMO | CUSTOM
+      const totalPax  = parseInt(body.totalPax, 10) || 1;
+      const qualPax   = parseInt(body.qualifiedPax, 10) || 1; // how many PWD/Senior
+      const promoPct  = parseFloat(body.promoPct) || 0;       // % for PROMO
+      const customAmt = parseFloat(body.customAmt) || 0;      // fixed ₱ for CUSTOM
+      const note      = String(body.note || '').trim().slice(0, 200);
+
+      if (!orderId) return res.status(400).json({ ok: false, error: 'orderId required' });
+      if (!isValidOrderId(orderId)) return res.status(400).json({ ok: false, error: 'Invalid orderId' });
+      if (!['PWD','SENIOR','BOTH','PROMO','CUSTOM','REMOVE'].includes(type))
+        return res.status(400).json({ ok: false, error: 'Invalid discountType' });
+
+      // Fetch current order total
+      const orderR = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=total`
+      );
+      if (!orderR.ok || !orderR.data?.length)
+        return res.status(404).json({ ok: false, error: 'Order not found' });
+      const total = parseFloat(orderR.data[0].total) || 0;
+
+      let discountAmount = 0;
+      let discountPct = 0;
+
+      if (type === 'REMOVE') {
+        // Remove discount entirely
+        const r = await supa('PATCH', 'dine_in_orders',
+          { discount_type: null, discount_pax: 0, discount_pct: 0, discount_amount: 0,
+            discounted_total: null, discount_note: null, updated_at: new Date().toISOString() },
+          { order_id: `eq.${encodeURIComponent(orderId)}` }
+        );
+        if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to remove discount' });
+        return res.status(200).json({ ok: true, orderId, discountRemoved: true });
+      }
+
+      if (type === 'PWD' || type === 'SENIOR') {
+        // 20% per qualifying person, split equally among all pax
+        const perPerson = total / Math.max(totalPax, 1);
+        discountAmount  = Math.round(perPerson * qualPax * 0.20 * 100) / 100;
+        discountPct     = 20;
+      } else if (type === 'BOTH') {
+        // Both PWD and Senior in same party
+        const perPerson = total / Math.max(totalPax, 1);
+        discountAmount  = Math.round(perPerson * qualPax * 0.20 * 100) / 100;
+        discountPct     = 20;
+      } else if (type === 'PROMO') {
+        discountPct    = Math.min(promoPct, 100);
+        discountAmount = Math.round(total * (discountPct / 100) * 100) / 100;
+      } else if (type === 'CUSTOM') {
+        discountAmount = Math.min(customAmt, total);
+        discountPct    = Math.round((discountAmount / total) * 100 * 100) / 100;
+      }
+
+      const discountedTotal = Math.max(0, Math.round((total - discountAmount) * 100) / 100);
+
+      const r = await supa('PATCH', 'dine_in_orders',
+        { discount_type: type, discount_pax: qualPax, discount_pct: discountPct,
+          discount_amount: discountAmount, discounted_total: discountedTotal,
+          discount_note: note || null, updated_at: new Date().toISOString() },
+        { order_id: `eq.${encodeURIComponent(orderId)}` }
+      );
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to apply discount' });
+      return res.status(200).json({ ok: true, orderId, type, discountAmount, discountedTotal, total });
+    }
+
+    // ── getShiftSummary ────────────────────────────────────────────────────
+    // Returns today's sales breakdown by payment method for end-of-day reconciliation
+    if (action === 'getShiftSummary') {
+      const authSh = await requireAuth(body, ['OWNER','ADMIN','CASHIER']);
+      if (!authSh.ok) return res.status(401).json({ ok: false, error: authSh.error });
+
+      // Get timezone from settings (default Asia/Manila)
+      const tz = await getSetting('TIMEZONE') || 'Asia/Manila';
+
+      // Today's date in PH time
+      const nowPH  = new Date(new Date().toLocaleString('en-US', { timeZone: tz }));
+      const y = nowPH.getFullYear(), m = String(nowPH.getMonth()+1).padStart(2,'0'), d = String(nowPH.getDate()).padStart(2,'0');
+      const todayStart = `${y}-${m}-${d}T00:00:00+08:00`;
+      const todayEnd   = `${y}-${m}-${d}T23:59:59+08:00`;
+
+      const ordersR = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/dine_in_orders?created_at=gte.${encodeURIComponent(todayStart)}&created_at=lte.${encodeURIComponent(todayEnd)}&is_test=eq.false&select=status,total,discounted_total,payment_method,payment_status,discount_type,discount_amount,order_type,created_at&order=created_at.asc`
+      );
+      if (!ordersR.ok) return res.status(500).json({ ok: false, error: 'Failed to fetch shift data' });
+
+      const orders = ordersR.data || [];
+      const completed = orders.filter(o => o.status === 'COMPLETED');
+      const cancelled = orders.filter(o => o.status === 'CANCELLED');
+
+      // Payment method breakdown
+      const pmBreakdown = {};
+      let totalRevenue = 0;
+      let discountTotal = 0;
+      completed.forEach(o => {
+        const revenue = parseFloat(o.discounted_total ?? o.total) || 0;
+        totalRevenue += revenue;
+        discountTotal += parseFloat(o.discount_amount) || 0;
+        const pm = o.payment_method || 'UNRECORDED';
+        if (!pmBreakdown[pm]) pmBreakdown[pm] = { count: 0, total: 0 };
+        pmBreakdown[pm].count++;
+        pmBreakdown[pm].total = Math.round((pmBreakdown[pm].total + revenue) * 100) / 100;
+      });
+
+      // Order type split
+      const dineIn  = completed.filter(o => o.order_type === 'DINE-IN').length;
+      const takeOut = completed.filter(o => o.order_type === 'TAKE-OUT').length;
+
+      return res.status(200).json({
+        ok: true,
+        date: `${y}-${m}-${d}`,
+        totalOrders: completed.length,
+        cancelledOrders: cancelled.length,
+        totalRevenue: Math.round(totalRevenue * 100) / 100,
+        totalDiscounts: Math.round(discountTotal * 100) / 100,
+        unrecordedPayments: (pmBreakdown['UNRECORDED']?.count || 0),
+        paymentBreakdown: pmBreakdown,
+        orderTypeSplit: { dineIn, takeOut },
+        orders: completed.map(o => ({
+          orderId: o.order_id,
+          total: o.discounted_total ?? o.total,
+          paymentMethod: o.payment_method || null,
+          discountType: o.discount_type || null,
+          time: o.created_at,
+        }))
+      });
+    }
+
     // ── editOrderItems ─────────────────────────────────────────────────────
     if (action === 'editOrderItems') {
       const orderId = String(body.orderId || '').trim();
