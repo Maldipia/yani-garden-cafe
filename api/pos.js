@@ -1638,9 +1638,40 @@ export default async function handler(req, res) {
       const authR = await requireAuth(body);
       if (!authR.ok) return res.status(401).json({ ok: false, error: authR.error });
       const r = await supaFetch(
-        `${SUPABASE_URL}/rest/v1/cafe_tables?order=table_number.asc&select=table_number,qr_token`
+        `${SUPABASE_URL}/rest/v1/cafe_tables?order=table_number.asc&select=table_number,qr_token,table_name,capacity`
       );
       return res.status(200).json({ ok: true, tables: r.data || [] });
+    }
+
+    // ── updateTable ────────────────────────────────────────────────────────
+    if (action === 'updateTable') {
+      const authR = await requireAdminRole(body);
+      if (!authR.ok) return res.status(401).json({ ok: false, error: authR.error });
+      const { tableNo, tableName, capacity } = body;
+      if (!tableNo) return res.status(400).json({ ok: false, error: 'tableNo required' });
+      const updates = {};
+      if (tableName !== undefined) updates.table_name = String(tableName).trim().slice(0, 50);
+      if (capacity !== undefined) updates.capacity = parseInt(capacity) || 4;
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/cafe_tables?table_number=eq.${encodeURIComponent(tableNo)}`,
+        { method: 'PATCH', body: JSON.stringify(updates) }
+      );
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to update table' });
+      return res.status(200).json({ ok: true });
+    }
+
+    // ── deleteTable ────────────────────────────────────────────────────────
+    if (action === 'deleteTable') {
+      const authR = await requireAdminRole(body);
+      if (!authR.ok) return res.status(401).json({ ok: false, error: authR.error });
+      const { tableNo } = body;
+      if (!tableNo) return res.status(400).json({ ok: false, error: 'tableNo required' });
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/cafe_tables?table_number=eq.${encodeURIComponent(tableNo)}`,
+        { method: 'DELETE' }
+      );
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to delete table' });
+      return res.status(200).json({ ok: true });
     }
 
     // ── addTable ───────────────────────────────────────────────────────────
@@ -1652,7 +1683,9 @@ export default async function handler(req, res) {
         return res.status(400).json({ ok: false, error: 'Invalid table number (1-99)' });
       // Generate random 8-char hex token
       const token = Array.from({length:8}, () => Math.floor(Math.random()*16).toString(16)).join('');
-      const r = await supa('POST', 'cafe_tables', { table_number: tableNo, qr_token: token });
+      const tableName = body.tableName ? String(body.tableName).trim().slice(0,50) : `Table ${tableNo}`;
+      const capacity = parseInt(body.capacity) || 4;
+      const r = await supa('POST', 'cafe_tables', { table_number: tableNo, qr_token: token, table_name: tableName, capacity });
       if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to add table — may already exist' });
       return res.status(200).json({ ok: true, tableNo, token });
     }
