@@ -17,6 +17,15 @@ const SUPABASE_KEY = (() => {
 const SERVICE_CHARGE_RATE = 0.10;
 const ORDER_PREFIX = 'YANI';
 
+// ── Fetch a single setting value from DB ───────────────────────────────────
+async function getSetting(key) {
+  try {
+    const r = await supaFetch(`${SUPABASE_URL}/rest/v1/settings?key=eq.${encodeURIComponent(key)}&select=value&limit=1`);
+    if (r.ok && r.data && r.data.length > 0) return r.data[0].value;
+  } catch (_) {}
+  return null;
+}
+
 // ── Supabase-backed rate limiter (per IP, 60 req/min) ─────────────────────
 // Persists across Vercel cold starts via api_rate_limits table.
 // Falls open (allows request) if Supabase is unreachable — never blocks ops.
@@ -443,7 +452,14 @@ export default async function handler(req, res) {
       if (orderItems.length === 0) return res.status(400).json({ ok: false, error: 'No valid items in order' });
 
       const svcCharge = orderType === 'DINE-IN' ? Math.round(subtotal * SERVICE_CHARGE_RATE * 100) / 100 : 0;
-      const total     = Math.round((subtotal + svcCharge) * 100) / 100;
+      const preTax    = subtotal + svcCharge;
+
+      // VAT — read live from settings table
+      const vatEnabled = (await getSetting('VAT_ENABLED')) === 'true';
+      const vatRate    = parseFloat(await getSetting('VAT_RATE') || '0.12');
+      // VAT-inclusive: vat = preTax × rate / (1 + rate)  ← back-calculate from VAT-inclusive price
+      const vatAmt     = vatEnabled ? Math.round(preTax * (vatRate / (1 + vatRate)) * 100) / 100 : 0;
+      const total      = Math.round(preTax * 100) / 100; // total stays the same; VAT is shown as breakdown
 
       if (total <= 0) return res.status(400).json({ ok: false, error: 'Order total must be greater than zero' });
 
@@ -471,6 +487,7 @@ export default async function handler(req, res) {
           order_type:     orderType,
           subtotal:       subtotal,
           service_charge: svcCharge,
+          vat_amount:     vatAmt,
           total:          total,
           notes:          notes,
           source:         'QR',
@@ -521,6 +538,8 @@ export default async function handler(req, res) {
         orderNo,
         subtotal,
         serviceCharge: svcCharge,
+        vatAmount: vatAmt,
+        vatEnabled,
         total,
       });
     }
@@ -570,6 +589,7 @@ export default async function handler(req, res) {
         orderType:     o.order_type,
         subtotal:      o.subtotal,
         serviceCharge: o.service_charge,
+        vatAmount:     o.vat_amount || 0,
         total:         o.total,
         notes:         o.notes || '',
         source:        o.source || 'QR',
@@ -670,15 +690,19 @@ export default async function handler(req, res) {
         };
       });
 
-      const svcCharge = Math.round(subtotal * SERVICE_CHARGE_RATE * 100) / 100;
-      const total     = Math.round((subtotal + svcCharge) * 100) / 100;
+      const svcCharge  = Math.round(subtotal * SERVICE_CHARGE_RATE * 100) / 100;
+      const preTax2    = subtotal + svcCharge;
+      const vatEnabled2 = (await getSetting('VAT_ENABLED')) === 'true';
+      const vatRate2    = parseFloat(await getSetting('VAT_RATE') || '0.12');
+      const vatAmt2     = vatEnabled2 ? Math.round(preTax2 * (vatRate2 / (1 + vatRate2)) * 100) / 100 : 0;
+      const total       = Math.round(preTax2 * 100) / 100;
 
       // Delete old items and insert new ones
       await supa('DELETE', 'dine_in_order_items', null, { order_id: `eq.${orderId}` });
       if (itemRows.length > 0) await supa('POST', 'dine_in_order_items', itemRows);
 
       // Update order totals
-      await supa('PATCH', 'dine_in_orders', { subtotal, service_charge: svcCharge, total }, { order_id: `eq.${orderId}` });
+      await supa('PATCH', 'dine_in_orders', { subtotal, service_charge: svcCharge, vat_amount: vatAmt2, total }, { order_id: `eq.${orderId}` });
 
       logSync('dine_in_orders', orderId, 'UPDATE');
       return res.status(200).json({ ok: true, orderId, subtotal, serviceCharge: svcCharge, total });
@@ -1322,6 +1346,35 @@ export default async function handler(req, res) {
       );
       if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to fetch staff' });
       return res.status(200).json({ ok: true, users: r.data || [] });
+    }
+
+    // ── getSettings ────────────────────────────────────────────────────────
+    if (action === 'getSettings') {
+      const r = await supaFetch(`${SUPABASE_URL}/rest/v1/settings?order=key.asc&select=key,value,description`);
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to fetch settings' });
+      return res.status(200).json({ ok: true, settings: r.data || [] });
+    }
+
+    // ── updateSetting ──────────────────────────────────────────────────────
+    if (action === 'updateSetting') {
+      const { userId, key, value } = body;
+      const user = await requireAdminRole(userId);
+      if (!user.ok) return res.status(403).json({ ok: false, error: user.error });
+      if (!key) return res.status(400).json({ ok: false, error: 'key is required' });
+      // Validate VAT-specific values
+      if (key === 'VAT_ENABLED' && !['true','false'].includes(value)) {
+        return res.status(400).json({ ok: false, error: 'VAT_ENABLED must be true or false' });
+      }
+      if (key === 'VAT_RATE') {
+        const n = parseFloat(value);
+        if (isNaN(n) || n < 0 || n > 1) return res.status(400).json({ ok: false, error: 'VAT_RATE must be between 0 and 1 (e.g. 0.12 for 12%)' });
+      }
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/settings?key=eq.${encodeURIComponent(key)}`,
+        { method: 'PATCH', body: JSON.stringify({ value: String(value), updated_at: new Date().toISOString() }) }
+      );
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to update setting' });
+      return res.status(200).json({ ok: true, key, value });
     }
 
     // ── Unknown action ─────────────────────────────────────────────────────

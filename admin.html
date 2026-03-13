@@ -1051,7 +1051,65 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 
 </div>
 
-<!-- ═══════════════ MENU ITEM EDIT MODAL ═══════════════ -->
+<!-- ══ SETTINGS VIEW (OWNER only) ══ -->
+<div id="settingsView" style="display:none;padding:16px 16px 100px;max-width:520px;margin:0 auto">
+  <div style="font-weight:800;font-size:1.05rem;color:var(--forest-deep);margin-bottom:16px">⚙️ Cafe Settings</div>
+
+  <!-- VAT Card -->
+  <div style="background:#fff;border-radius:14px;box-shadow:0 2px 12px rgba(0,0,0,.08);padding:20px;margin-bottom:16px">
+    <div style="font-weight:700;font-size:.85rem;color:var(--timber);text-transform:uppercase;letter-spacing:.6px;margin-bottom:14px">🧾 Tax Settings</div>
+
+    <!-- VAT Toggle -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div>
+        <div style="font-weight:700;font-size:.95rem;color:var(--forest-deep)">VAT Computation</div>
+        <div style="font-size:.78rem;color:var(--timber);margin-top:2px">Enable 12% VAT on all orders</div>
+        <div style="font-size:.72rem;color:#e67e22;margin-top:3px;font-weight:600" id="vatStatusNote">Currently: Non-VAT Registered</div>
+      </div>
+      <label style="position:relative;display:inline-block;width:52px;height:28px;cursor:pointer;flex-shrink:0">
+        <input type="checkbox" id="vatToggle" onchange="handleVatToggle(this)" style="opacity:0;width:0;height:0">
+        <span id="vatSlider" style="position:absolute;inset:0;background:#ccc;border-radius:28px;transition:.3s;cursor:pointer">
+          <span id="vatKnob" style="position:absolute;left:3px;bottom:3px;width:22px;height:22px;background:#fff;border-radius:50%;transition:.3s;box-shadow:0 1px 4px rgba(0,0,0,.2)"></span>
+        </span>
+      </label>
+    </div>
+
+    <!-- VAT Rate (shown when VAT enabled) -->
+    <div id="vatRateRow" style="display:none;background:var(--mist-light);border-radius:10px;padding:12px;margin-top:4px">
+      <div style="font-size:.8rem;font-weight:600;color:var(--timber);margin-bottom:6px">VAT Rate</div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <input type="number" id="vatRateInput" min="1" max="30" step="1" value="12"
+          style="width:70px;padding:8px;border:1.5px solid var(--sage);border-radius:8px;font-size:.95rem;font-weight:700;text-align:center"
+          onchange="handleVatRateChange(this)">
+        <span style="font-size:.9rem;font-weight:600;color:var(--forest-deep)">%</span>
+        <span style="font-size:.75rem;color:var(--timber)">(Philippine standard: 12%)</span>
+      </div>
+      <div style="font-size:.72rem;color:var(--timber);margin-top:8px;line-height:1.5">
+        ⚠️ VAT is computed <b>inclusive</b> — shown as breakdown on receipts.<br>
+        Total price does not change; VAT portion is disclosed separately.
+      </div>
+    </div>
+
+    <!-- Receipt Preview -->
+    <div style="margin-top:14px;background:#f9f9f9;border-radius:10px;padding:12px;font-family:monospace;font-size:.75rem;line-height:1.8;color:#333" id="vatPreview">
+      <!-- filled by JS -->
+    </div>
+  </div>
+
+  <!-- Service Charge Card (read-only info) -->
+  <div style="background:#fff;border-radius:14px;box-shadow:0 2px 12px rgba(0,0,0,.08);padding:20px;margin-bottom:16px">
+    <div style="font-weight:700;font-size:.85rem;color:var(--timber);text-transform:uppercase;letter-spacing:.6px;margin-bottom:14px">💳 Service Charge</div>
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-weight:700;color:var(--forest-deep)">10% on Dine-In orders</div>
+        <div style="font-size:.78rem;color:var(--timber);margin-top:2px">Fixed — applied automatically to all dine-in orders</div>
+      </div>
+      <div style="font-size:1.3rem;font-weight:800;color:var(--forest)">10%</div>
+    </div>
+  </div>
+
+  <div id="settingsSaveMsg" style="display:none;text-align:center;padding:10px;border-radius:10px;font-weight:600;font-size:.85rem;margin-top:8px"></div>
+</div>
 <div id="menuEditOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:500;overflow-y:auto;padding:20px 16px">
   <div style="background:#fff;border-radius:16px;max-width:480px;margin:0 auto;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3)">
     <div style="background:var(--forest-deep);color:#fff;padding:18px 20px;display:flex;align-items:center;justify-content:space-between">
@@ -1559,6 +1617,10 @@ function renderFilters() {
   if (currentUser.role === 'ADMIN' || currentUser.role === 'OWNER') {
     tabs.push({ key:'TABLES', label:'🪑 Tables', count:'' });
   }
+  // Settings: OWNER only
+  if (currentUser.role === 'OWNER') {
+    tabs.push({ key:'SETTINGS', label:'⚙️ Settings', count:'' });
+  }
 
   document.getElementById('filterBar').innerHTML = tabs.map(function(t) {
     return '<button class="filter-btn' + (currentFilter===t.key?' active':'') + '" onclick="setFilter(\'' + t.key + '\')">' +
@@ -1590,6 +1652,9 @@ function setFilter(f) {
   var tablesView = document.getElementById('tablesView');
   if (tablesView) tablesView.style.display = 'none';
 
+  var settingsView = document.getElementById('settingsView');
+  if (settingsView) settingsView.style.display = 'none';
+
   if (f === 'PAYMENTS') {
     paymentsView.style.display = 'block';
     loadPayments();
@@ -1607,8 +1672,10 @@ function setFilter(f) {
     loadAnalytics();
   } else if (f === 'TABLES') {
     if (tablesView) tablesView.style.display = 'block';
-    // Fetch fresh orders first so table occupied status is up to date
     loadOrders().then(function() { loadTablesView(); });
+  } else if (f === 'SETTINGS') {
+    if (settingsView) settingsView.style.display = 'block';
+    loadSettings();
   } else {
     orderGrid.style.display = '';
     renderOrders();
@@ -2057,8 +2124,10 @@ function printReceipt(orderId) {
 
   var subtotal = (o.subtotal && typeof o.subtotal === 'number') ? o.subtotal : itemsTotal;
   var serviceCharge = (o.serviceCharge && typeof o.serviceCharge === 'number') ? o.serviceCharge : 0;
+  var vatAmount = (o.vatAmount && typeof o.vatAmount === 'number') ? o.vatAmount : 0;
+  var vatEnabled = vatAmount > 0;
   var grandTotal = subtotal + serviceCharge;
-  
+
   // Calculate service charge percentage dynamically
   var scPct = subtotal > 0 ? ((serviceCharge / subtotal) * 100) : 0;
 
@@ -2158,7 +2227,7 @@ function printReceipt(orderId) {
     '<p>Amadeo, Cavite, Philippines</p>' +
     '<p>TIN: 501-401-857-00005</p>' +
     '<p>Tel: 0967-400-0040</p>' +
-    '<p style="margin-top:1px;">Non-VAT Registered</p>' +
+    '<p style="margin-top:1px;">' + (vatEnabled ? 'VAT Registered' : 'Non-VAT Registered') + '</p>' +
     '</div>' +
 
     '<div class="divider-thick"></div>' +
@@ -2186,6 +2255,7 @@ function printReceipt(orderId) {
     '<div class="total-section">' +
     '<div class="total-row"><span>Subtotal:</span><span>P ' + subtotal.toFixed(2) + '</span></div>' +
     (serviceCharge > 0 ? '<div class="total-row"><span>Service Charge (' + scPct.toFixed(1) + '%):</span><span>P ' + serviceCharge.toFixed(2) + '</span></div>' : '') +
+    (vatEnabled ? '<div class="total-row"><span>VAT (12%, incl.):</span><span>P ' + vatAmount.toFixed(2) + '</span></div>' : '') +
     '<div class="divider-thick"></div>' +
     '<div class="total-row grand"><span>TOTAL:</span><span>P ' + grandTotal.toFixed(2) + '</span></div>' +
     '</div>' +
@@ -4140,6 +4210,86 @@ async function retryAllDead() {
 }
 
 // ══════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════
+// SETTINGS
+// ══════════════════════════════════════════════════════════
+var _settings = {};
+
+async function loadSettings() {
+  var r = await api('getSettings', { userId: currentUser.userId });
+  if (!r.ok) { showToast('Failed to load settings', 'error'); return; }
+  _settings = {};
+  (r.settings || []).forEach(function(s) { _settings[s.key] = s.value; });
+
+  var vatEnabled = _settings['VAT_ENABLED'] === 'true';
+  var vatRate = parseFloat(_settings['VAT_RATE'] || '0.12') * 100;
+
+  // Update toggle
+  var toggle = document.getElementById('vatToggle');
+  if (toggle) toggle.checked = vatEnabled;
+  applyVatToggleUI(vatEnabled, vatRate);
+}
+
+function applyVatToggleUI(enabled, ratePct) {
+  var slider = document.getElementById('vatSlider');
+  var knob = document.getElementById('vatKnob');
+  var rateRow = document.getElementById('vatRateRow');
+  var statusNote = document.getElementById('vatStatusNote');
+  var rateInput = document.getElementById('vatRateInput');
+
+  if (slider) slider.style.background = enabled ? 'var(--forest)' : '#ccc';
+  if (knob) knob.style.left = enabled ? '27px' : '3px';
+  if (rateRow) rateRow.style.display = enabled ? 'block' : 'none';
+  if (statusNote) {
+    statusNote.textContent = enabled ? 'Currently: VAT Registered (12%)' : 'Currently: Non-VAT Registered';
+    statusNote.style.color = enabled ? '#27ae60' : '#e67e22';
+  }
+  if (rateInput && ratePct) rateInput.value = ratePct;
+  renderVatPreview(enabled, ratePct || 12);
+}
+
+function renderVatPreview(enabled, ratePct) {
+  var box = document.getElementById('vatPreview');
+  if (!box) return;
+  var sample = 479, svc = 47.90, total = 526.90;
+  var vatAmt = enabled ? (total * (ratePct / 100) / (1 + ratePct / 100)).toFixed(2) : null;
+  box.innerHTML =
+    '<div style="color:#888;font-size:.7rem;margin-bottom:4px">Receipt preview (sample order ₱526.90):</div>' +
+    'Subtotal:        P 479.00<br>' +
+    'Service Charge:  P  47.90<br>' +
+    (enabled ? '<span style="color:var(--forest);font-weight:700">VAT ('+ratePct+'%, incl.): P  ' + vatAmt + '</span><br>' : '') +
+    '──────────────────────<br>' +
+    '<b>TOTAL:           P 526.90</b><br>' +
+    '<br>' +
+    '<span style="color:#888">' + (enabled ? 'VAT Registered' : 'Non-VAT Registered') + '</span>';
+}
+
+async function handleVatToggle(el) {
+  var enabled = el.checked;
+  var ratePct = parseFloat(document.getElementById('vatRateInput').value) || 12;
+  applyVatToggleUI(enabled, ratePct);
+
+  var r = await api('updateSetting', { userId: currentUser.userId, key: 'VAT_ENABLED', value: String(enabled) });
+  if (!r.ok) {
+    showToast('Failed to save VAT setting', 'error');
+    el.checked = !enabled; // revert
+    applyVatToggleUI(!enabled, ratePct);
+    return;
+  }
+  showToast(enabled ? '✅ VAT enabled — receipts will show VAT breakdown' : '✅ VAT disabled — receipts show Non-VAT Registered', 'success');
+  _settings['VAT_ENABLED'] = String(enabled);
+}
+
+async function handleVatRateChange(el) {
+  var rate = parseFloat(el.value);
+  if (isNaN(rate) || rate < 1 || rate > 30) { showToast('VAT rate must be 1–30%', 'error'); el.value = 12; return; }
+  renderVatPreview(true, rate);
+  var r = await api('updateSetting', { userId: currentUser.userId, key: 'VAT_RATE', value: (rate / 100).toFixed(4) });
+  if (!r.ok) { showToast('Failed to save VAT rate', 'error'); return; }
+  showToast('✅ VAT rate set to ' + rate + '%', 'success');
+  _settings['VAT_RATE'] = (rate / 100).toFixed(4);
+}
+
 // TABLES & RESERVATIONS
 // ══════════════════════════════════════════════════════════
 
