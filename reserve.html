@@ -508,22 +508,15 @@
       <label>Seating Preference <span style="font-weight:400;opacity:.6">(optional)</span></label>
       <div class="pill-group">
         <label class="pill"><input type="radio" name="seating" value="No preference" checked> <span>No preference</span></label>
-        <label class="pill"><input type="radio" name="seating" value="Garden"> <span>🌿 Garden / Outdoor</span></label>
-        <label class="pill"><input type="radio" name="seating" value="Indoor"> <span>🏠 Indoor</span></label>
-        <label class="pill"><input type="radio" name="seating" value="Window"> <span>🪟 Near Window</span></label>
+        <label class="pill"><input type="radio" name="seating" value="Bonfire Area"> <span>🔥 Bonfire Area</span></label>
+        <label class="pill"><input type="radio" name="seating" value="Garden"> <span>🌿 Within the Garden</span></label>
+        <label class="pill"><input type="radio" name="seating" value="Sunset Area (2nd Floor)"> <span>🌅 Sunset Area (2nd Flr)</span></label>
       </div>
     </div>
 
     <div class="field" style="margin-top:16px">
-      <label>Dietary Restrictions <span style="font-weight:400;opacity:.6">(select all that apply)</span></label>
-      <div class="pill-group" id="dietaryGroup">
-        <label class="pill"><input type="checkbox" value="None" checked onchange="handleDietaryNone(this)"> <span>None</span></label>
-        <label class="pill"><input type="checkbox" value="Vegetarian" onchange="handleDietary(this)"> <span>🥦 Vegetarian</span></label>
-        <label class="pill"><input type="checkbox" value="Vegan" onchange="handleDietary(this)"> <span>🌱 Vegan</span></label>
-        <label class="pill"><input type="checkbox" value="Halal" onchange="handleDietary(this)"> <span>☪️ Halal</span></label>
-        <label class="pill"><input type="checkbox" value="Gluten-Free" onchange="handleDietary(this)"> <span>🌾 Gluten-Free</span></label>
-        <label class="pill"><input type="checkbox" value="Nut Allergy" onchange="handleDietary(this)"> <span>🥜 Nut Allergy</span></label>
-      </div>
+      <label>Any Food Allergies? <span style="font-weight:400;opacity:.6">(optional)</span></label>
+      <input type="text" id="dietary" placeholder="e.g. nuts, shellfish, dairy...">
     </div>
   </div>
 
@@ -586,21 +579,6 @@
     document.getElementById('pax').value = paxVal;
   }
 
-  // ── Dietary checkboxes ──
-  function handleDietaryNone(cb) {
-    if (cb.checked) {
-      document.querySelectorAll('#dietaryGroup input[type=checkbox]').forEach(function(c) {
-        if (c.value !== 'None') c.checked = false;
-      });
-    }
-  }
-  function handleDietary(cb) {
-    if (cb.checked) {
-      var noneBox = document.querySelector('#dietaryGroup input[value="None"]');
-      if (noneBox) noneBox.checked = false;
-    }
-  }
-
   // ── Validation ──
   function validate() {
     var ok = true;
@@ -647,12 +625,8 @@
     var occasion = document.querySelector('input[name="occasion"]:checked');
     var seating  = document.querySelector('input[name="seating"]:checked');
 
-    // Dietary
-    var dietaryChecked = Array.from(document.querySelectorAll('#dietaryGroup input[type=checkbox]:checked'))
-      .map(function(c) { return c.value; });
-    var dietary = dietaryChecked.length === 0 || dietaryChecked.includes('None')
-      ? null
-      : dietaryChecked.join(', ');
+    // Allergies
+    var dietary = document.getElementById('dietary').value.trim() || null;
 
     var payload = {
       action:      'createReservation',
@@ -745,9 +719,8 @@
     document.querySelectorAll('input[name="occasion"]').forEach(function(r) { r.checked = false; });
     var noneSeating = document.querySelector('input[name="seating"][value="No preference"]');
     if (noneSeating) noneSeating.checked = true;
-    document.querySelectorAll('#dietaryGroup input').forEach(function(c) {
-      c.checked = c.value === 'None';
-    });
+    var dietaryEl = document.getElementById('dietary');
+    if (dietaryEl) dietaryEl.value = '';
     paxVal = 2;
     document.getElementById('paxDisplay').textContent = 2;
     document.getElementById('pax').value = 2;
