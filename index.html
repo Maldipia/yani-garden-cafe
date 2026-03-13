@@ -1083,6 +1083,7 @@ function apiItemToMenuData(item) {
 
 // MENU_DATA is populated on load; starts empty
 let MENU_DATA = [];
+let ADDONS_DATA = []; // Global add-ons/modifiers loaded from API
 
 // Fallback data used if API fails (prices may be stale)
 const MENU_DATA_FALLBACK = [
@@ -1214,14 +1215,19 @@ function showMenuLoading() {
 
 async function fetchMenuFromAPI() {
   try {
-    var result = await api('getMenu', {});
-    if (result && result.ok && Array.isArray(result.items) && result.items.length > 0) {
-      MENU_DATA = result.items.map(apiItemToMenuData);
+    var [menuResult, addonsResult] = await Promise.all([
+      api('getMenu', {}),
+      api('getAddons', {})
+    ]);
+    if (menuResult && menuResult.ok && Array.isArray(menuResult.items) && menuResult.items.length > 0) {
+      MENU_DATA = menuResult.items.map(apiItemToMenuData);
     } else {
-      // API returned error or empty — use fallback
-      console.warn('Menu API failed, using fallback:', result && result.error);
+      console.warn('Menu API failed, using fallback:', menuResult && menuResult.error);
       MENU_DATA = MENU_DATA_FALLBACK.slice();
       toast('Menu loaded from cache. Prices may vary.', 4000);
+    }
+    if (addonsResult && addonsResult.ok) {
+      ADDONS_DATA = addonsResult.addons || [];
     }
   } catch (e) {
     console.error('fetchMenuFromAPI error:', e);
@@ -1367,14 +1373,39 @@ function addItem(code) {
   var item = MENU_DATA.find(function(m) { return m.code === code });
   if (!item || !item.available) return;
 
-  // No options needed → add directly
-  if (!item.hasSizes && !item.hasSugar) {
-    addToCart(item, null, null, null, item.price);
+  var applicableAddons = ADDONS_DATA.filter(function(a) {
+    return a.applies_to_all || (a.applies_to_codes || []).includes(code);
+  });
+
+  // No options needed and no addons → add directly
+  if (!item.hasSizes && !item.hasSugar && applicableAddons.length === 0) {
+    addToCart(item, null, null, null, item.price, []);
     toast(esc(item.name) + ' added');
     return;
   }
 
-  // Show option selector
+  // No size/sugar but has addons → show addon selector directly
+  if (!item.hasSizes && !item.hasSugar && applicableAddons.length > 0) {
+    var html = '<div class="opt-header">' +
+      '<div class="opt-item-name">' + esc(item.name) + '</div>' +
+      '<div class="opt-item-detail">' + peso(item.price) + '</div>' +
+      '</div>' +
+      '<div class="opt-label">Add-ons <span style="font-weight:400;font-size:.8em;opacity:.7">(optional)</span></div>' +
+      '<div id="addonGroup" style="display:flex;flex-direction:column;gap:6px">';
+    applicableAddons.forEach(function(a) {
+      html += '<button class="opt-btn" data-addon="' + esc(a.addon_code) + '" data-price="' + a.price + '" data-name="' + esc(a.name) + '" onclick="toggleAddon(this)">' +
+        '<div class="opt-btn-radio" style="border-radius:4px"></div>' +
+        '<div class="opt-btn-text"><div class="opt-btn-main">' + esc(a.name) + '</div></div>' +
+        '<div style="font-weight:700;color:var(--terra);font-size:.88rem;white-space:nowrap">+' + peso(a.price) + '</div>' +
+        '</button>';
+    });
+    html += '</div><button class="opt-confirm" onclick="addonConfirm(\'' + esc(item.code) + '\',\'\',\'\',' + item.price + ',\'\')">Add to Cart</button>';
+    document.getElementById('optContent').innerHTML = html;
+    if (!document.getElementById('optModal').classList.contains('open')) openModal('optModal');
+    return;
+  }
+
+  // Show size/sugar selector
   if (item.hasSizes) {
     showSizeSelector(item);
   } else {
@@ -1430,9 +1461,17 @@ function sizeNext(code) {
   if (item.hasSugar) {
     showSugarSelector(item, sizeKey, sizeLabel, price);
   } else {
-    addToCart(item, sizeKey, sizeLabel, null, price);
-    closeModal('optModal');
-    toast(esc(item.name) + ' added');
+    // No sugar — check for addons before adding
+    var applicableAddons = ADDONS_DATA.filter(function(a) {
+      return a.applies_to_all || (a.applies_to_codes || []).includes(code);
+    });
+    if (applicableAddons.length > 0) {
+      showAddonSelector(item, sizeKey, sizeLabel, null, price, applicableAddons);
+    } else {
+      addToCart(item, sizeKey, sizeLabel, null, price, []);
+      closeModal('optModal');
+      toast(esc(item.name) + ' added');
+    }
   }
 }
 
@@ -1476,33 +1515,104 @@ function sugarConfirm(code, sizeKey, sizeLabel, price) {
   var sugarId = sel.dataset.sugar;
   var sugarObj = SUGAR_LEVELS.find(function(s) { return s.id === sugarId });
 
-  addToCart(item, sizeKey || null, sizeLabel || null, sugarObj, price);
+  // Check if there are addons for this item
+  var applicableAddons = ADDONS_DATA.filter(function(a) {
+    return a.applies_to_all || (a.applies_to_codes || []).includes(code);
+  });
+
+  if (applicableAddons.length > 0) {
+    showAddonSelector(item, sizeKey, sizeLabel, sugarObj, price, applicableAddons);
+  } else {
+    addToCart(item, sizeKey || null, sizeLabel || null, sugarObj, price, []);
+    closeModal('optModal');
+    toast(esc(item.name) + ' added');
+  }
+}
+
+function showAddonSelector(item, sizeKey, sizeLabel, sugarObj, price, addons) {
+  var detailParts = [];
+  if (sizeLabel) detailParts.push(sizeLabel);
+  if (sugarObj) detailParts.push(sugarObj.label);
+  detailParts.push(peso(price));
+
+  var html = '<div class="opt-header">' +
+    '<div class="opt-item-name">' + esc(item.name) + '</div>' +
+    '<div class="opt-item-detail">' + esc(detailParts.join(' · ')) + '</div>' +
+    '</div>' +
+    '<div class="opt-label">Add-ons <span style="font-weight:400;font-size:.8em;opacity:.7">(optional)</span></div>' +
+    '<div id="addonGroup" style="display:flex;flex-direction:column;gap:6px">';
+
+  addons.forEach(function(a) {
+    html += '<button class="opt-btn" data-addon="' + esc(a.addon_code) + '" data-price="' + a.price + '" data-name="' + esc(a.name) + '" onclick="toggleAddon(this)">' +
+      '<div class="opt-btn-radio" style="border-radius:4px"></div>' +
+      '<div class="opt-btn-text">' +
+        '<div class="opt-btn-main">' + esc(a.name) + '</div>' +
+      '</div>' +
+      '<div style="font-weight:700;color:var(--terra);font-size:.88rem;white-space:nowrap">+' + peso(a.price) + '</div>' +
+    '</button>';
+  });
+
+  html += '</div>' +
+    '<button class="opt-confirm" onclick="addonConfirm(\'' + esc(item.code) + '\',\'' + (sizeKey||'') + '\',\'' + esc(sizeLabel||'') + '\',' + price + ',\'' + (sugarObj ? sugarObj.id : '') + '\')">Add to Cart</button>';
+
+  document.getElementById('optContent').innerHTML = html;
+}
+
+function toggleAddon(btn) {
+  btn.classList.toggle('selected');
+}
+
+function addonConfirm(code, sizeKey, sizeLabel, price, sugarId) {
+  var item = MENU_DATA.find(function(m) { return m.code === code });
+  var sugarObj = SUGAR_LEVELS.find(function(s) { return s.id === sugarId }) || null;
+
+  // Collect selected addons
+  var selectedAddons = [];
+  var totalAddonPrice = 0;
+  document.querySelectorAll('#addonGroup .opt-btn.selected').forEach(function(btn) {
+    var addonPrice = parseFloat(btn.dataset.price) || 0;
+    selectedAddons.push({ code: btn.dataset.addon, name: btn.dataset.name, price: addonPrice });
+    totalAddonPrice += addonPrice;
+  });
+
+  addToCart(item, sizeKey || null, sizeLabel || null, sugarObj, price + totalAddonPrice, selectedAddons);
   closeModal('optModal');
-  toast(esc(item.name) + ' added');
+  var addonNames = selectedAddons.map(function(a) { return a.name; }).join(', ');
+  toast(esc(item.name) + (addonNames ? ' + ' + addonNames : '') + ' added');
 }
 
 // ══════════════════════════════════════════════════════════
 // CART MANAGEMENT
 // ══════════════════════════════════════════════════════════
-function addToCart(item, sizeKey, sizeLabel, sugarObj, price) {
-  // Check if identical item exists (same code + size + sugar)
+function addToCart(item, sizeKey, sizeLabel, sugarObj, price, addons) {
   var sugarId = sugarObj ? sugarObj.id : '';
+  addons = addons || [];
+  var addonKey = addons.map(function(a) { return a.code; }).sort().join(',');
+
+  // Only merge if same code + size + sugar + addons
   var existing = state.cart.find(function(c) {
-    return c.code === item.code && (c.size||'') === (sizeKey||'') && (c.sugar||'') === sugarId;
+    return c.code === item.code &&
+           (c.size||'') === (sizeKey||'') &&
+           (c.sugar||'') === sugarId &&
+           (c.addonKey||'') === addonKey;
   });
 
   if (existing) {
     existing.qty++;
   } else {
+    var addonTotal = addons.reduce(function(s, a) { return s + (a.price||0); }, 0);
     state.cart.push({
       code: item.code,
       name: item.name,
       price: price,
+      basePrice: price - addonTotal,
       qty: 1,
       size: sizeKey || '',
       sizeLabel: sizeLabel || '',
       sugar: sugarId,
       sugarLabel: sugarObj ? sugarObj.label : '',
+      addons: addons,
+      addonKey: addonKey,
       imgUrl: getImgUrl(item)
     });
   }
@@ -1547,6 +1657,7 @@ function renderCartPage() {
     var meta = '';
     if (c.sizeLabel) meta += c.sizeLabel;
     if (c.sugarLabel) meta += (meta ? ' | ' : '') + c.sugarLabel;
+    if (c.addons && c.addons.length) meta += (meta ? ' | ' : '') + c.addons.map(function(a){return '+'+a.name;}).join(', ');
 
     html += '<div class="cart-item">' +
       (c.imgUrl ? '<img class="cart-item-img" src="' + c.imgUrl + '" alt="" onerror="this.style.display=\'none\'">' : '<div class="cart-item-img" style="display:flex;align-items:center;justify-content:center;font-size:1.2rem">' + getCategoryIcon(MENU_DATA.find(function(m){return m.code===c.code})?.category||'') + '</div>') +
@@ -1604,6 +1715,7 @@ function renderCheckoutPage() {
     var meta = '';
     if (c.sizeLabel) meta += c.sizeLabel;
     if (c.sugarLabel) meta += (meta ? ' | ' : '') + c.sugarLabel;
+    if (c.addons && c.addons.length) meta += (meta ? ' | ' : '') + c.addons.map(function(a){return '+'+a.name;}).join(', ');
     html += '<div class="summary-row"><span>' + esc(c.name) + (meta ? '<br><small style="color:var(--timber)">' + esc(meta) + '</small>' : '') + ' × ' + c.qty + '</span><span>' + peso(c.price * c.qty) + '</span></div>';
   });
 
@@ -1652,7 +1764,8 @@ async function placeOrder() {
       code: c.code,
       qty: c.qty,
       size: c.size || '',
-      sugarLevel: c.sugar || ''
+      sugarLevel: c.sugar || '',
+      addons: c.addons || []
     };
   });
 
