@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YANI Kitchen Display</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0f0f0f;
+    --card-new: #1a1a1a;
+    --card-prep: #1a1a1a;
+    --accent-new: #f59e0b;
+    --accent-prep: #3b82f6;
+    --text: #f1f5f9;
+    --muted: #94a3b8;
+    --green: #22c55e;
+    --red: #ef4444;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── PIN SCREEN ────────────────────────────────── */
+  #pinScreen {
+    position: fixed; inset: 0;
+    background: #0f0f0f;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 999;
+    flex-direction: column;
+    gap: 24px;
+  }
+  #pinScreen h1 {
+    font-size: 2rem; font-weight: 800;
+    color: #f59e0b; letter-spacing: 2px;
+  }
+  #pinScreen p { color: var(--muted); font-size: 1rem; }
+  #pinInput {
+    width: 240px; padding: 16px 20px;
+    font-size: 2rem; letter-spacing: 12px; text-align: center;
+    background: #1e1e1e; border: 2px solid #333;
+    border-radius: 12px; color: white; outline: none;
+  }
+  #pinInput:focus { border-color: #f59e0b; }
+  #pinInput.error { border-color: #ef4444; animation: shake .3s; }
+  #pinBtn {
+    width: 240px; padding: 14px;
+    background: #f59e0b; color: #000;
+    border: none; border-radius: 12px;
+    font-size: 1.1rem; font-weight: 700;
+    cursor: pointer; transition: opacity .2s;
+  }
+  #pinBtn:hover { opacity: .85; }
+  #pinErr { color: #ef4444; font-size: .9rem; min-height: 20px; }
+
+  @keyframes shake {
+    0%,100% { transform: translateX(0); }
+    25% { transform: translateX(-8px); }
+    75% { transform: translateX(8px); }
+  }
+
+  /* ── HEADER ─────────────────────────────────────── */
+  #header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 24px;
+    background: #161616;
+    border-bottom: 2px solid #222;
+    position: sticky; top: 0; z-index: 10;
+  }
+  #header h1 {
+    font-size: 1.4rem; font-weight: 800;
+    color: #f59e0b; letter-spacing: 1px;
+  }
+  #header .stats {
+    display: flex; gap: 24px; align-items: center;
+  }
+  .stat-badge {
+    display: flex; align-items: center; gap: 8px;
+    background: #222; border-radius: 20px;
+    padding: 6px 14px; font-size: .95rem;
+  }
+  .stat-badge .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+  }
+  .dot-new  { background: #f59e0b; }
+  .dot-prep { background: #3b82f6; }
+  #clock {
+    font-size: 1.3rem; font-weight: 700;
+    color: var(--muted); letter-spacing: 2px;
+  }
+  #soundBtn {
+    background: #222; border: none; border-radius: 8px;
+    padding: 6px 12px; color: var(--muted);
+    cursor: pointer; font-size: .85rem;
+    transition: background .2s;
+  }
+  #soundBtn:hover { background: #333; color: white; }
+  #exitBtn {
+    background: transparent; border: 1px solid #333;
+    border-radius: 8px; padding: 6px 14px;
+    color: var(--muted); cursor: pointer; font-size: .85rem;
+    transition: all .2s;
+  }
+  #exitBtn:hover { border-color: #ef4444; color: #ef4444; }
+
+  /* ── MAIN GRID ───────────────────────────────────── */
+  #main {
+    padding: 20px 24px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 20px;
+    align-items: start;
+  }
+
+  /* ── EMPTY STATE ─────────────────────────────────── */
+  #empty {
+    display: none;
+    flex-direction: column; align-items: center; justify-content: center;
+    min-height: 70vh; gap: 16px; width: 100%;
+    grid-column: 1 / -1;
+  }
+  #empty .icon { font-size: 5rem; }
+  #empty h2 { font-size: 1.8rem; font-weight: 700; color: var(--muted); }
+  #empty p  { color: #555; }
+
+  /* ── ORDER CARD ──────────────────────────────────── */
+  .order-card {
+    background: var(--card-new);
+    border-radius: 16px;
+    border: 2px solid #2a2a2a;
+    overflow: hidden;
+    transition: transform .15s;
+  }
+  .order-card:hover { transform: translateY(-2px); }
+  .order-card.status-NEW    { border-top: 5px solid var(--accent-new); }
+  .order-card.status-PREPARING { border-top: 5px solid var(--accent-prep); }
+
+  .card-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 18px 10px;
+    border-bottom: 1px solid #2a2a2a;
+  }
+  .order-id {
+    font-size: 1.1rem; font-weight: 800; color: white;
+    letter-spacing: .5px;
+  }
+  .table-badge {
+    font-size: 1.8rem; font-weight: 900;
+    line-height: 1;
+  }
+  .status-NEW    .table-badge { color: var(--accent-new); }
+  .status-PREPARING .table-badge { color: var(--accent-prep); }
+
+  .card-meta {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 18px;
+    background: #161616;
+    font-size: .82rem; color: var(--muted);
+  }
+  .elapsed {
+    font-weight: 700;
+    padding: 2px 8px; border-radius: 6px;
+    font-size: .8rem;
+  }
+  .elapsed.ok   { background: #1a2e1a; color: #4ade80; }
+  .elapsed.warn { background: #2e2a1a; color: #fbbf24; }
+  .elapsed.late { background: #2e1a1a; color: #f87171; }
+
+  .order-type-tag {
+    font-size: .75rem; font-weight: 700; letter-spacing: .5px;
+    padding: 2px 8px; border-radius: 6px;
+    background: #222; color: var(--muted);
+  }
+
+  /* ── ITEMS LIST ──────────────────────────────────── */
+  .items-list {
+    padding: 10px 18px;
+  }
+  .item-row {
+    display: flex; align-items: flex-start;
+    padding: 10px 0;
+    border-bottom: 1px solid #222;
+    gap: 12px;
+  }
+  .item-row:last-child { border-bottom: none; }
+  .item-qty {
+    font-size: 1.4rem; font-weight: 900;
+    color: white; min-width: 28px; text-align: center;
+    margin-top: 2px;
+  }
+  .item-details { flex: 1; }
+  .item-name {
+    font-size: 1.1rem; font-weight: 700; color: white;
+    line-height: 1.3;
+  }
+  .item-opts {
+    display: flex; flex-wrap: wrap; gap: 6px; margin-top: 5px;
+  }
+  .opt-tag {
+    font-size: .8rem; font-weight: 600;
+    padding: 2px 10px; border-radius: 20px;
+  }
+  .opt-size  { background: #1e3a5f; color: #93c5fd; }
+  .opt-sugar { background: #3b2f1a; color: #fcd34d; }
+  .item-note {
+    font-size: .78rem; color: #ef4444; margin-top: 4px;
+    font-style: italic;
+  }
+
+  /* ── SPECIAL NOTE ─────────────────────────────────── */
+  .order-note {
+    margin: 0 18px 10px;
+    padding: 8px 12px;
+    background: #2a1a1a; border-radius: 8px;
+    border-left: 3px solid #ef4444;
+    font-size: .85rem; color: #fca5a5;
+    font-style: italic;
+  }
+
+  /* ── ACTION BUTTONS ──────────────────────────────── */
+  .card-actions {
+    display: flex; gap: 10px;
+    padding: 14px 18px;
+    border-top: 1px solid #222;
+  }
+  .btn-action {
+    flex: 1; padding: 14px;
+    border: none; border-radius: 10px;
+    font-size: 1rem; font-weight: 700;
+    cursor: pointer; transition: all .2s;
+    letter-spacing: .5px;
+  }
+  .btn-start {
+    background: var(--accent-new);
+    color: #000;
+  }
+  .btn-start:hover  { filter: brightness(1.1); }
+  .btn-ready {
+    background: var(--accent-prep);
+    color: white;
+  }
+  .btn-ready:hover  { filter: brightness(1.2); }
+  .btn-complete {
+    background: var(--green);
+    color: white;
+  }
+  .btn-complete:hover { filter: brightness(1.1); }
+  .btn-action:disabled {
+    opacity: .4; cursor: not-allowed; filter: none;
+  }
+
+  /* ── REFRESHING INDICATOR ─────────────────────────── */
+  #refreshDot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--green);
+    display: inline-block;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity: 1; }
+    50%      { opacity: .3; }
+  }
+
+  /* ── TOAST ───────────────────────────────────────── */
+  #toast {
+    position: fixed; bottom: 24px; right: 24px;
+    background: #1e1e1e; border: 1px solid #333;
+    padding: 12px 20px; border-radius: 10px;
+    font-size: .9rem; color: white;
+    transform: translateY(80px); opacity: 0;
+    transition: all .3s; z-index: 100;
+  }
+  #toast.show { transform: translateY(0); opacity: 1; }
+</style>
+</head>
+<body>
+
+<!-- PIN Screen -->
+<div id="pinScreen">
+  <h1>☕ YANI KDS</h1>
+  <p>Enter your staff PIN to activate Kitchen Display</p>
+  <input type="password" id="pinInput" inputmode="numeric" maxlength="8" placeholder="••••" autofocus>
+  <div id="pinErr"></div>
+  <button id="pinBtn" onclick="doLogin()">Activate</button>
+  <p style="font-size:.75rem;color:#444;margin-top:8px;">Session stays active until you exit</p>
+</div>
+
+<!-- Main KDS -->
+<div id="kdsApp" style="display:none;">
+  <div id="header">
+    <h1>☕ YANI KITCHEN DISPLAY</h1>
+    <div class="stats">
+      <div class="stat-badge">
+        <span class="dot dot-new"></span>
+        <span id="countNew">0</span> NEW
+      </div>
+      <div class="stat-badge">
+        <span class="dot dot-prep"></span>
+        <span id="countPrep">0</span> PREPARING
+      </div>
+      <span id="refreshDot" title="Auto-refreshing every 5s"></span>
+      <div id="clock">--:--</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button id="soundBtn" onclick="toggleSound()">🔔 Sound ON</button>
+      <button id="exitBtn" onclick="exitKDS()">Exit KDS</button>
+    </div>
+  </div>
+
+  <div id="main">
+    <div id="empty">
+      <div class="icon">✅</div>
+      <h2>All caught up!</h2>
+      <p>No new or preparing orders right now</p>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const API = '/api/pos';
+let userId = null;
+let soundOn = true;
+let knownOrderIds = new Set();
+let refreshInterval = null;
+let audioCtx = null;
+
+// ── PIN LOGIN ────────────────────────────────────────
+async function doLogin() {
+  const pin = document.getElementById('pinInput').value.trim();
+  if (pin.length < 4) return;
+  document.getElementById('pinBtn').disabled = true;
+  document.getElementById('pinErr').textContent = '';
+  try {
+    const r = await fetch(API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'verifyUserPin', pin })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      userId = d.userId;
+      localStorage.setItem('kds_userId', userId);
+      localStorage.setItem('kds_name', d.displayName);
+      activateKDS();
+    } else {
+      document.getElementById('pinInput').classList.add('error');
+      document.getElementById('pinErr').textContent = d.error || 'Invalid PIN';
+      setTimeout(() => {
+        document.getElementById('pinInput').classList.remove('error');
+        document.getElementById('pinInput').value = '';
+        document.getElementById('pinInput').focus();
+      }, 600);
+    }
+  } catch(e) {
+    document.getElementById('pinErr').textContent = 'Connection error. Try again.';
+  }
+  document.getElementById('pinBtn').disabled = false;
+}
+
+function activateKDS() {
+  document.getElementById('pinScreen').style.display = 'none';
+  document.getElementById('kdsApp').style.display = 'block';
+  startRefresh();
+  startClock();
+  initAudio();
+}
+
+function exitKDS() {
+  if (!confirm('Exit Kitchen Display?')) return;
+  localStorage.removeItem('kds_userId');
+  localStorage.removeItem('kds_name');
+  location.reload();
+}
+
+function toggleSound() {
+  soundOn = !soundOn;
+  document.getElementById('soundBtn').textContent = soundOn ? '🔔 Sound ON' : '🔕 Sound OFF';
+}
+
+// ── AUDIO ────────────────────────────────────────────
+function initAudio() {
+  try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+}
+
+function beep() {
+  if (!soundOn || !audioCtx) return;
+  try {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.frequency.value = 880;
+    osc.type = 'sine';
+    gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
+    osc.start(); osc.stop(audioCtx.currentTime + 0.4);
+    // Second beep
+    setTimeout(() => {
+      const o2 = audioCtx.createOscillator();
+      const g2 = audioCtx.createGain();
+      o2.connect(g2); g2.connect(audioCtx.destination);
+      o2.frequency.value = 1100;
+      o2.type = 'sine';
+      g2.gain.setValueAtTime(0.4, audioCtx.currentTime);
+      g2.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+      o2.start(); o2.stop(audioCtx.currentTime + 0.3);
+    }, 180);
+  } catch(e) {}
+}
+
+// ── CLOCK ────────────────────────────────────────────
+function startClock() {
+  function tick() {
+    const now = new Date();
+    const h = String(now.getHours()).padStart(2,'0');
+    const m = String(now.getMinutes()).padStart(2,'0');
+    const s = String(now.getSeconds()).padStart(2,'0');
+    document.getElementById('clock').textContent = `${h}:${m}:${s}`;
+  }
+  tick(); setInterval(tick, 1000);
+}
+
+// ── REFRESH ──────────────────────────────────────────
+function startRefresh() {
+  loadOrders();
+  refreshInterval = setInterval(loadOrders, 5000);
+}
+
+async function loadOrders() {
+  try {
+    const r = await fetch(API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'getOrders', limit: 100 })
+    });
+    const d = await r.json();
+    if (!d.ok) return;
+    const active = d.orders.filter(o =>
+      (o.status === 'NEW' || o.status === 'PREPARING') && !o.isTest
+    ).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    checkNewOrders(active);
+    renderOrders(active);
+  } catch(e) { /* silent — will retry */ }
+}
+
+function checkNewOrders(orders) {
+  const newIds = new Set(orders.map(o => o.orderId));
+  const incoming = orders.filter(o =>
+    o.status === 'NEW' && !knownOrderIds.has(o.orderId)
+  );
+  if (incoming.length > 0 && knownOrderIds.size > 0) {
+    beep();
+    showToast(`🔔 ${incoming.length} new order${incoming.length>1?'s':''} received!`);
+  }
+  knownOrderIds = newIds;
+}
+
+// ── RENDER ───────────────────────────────────────────
+function renderOrders(orders) {
+  const main = document.getElementById('main');
+  const empty = document.getElementById('empty');
+  document.getElementById('countNew').textContent  = orders.filter(o=>o.status==='NEW').length;
+  document.getElementById('countPrep').textContent = orders.filter(o=>o.status==='PREPARING').length;
+
+  if (orders.length === 0) {
+    empty.style.display = 'flex';
+    // Remove all cards
+    main.querySelectorAll('.order-card').forEach(c => c.remove());
+    return;
+  }
+  empty.style.display = 'none';
+
+  const existingIds = new Set([...main.querySelectorAll('.order-card')].map(c => c.dataset.id));
+  const currentIds  = new Set(orders.map(o => o.orderId));
+
+  // Remove stale cards
+  main.querySelectorAll('.order-card').forEach(c => {
+    if (!currentIds.has(c.dataset.id)) c.remove();
+  });
+
+  // Add/update cards
+  orders.forEach(order => {
+    let card = main.querySelector(`.order-card[data-id="${order.orderId}"]`);
+    if (card) {
+      // Update elapsed time and status badge only
+      const el = card.querySelector('.elapsed');
+      if (el) { const info = elapsedInfo(order.createdAt); el.textContent = info.text; el.className = 'elapsed ' + info.cls; }
+      card.className = `order-card status-${order.status}`;
+    } else {
+      card = buildCard(order);
+      main.insertBefore(card, empty);
+    }
+  });
+}
+
+function buildCard(o) {
+  const el = document.createElement('div');
+  el.className = `order-card status-${o.status}`;
+  el.dataset.id = o.orderId;
+  const elapsed = elapsedInfo(o.createdAt);
+  const typeLabel = o.orderType === 'TAKE_OUT' ? '🥡 TAKE-OUT' : '🪑 DINE-IN';
+
+  const itemsHTML = o.items.map(it => {
+    const sizeTag  = it.size  ? `<span class="opt-tag opt-size">${it.size}</span>`  : '';
+    const sugarTag = it.sugar ? `<span class="opt-tag opt-sugar">${it.sugar}</span>` : '';
+    const noteHtml = it.notes ? `<div class="item-note">⚠ ${it.notes}</div>` : '';
+    return `<div class="item-row">
+      <div class="item-qty">${it.qty}×</div>
+      <div class="item-details">
+        <div class="item-name">${it.name}</div>
+        <div class="item-opts">${sizeTag}${sugarTag}</div>
+        ${noteHtml}
+      </div>
+    </div>`;
+  }).join('');
+
+  const orderNote = o.notes ? `<div class="order-note">📝 ${o.notes}</div>` : '';
+
+  let btnHTML = '';
+  if (o.status === 'NEW') {
+    btnHTML = `<button class="btn-action btn-start" onclick="updateStatus('${o.orderId}', 'PREPARING', this)">☕ START</button>`;
+  } else if (o.status === 'PREPARING') {
+    btnHTML = `<button class="btn-action btn-ready" onclick="updateStatus('${o.orderId}', 'READY', this)">✨ READY</button>`;
+  }
+
+  el.innerHTML = `
+    <div class="card-header">
+      <div>
+        <div class="order-id">${o.orderId}</div>
+        <div style="font-size:.8rem;color:var(--muted);margin-top:2px;">
+          ${o.customerName ? '👤 ' + o.customerName : 'Walk-in'}
+        </div>
+      </div>
+      <div class="table-badge">T${o.tableNo || '?'}</div>
+    </div>
+    <div class="card-meta">
+      <span class="order-type-tag">${typeLabel}</span>
+      <span class="elapsed ${elapsed.cls}" id="el-${o.orderId}">${elapsed.text}</span>
+    </div>
+    <div class="items-list">${itemsHTML}</div>
+    ${orderNote}
+    <div class="card-actions">${btnHTML}</div>`;
+  return el;
+}
+
+function elapsedInfo(createdAt) {
+  const mins = Math.floor((Date.now() - new Date(createdAt)) / 60000);
+  let text, cls;
+  if (mins < 1)       { text = 'Just now'; cls = 'ok'; }
+  else if (mins < 10) { text = `${mins}m ago`; cls = 'ok'; }
+  else if (mins < 20) { text = `${mins}m ago`; cls = 'warn'; }
+  else                { text = `${mins}m ago`; cls = 'late'; }
+  return { text, cls };
+}
+
+// ── STATUS UPDATE ────────────────────────────────────
+async function updateStatus(orderId, newStatus, btn) {
+  btn.disabled = true;
+  btn.textContent = '...';
+  try {
+    const r = await fetch(API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'updateOrderStatus', orderId, status: newStatus, userId })
+    });
+    const d = await r.json();
+    if (!d.ok) {
+      showToast('❌ ' + (d.error || 'Update failed'));
+      btn.disabled = false;
+      btn.textContent = newStatus === 'PREPARING' ? '☕ START' : '✨ READY';
+    } else {
+      await loadOrders(); // immediate refresh
+    }
+  } catch(e) {
+    showToast('❌ Network error');
+    btn.disabled = false;
+  }
+}
+
+// ── TOAST ────────────────────────────────────────────
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ── KEYBOARD ─────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (document.getElementById('pinScreen').style.display !== 'none') {
+    if (e.key === 'Enter') doLogin();
+  }
+});
+
+// ── INIT ─────────────────────────────────────────────
+(function init() {
+  const savedId = localStorage.getItem('kds_userId');
+  if (savedId) {
+    userId = savedId;
+    activateKDS();
+  }
+})();
+</script>
+</body>
+</html>

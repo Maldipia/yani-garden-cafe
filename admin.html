@@ -1000,6 +1000,34 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
     </div>
   </div>
 
+
+  <!-- ══ TABLES & RESERVATIONS VIEW ══ -->
+  <div id="tablesView" style="display:none;padding:0 0 100px">
+    <div style="background:#fff;border-bottom:1.5px solid var(--mist);padding:14px 16px;position:sticky;top:0;z-index:10">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div>
+          <div style="font-weight:800;font-size:1.1rem;color:var(--forest-deep)">🪑 Tables &amp; Reservations</div>
+          <div id="tablesDateLabel" style="font-size:.72rem;color:var(--timber);margin-top:1px">Today</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="date" id="resDatePicker" onchange="loadTablesView()" style="border:1.5px solid var(--mist);border-radius:8px;padding:6px 10px;font-size:.82rem;color:var(--forest-deep);outline:none">
+          <button onclick="openResModal()" style="background:var(--forest);color:#fff;border:none;border-radius:10px;padding:10px 16px;font-size:.82rem;font-weight:700;cursor:pointer">+ Reserve</button>
+          <button onclick="loadTablesView()" style="background:var(--mist-light);color:var(--timber);border:none;border-radius:10px;padding:10px 12px;font-size:.82rem;cursor:pointer">🔄</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Table Grid -->
+    <div style="padding:16px">
+      <div style="font-weight:700;font-size:.85rem;color:var(--timber);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px">Table Status (Live)</div>
+      <div id="tableGrid" style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:24px"></div>
+
+      <!-- Reservations for selected date -->
+      <div style="font-weight:700;font-size:.85rem;color:var(--timber);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px">Reservations</div>
+      <div id="resList" style="display:flex;flex-direction:column;gap:10px"></div>
+    </div>
+  </div>
+
   <!-- FAB: New Platform Order -->
   <button class="fab-platform" onclick="openPlatformOrder()" title="New Platform Order">+</button>
 
@@ -1509,6 +1537,10 @@ function renderFilters() {
   if (currentUser.role === 'ADMIN' || currentUser.role === 'OWNER') {
     tabs.push({ key:'ANALYTICS', label:'📈 Analytics', count:'' });
   }
+  // Tables & Reservations: ADMIN and OWNER only
+  if (currentUser.role === 'ADMIN' || currentUser.role === 'OWNER') {
+    tabs.push({ key:'TABLES', label:'🪑 Tables', count:'' });
+  }
 
   document.getElementById('filterBar').innerHTML = tabs.map(function(t) {
     return '<button class="filter-btn' + (currentFilter===t.key?' active':'') + '" onclick="setFilter(\'' + t.key + '\')">' +
@@ -1537,6 +1569,9 @@ function setFilter(f) {
   var analyticsView = document.getElementById('analyticsView');
   if (analyticsView) analyticsView.style.display = 'none';
 
+  var tablesView = document.getElementById('tablesView');
+  if (tablesView) tablesView.style.display = 'none';
+
   if (f === 'PAYMENTS') {
     paymentsView.style.display = 'block';
     loadPayments();
@@ -1552,6 +1587,9 @@ function setFilter(f) {
   } else if (f === 'ANALYTICS') {
     if (analyticsView) analyticsView.style.display = 'block';
     loadAnalytics();
+  } else if (f === 'TABLES') {
+    if (tablesView) tablesView.style.display = 'block';
+    loadTablesView();
   } else {
     orderGrid.style.display = '';
     renderOrders();
@@ -4081,7 +4119,219 @@ async function retryAllDead() {
   loadQueueStats();
   if (_qmDeadListOpen) renderDeadList();
 }
-</script>>
+
+// ══════════════════════════════════════════════════════════
+// TABLES & RESERVATIONS
+// ══════════════════════════════════════════════════════════
+
+async function loadTablesView() {
+  // Set date picker to today if not set
+  var picker = document.getElementById('resDatePicker');
+  if (!picker.value) picker.value = new Date().toISOString().slice(0,10);
+  var date = picker.value;
+
+  // Format date label
+  var d = new Date(date + 'T00:00:00');
+  var label = d.toLocaleDateString('en-PH', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+  var today = new Date().toISOString().slice(0,10);
+  if (date === today) label = 'Today — ' + label;
+  document.getElementById('tablesDateLabel').textContent = label;
+
+  renderTableGrid(date);
+  await loadReservations(date);
+}
+
+function renderTableGrid(date) {
+  var grid = document.getElementById('tableGrid');
+  if (!grid) return;
+
+  // Get occupied tables from allOrders (active orders)
+  var occupiedTables = {};
+  allOrders.forEach(function(o) {
+    if ((o.status === 'NEW' || o.status === 'PREPARING' || o.status === 'READY') && !o.isTest && o.tableNo) {
+      occupiedTables[o.tableNo] = o;
+    }
+  });
+
+  grid.innerHTML = '';
+  for (var t = 1; t <= 10; t++) {
+    var order = occupiedTables[t];
+    var isOccupied = !!order;
+    var card = document.createElement('div');
+    card.style.cssText = 'background:' + (isOccupied ? '#fef3c7' : '#f0fdf4') + ';' +
+      'border:2px solid ' + (isOccupied ? '#f59e0b' : '#86efac') + ';' +
+      'border-radius:12px;padding:14px 10px;text-align:center;cursor:default;';
+    card.innerHTML =
+      '<div style="font-size:1.6rem;font-weight:900;color:' + (isOccupied ? '#b45309' : '#16a34a') + '">T' + t + '</div>' +
+      '<div style="font-size:.7rem;font-weight:700;margin-top:4px;color:' + (isOccupied ? '#92400e' : '#15803d') + '">' +
+        (isOccupied ? '🔴 OCCUPIED' : '🟢 FREE') + '</div>' +
+      (isOccupied ? '<div style="font-size:.65rem;color:#78350f;margin-top:4px;">' + (order.orderId || '') + '</div>' : '');
+    grid.appendChild(card);
+  }
+}
+
+async function loadReservations(date) {
+  var list = document.getElementById('resList');
+  list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--timber)">Loading...</div>';
+  try {
+    var d = await api('getReservations', { date: date });
+    if (!d.ok) throw new Error(d.error);
+    var res = d.reservations || [];
+    if (res.length === 0) {
+      list.innerHTML = '<div style="text-align:center;padding:32px;color:var(--timber);background:#f8fafc;border-radius:12px;">' +
+        '<div style="font-size:2rem;margin-bottom:8px;">📅</div>' +
+        '<div style="font-weight:600;">No reservations for this date</div>' +
+        '<div style="font-size:.8rem;margin-top:4px;">Click "+ Reserve" to add one</div></div>';
+      return;
+    }
+    list.innerHTML = res.map(function(r) {
+      var statusColors = {
+        CONFIRMED: { bg:'#eff6ff', border:'#3b82f6', text:'#1d4ed8', label:'Confirmed' },
+        SEATED:    { bg:'#f0fdf4', border:'#22c55e', text:'#15803d', label:'Seated' },
+        COMPLETED: { bg:'#f8fafc', border:'#94a3b8', text:'#64748b', label:'Done' },
+        NO_SHOW:   { bg:'#fff1f2', border:'#f43f5e', text:'#be123c', label:'No Show' },
+      };
+      var sc = statusColors[r.status] || statusColors.CONFIRMED;
+      var timeStr = r.res_time ? r.res_time.slice(0,5) : '';
+      // Format to 12h
+      if (timeStr) {
+        var parts = timeStr.split(':');
+        var h = parseInt(parts[0]); var m = parts[1];
+        var ampm = h >= 12 ? 'PM' : 'AM';
+        h = h % 12 || 12;
+        timeStr = h + ':' + m + ' ' + ampm;
+      }
+      return '<div style="background:' + sc.bg + ';border:1.5px solid ' + sc.border + ';border-radius:12px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;">' +
+        '<div style="display:flex;align-items:center;gap:14px;">' +
+          '<div style="font-size:1.8rem;font-weight:900;color:' + sc.text + ';min-width:36px;text-align:center">T' + r.table_no + '</div>' +
+          '<div>' +
+            '<div style="font-weight:700;font-size:.95rem;">' + esc(r.guest_name) + '</div>' +
+            '<div style="font-size:.78rem;color:var(--timber);margin-top:2px;">' +
+              '🕐 ' + timeStr + ' &nbsp;·&nbsp; 👥 ' + r.pax + ' pax' +
+              (r.guest_phone ? ' &nbsp;·&nbsp; 📱 ' + esc(r.guest_phone) : '') +
+            '</div>' +
+            (r.notes ? '<div style="font-size:.75rem;color:#ef4444;margin-top:3px;font-style:italic;">📝 ' + esc(r.notes) + '</div>' : '') +
+          '</div>' +
+        '</div>' +
+        '<div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">' +
+          '<span style="font-size:.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:' + sc.border + ';color:#fff;">' + sc.label + '</span>' +
+          (r.status === 'CONFIRMED' ?
+            '<button onclick="updateRes('' + r.res_id + '','SEATED')" style="background:#22c55e;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:.75rem;font-weight:700;cursor:pointer;">Seat</button>' +
+            '<button onclick="updateRes('' + r.res_id + '','NO_SHOW')" style="background:#f43f5e;color:#fff;border:none;border-radius:8px;padding:6px 10px;font-size:.75rem;font-weight:700;cursor:pointer;">No Show</button>' : '') +
+          (r.status === 'SEATED' ?
+            '<button onclick="updateRes('' + r.res_id + '','COMPLETED')" style="background:#64748b;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:.75rem;font-weight:700;cursor:pointer;">Done</button>' : '') +
+          '<button onclick="updateRes('' + r.res_id + '','CANCELLED')" style="background:#fee2e2;color:#ef4444;border:none;border-radius:8px;padding:6px 10px;font-size:.75rem;cursor:pointer;font-weight:700;">✕</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  } catch(e) {
+    list.innerHTML = '<div style="color:red;padding:16px;">Error: ' + e.message + '</div>';
+  }
+}
+
+async function updateRes(resId, status) {
+  var r = await api('updateReservation', { resId: resId, status: status });
+  if (r.ok) {
+    var date = document.getElementById('resDatePicker').value || new Date().toISOString().slice(0,10);
+    await loadReservations(date);
+  } else {
+    alert('Error: ' + (r.error || 'Failed'));
+  }
+}
+
+function esc(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── RESERVATION MODAL ─────────────────────────────────────────────────────
+function openResModal() {
+  var today = new Date().toISOString().slice(0,10);
+  var picked = document.getElementById('resDatePicker').value || today;
+  var modalHtml = '<div id="resModal" style="position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:600;display:flex;align-items:center;justify-content:center;padding:20px">' +
+    '<div style="background:#fff;border-radius:16px;width:100%;max-width:420px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3)">' +
+      '<div style="background:var(--forest-deep);color:#fff;padding:16px 20px;display:flex;align-items:center;justify-content:space-between">' +
+        '<div style="font-weight:700;font-size:1rem">📅 New Reservation</div>' +
+        '<button onclick="closeResModal()" style="background:none;border:none;color:#fff;font-size:1.4rem;cursor:pointer">&times;</button>' +
+      '</div>' +
+      '<div style="padding:20px;display:flex;flex-direction:column;gap:14px">' +
+        '<div>' +
+          '<label style="font-size:.78rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">GUEST NAME *</label>' +
+          '<input id="resName" placeholder="Juan Dela Cruz" style="width:100%;border:1.5px solid var(--mist);border-radius:8px;padding:10px 12px;font-size:.9rem;outline:none;box-sizing:border-box">' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+          '<div>' +
+            '<label style="font-size:.78rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">PHONE</label>' +
+            '<input id="resPhone" placeholder="09xxxxxxxxx" style="width:100%;border:1.5px solid var(--mist);border-radius:8px;padding:10px 12px;font-size:.9rem;outline:none;box-sizing:border-box">' +
+          '</div>' +
+          '<div>' +
+            '<label style="font-size:.78rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">PAX *</label>' +
+            '<input id="resPax" type="number" min="1" max="20" value="2" style="width:100%;border:1.5px solid var(--mist);border-radius:8px;padding:10px 12px;font-size:.9rem;outline:none;box-sizing:border-box">' +
+          '</div>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+          '<div>' +
+            '<label style="font-size:.78rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">TABLE *</label>' +
+            '<select id="resTable" style="width:100%;border:1.5px solid var(--mist);border-radius:8px;padding:10px 12px;font-size:.9rem;outline:none;background:#fff;box-sizing:border-box">' +
+              [1,2,3,4,5,6,7,8,9,10].map(function(n){ return '<option value="'+n+'">Table '+n+'</option>'; }).join('') +
+            '</select>' +
+          '</div>' +
+          '<div>' +
+            '<label style="font-size:.78rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">TIME *</label>' +
+            '<input id="resTime" type="time" value="12:00" style="width:100%;border:1.5px solid var(--mist);border-radius:8px;padding:10px 12px;font-size:.9rem;outline:none;box-sizing:border-box">' +
+          '</div>' +
+        '</div>' +
+        '<div>' +
+          '<label style="font-size:.78rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">DATE *</label>' +
+          '<input id="resDate" type="date" value="' + picked + '" style="width:100%;border:1.5px solid var(--mist);border-radius:8px;padding:10px 12px;font-size:.9rem;outline:none;box-sizing:border-box">' +
+        '</div>' +
+        '<div>' +
+          '<label style="font-size:.78rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">NOTES</label>' +
+          '<input id="resNotes" placeholder="e.g. Birthday celebration, window seat preference" style="width:100%;border:1.5px solid var(--mist);border-radius:8px;padding:10px 12px;font-size:.9rem;outline:none;box-sizing:border-box">' +
+        '</div>' +
+        '<button onclick="submitReservation()" style="background:var(--forest);color:#fff;border:none;border-radius:10px;padding:14px;font-size:.95rem;font-weight:700;cursor:pointer;width:100%;margin-top:4px">✅ Confirm Reservation</button>' +
+      '</div>' +
+    '</div>' +
+  '</div>';
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+function closeResModal() {
+  var m = document.getElementById('resModal');
+  if (m) m.remove();
+}
+
+async function submitReservation() {
+  var name  = document.getElementById('resName').value.trim();
+  var phone = document.getElementById('resPhone').value.trim();
+  var pax   = document.getElementById('resPax').value;
+  var table = document.getElementById('resTable').value;
+  var time  = document.getElementById('resTime').value;
+  var date  = document.getElementById('resDate').value;
+  var notes = document.getElementById('resNotes').value.trim();
+
+  if (!name || !table || !time || !date) {
+    alert('Please fill in all required fields (Name, Table, Time, Date)');
+    return;
+  }
+  var btn = document.querySelector('#resModal button[onclick="submitReservation()"]');
+  btn.disabled = true; btn.textContent = 'Saving...';
+
+  var r = await api('createReservation', {
+    guestName: name, guestPhone: phone || null,
+    tableNo: parseInt(table), pax: parseInt(pax) || 2,
+    resDate: date, resTime: time, notes: notes || null
+  });
+  if (r.ok) {
+    closeResModal();
+    document.getElementById('resDatePicker').value = date;
+    await loadTablesView();
+  } else {
+    alert('Error: ' + (r.error || 'Failed to save'));
+    btn.disabled = false; btn.textContent = '✅ Confirm Reservation';
+  }
+}
+
+</script>
 
 <!-- ── Custom confirm dialog (non-blocking, fixes INP on cancel/delete) ── -->
 <div class="ygc-confirm-overlay" id="ygcConfirmOverlay">

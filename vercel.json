@@ -26,9 +26,11 @@
     },
     "api/queue-status.js": {
       "maxDuration": 10
+    },
+    "api/daily-report.js": {
+      "maxDuration": 30
     }
   },
-
   "rewrites": [
     {
       "source": "/api/pos",
@@ -61,6 +63,14 @@
     {
       "source": "/api/sync-menu",
       "destination": "/api/sync-menu"
+    },
+    {
+      "source": "/api/daily-report",
+      "destination": "/api/daily-report"
+    },
+    {
+      "source": "/kitchen",
+      "destination": "/kitchen.html"
     }
   ],
   "headers": [
@@ -72,6 +82,12 @@
           "value": "no-store"
         }
       ]
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/daily-report",
+      "schedule": "0 15 * * *"
     }
   ]
 }

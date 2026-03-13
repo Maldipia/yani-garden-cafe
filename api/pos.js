@@ -998,6 +998,70 @@ export default async function handler(req, res) {
     }
 
     // ── getCustomers ───────────────────────────────────────────────────────
+    // ── createReservation ─────────────────────────────────────────────────
+    if (action === 'createReservation') {
+      const authR = await requireAdminRole(body);
+      if (!authR.ok) return res.status(401).json({ ok: false, error: authR.error });
+
+      const { guestName, guestPhone, tableNo, pax, resDate, resTime, notes } = body;
+      if (!guestName || !tableNo || !resDate || !resTime)
+        return res.status(400).json({ ok: false, error: 'guestName, tableNo, resDate, resTime are required' });
+      if (tableNo < 1 || tableNo > 10)
+        return res.status(400).json({ ok: false, error: 'tableNo must be 1-10' });
+
+      // Get next res_id
+      const seqR = await supaFetch(`${SUPABASE_URL}/rest/v1/rpc/get_next_res_id`, {
+        method: 'POST', body: JSON.stringify({})
+      });
+      const resId = seqR.ok ? seqR.data : `RES-${Date.now()}`;
+
+      const r = await supa('POST', 'reservations', {
+        res_id:      resId,
+        table_no:    parseInt(tableNo),
+        guest_name:  String(guestName).trim(),
+        guest_phone: guestPhone ? String(guestPhone).trim() : null,
+        pax:         parseInt(pax) || 1,
+        res_date:    resDate,
+        res_time:    resTime,
+        notes:       notes ? String(notes).trim() : null,
+        status:      'CONFIRMED',
+      });
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to create reservation' });
+      return res.status(200).json({ ok: true, resId });
+    }
+
+    // ── getReservations ────────────────────────────────────────────────────
+    if (action === 'getReservations') {
+      const authR = await requireAdminRole(body);
+      if (!authR.ok) return res.status(401).json({ ok: false, error: authR.error });
+
+      const date = body.date ? String(body.date) : new Date().toISOString().slice(0,10);
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/reservations?res_date=eq.${date}&status=neq.CANCELLED&order=res_time.asc&select=*`
+      );
+      return res.status(200).json({ ok: true, reservations: r.data || [] });
+    }
+
+    // ── updateReservation ──────────────────────────────────────────────────
+    if (action === 'updateReservation') {
+      const authR = await requireAdminRole(body);
+      if (!authR.ok) return res.status(401).json({ ok: false, error: authR.error });
+
+      const { resId, status, notes } = body;
+      if (!resId) return res.status(400).json({ ok: false, error: 'resId is required' });
+      const validStatuses = ['CONFIRMED','SEATED','COMPLETED','CANCELLED','NO_SHOW'];
+      if (status && !validStatuses.includes(status))
+        return res.status(400).json({ ok: false, error: 'Invalid status' });
+
+      const patch = {};
+      if (status) patch.status = status;
+      if (notes !== undefined) patch.notes = notes;
+
+      const r = await supa('PATCH', 'reservations', patch, { res_id: `eq.${resId}` });
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to update reservation' });
+      return res.status(200).json({ ok: true });
+    }
+
     if (action === 'getCustomers') {
       const authGC = await requireAdminRole(body);
       if (!authGC.ok) return res.status(401).json({ ok: false, error: authGC.error });
