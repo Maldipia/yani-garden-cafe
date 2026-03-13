@@ -2516,6 +2516,7 @@ async function submitResendReceipt(orderId) {
 }
 
 
+function printReceipt(orderId) {
   var o = allOrders.find(function(x) { return x.orderId === orderId; });
   if (!o) { showToast('Order not found', 'error'); return; }
 
@@ -3308,28 +3309,6 @@ function poSelectSugar(level) {
 }
 
 function poFinishAdd() {
-  // Check if same item+size+sugar exists in cart → increment qty
-  var existing = poCart.find(function(c) {
-    return c.code === poAddingItem.code && c.size === poAddingItem.size && c.sugarLevel === poAddingItem.sugarLevel;
-  });
-
-  if (existing) {
-    existing.qty++;
-  } else {
-    poCart.push({
-      code: poAddingItem.code,
-      name: poAddingItem.name,
-      size: poAddingItem.size,
-      sugarLevel: poAddingItem.sugarLevel,
-      price: poAddingItem.price,
-      qty: 1
-    });
-  }
-
-  poAddingItem = null;
-  renderPoCart();
-}
-
   // Check if same item+size+sugar exists in cart → increment qty
   var existing = poCart.find(function(c) {
     return c.code === poAddingItem.code && c.size === poAddingItem.size && c.sugarLevel === poAddingItem.sugarLevel;
