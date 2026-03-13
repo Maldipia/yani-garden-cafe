@@ -1762,15 +1762,19 @@ function renderOrders() {
     // Items
     html += '<div class="oc-items">';
     var orderTotal = 0;
+    var preparedCount = 0;
     if (o.items && o.items.length) {
       o.items.forEach(function(it) {
+        if (it.prepared) preparedCount++;
         var opts = [];
         if (it.size) opts.push(capitalize(it.size));
         if (it.sugar) opts.push(capitalize(it.sugar));
         var lineTotal = (it.price || 0) * (it.qty || 1);
         orderTotal += lineTotal;
-
-        html += '<div class="oc-item">' +
+        var prepIcon = it.prepared ? '✅' : '⬜';
+        var prepStyle = it.prepared ? 'opacity:.5;text-decoration:line-through;' : '';
+        html += '<div class="oc-item" style="' + prepStyle + '">' +
+          '<span style="font-size:.8rem;margin-right:4px;">' + prepIcon + '</span>' +
           '<div class="oc-item-qty">' + (it.qty || 1) + '×</div>' +
           '<div class="oc-item-info">' +
             '<div class="oc-item-name">' + esc(it.name) + '</div>' +
@@ -1779,6 +1783,18 @@ function renderOrders() {
           '</div>' +
         '</div>';
       });
+    }
+    // Prep progress bar (only for PREPARING status or if any prepared)
+    if (o.items && o.items.length && (o.status === 'PREPARING' || preparedCount > 0)) {
+      var totalItems = o.items.length;
+      var pct = Math.round((preparedCount / totalItems) * 100);
+      var barColor = preparedCount === totalItems ? '#27ae60' : preparedCount > 0 ? '#f39c12' : '#ccc';
+      html += '<div style="margin:6px 0 2px;display:flex;align-items:center;gap:8px;">' +
+        '<div style="flex:1;height:5px;background:#e0e0e0;border-radius:3px;overflow:hidden;">' +
+          '<div style="height:100%;width:' + pct + '%;background:' + barColor + ';border-radius:3px;transition:width .3s;"></div>' +
+        '</div>' +
+        '<span style="font-size:.7rem;font-weight:700;color:' + barColor + ';white-space:nowrap;">' + preparedCount + '/' + totalItems + ' prepped</span>' +
+      '</div>';
     }
     html += '</div>';
 

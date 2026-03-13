@@ -187,8 +187,18 @@
     padding: 10px 0;
     border-bottom: 1px solid #222;
     gap: 12px;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: background 0.15s;
   }
+  .item-row:hover { background: rgba(255,255,255,0.04); }
   .item-row:last-child { border-bottom: none; }
+  .item-row-done { opacity: 0.45; }
+  .item-row-done .item-name { text-decoration: line-through; color: #27ae60 !important; }
+  .item-check {
+    font-size: 1.2rem; min-width: 24px; text-align: center;
+    margin-top: 3px; user-select: none;
+  }
   .item-qty {
     font-size: 1.4rem; font-weight: 900;
     color: white; min-width: 28px; text-align: center;
@@ -197,7 +207,7 @@
   .item-details { flex: 1; }
   .item-name {
     font-size: 1.1rem; font-weight: 700; color: white;
-    line-height: 1.3;
+    line-height: 1.3; transition: color 0.2s;
   }
   .item-opts {
     display: flex; flex-wrap: wrap; gap: 6px; margin-top: 5px;
@@ -212,6 +222,29 @@
     font-size: .78rem; color: #ef4444; margin-top: 4px;
     font-style: italic;
   }
+  /* ── PREP PROGRESS BAR ─────────────────────────────── */
+  .prep-progress {
+    display: flex; align-items: center; gap: 10px;
+    margin: 8px 18px 4px;
+  }
+  .prep-bar-bg {
+    flex: 1; height: 6px; background: #2a2a2a;
+    border-radius: 3px; overflow: hidden;
+  }
+  .prep-bar-fill {
+    height: 100%; border-radius: 3px;
+    transition: width 0.3s ease, background 0.3s ease;
+  }
+  .prep-label {
+    font-size: .78rem; font-weight: 700;
+    white-space: nowrap; transition: color 0.3s;
+  }
+  /* ── READY BUTTON PULSE when all items done ─────────── */
+  @keyframes readyPulse {
+    0%,100% { box-shadow: 0 0 0 0 rgba(39,174,96,.6); }
+    50%      { box-shadow: 0 0 0 10px rgba(39,174,96,0); }
+  }
+  .btn-ready-pulse { animation: readyPulse 1.2s infinite; }
 
   /* ── SPECIAL NOTE ─────────────────────────────────── */
   .order-note {
@@ -489,7 +522,16 @@ function renderOrders(orders) {
   orders.forEach(order => {
     let card = main.querySelector(`.order-card[data-id="${order.orderId}"]`);
     if (card) {
-      // Update elapsed time and status badge only
+      // Check if prep state changed (e.g. another device tapped an item)
+      const existingPrepped = [...card.querySelectorAll('.item-row-done')].length;
+      const newPrepped = order.items.filter(it => it.prepared).length;
+      if (existingPrepped !== newPrepped) {
+        // Rebuild the whole card to sync prep state
+        const newCard = buildCard(order);
+        card.replaceWith(newCard);
+        return;
+      }
+      // Otherwise just update elapsed time and status badge
       const el = card.querySelector('.elapsed');
       if (el) { const info = elapsedInfo(order.createdAt); el.textContent = info.text; el.className = 'elapsed ' + info.cls; }
       card.className = `order-card status-${order.status}`;
@@ -507,11 +549,20 @@ function buildCard(o) {
   const elapsed = elapsedInfo(o.createdAt);
   const typeLabel = o.orderType === 'TAKE_OUT' ? '🥡 TAKE-OUT' : '🪑 DINE-IN';
 
+  const preparedCount = o.items.filter(it => it.prepared).length;
+  const totalItems    = o.items.length;
+  const allDone       = preparedCount === totalItems;
+  const progressPct   = totalItems > 0 ? Math.round((preparedCount / totalItems) * 100) : 0;
+  const progressColor = allDone ? '#27ae60' : preparedCount > 0 ? '#f39c12' : '#555';
+
   const itemsHTML = o.items.map(it => {
     const sizeTag  = it.size  ? `<span class="opt-tag opt-size">${it.size}</span>`  : '';
     const sugarTag = it.sugar ? `<span class="opt-tag opt-sugar">${it.sugar}</span>` : '';
     const noteHtml = it.notes ? `<div class="item-note">⚠ ${it.notes}</div>` : '';
-    return `<div class="item-row">
+    const doneClass = it.prepared ? ' item-row-done' : '';
+    const checkIcon = it.prepared ? '✅' : '⬜';
+    return `<div class="item-row${doneClass}" data-item-id="${it.id}" onclick="toggleItemPrep(this, '${o.orderId}', ${it.id}, ${it.prepared})" title="${it.prepared ? 'Mark as NOT prepared' : 'Mark as PREPARED'}">
+      <div class="item-check">${checkIcon}</div>
       <div class="item-qty">${it.qty}×</div>
       <div class="item-details">
         <div class="item-name">${it.name}</div>
@@ -527,7 +578,9 @@ function buildCard(o) {
   if (o.status === 'NEW') {
     btnHTML = `<button class="btn-action btn-start" onclick="updateStatus('${o.orderId}', 'PREPARING', this)">☕ START</button>`;
   } else if (o.status === 'PREPARING') {
-    btnHTML = `<button class="btn-action btn-ready" onclick="updateStatus('${o.orderId}', 'READY', this)">✨ READY</button>`;
+    const readyCls = allDone ? 'btn-ready btn-ready-pulse' : 'btn-ready';
+    const readyLabel = allDone ? '✨ READY  ✅ All done!' : `✨ READY  (${preparedCount}/${totalItems} prepped)`;
+    btnHTML = `<button class="btn-action ${readyCls}" onclick="updateStatus('${o.orderId}', 'READY', this)">${readyLabel}</button>`;
   }
 
   el.innerHTML = `
@@ -543,6 +596,12 @@ function buildCard(o) {
     <div class="card-meta">
       <span class="order-type-tag">${typeLabel}</span>
       <span class="elapsed ${elapsed.cls}" id="el-${o.orderId}">${elapsed.text}</span>
+    </div>
+    <div class="prep-progress">
+      <div class="prep-bar-bg">
+        <div class="prep-bar-fill" style="width:${progressPct}%;background:${progressColor};"></div>
+      </div>
+      <span class="prep-label" style="color:${progressColor};">${preparedCount}/${totalItems} prepared</span>
     </div>
     <div class="items-list">${itemsHTML}</div>
     ${orderNote}
@@ -581,6 +640,57 @@ async function updateStatus(orderId, newStatus, btn) {
   } catch(e) {
     showToast('❌ Network error');
     btn.disabled = false;
+  }
+}
+
+async function toggleItemPrep(rowEl, orderId, itemId, currentPrepared) {
+  const newPrepared = !currentPrepared;
+  // Optimistic UI update immediately
+  rowEl.classList.toggle('item-row-done', newPrepared);
+  rowEl.querySelector('.item-check').textContent = newPrepared ? '✅' : '⬜';
+  rowEl.setAttribute('onclick', `toggleItemPrep(this, '${orderId}', ${itemId}, ${newPrepared})`);
+
+  // Update progress bar on the card
+  const card = rowEl.closest('.order-card');
+  const allRows = card.querySelectorAll('.item-row[data-item-id]');
+  const doneCount = [...allRows].filter(r => r.classList.contains('item-row-done')).length;
+  const total = allRows.length;
+  const pct = Math.round((doneCount / total) * 100);
+  const color = doneCount === total ? '#27ae60' : doneCount > 0 ? '#f39c12' : '#555';
+  card.querySelector('.prep-bar-fill').style.width = pct + '%';
+  card.querySelector('.prep-bar-fill').style.background = color;
+  card.querySelector('.prep-label').textContent = `${doneCount}/${total} prepared`;
+  card.querySelector('.prep-label').style.color = color;
+
+  // Update READY button label if PREPARING
+  const readyBtn = card.querySelector('.btn-ready');
+  if (readyBtn) {
+    if (doneCount === total) {
+      readyBtn.classList.add('btn-ready-pulse');
+      readyBtn.textContent = '✨ READY  ✅ All done!';
+    } else {
+      readyBtn.classList.remove('btn-ready-pulse');
+      readyBtn.textContent = `✨ READY  (${doneCount}/${total} prepped)`;
+    }
+  }
+
+  // API call in background
+  try {
+    const r = await fetch(API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'toggleItemPrepared', itemId, prepared: newPrepared, userId })
+    });
+    const d = await r.json();
+    if (!d.ok) {
+      // Revert on failure
+      showToast('❌ Could not save — retrying...');
+      rowEl.classList.toggle('item-row-done', currentPrepared);
+      rowEl.querySelector('.item-check').textContent = currentPrepared ? '✅' : '⬜';
+      rowEl.setAttribute('onclick', `toggleItemPrep(this, '${orderId}', ${itemId}, ${currentPrepared})`);
+    }
+  } catch(e) {
+    showToast('❌ Network error');
   }
 }
 

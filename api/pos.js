@@ -568,13 +568,15 @@ export default async function handler(req, res) {
           itemsR.data.forEach(it => {
             if (!itemsMap[it.order_id]) itemsMap[it.order_id] = [];
             itemsMap[it.order_id].push({
-              code:  it.item_code,
-              name:  it.item_name,
-              price: it.unit_price,
-              qty:   it.qty,
-              size:  it.size_choice || '',
-              sugar: it.sugar_choice || '',
-              notes: it.item_notes || '',
+              id:       it.id,
+              code:     it.item_code,
+              name:     it.item_name,
+              price:    it.unit_price,
+              qty:      it.qty,
+              size:     it.size_choice || '',
+              sugar:    it.sugar_choice || '',
+              notes:    it.item_notes || '',
+              prepared: it.prepared || false,
             });
           });
         }
@@ -654,6 +656,25 @@ export default async function handler(req, res) {
 
       logSync('dine_in_orders', orderId, 'DELETE');
       return res.status(200).json({ ok: true, orderId });
+    }
+
+    // ── toggleItemPrepared ────────────────────────────────────────────────
+    // Kitchen taps an item to mark it prepared (or un-prepared).
+    // Allowed for KITCHEN, CASHIER, ADMIN, OWNER.
+    if (action === 'toggleItemPrepared') {
+      const authK = await requireAuth(body);
+      if (!authK.ok) return res.status(401).json({ ok: false, error: authK.error });
+
+      const itemId  = parseInt(body.itemId, 10);
+      const prepared = Boolean(body.prepared);
+      if (!itemId || isNaN(itemId)) return res.status(400).json({ ok: false, error: 'itemId is required' });
+
+      const r = await supa('PATCH', 'dine_in_order_items',
+        { prepared },
+        { id: `eq.${itemId}` }
+      );
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to update item' });
+      return res.status(200).json({ ok: true, itemId, prepared });
     }
 
     // ── editOrderItems ─────────────────────────────────────────────────────
