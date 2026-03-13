@@ -367,18 +367,42 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 .pm-sub { font-size:.78rem; color:var(--timber); margin-bottom:18px; }
 .pm-grid {
   display:grid; grid-template-columns:repeat(3,1fr); gap:10px;
-  margin-bottom:18px;
+  margin-bottom:14px;
 }
 .pm-btn {
-  padding:14px 8px; border-radius:12px;
+  padding:18px 8px; border-radius:14px;
   border:2px solid var(--mist); background:#fff;
   cursor:pointer; text-align:center;
   font-family:var(--font-body); transition:all .15s;
+  position:relative;
 }
 .pm-btn:hover { border-color:var(--forest); background:#f0f9f0; }
 .pm-btn.selected { border-color:var(--forest); background:var(--forest); color:#fff; }
-.pm-btn-icon { font-size:1.5rem; display:block; margin-bottom:4px; }
-.pm-btn-label { font-size:.75rem; font-weight:700; }
+.pm-btn.selected-2 { border-color:#2563EB; background:#2563EB; color:#fff; }
+.pm-btn-icon { font-size:2rem; display:block; margin-bottom:6px; }
+.pm-btn-label { font-size:.8rem; font-weight:800; display:block; }
+.pm-btn-sub { font-size:.62rem; font-weight:500; opacity:.75; display:block; margin-top:2px; }
+.pm-split-badge {
+  position:absolute; top:6px; right:6px;
+  background:#fff; color:var(--forest); border-radius:20px;
+  font-size:.58rem; font-weight:800; padding:1px 5px;
+  border:1.5px solid var(--forest);
+}
+.pm-btn.selected-2 .pm-split-badge { background:#2563EB; color:#fff; border-color:rgba(255,255,255,.5); }
+.pm-split-info {
+  background:#EFF6FF; border:1.5px solid #BFDBFE; border-radius:10px;
+  padding:8px 12px; margin-bottom:12px; font-size:.75rem; color:#1D4ED8;
+  display:none;
+}
+.pm-split-info.show { display:block; }
+.pm-notes-wrap { margin-bottom:14px; }
+.pm-notes-wrap label { font-size:.68rem; font-weight:700; color:var(--bark); display:block; margin-bottom:4px; }
+.pm-notes-input {
+  width:100%; padding:8px 10px; border:1.5px solid var(--mist);
+  border-radius:10px; font-size:.82rem; font-family:var(--font-body);
+  box-sizing:border-box; resize:none;
+}
+.pm-notes-input:focus { border-color:var(--forest); outline:none; }
 .pm-confirm {
   width:100%; padding:14px; border:none; border-radius:12px;
   background:var(--forest); color:#fff;
@@ -1922,13 +1946,17 @@ function renderOrders() {
     if (o.paymentStatus === 'PLATFORM_PAID') {
       html += '<div class="oc-payment verified">📦 Platform Handles Payment</div>';
     } else if (o.paymentStatus === 'VERIFIED' && o.paymentMethod) {
-      var pmIcon = pmIcons[o.paymentMethod] || '💰';
+      var pmParts = o.paymentMethod.split('+');
+      var splitLabel = pmParts.map(function(p){ return (pmIcons[p.trim()] || '💰') + ' ' + p.trim(); }).join(' + ');
       html += '<div class="oc-payment-row">'
-        + '<div class="oc-payment verified">' + pmIcon + ' ' + esc(o.paymentMethod) + ' · Paid ✅</div>';
+        + '<div class="oc-payment verified">' + splitLabel + ' · Paid ✅</div>';
       if (canSetPayment) {
         html += '<button class="oc-pm-change" onclick="openPaymentModal(\'' + esc(o.orderId) + '\')">Change</button>';
       }
       html += '</div>';
+      if (o.paymentNotes) {
+        html += '<div style="font-size:.68rem;color:#6B7280;padding:2px 16px 4px;font-style:italic">📝 ' + esc(o.paymentNotes) + '</div>';
+      }
     } else if (o.paymentStatus === 'SUBMITTED') {
       html += '<div class="oc-payment-row">'
         + '<div class="oc-payment submitted">💳 Payment Submitted · Pending</div>';
@@ -4960,15 +4988,31 @@ document.addEventListener('click', function(e) {
     <div class="pm-title">Set Payment Method</div>
     <div class="pm-sub" id="pmOrderLabel">Order: —</div>
     <div class="pm-grid">
-      <button class="pm-btn" onclick="selectPM('CASH')"><span class="pm-btn-icon">💵</span><span class="pm-btn-label">Cash</span></button>
-      <button class="pm-btn" onclick="selectPM('CARD')"><span class="pm-btn-icon">💳</span><span class="pm-btn-label">Card</span></button>
-      <button class="pm-btn" onclick="selectPM('GCASH')"><span class="pm-btn-icon">📱</span><span class="pm-btn-label">GCash</span></button>
-      <button class="pm-btn" onclick="selectPM('MAYA')"><span class="pm-btn-icon">📲</span><span class="pm-btn-label">Maya</span></button>
-      <button class="pm-btn" onclick="selectPM('INSTAPAY')"><span class="pm-btn-icon">🏦</span><span class="pm-btn-label">InstaPay</span></button>
-      <button class="pm-btn" onclick="selectPM('BDO')"><span class="pm-btn-icon">🏛️</span><span class="pm-btn-label">BDO</span></button>
-      <button class="pm-btn" onclick="selectPM('BPI')"><span class="pm-btn-icon">🏛️</span><span class="pm-btn-label">BPI</span></button>
-      <button class="pm-btn" onclick="selectPM('UNIONBANK')"><span class="pm-btn-icon">🏛️</span><span class="pm-btn-label">UnionBank</span></button>
-      <button class="pm-btn" onclick="selectPM('OTHER')"><span class="pm-btn-icon">💰</span><span class="pm-btn-label">Other</span></button>
+      <button class="pm-btn" id="pmBtnQR" onclick="selectPM('GCASH')">
+        <span class="pm-btn-icon">📱</span>
+        <span class="pm-btn-label">QR / GCash</span>
+        <span class="pm-btn-sub">GCash · Bank · InstaPay</span>
+        <span class="pm-split-badge" style="display:none" id="pmBadgeQR">1st</span>
+      </button>
+      <button class="pm-btn" id="pmBtnCASH" onclick="selectPM('CASH')">
+        <span class="pm-btn-icon">💵</span>
+        <span class="pm-btn-label">Cash</span>
+        <span class="pm-btn-sub">&nbsp;</span>
+        <span class="pm-split-badge" style="display:none" id="pmBadgeCASH">1st</span>
+      </button>
+      <button class="pm-btn" id="pmBtnCARD" onclick="selectPM('CARD')">
+        <span class="pm-btn-icon">💳</span>
+        <span class="pm-btn-label">Card</span>
+        <span class="pm-btn-sub">Terminal · PayMongo</span>
+        <span class="pm-split-badge" style="display:none" id="pmBadgeCARD">1st</span>
+      </button>
+    </div>
+    <div class="pm-split-info" id="pmSplitInfo">
+      ✂️ <strong>Split payment</strong> — tap a 2nd method to split the bill between two payment types.
+    </div>
+    <div class="pm-notes-wrap">
+      <label for="pmNotes">Notes (optional)</label>
+      <textarea id="pmNotes" class="pm-notes-input" rows="2" placeholder="e.g. Split: ₱200 cash + ₱326.90 GCash · Reference: 12345"></textarea>
     </div>
     <button class="pm-confirm" id="pmConfirmBtn" disabled onclick="confirmPaymentMethod()">✅ Confirm Payment</button>
     <span class="pm-cancel-link" onclick="closePaymentModal()">Cancel</span>
@@ -5032,36 +5076,85 @@ document.addEventListener('click', function(e) {
 
 <script>
 var pmCurrentOrder = null;
-var pmSelectedMethod = null;
+var pmSelectedMethod  = null;   // first pick  (GCASH | CASH | CARD)
+var pmSelectedMethod2 = null;   // second pick for split
 var pmFromComplete = false;
 
 function openPaymentModal(orderId, fromComplete) {
-  pmCurrentOrder = orderId;
+  pmCurrentOrder   = orderId;
   pmSelectedMethod = null;
-  pmFromComplete = !!fromComplete;
-  var label = fromComplete
-    ? 'Payment required to complete ' + orderId
-    : 'Order: ' + orderId;
+  pmSelectedMethod2= null;
+  pmFromComplete   = !!fromComplete;
+
+  var order = (typeof allOrders !== 'undefined') && allOrders.find(function(o){ return o.orderId === orderId; });
+  var total = order ? ' — ₱' + parseFloat(order.discountedTotal || order.total).toFixed(2) : '';
+  var label = (fromComplete ? 'Payment required: ' : '') + orderId + total;
   document.getElementById('pmOrderLabel').textContent = label;
+
   var confirmBtn = document.getElementById('pmConfirmBtn');
-  confirmBtn.textContent = fromComplete ? '✅ Set Payment & Complete Order' : '✅ Confirm Payment';
-  document.querySelectorAll('.pm-btn').forEach(function(b){ b.classList.remove('selected'); });
+  confirmBtn.textContent = fromComplete ? '✅ Set Payment & Complete' : '✅ Confirm Payment';
   confirmBtn.disabled = true;
+
+  // Reset all 3 buttons
+  ['QR','CASH','CARD'].forEach(function(k) {
+    var btn   = document.getElementById('pmBtn'   + k);
+    var badge = document.getElementById('pmBadge' + k);
+    if (btn)   btn.className = 'pm-btn';
+    if (badge) badge.style.display = 'none';
+  });
+  var splitInfo = document.getElementById('pmSplitInfo');
+  if (splitInfo) splitInfo.classList.remove('show');
+  var notes = document.getElementById('pmNotes');
+  if (notes) notes.value = '';
+
   document.getElementById('pmOverlay').classList.add('open');
 }
 
 function closePaymentModal() {
   document.getElementById('pmOverlay').classList.remove('open');
-  pmCurrentOrder = null;
-  pmSelectedMethod = null;
+  pmCurrentOrder = null; pmSelectedMethod = null; pmSelectedMethod2 = null; pmFromComplete = false;
 }
 
-function selectPM(method) {
-  pmSelectedMethod = method;
-  document.querySelectorAll('.pm-btn').forEach(function(b){
-    b.classList.toggle('selected', b.getAttribute('onclick') === "selectPM('" + method + "')");
-  });
-  document.getElementById('pmConfirmBtn').disabled = false;
+// pmKey: 'GCASH' | 'CASH' | 'CARD'  (also the DB method value)
+function selectPM(pmKey) {
+  if (event) event.stopPropagation();
+  var btn   = document.getElementById('pmBtn'   + pmKey);
+  var badge = document.getElementById('pmBadge' + pmKey);
+
+  if (!pmSelectedMethod) {
+    // ── First selection ─────────────────────────────
+    pmSelectedMethod = pmKey;
+    if (btn)   btn.className = 'pm-btn selected';
+    if (badge) { badge.textContent = '1st'; badge.style.display = ''; }
+    var si = document.getElementById('pmSplitInfo');
+    if (si) si.classList.add('show');
+    document.getElementById('pmConfirmBtn').disabled = false;
+
+  } else if (pmKey === pmSelectedMethod && !pmSelectedMethod2) {
+    // ── Deselect first pick ─────────────────────────
+    pmSelectedMethod = null;
+    if (btn)   btn.className = 'pm-btn';
+    if (badge) badge.style.display = 'none';
+    var si = document.getElementById('pmSplitInfo');
+    if (si) si.classList.remove('show');
+    document.getElementById('pmConfirmBtn').disabled = true;
+
+  } else if (!pmSelectedMethod2 && pmKey !== pmSelectedMethod) {
+    // ── Second selection — split ────────────────────
+    pmSelectedMethod2 = pmKey;
+    if (btn)   btn.className = 'pm-btn selected-2';
+    if (badge) { badge.textContent = '2nd'; badge.style.display = ''; }
+    document.getElementById('pmConfirmBtn').textContent =
+      '✅ Split: ' + pmSelectedMethod + ' + ' + pmSelectedMethod2;
+
+  } else if (pmKey === pmSelectedMethod2) {
+    // ── Deselect second pick ────────────────────────
+    pmSelectedMethod2 = null;
+    if (btn)   btn.className = 'pm-btn';
+    if (badge) badge.style.display = 'none';
+    document.getElementById('pmConfirmBtn').textContent =
+      pmFromComplete ? '✅ Set Payment & Complete' : '✅ Confirm Payment';
+  }
 }
 
 async function confirmPaymentMethod() {
@@ -5069,26 +5162,37 @@ async function confirmPaymentMethod() {
   var btn = document.getElementById('pmConfirmBtn');
   btn.disabled = true;
   btn.textContent = 'Saving...';
+
+  // Build the method string — split joins with '+'
+  var finalMethod = pmSelectedMethod2
+    ? pmSelectedMethod + '+' + pmSelectedMethod2
+    : pmSelectedMethod;
+  var notes = (document.getElementById('pmNotes') && document.getElementById('pmNotes').value.trim()) || '';
+
   try {
     var r = await api('setPaymentMethod', {
       userId: currentUser && currentUser.userId,
       orderId: pmCurrentOrder,
-      method: pmSelectedMethod
+      method: finalMethod,
+      notes: notes || undefined
     });
     if (r && r.ok) {
       closePaymentModal();
       if (pmFromComplete) {
-        // Now complete the order
         await updateStatus(pmCurrentOrder || r.orderId, 'COMPLETED');
       } else {
         await loadOrders();
-        showToast('\u2705 Payment set: ' + pmSelectedMethod);
+        var label = pmSelectedMethod2
+          ? '✅ Split: ' + pmSelectedMethod + ' + ' + pmSelectedMethod2
+          : '✅ Payment: ' + finalMethod;
+        showToast(label);
       }
     } else {
       showToast('\u274C ' + (r && r.error ? r.error : 'Failed to save'));
       btn.disabled = false;
       btn.textContent = '\u2705 Confirm Payment';
     }
+
   } catch(e) {
     showToast('\u274C Network error');
     btn.disabled = false;

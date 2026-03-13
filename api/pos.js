@@ -607,6 +607,7 @@ export default async function handler(req, res) {
         discountAmount:  o.discount_amount  || 0,
         discountedTotal: o.discounted_total || null,
         discountNote:    o.discount_note    || null,
+        paymentNotes:    o.payment_notes    || null,
         createdAt:     o.created_at,
         updatedAt:     o.updated_at,
         isTest:        o.is_test || false,
@@ -686,24 +687,37 @@ export default async function handler(req, res) {
     }
 
     // ── setPaymentMethod ──────────────────────────────────────────────────
-    // Admin/Cashier/Owner sets how an order was paid (cash, card, gcash, etc.)
+    // Admin/Cashier/Owner sets how an order was paid.
+    // method can be single (CASH) or split (GCASH+CASH, CARD+GCASH, etc.)
     if (action === 'setPaymentMethod') {
       const authP = await requireAuth(body, ['OWNER','ADMIN','CASHIER']);
       if (!authP.ok) return res.status(401).json({ ok: false, error: authP.error });
 
       const orderId = String(body.orderId || '').trim();
       const method  = String(body.method  || '').trim().toUpperCase();
-      const VALID   = ['CASH','CARD','GCASH','INSTAPAY','BDO','BPI','UNIONBANK','MAYA','OTHER'];
+      const notes   = String(body.notes   || '').trim().slice(0, 300);
+      const VALID   = new Set(['CASH','CARD','GCASH','INSTAPAY','BDO','BPI','UNIONBANK','MAYA','OTHER']);
+
       if (!orderId) return res.status(400).json({ ok: false, error: 'orderId required' });
       if (!isValidOrderId(orderId)) return res.status(400).json({ ok: false, error: 'Invalid orderId' });
-      if (!VALID.includes(method)) return res.status(400).json({ ok: false, error: 'Invalid payment method' });
 
-      const r = await supa('PATCH', 'dine_in_orders',
-        { payment_method: method, payment_status: 'VERIFIED', updated_at: new Date().toISOString() },
+      // Accept single or split methods (e.g. "GCASH+CASH")
+      const parts = method.split('+').map(s => s.trim());
+      if (parts.length > 2 || parts.some(p => !VALID.has(p)))
+        return res.status(400).json({ ok: false, error: 'Invalid payment method: ' + method });
+
+      const patchData = {
+        payment_method: method,
+        payment_status: 'VERIFIED',
+        updated_at: new Date().toISOString()
+      };
+      if (notes) patchData.payment_notes = notes;
+
+      const r = await supa('PATCH', 'dine_in_orders', patchData,
         { order_id: `eq.${encodeURIComponent(orderId)}` }
       );
       if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to update payment method' });
-      return res.status(200).json({ ok: true, orderId, method });
+      return res.status(200).json({ ok: true, orderId, method, split: parts.length === 2 });
     }
 
     // ── applyDiscount ─────────────────────────────────────────────────────
