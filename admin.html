@@ -1590,7 +1590,8 @@ function setFilter(f) {
     loadAnalytics();
   } else if (f === 'TABLES') {
     if (tablesView) tablesView.style.display = 'block';
-    loadTablesView();
+    // Fetch fresh orders first so table occupied status is up to date
+    loadOrders().then(function() { loadTablesView(); });
   } else {
     orderGrid.style.display = '';
     renderOrders();
@@ -4175,7 +4176,7 @@ async function loadReservations(date) {
   var list = document.getElementById('resList');
   list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--timber)">Loading...</div>';
   try {
-    var d = await api('getReservations', { date: date });
+    var d = await api('getReservations', { date: date, userId: currentUser && currentUser.userId });
     if (!d.ok) throw new Error(d.error);
     var res = d.reservations || [];
     if (res.length === 0) {
@@ -4231,7 +4232,7 @@ async function loadReservations(date) {
 }
 
 async function updateRes(resId, status) {
-  var r = await api('updateReservation', { resId: resId, status: status });
+  var r = await api('updateReservation', { resId: resId, status: status, userId: currentUser && currentUser.userId });
   if (r.ok) {
     var date = document.getElementById('resDatePicker').value || new Date().toISOString().slice(0,10);
     await loadReservations(date);
@@ -4318,6 +4319,7 @@ async function submitReservation() {
   btn.disabled = true; btn.textContent = 'Saving...';
 
   var r = await api('createReservation', {
+    userId: currentUser && currentUser.userId,
     guestName: name, guestPhone: phone || null,
     tableNo: parseInt(table), pax: parseInt(pax) || 2,
     resDate: date, resTime: time, notes: notes || null
