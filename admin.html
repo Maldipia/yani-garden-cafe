@@ -1773,7 +1773,7 @@ async function loadOrders() {
 async function loadMenuCache() {
   if (window._menuDataCache && window._menuDataCache.length) return; // already loaded
   try {
-    var result = await api('getMenuAdmin');
+    var result = await api('getMenuAdmin', { userId: currentUser && currentUser.userId });
     if (result.ok && result.items) {
       window._menuDataCache = result.items;
     }
@@ -3424,7 +3424,7 @@ var menuMgrShowInactive = false;
 async function loadMenuManager() {
   var grid = document.getElementById('menuMgrGrid');
   grid.innerHTML = '<div style="text-align:center;padding:40px;color:var(--timber)">Loading menu...</div>';
-  var result = await api('getMenuAdmin');
+  var result = await api('getMenuAdmin', { userId: currentUser && currentUser.userId });
   if (!result.ok) {
     grid.innerHTML = '<div style="text-align:center;padding:40px;color:#EF4444">❌ ' + (result.error || 'Failed to load menu') + '</div>';
     return;
