@@ -326,6 +326,28 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
   cursor:pointer; font-family:var(--font-body); white-space:nowrap;
   flex-shrink:0;
 }
+/* ── Discount badge on order card ── */
+.oc-discount-row {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:4px 16px 2px; gap:8px;
+}
+.oc-discount-badge {
+  font-size:.72rem; font-weight:700; color:#92400E;
+  background:#FEF3C7; border:1px solid #FCD34D;
+  border-radius:20px; padding:3px 10px; flex:1;
+}
+/* ── Discount Modal Type Buttons ── */
+.dm-type-btn {
+  padding:10px 6px; border-radius:10px;
+  border:1.5px solid var(--mist); background:#fff;
+  font-size:.78rem; font-weight:700; cursor:pointer;
+  font-family:var(--font-body); text-align:center;
+  transition:all .15s;
+}
+.dm-type-btn:hover { border-color:var(--forest); background:#F0FDF4; }
+.dm-type-btn.selected { background:var(--forest); color:#fff; border-color:var(--forest); }
+.dm-type-remove { color:#EF4444; border-color:#FCA5A5; }
+.dm-type-remove.selected { background:#EF4444; border-color:#EF4444; color:#fff; }
 /* ── Payment Modal ── */
 .pm-overlay {
   position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:500;
@@ -1123,6 +1145,8 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 </div>
 
 <!-- ══ SETTINGS VIEW (OWNER only) ══ -->
+<div id="staffView" style="display:none"></div>
+<div id="shiftView" style="display:none"></div>
 <div id="settingsView" style="display:none;padding:16px 16px 100px;max-width:520px;margin:0 auto">
   <div style="font-weight:800;font-size:1.05rem;color:var(--forest-deep);margin-bottom:16px">⚙️ Cafe Settings</div>
 
@@ -1691,6 +1715,8 @@ function renderFilters() {
   // Settings: OWNER only
   if (currentUser.role === 'OWNER') {
     tabs.push({ key:'SETTINGS', label:'⚙️ Settings', count:'' });
+    tabs.push({ key:'STAFF', label:'👥 Staff', count:'' });
+    tabs.push({ key:'SHIFT', label:'📋 Shift', count:'' });
   }
 
   document.getElementById('filterBar').innerHTML = tabs.map(function(t) {
@@ -1725,6 +1751,10 @@ function setFilter(f) {
 
   var settingsView = document.getElementById('settingsView');
   if (settingsView) settingsView.style.display = 'none';
+  var staffView = document.getElementById('staffView');
+  if (staffView) staffView.style.display = 'none';
+  var shiftView = document.getElementById('shiftView');
+  if (shiftView) shiftView.style.display = 'none';
 
   if (f === 'PAYMENTS') {
     paymentsView.style.display = 'block';
@@ -1747,6 +1777,14 @@ function setFilter(f) {
   } else if (f === 'SETTINGS') {
     if (settingsView) settingsView.style.display = 'block';
     loadSettings();
+  } else if (f === 'STAFF') {
+    var sv = document.getElementById('staffView');
+    if (sv) sv.style.display = 'block';
+    loadStaffTab();
+  } else if (f === 'SHIFT') {
+    var shv = document.getElementById('shiftView');
+    if (shv) shv.style.display = 'block';
+    loadShiftSummary();
   } else {
     orderGrid.style.display = '';
     renderOrders();
@@ -1914,6 +1952,21 @@ function renderOrders() {
       html += '<div class="oc-notes">📝 ' + esc(o.notes) + '</div>';
     }
 
+    // Discount display
+    var canDiscount = (currentUser.role === 'OWNER' || currentUser.role === 'ADMIN' || currentUser.role === 'CASHIER');
+    if (o.discountType && parseFloat(o.discountAmount) > 0) {
+      var dtLabel = {PWD:'PWD 20%',SENIOR:'Senior 20%',BOTH:'PWD+Senior',PROMO:'Promo',CUSTOM:'Custom'}[o.discountType] || o.discountType;
+      html += '<div class="oc-discount-row">'
+        + '<span class="oc-discount-badge">🏷️ ' + dtLabel + ' -₱' + parseFloat(o.discountAmount).toFixed(2) + '</span>';
+      if (canDiscount && o.status !== 'COMPLETED' && o.status !== 'CANCELLED') {
+        html += '<button class="oc-pm-change" onclick="openDiscountModal(\'' + o.orderId + '\')">Edit</button>';
+      }
+      html += '</div>';
+      if (o.discountedTotal) {
+        html += '<div style="font-size:.7rem;color:var(--forest);font-weight:700;padding:0 16px 6px;">Final: ₱' + parseFloat(o.discountedTotal).toFixed(2) + '</div>';
+      }
+    }
+
     // Actions
     if (cfg.actions.length) {
       html += '<div class="oc-actions">';
@@ -1925,6 +1978,12 @@ function renderOrders() {
         if (act === 'cancel' && canCancel) html += '<button class="oc-btn oc-btn-cancel" onclick="updateStatus(\'' + o.orderId + '\',\'CANCELLED\')">✕</button>';
       });
       html += '</div>';
+    }
+
+    // Discount button (ADMIN/CASHIER/OWNER, active orders only)
+    if (canDiscount && o.status !== 'COMPLETED' && o.status !== 'CANCELLED') {
+      html += '<button class="oc-btn" style="background:#FEF3C7;color:#92400E;border:1px solid #FCD34D;margin-top:4px;width:calc(100% - 32px);margin-left:16px;" onclick="openDiscountModal(\'' + o.orderId + '\')">🏷️ '
+        + (o.discountType ? 'Edit Discount' : 'Apply Discount') + '</button>';
     }
 
     // Print Receipt button (SERVER, ADMIN, OWNER only)
@@ -1978,6 +2037,16 @@ async function updateStatus(orderId, newStatus) {
       showToast('Failed: ' + (result.error || 'Unknown error'), 'error');
     }
     return;
+  }
+
+  // ── FORCED PAYMENT CHECK before COMPLETE ────────────────────────────
+  if (newStatus === 'COMPLETED') {
+    var order = allOrders.find(function(o) { return o.orderId === orderId; });
+    if (order && !order.paymentMethod && order.paymentStatus !== 'PLATFORM_PAID') {
+      // Must set payment method first
+      openPaymentModal(orderId, true /* fromComplete */);
+      return;
+    }
   }
 
   var result = await api('updateOrderStatus', { orderId:orderId, status:newStatus, userId: currentUser && currentUser.userId });
@@ -4906,16 +4975,78 @@ document.addEventListener('click', function(e) {
   </div>
 </div>
 
+<!-- ── Discount Modal ────────────────────────────────── -->
+<div class="pm-overlay" id="discountOverlay" onclick="if(event.target===this)closeDiscountModal()">
+  <div class="pm-modal" style="max-width:360px">
+    <div class="pm-title">🏷️ Apply Discount</div>
+    <div class="pm-sub" id="dmOrderLabel">Order: —</div>
+    <div style="padding:0 4px">
+      <!-- Discount Type -->
+      <div style="font-size:.72rem;font-weight:700;color:var(--bark);margin-bottom:6px;">DISCOUNT TYPE</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px">
+        <button class="dm-type-btn" onclick="selectDmType('PWD')">♿ PWD (20%)</button>
+        <button class="dm-type-btn" onclick="selectDmType('SENIOR')">👴 Senior (20%)</button>
+        <button class="dm-type-btn" onclick="selectDmType('BOTH')">♿👴 Both (20%)</button>
+        <button class="dm-type-btn" onclick="selectDmType('PROMO')">🎉 Promo %</button>
+        <button class="dm-type-btn" onclick="selectDmType('CUSTOM')">✍️ Custom ₱</button>
+        <button class="dm-type-btn dm-type-remove" onclick="selectDmType('REMOVE')">✕ Remove</button>
+      </div>
+      <!-- PWD/Senior inputs -->
+      <div id="dmPaxSection" style="display:none;margin-bottom:10px">
+        <div style="display:flex;gap:8px;align-items:center">
+          <div style="flex:1">
+            <label style="font-size:.68rem;color:var(--bark)">Total people in party</label>
+            <input id="dmTotalPax" type="number" min="1" max="20" value="1" style="width:100%;padding:6px;border:1.5px solid var(--mist);border-radius:8px;font-size:.85rem">
+          </div>
+          <div style="flex:1" id="dmQualPaxWrap">
+            <label style="font-size:.68rem;color:var(--bark)">Qualifying (PWD/Senior)</label>
+            <input id="dmQualPax" type="number" min="1" max="20" value="1" style="width:100%;padding:6px;border:1.5px solid var(--mist);border-radius:8px;font-size:.85rem">
+          </div>
+        </div>
+      </div>
+      <!-- Promo % input -->
+      <div id="dmPromoSection" style="display:none;margin-bottom:10px">
+        <label style="font-size:.68rem;color:var(--bark)">Discount Percentage</label>
+        <input id="dmPromoPct" type="number" min="1" max="100" value="10" placeholder="e.g. 10" style="width:100%;padding:6px;border:1.5px solid var(--mist);border-radius:8px;font-size:.85rem">
+      </div>
+      <!-- Custom ₱ input -->
+      <div id="dmCustomSection" style="display:none;margin-bottom:10px">
+        <label style="font-size:.68rem;color:var(--bark)">Discount Amount (₱)</label>
+        <input id="dmCustomAmt" type="number" min="1" placeholder="e.g. 50" style="width:100%;padding:6px;border:1.5px solid var(--mist);border-radius:8px;font-size:.85rem">
+      </div>
+      <!-- Note -->
+      <div id="dmNoteSection" style="margin-bottom:14px">
+        <label style="font-size:.68rem;color:var(--bark)">Note (optional)</label>
+        <input id="dmNote" type="text" placeholder="e.g. Promo code: SAVE10" style="width:100%;padding:6px;border:1.5px solid var(--mist);border-radius:8px;font-size:.85rem">
+      </div>
+      <!-- Preview -->
+      <div id="dmPreview" style="background:#F0FDF4;border:1.5px solid #86EFAC;border-radius:10px;padding:10px 12px;margin-bottom:12px;display:none">
+        <div style="font-size:.72rem;color:#15803D;font-weight:700">DISCOUNT PREVIEW</div>
+        <div style="font-size:.8rem;color:#166534;margin-top:4px" id="dmPreviewText"></div>
+      </div>
+    </div>
+    <button class="pm-confirm" id="dmConfirmBtn" disabled onclick="submitDiscount()">✅ Apply Discount</button>
+    <span class="pm-cancel-link" onclick="closeDiscountModal()">Cancel</span>
+  </div>
+</div>
+
 <script>
 var pmCurrentOrder = null;
 var pmSelectedMethod = null;
+var pmFromComplete = false;
 
-function openPaymentModal(orderId) {
+function openPaymentModal(orderId, fromComplete) {
   pmCurrentOrder = orderId;
   pmSelectedMethod = null;
-  document.getElementById('pmOrderLabel').textContent = 'Order: ' + orderId;
+  pmFromComplete = !!fromComplete;
+  var label = fromComplete
+    ? 'Payment required to complete ' + orderId
+    : 'Order: ' + orderId;
+  document.getElementById('pmOrderLabel').textContent = label;
+  var confirmBtn = document.getElementById('pmConfirmBtn');
+  confirmBtn.textContent = fromComplete ? '✅ Set Payment & Complete Order' : '✅ Confirm Payment';
   document.querySelectorAll('.pm-btn').forEach(function(b){ b.classList.remove('selected'); });
-  document.getElementById('pmConfirmBtn').disabled = true;
+  confirmBtn.disabled = true;
   document.getElementById('pmOverlay').classList.add('open');
 }
 
@@ -4946,8 +5077,13 @@ async function confirmPaymentMethod() {
     });
     if (r && r.ok) {
       closePaymentModal();
-      await loadOrders();
-      showToast('\u2705 Payment set: ' + pmSelectedMethod);
+      if (pmFromComplete) {
+        // Now complete the order
+        await updateStatus(pmCurrentOrder || r.orderId, 'COMPLETED');
+      } else {
+        await loadOrders();
+        showToast('\u2705 Payment set: ' + pmSelectedMethod);
+      }
     } else {
       showToast('\u274C ' + (r && r.error ? r.error : 'Failed to save'));
       btn.disabled = false;
@@ -4958,6 +5094,217 @@ async function confirmPaymentMethod() {
     btn.disabled = false;
     btn.textContent = '\u2705 Confirm Payment';
   }
+}
+
+// ══════════════════════════════════════════════════════════
+// DISCOUNT MODAL
+// ══════════════════════════════════════════════════════════
+var dmCurrentOrder = null;
+var dmSelectedType = null;
+
+function openDiscountModal(orderId) {
+  dmCurrentOrder = orderId;
+  dmSelectedType = null;
+  var order = allOrders.find(function(o){ return o.orderId === orderId; });
+  document.getElementById('dmOrderLabel').textContent = 'Order: ' + orderId
+    + (order ? ' — Total: ₱' + parseFloat(order.total).toFixed(2) : '');
+  document.querySelectorAll('.dm-type-btn').forEach(function(b){ b.classList.remove('selected'); });
+  document.getElementById('dmPaxSection').style.display = 'none';
+  document.getElementById('dmPromoSection').style.display = 'none';
+  document.getElementById('dmCustomSection').style.display = 'none';
+  document.getElementById('dmPreview').style.display = 'none';
+  document.getElementById('dmConfirmBtn').disabled = true;
+  document.getElementById('dmConfirmBtn').textContent = '✅ Apply Discount';
+  document.getElementById('dmNote').value = (order && order.discountNote) || '';
+  document.getElementById('discountOverlay').classList.add('open');
+}
+function closeDiscountModal() {
+  document.getElementById('discountOverlay').classList.remove('open');
+  dmCurrentOrder = null; dmSelectedType = null;
+}
+function selectDmType(type) {
+  dmSelectedType = type;
+  document.querySelectorAll('.dm-type-btn').forEach(function(b){ b.classList.remove('selected'); });
+  event.currentTarget.classList.add('selected');
+  document.getElementById('dmPaxSection').style.display   = (type==='PWD'||type==='SENIOR'||type==='BOTH') ? 'block' : 'none';
+  document.getElementById('dmPromoSection').style.display = (type==='PROMO') ? 'block' : 'none';
+  document.getElementById('dmCustomSection').style.display= (type==='CUSTOM') ? 'block' : 'none';
+  document.getElementById('dmNoteSection').style.display  = (type==='REMOVE') ? 'none' : 'block';
+  var btn = document.getElementById('dmConfirmBtn');
+  btn.disabled = false;
+  btn.textContent = type === 'REMOVE' ? '✕ Remove Discount' : '✅ Apply Discount';
+  if (type !== 'REMOVE') updateDmPreview();
+  else document.getElementById('dmPreview').style.display = 'none';
+}
+function updateDmPreview() {
+  var order = allOrders.find(function(o){ return o.orderId === dmCurrentOrder; });
+  if (!order || !dmSelectedType || dmSelectedType === 'REMOVE') return;
+  var total = parseFloat(order.total) || 0;
+  var discount = 0;
+  if (dmSelectedType === 'PWD' || dmSelectedType === 'SENIOR' || dmSelectedType === 'BOTH') {
+    var tp = parseInt(document.getElementById('dmTotalPax').value) || 1;
+    var qp = parseInt(document.getElementById('dmQualPax').value)  || 1;
+    discount = Math.round((total / Math.max(tp,1)) * qp * 0.20 * 100) / 100;
+  } else if (dmSelectedType === 'PROMO') {
+    var pct = parseFloat(document.getElementById('dmPromoPct').value) || 0;
+    discount = Math.round(total * (pct/100) * 100) / 100;
+  } else if (dmSelectedType === 'CUSTOM') {
+    discount = parseFloat(document.getElementById('dmCustomAmt').value) || 0;
+  }
+  var finalTotal = Math.max(0, Math.round((total - discount) * 100) / 100);
+  document.getElementById('dmPreviewText').innerHTML =
+    '₱' + total.toFixed(2) + ' − ₱' + discount.toFixed(2) + ' = <strong>₱' + finalTotal.toFixed(2) + '</strong>';
+  document.getElementById('dmPreview').style.display = 'block';
+}
+// Wire preview on input change
+document.addEventListener('DOMContentLoaded', function() {
+  ['dmTotalPax','dmQualPax','dmPromoPct','dmCustomAmt'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('input', function(){ if(dmSelectedType) updateDmPreview(); });
+  });
+});
+async function submitDiscount() {
+  if (!dmCurrentOrder || !dmSelectedType) return;
+  var btn = document.getElementById('dmConfirmBtn');
+  btn.disabled = true; btn.textContent = 'Saving...';
+  var payload = {
+    userId: currentUser && currentUser.userId,
+    orderId: dmCurrentOrder,
+    discountType: dmSelectedType,
+    note: document.getElementById('dmNote').value || ''
+  };
+  if (dmSelectedType === 'PWD' || dmSelectedType === 'SENIOR' || dmSelectedType === 'BOTH') {
+    payload.totalPax   = parseInt(document.getElementById('dmTotalPax').value) || 1;
+    payload.qualifiedPax = parseInt(document.getElementById('dmQualPax').value) || 1;
+  } else if (dmSelectedType === 'PROMO') {
+    payload.promoPct = parseFloat(document.getElementById('dmPromoPct').value) || 0;
+  } else if (dmSelectedType === 'CUSTOM') {
+    payload.customAmt = parseFloat(document.getElementById('dmCustomAmt').value) || 0;
+  }
+  try {
+    var r = await api('applyDiscount', payload);
+    if (r && r.ok) {
+      closeDiscountModal();
+      await loadOrders();
+      if (dmSelectedType === 'REMOVE') {
+        showToast('Discount removed');
+      } else {
+        showToast('🏷️ Discount applied: -₱' + (r.discountAmount || 0).toFixed(2) + ' → Final ₱' + (r.discountedTotal || 0).toFixed(2));
+      }
+    } else {
+      showToast('❌ ' + (r && r.error ? r.error : 'Failed'));
+      btn.disabled = false;
+      btn.textContent = '✅ Apply Discount';
+    }
+  } catch(e) {
+    showToast('❌ Network error');
+    btn.disabled = false;
+    btn.textContent = '✅ Apply Discount';
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// STAFF TAB
+// ══════════════════════════════════════════════════════════
+async function loadStaffTab() {
+  var view = document.getElementById('staffView');
+  if (!view) return;
+  view.innerHTML = '<div style="padding:20px;text-align:center;color:var(--bark)">Loading staff...</div>';
+  var r = await api('getStaff', { userId: currentUser && currentUser.userId });
+  if (!r || !r.ok) {
+    view.innerHTML = '<div style="padding:20px;color:#EF4444">Failed to load staff.</div>';
+    return;
+  }
+  var roleColors = { OWNER:'#7C3AED', ADMIN:'#2563EB', CASHIER:'#059669', KITCHEN:'#D97706' };
+  var html = '<div style="padding:16px 16px 100px">';
+  html += '<div style="font-size:.85rem;color:var(--bark);margin-bottom:14px;">' + r.users.length + ' active staff accounts</div>';
+  r.users.forEach(function(u) {
+    var lastLogin = u.last_login ? new Date(u.last_login).toLocaleString('en-PH',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : 'Never';
+    var roleColor = roleColors[u.role] || '#6B7280';
+    html += '<div style="background:#fff;border-radius:14px;padding:14px 16px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,.07);display:flex;align-items:center;gap:12px">'
+      + '<div style="width:40px;height:40px;border-radius:50%;background:' + roleColor + '20;display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0">'
+        + (u.role==='OWNER'?'👑':u.role==='ADMIN'?'🛡️':u.role==='CASHIER'?'💵':'👨‍🍳') + '</div>'
+      + '<div style="flex:1;min-width:0">'
+        + '<div style="font-weight:700;font-size:.88rem;color:var(--bark)">' + (u.display_name || u.username) + '</div>'
+        + '<div style="font-size:.72rem;color:#9CA3AF;margin-top:2px">@' + u.username + ' · Last login: ' + lastLogin + '</div>'
+        + (u.failed_attempts > 0 ? '<div style="font-size:.68rem;color:#EF4444;margin-top:2px">⚠️ ' + u.failed_attempts + ' failed attempt(s)</div>' : '')
+      + '</div>'
+      + '<span style="font-size:.68rem;font-weight:700;color:' + roleColor + ';background:' + roleColor + '18;padding:3px 10px;border-radius:20px">' + u.role + '</span>'
+      + '</div>';
+  });
+  html += '<div style="background:#FEF3C7;border:1px solid #FCD34D;border-radius:12px;padding:12px 14px;margin-top:8px;font-size:.75rem;color:#92400E">'
+    + '💡 To change PINs, use the <strong>Change PIN</strong> option in Settings. Staff management (add/remove) coming soon.</div>';
+  html += '</div>';
+  view.innerHTML = html;
+}
+
+// ══════════════════════════════════════════════════════════
+// SHIFT SUMMARY (End-of-Day)
+// ══════════════════════════════════════════════════════════
+async function loadShiftSummary() {
+  var view = document.getElementById('shiftView');
+  if (!view) return;
+  view.innerHTML = '<div style="padding:24px;text-align:center;color:var(--bark)">Loading shift summary...</div>';
+  var r = await api('getShiftSummary', { userId: currentUser && currentUser.userId });
+  if (!r || !r.ok) {
+    view.innerHTML = '<div style="padding:20px;color:#EF4444">Failed to load shift data.</div>';
+    return;
+  }
+  var pmIcons = {CASH:'💵',CARD:'💳',GCASH:'📱',MAYA:'📲',INSTAPAY:'🏦',BDO:'🏛️',BPI:'🏛️',UNIONBANK:'🏛️',OTHER:'💰',UNRECORDED:'⚠️'};
+  var html = '<div style="padding:16px 16px 100px">';
+  // Date + header
+  html += '<div style="font-size:.8rem;color:var(--bark);margin-bottom:12px">📅 ' + r.date + ' · Today\'s Shift</div>';
+  // Summary cards
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">';
+  html += statCard('💰 Revenue', '₱' + parseFloat(r.totalRevenue).toFixed(2), '#059669', '#F0FDF4');
+  html += statCard('📋 Orders', r.totalOrders, '#2563EB', '#EFF6FF');
+  html += statCard('🏷️ Discounts', '₱' + parseFloat(r.totalDiscounts).toFixed(2), '#7C3AED', '#F5F3FF');
+  html += statCard('❌ Cancelled', r.cancelledOrders, '#EF4444', '#FEF2F2');
+  html += '</div>';
+  // Unrecorded warning
+  if (r.unrecordedPayments > 0) {
+    html += '<div style="background:#FEF3C7;border:1.5px solid #FCD34D;border-radius:12px;padding:12px 14px;margin-bottom:14px">'
+      + '<div style="font-weight:700;color:#92400E;font-size:.82rem">⚠️ ' + r.unrecordedPayments + ' completed order(s) with no payment method logged!</div>'
+      + '<div style="font-size:.72rem;color:#B45309;margin-top:3px">Go to those orders and set payment method for accurate reconciliation.</div>'
+      + '</div>';
+  }
+  // Payment breakdown
+  html += '<div style="font-size:.75rem;font-weight:700;color:var(--bark);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">Payment Breakdown</div>';
+  var breakdown = r.paymentBreakdown || {};
+  var pmKeys = Object.keys(breakdown).sort();
+  if (pmKeys.length === 0) {
+    html += '<div style="color:#9CA3AF;font-size:.8rem;padding:8px 0">No completed orders yet today.</div>';
+  } else {
+    pmKeys.forEach(function(pm) {
+      var d = breakdown[pm];
+      var icon = pmIcons[pm] || '💰';
+      var isWarning = pm === 'UNRECORDED';
+      html += '<div style="background:' + (isWarning?'#FEF3C7':'#fff') + ';border-radius:12px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px;box-shadow:0 1px 3px rgba(0,0,0,.06)">'
+        + '<span style="font-size:1.1rem">' + icon + '</span>'
+        + '<div style="flex:1"><div style="font-weight:700;font-size:.83rem;color:' + (isWarning?'#92400E':'var(--bark)') + '">' + pm + '</div>'
+        + '<div style="font-size:.7rem;color:#9CA3AF">' + d.count + ' order(s)</div></div>'
+        + '<div style="font-weight:800;font-size:.9rem;color:' + (isWarning?'#92400E':'var(--forest)') + '">₱' + parseFloat(d.total).toFixed(2) + '</div>'
+        + '</div>';
+    });
+  }
+  // Dine-in vs Take-out
+  html += '<div style="font-size:.75rem;font-weight:700;color:var(--bark);margin-top:14px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">Order Types</div>';
+  html += '<div style="display:flex;gap:8px">'
+    + '<div style="flex:1;background:#fff;border-radius:12px;padding:12px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.06)">'
+      + '<div style="font-size:1.2rem">🍽️</div><div style="font-weight:700;font-size:1.1rem;color:var(--forest)">' + r.orderTypeSplit.dineIn + '</div>'
+      + '<div style="font-size:.68rem;color:#9CA3AF">Dine-In</div></div>'
+    + '<div style="flex:1;background:#fff;border-radius:12px;padding:12px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.06)">'
+      + '<div style="font-size:1.2rem">🛍️</div><div style="font-weight:700;font-size:1.1rem;color:var(--forest)">' + r.orderTypeSplit.takeOut + '</div>'
+      + '<div style="font-size:.68rem;color:#9CA3AF">Take-Out</div></div>'
+    + '</div>';
+  html += '</div>';
+  view.innerHTML = html;
+}
+function statCard(label, value, color, bg) {
+  return '<div style="background:' + bg + ';border-radius:12px;padding:12px;text-align:center">'
+    + '<div style="font-size:.68rem;color:' + color + ';font-weight:700;margin-bottom:4px">' + label + '</div>'
+    + '<div style="font-size:1.1rem;font-weight:800;color:' + color + '">' + value + '</div>'
+    + '</div>';
 }
 </script>
 
