@@ -5,6 +5,7 @@
   "description": "Yani Garden Cafe QR Self-Order POS",
   "dependencies": {
     "@supabase/supabase-js": "^2.98.0",
+    "bcryptjs": "^3.0.3",
     "express": "^5.2.1",
     "node-fetch": "^3.3.2"
   }

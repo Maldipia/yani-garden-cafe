@@ -5,6 +5,7 @@
 // CORS restricted to known domains. No hardcoded key fallbacks.
 // ══════════════════════════════════════════════════════════════════════
 
+import bcrypt from 'bcryptjs';
 const SUPABASE_URL = 'https://hnynvclpvfxzlfjphefj.supabase.co';
 // Service role key — loaded from env only. No hardcoded fallback.
 const SUPABASE_KEY = (() => {
@@ -16,27 +17,43 @@ const SUPABASE_KEY = (() => {
 const SERVICE_CHARGE_RATE = 0.10;
 const ORDER_PREFIX = 'YANI';
 
-// ── In-memory rate limiter (per IP, 60 req/min) ───────────────────────────
-const rateLimitMap = new Map();
-const RATE_LIMIT = 60;
-const RATE_WINDOW_MS = 60_000;
+// ── Supabase-backed rate limiter (per IP, 60 req/min) ─────────────────────
+// Persists across Vercel cold starts via api_rate_limits table.
+// Falls open (allows request) if Supabase is unreachable — never blocks ops.
+const RATE_LIMIT    = 60;
+const RATE_WINDOW_S = 60;
 
-function checkRateLimit(ip) {
-  const now = Date.now();
-  const entry = rateLimitMap.get(ip) || { count: 0, windowStart: now };
-  if (now - entry.windowStart > RATE_WINDOW_MS) {
-    entry.count = 1;
-    entry.windowStart = now;
-  } else {
-    entry.count++;
+async function checkRateLimit(ip) {
+  try {
+    // Hash IP for privacy — we only need uniqueness, not the real IP
+    const encoder = new TextEncoder();
+    const data = encoder.encode(ip);
+    const hashBuf = await crypto.subtle.digest('SHA-256', data);
+    const ipKey = Array.from(new Uint8Array(hashBuf))
+      .map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 32);
+
+    const now   = Math.floor(Date.now() / 1000);
+    const winStart = now - RATE_WINDOW_S;
+
+    // Upsert: increment count if same window, else reset
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/rpc/upsert_rate_limit`,
+      {
+        method: 'POST',
+        headers: {
+          'apikey':        SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Content-Type':  'application/json',
+        },
+        body: JSON.stringify({ p_key: ipKey, p_window: RATE_WINDOW_S, p_limit: RATE_LIMIT }),
+      }
+    );
+    if (!r.ok) return true; // fail open
+    const result = await r.json();
+    return result !== false; // function returns false when over limit
+  } catch {
+    return true; // fail open — never block real traffic on rate limit errors
   }
-  rateLimitMap.set(ip, entry);
-  if (rateLimitMap.size > 1000) {
-    for (const [k, v] of rateLimitMap) {
-      if (now - v.windowStart > RATE_WINDOW_MS) rateLimitMap.delete(k);
-    }
-  }
-  return entry.count <= RATE_LIMIT;
 }
 
 // ── Input validation helpers ──────────────────────────────────────────────
@@ -131,14 +148,7 @@ async function supaFetch(url, opts = {}) {
   catch { return { ok: resp.ok, status: resp.status, data: text }; }
 }
 
-// ── SHA-256 hash (for PIN verification) ───────────────────────────────────
-async function sha256(text) {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(text);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
+// ── PIN verification uses bcrypt (cost 12) — see verifyUserPin handler ──
 
 // ── Log to sheets_sync_log (fire-and-forget) ──────────────────────────────
 function logSync(tableName, recordId, action) {
@@ -186,7 +196,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed' });
 
   const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
-  if (!checkRateLimit(ip)) {
+  if (!await checkRateLimit(ip)) {
     return res.status(429).json({ ok: false, error: 'Too many requests. Please wait a moment.' });
   }
 
@@ -909,46 +919,50 @@ export default async function handler(req, res) {
       const pin = String(body.pin || '').trim();
       if (!pin || pin.length < 4) return res.status(400).json({ ok: false, error: 'PIN is required' });
 
-      const pinHash = await sha256(pin);
-
-      // Check for locked accounts first
+      // Fetch all active staff — we need to bcrypt.compare against each hash
+      // (bcrypt cannot reverse-lookup; we must compare, not query by hash)
       const r = await supaFetch(
-        `${SUPABASE_URL}/rest/v1/staff_users?pin_hash=eq.${encodeURIComponent(pinHash)}&active=eq.true&select=user_id,username,display_name,role,active,locked_until`
+        `${SUPABASE_URL}/rest/v1/staff_users?active=eq.true&select=user_id,username,display_name,role,pin_hash,failed_attempts,locked_until`
       );
+      if (!r.ok || !r.data) return res.status(500).json({ ok: false, error: 'Auth service error' });
 
-      if (!r.ok || !r.data.length) {
-        // Increment failed attempts on all users (we don't know which one)
-        // Just return invalid PIN
+      // Find matching user — try each active staff member
+      let matchedUser = null;
+      for (const candidate of r.data) {
+        if (!candidate.pin_hash) continue;
+        try {
+          const match = await bcrypt.compare(pin, candidate.pin_hash);
+          if (match) { matchedUser = candidate; break; }
+        } catch { continue; } // malformed hash — skip
+      }
+
+      if (!matchedUser) {
         return res.status(200).json({ ok: false, error: 'Invalid PIN' });
       }
 
-      const user = r.data[0];
-
-      // Check if locked
-      if (user.locked_until && new Date(user.locked_until) > new Date()) {
-        return res.status(200).json({ ok: false, error: 'Account locked. Please wait.' });
+      // Check if account is locked
+      if (matchedUser.locked_until && new Date(matchedUser.locked_until) > new Date()) {
+        return res.status(200).json({ ok: false, error: 'Account locked. Please try again later.' });
       }
 
-      // Update last_login and reset failed_attempts
+      // PIN correct — reset counters, update last_login
       await supa('PATCH', 'staff_users', {
         last_login:      new Date().toISOString(),
         failed_attempts: 0,
         locked_until:    null,
-      }, { user_id: `eq.${user.user_id}` });
+      }, { user_id: `eq.${matchedUser.user_id}` });
 
-      // Return flat fields for admin.html compatibility
       return res.status(200).json({
         ok: true,
-        userId:      user.user_id,
-        username:    user.username,
-        displayName: user.display_name,
-        role:        user.role,
-        // Also include nested user object for future clients
+        userId:      matchedUser.user_id,
+        username:    matchedUser.username,
+        displayName: matchedUser.display_name,
+        role:        matchedUser.role,
         user: {
-          userId:      user.user_id,
-          username:    user.username,
-          displayName: user.display_name,
-          role:        user.role,
+          userId:      matchedUser.user_id,
+          username:    matchedUser.username,
+          displayName: matchedUser.display_name,
+          role:        matchedUser.role,
         },
       });
     }
