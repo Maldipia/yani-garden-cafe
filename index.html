@@ -1776,27 +1776,39 @@ function saveReceiptDetails() {
 async function selectReceiptDelivery(method) {
   state.receiptDelivery = method;
 
-  // Send receipt request to backend
-  await api('requestReceipt', {
-    orderId: state.orderId,
-    receiptType: state.receiptType,
-    delivery: method,
-    email: state.receiptEmail,
-    name: state.receiptName,
-    address: state.receiptAddress,
-    tin: state.receiptTIN
+  // Show loading state for email
+  if (method === 'email') {
+    toast('Sending receipt...');
+  }
+
+  // Send receipt request to backend (now actually sends email if method=email)
+  const result = await api('requestReceipt', {
+    orderId:        state.orderId,
+    receiptType:    state.receiptType,
+    deliveryMethod: method,
+    email:          state.receiptEmail,
+    name:           state.receiptName,
+    address:        state.receiptAddress,
+    tin:            state.receiptTIN
   });
 
   if (method === 'email') {
-    toast('Receipt will be emailed!');
+    if (result && result.ok && result.sent) {
+      toast('✅ Receipt sent to ' + state.receiptEmail + '!');
+    } else if (result && result.error) {
+      toast('⚠️ ' + result.error);
+    } else {
+      toast('Receipt emailed!');
+    }
   } else {
-    toast('Pick up receipt at counter');
+    toast('Pick up your receipt at the counter');
   }
 
   closePage('receipt');
   openPage('payment');
   renderPaymentPage();
 }
+
 
 // ══════════════════════════════════════════════════════════
 // PAYMENT PAGE
