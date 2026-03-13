@@ -326,12 +326,29 @@ async function supaFetch(url, opts = {}) {
 // ── PIN verification uses bcrypt (cost 12) — see verifyUserPin handler ──
 
 // ── Log to sheets_sync_log (fire-and-forget) ──────────────────────────────
+// ── Sheets write-through sync ──────────────────────────────────────────────
+// Fires async, never blocks the response. Requires GAS_SYNC_URL env var.
+const GAS_SYNC_URL    = process.env.GAS_SYNC_URL;
+const GAS_SYNC_SECRET = process.env.GAS_SYNC_SECRET || 'yani-sync-2026';
+
+async function pushToSheets(action, payload) {
+  if (!GAS_SYNC_URL) return; // disabled until env var is set
+  try {
+    fetch(GAS_SYNC_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ secret: GAS_SYNC_SECRET, action, ...payload }),
+    }).catch(e => console.warn('Sheets sync error:', e.message));
+  } catch (_) {}
+}
+
 function logSync(tableName, recordId, action) {
+  // Keep legacy sync log entry for audit trail
   supa('POST', 'sheets_sync_log', {
     table_name: tableName,
     record_id: String(recordId),
     action,
-    synced: false,
+    synced: !!GAS_SYNC_URL,
   }).catch(() => {});
 }
 
@@ -702,6 +719,20 @@ export default async function handler(req, res) {
       logSync('dine_in_orders', orderId, 'INSERT');
       auditLog({ orderId, action: 'ORDER_PLACED', details: { tableNo, customerName, orderType, total, itemCount: orderItems.length } });
 
+      // Push to Google Sheets (fire-and-forget)
+      pushToSheets('syncOrder', { order: {
+        orderId, tableNo, customerName, status: 'NEW',
+        orderType, subtotal, serviceCharge: svcCharge, vatAmount: vatAmt, total,
+        createdAt: new Date().toISOString(),
+        notes,
+      }});
+      pushToSheets('syncOrderItems', { orderId, items: orderItems.map(it => ({
+        code: it.item_code, name: it.item_name, size: it.size_choice,
+        price: it.unit_price, qty: it.qty,
+        lineTotal: Math.round(it.unit_price * it.qty * 100) / 100,
+        sugar: it.sugar_choice, notes: it.item_notes,
+      }))});
+
       return res.status(200).json({
         ok: true,
         orderId,
@@ -817,6 +848,8 @@ export default async function handler(req, res) {
 
       logSync('dine_in_orders', orderId, 'UPDATE');
       auditLog({ orderId, action: 'STATUS_CHANGED', actor: { userId, role: staffRole }, oldValue: prevStatus, newValue: newStatus });
+      // Push status update to Sheets
+      pushToSheets('updateOrderStatus', { orderId, status: newStatus });
       return res.status(200).json({ ok: true, orderId, status: newStatus });
     }
 
@@ -891,6 +924,7 @@ export default async function handler(req, res) {
       );
       if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to update payment method' });
       auditLog({ orderId, action: 'PAYMENT_SET', actor: { userId: body.userId, role: authP.role }, newValue: method, details: { notes: notes || null } });
+      pushToSheets('updateOrderPayment', { orderId, paymentMethod: method, paymentStatus: 'VERIFIED' });
       return res.status(200).json({ ok: true, orderId, method, split: parts.length === 2 });
     }
 
@@ -964,6 +998,7 @@ export default async function handler(req, res) {
       );
       if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to apply discount' });
       auditLog({ orderId, action: 'DISCOUNT_APPLIED', actor: { userId: body.userId, role: authD.role }, newValue: type, details: { discountAmount, discountedTotal, note: body.note || null } });
+      pushToSheets('updateOrderDiscount', { orderId, discountType: type, discountAmount, discountedTotal });
       return res.status(200).json({ ok: true, orderId, type, discountAmount, discountedTotal, total });
     }
 
