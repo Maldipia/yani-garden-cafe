@@ -449,6 +449,9 @@ export default async function handler(req, res) {
 
     // ── getMenuAdmin ───────────────────────────────────────────────────────
     if (action === 'getMenuAdmin') {
+      const authMA = await requireAuth(body);
+      if (!authMA.ok) return res.status(403).json({ ok: false, error: authMA.error });
+      if (authMA.role === 'KITCHEN') return res.status(403).json({ ok: false, error: 'Kitchen staff cannot access menu admin' });
       const now = Date.now();
       if (menuCache.admin && (now - menuCache.ts) < MENU_CACHE_TTL) {
         return res.status(200).json({ ok: true, items: menuCache.admin, cached: true });
@@ -586,16 +589,25 @@ export default async function handler(req, res) {
       const isStaffOrder = body.staffOrder === true;
       const rawTableNo   = body.tableNo;
       const tableNo      = rawTableNo != null ? String(rawTableNo).trim() : '0';
-      const tableToken   = String(body.tableToken || '').trim();
-      const customerName = String(body.customerName || 'Guest').trim().substring(0, 100);
+      // Accept both 'token' (customer front-end) and 'tableToken' (legacy) field names
+      const tableToken   = String(body.token || body.tableToken || '').trim();
+      const customerName = String(body.customerName || body.customer || 'Guest').trim().substring(0, 100);
       const notes        = String(body.notes || '').trim().substring(0, 500);
-      const orderType    = String(body.orderType || 'DINE-IN').toUpperCase().replace('_','-');
+      const rawOrderType = String(body.orderType || '').toUpperCase().replace('_', '-');
+      const orderType    = ['DINE-IN', 'TAKE-OUT'].includes(rawOrderType) ? rawOrderType : 'DINE-IN';
       const items        = Array.isArray(body.items) ? body.items : [];
 
+      // Validate items
       if (items.length === 0) return res.status(400).json({ ok: false, error: 'Order must have at least one item' });
+      if (items.some(i => (parseFloat(i.price) || 0) < 0)) {
+        return res.status(400).json({ ok: false, error: 'Item prices cannot be negative' });
+      }
 
-      // Validate table token against DB (skip for take-out with no tableNo)
-      if (tableToken && !isStaffOrder && tableToken !== 'staff' && tableToken !== 'takeout') {
+      // Validate table token against DB — mandatory for customer (non-staff) dine-in orders
+      if (!isStaffOrder && tableNo !== '0') {
+        if (!tableToken) {
+          return res.status(403).json({ ok: false, error: 'Table token required' });
+        }
         const tokenR = await supaFetch(
           `${SUPABASE_URL}/rest/v1/cafe_tables?table_number=eq.${encodeURIComponent(tableNo)}&qr_token=eq.${encodeURIComponent(tableToken)}&select=table_number`
         );
@@ -1904,7 +1916,8 @@ export default async function handler(req, res) {
         `${SUPABASE_URL}/rest/v1/staff_users?active=eq.true&order=user_id.asc&select=user_id,username,display_name,role,last_login,failed_attempts`
       );
       if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to fetch staff' });
-      return res.status(200).json({ ok: true, users: r.data || [] });
+      const staffList = r.data || [];
+      return res.status(200).json({ ok: true, staff: staffList, users: staffList });
     }
 
     // ── getSettings ────────────────────────────────────────────────────────
