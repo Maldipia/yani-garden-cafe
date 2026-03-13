@@ -692,7 +692,7 @@ export default async function handler(req, res) {
       if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to delete order' });
 
       logSync('dine_in_orders', orderId, 'DELETE');
-      auditLog({ orderId, action: 'ORDER_DELETED', actor: { userId: body.userId, role: user && user.role, displayName: user && user.display_name } });
+      auditLog({ orderId, action: 'ORDER_DELETED', actor: { userId: body.userId } });
       return res.status(200).json({ ok: true, orderId });
     }
 
@@ -746,7 +746,7 @@ export default async function handler(req, res) {
         { order_id: `eq.${encodeURIComponent(orderId)}` }
       );
       if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to update payment method' });
-      auditLog({ orderId, action: 'PAYMENT_SET', actor: { userId: body.userId, role: user && user.role, displayName: user && user.display_name }, newValue: method, details: { notes: body.notes || null } });
+      auditLog({ orderId, action: 'PAYMENT_SET', actor: { userId: body.userId, role: authP.role }, newValue: method, details: { notes: notes || null } });
       return res.status(200).json({ ok: true, orderId, method, split: parts.length === 2 });
     }
 
@@ -788,7 +788,7 @@ export default async function handler(req, res) {
           { order_id: `eq.${encodeURIComponent(orderId)}` }
         );
         if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to remove discount' });
-        auditLog({ orderId, action: 'DISCOUNT_REMOVED', actor: { userId: body.userId, role: user && user.role, displayName: user && user.display_name } });
+        auditLog({ orderId, action: 'DISCOUNT_REMOVED', actor: { userId: body.userId, role: authD.role } });
         return res.status(200).json({ ok: true, orderId, discountRemoved: true });
       }
 
@@ -819,7 +819,7 @@ export default async function handler(req, res) {
         { order_id: `eq.${encodeURIComponent(orderId)}` }
       );
       if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to apply discount' });
-      auditLog({ orderId, action: 'DISCOUNT_APPLIED', actor: { userId: body.userId, role: user && user.role, displayName: user && user.display_name }, newValue: type, details: { discountAmount, discountedTotal, note: body.note || null } });
+      auditLog({ orderId, action: 'DISCOUNT_APPLIED', actor: { userId: body.userId, role: authD.role }, newValue: type, details: { discountAmount, discountedTotal, note: body.note || null } });
       return res.status(200).json({ ok: true, orderId, type, discountAmount, discountedTotal, total });
     }
 
@@ -887,6 +887,9 @@ export default async function handler(req, res) {
 
     // ── editOrderItems ─────────────────────────────────────────────────────
     if (action === 'editOrderItems') {
+      const authE = await requireAuth(body, ['OWNER','ADMIN','CASHIER']);
+      if (!authE.ok) return res.status(401).json({ ok: false, error: authE.error });
+
       const orderId = String(body.orderId || '').trim();
       const items   = Array.isArray(body.items) ? body.items : [];
       if (!orderId) return res.status(400).json({ ok: false, error: 'orderId is required' });
@@ -934,7 +937,7 @@ export default async function handler(req, res) {
       await supa('PATCH', 'dine_in_orders', { subtotal, service_charge: svcCharge, vat_amount: vatAmt2, total }, { order_id: `eq.${orderId}` });
 
       logSync('dine_in_orders', orderId, 'UPDATE');
-      auditLog({ orderId, action: 'ORDER_EDITED', actor: { userId: body.userId, role: user && user.role, displayName: user && user.display_name }, details: { newTotal: total, itemCount: newItems.length } });
+      auditLog({ orderId, action: 'ORDER_EDITED', actor: { userId: body.userId, role: authE.role }, details: { newTotal: total, itemCount: itemRows.length } });
       return res.status(200).json({ ok: true, orderId, subtotal, serviceCharge: svcCharge, total });
     }
 
