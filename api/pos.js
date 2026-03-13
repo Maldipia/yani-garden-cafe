@@ -599,6 +599,8 @@ export default async function handler(req, res) {
 
     // ── deleteOrder ────────────────────────────────────────────────────────
     if (action === 'deleteOrder') {
+      const authDO = await requireAdminRole(body);
+      if (!authDO.ok) return res.status(401).json({ ok: false, error: authDO.error });
       const orderId = String(body.orderId || '').trim();
       if (!orderId) return res.status(400).json({ ok: false, error: 'orderId is required' });
       if (!isValidOrderId(orderId)) return res.status(400).json({ ok: false, error: 'Invalid orderId format' });
@@ -983,6 +985,8 @@ export default async function handler(req, res) {
 
     // ── getCustomers ───────────────────────────────────────────────────────
     if (action === 'getCustomers') {
+      const authGC = await requireAdminRole(body);
+      if (!authGC.ok) return res.status(401).json({ ok: false, error: authGC.error });
       const r = await supaFetch(
         `${SUPABASE_URL}/rest/v1/online_orders?order=created_at.asc&limit=500&select=customer_phone,customer_name,created_at,total_amount,order_ref`
       );
