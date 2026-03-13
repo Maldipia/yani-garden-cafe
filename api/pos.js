@@ -167,6 +167,16 @@ function invalidateMenuCache() { menuCache.public = null; menuCache.admin = null
 
 // ── Admin role guard ──────────────────────────────────────────────────────
 // Verifies that body.userId belongs to an active ADMIN or OWNER staff user.
+async function requireAuth(body) {
+  const userId = String(body.userId || '').trim();
+  if (!userId) return { ok: false, error: 'userId is required for this action' };
+  const r = await supaFetch(
+    `${SUPABASE_URL}/rest/v1/staff_users?user_id=eq.${encodeURIComponent(userId)}&active=eq.true&select=role`
+  );
+  if (!r.ok || !r.data || !r.data.length) return { ok: false, error: 'Unauthorized: user not found' };
+  return { ok: true, role: r.data[0].role };
+}
+
 async function requireAdminRole(body) {
   const userId = String(body.userId || '').trim();
   if (!userId) return { ok: false, error: 'userId is required for this action' };
@@ -1104,6 +1114,30 @@ export default async function handler(req, res) {
       });
       if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to create reservation' });
       return res.status(200).json({ ok: true, resId });
+    }
+
+    // ── getTables ──────────────────────────────────────────────────────────
+    if (action === 'getTables') {
+      const authR = await requireAuth(body);
+      if (!authR.ok) return res.status(401).json({ ok: false, error: authR.error });
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/cafe_tables?order=table_number.asc&select=table_number,qr_token`
+      );
+      return res.status(200).json({ ok: true, tables: r.data || [] });
+    }
+
+    // ── addTable ───────────────────────────────────────────────────────────
+    if (action === 'addTable') {
+      const authR = await requireAdminRole(body);
+      if (!authR.ok) return res.status(401).json({ ok: false, error: authR.error });
+      const tableNo = parseInt(body.tableNo);
+      if (!tableNo || tableNo < 1 || tableNo > 99)
+        return res.status(400).json({ ok: false, error: 'Invalid table number (1-99)' });
+      // Generate random 8-char hex token
+      const token = Array.from({length:8}, () => Math.floor(Math.random()*16).toString(16)).join('');
+      const r = await supa('POST', 'cafe_tables', { table_number: tableNo, qr_token: token });
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to add table — may already exist' });
+      return res.status(200).json({ ok: true, tableNo, token });
     }
 
     // ── getReservations ────────────────────────────────────────────────────
