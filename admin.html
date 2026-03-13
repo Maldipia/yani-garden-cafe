@@ -1305,6 +1305,22 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 <div id="staffView" style="display:none"></div>
 <div id="shiftView" style="display:none"></div>
 <div id="logsView" style="display:none"></div>
+
+<!-- ══ FLOOR MAP VIEW ══ -->
+<div id="floorMapView" style="display:none;padding:0 0 100px"></div>
+
+<!-- ══ INVENTORY VIEW ══ -->
+<div id="inventoryView" style="display:none;padding:0 0 100px"></div>
+
+<!-- ══ ADDONS VIEW ══ -->
+<div id="addonsView" style="display:none;padding:0 0 100px"></div>
+
+<!-- ══ REFUNDS VIEW ══ -->
+<div id="refundsView" style="display:none;padding:0 0 100px"></div>
+
+<!-- ══ CASH DRAWER VIEW ══ -->
+<div id="cashView" style="display:none;padding:0 0 100px"></div>
+
 <div id="settingsView" style="display:none;padding:16px 16px 100px;max-width:520px;margin:0 auto">
   <div style="font-weight:800;font-size:1.05rem;color:var(--forest-deep);margin-bottom:16px">⚙️ Cafe Settings</div>
 
@@ -1869,6 +1885,17 @@ function renderFilters() {
   // Tables & Reservations: ADMIN and OWNER only
   if (currentUser.role === 'ADMIN' || currentUser.role === 'OWNER') {
     tabs.push({ key:'TABLES', label:'🪑 Tables', count:'' });
+    tabs.push({ key:'FLOOR_MAP', label:'🗺️ Floor', count:'' });
+  }
+  // Inventory: ADMIN and OWNER only
+  if (currentUser.role === 'ADMIN' || currentUser.role === 'OWNER') {
+    tabs.push({ key:'INVENTORY', label:'📦 Inventory', count:'' });
+    tabs.push({ key:'ADDONS', label:'➕ Add-ons', count:'' });
+  }
+  // Refunds & Cash: OWNER only
+  if (currentUser.role === 'OWNER') {
+    tabs.push({ key:'REFUNDS', label:'↩️ Refunds', count:'' });
+    tabs.push({ key:'CASH', label:'💵 Cash', count:'' });
   }
   // Settings: OWNER only
   if (currentUser.role === 'OWNER') {
@@ -1916,6 +1943,16 @@ function setFilter(f) {
   if (shiftView) shiftView.style.display = 'none';
   var logsView = document.getElementById('logsView');
   if (logsView) logsView.style.display = 'none';
+  var floorMapView = document.getElementById('floorMapView');
+  if (floorMapView) floorMapView.style.display = 'none';
+  var inventoryView = document.getElementById('inventoryView');
+  if (inventoryView) inventoryView.style.display = 'none';
+  var addonsView = document.getElementById('addonsView');
+  if (addonsView) addonsView.style.display = 'none';
+  var refundsView = document.getElementById('refundsView');
+  if (refundsView) refundsView.style.display = 'none';
+  var cashView = document.getElementById('cashView');
+  if (cashView) cashView.style.display = 'none';
 
   if (f === 'PAYMENTS') {
     paymentsView.style.display = 'block';
@@ -1935,6 +1972,21 @@ function setFilter(f) {
   } else if (f === 'TABLES') {
     if (tablesView) tablesView.style.display = 'block';
     loadOrders().then(function() { loadTablesView(); });
+  } else if (f === 'FLOOR_MAP') {
+    if (floorMapView) floorMapView.style.display = 'block';
+    loadFloorMap();
+  } else if (f === 'INVENTORY') {
+    if (inventoryView) inventoryView.style.display = 'block';
+    loadInventoryView();
+  } else if (f === 'ADDONS') {
+    if (addonsView) addonsView.style.display = 'block';
+    loadAddonsView();
+  } else if (f === 'REFUNDS') {
+    if (refundsView) refundsView.style.display = 'block';
+    loadRefundsView();
+  } else if (f === 'CASH') {
+    if (cashView) cashView.style.display = 'block';
+    loadCashView();
   } else if (f === 'SETTINGS') {
     if (settingsView) settingsView.style.display = 'block';
     loadSettings();
@@ -6234,8 +6286,629 @@ function statCard(label, value, color, bg) {
     + '<div style="font-size:1.1rem;font-weight:800;color:' + color + '">' + value + '</div>'
     + '</div>';
 }
+
+// ══════════════════════════════════════════════════════════
+// GENERIC MODAL HELPER
+// ══════════════════════════════════════════════════════════
+function showModal(title, bodyHtml) {
+  document.getElementById('genericModalTitle').textContent = title;
+  document.getElementById('genericModalBody').innerHTML = bodyHtml;
+  document.getElementById('genericModal').classList.add('open');
+}
+function closeModal() {
+  document.getElementById('genericModal').classList.remove('open');
+}
+
+// ══════════════════════════════════════════════════════════
+// FLOOR MAP — Table occupancy + Reservation auto-link
+// ══════════════════════════════════════════════════════════
+var _floorTables = [];
+var _floorReservations = [];
+
+async function loadFloorMap() {
+  var el = document.getElementById('floorMapView');
+  el.innerHTML = '<div style="padding:20px;color:#888">Loading floor map…</div>';
+  var [tr, rr] = await Promise.all([
+    api('getTableStatus'),
+    api('getReservations', { userId: currentUser.userId })
+  ]);
+  _floorTables = (tr.tables || []);
+  _floorReservations = (rr.reservations || []).filter(function(r) {
+    return r.status === 'CONFIRMED' || r.status === 'SEATED';
+  });
+  renderFloorMap();
+}
+
+function renderFloorMap() {
+  var el = document.getElementById('floorMapView');
+  var statusColors = { AVAILABLE:'#22c55e', OCCUPIED:'#ef4444', RESERVED:'#f59e0b', MAINTENANCE:'#94a3b8' };
+  var statusLabels = { AVAILABLE:'Available', OCCUPIED:'Occupied', RESERVED:'Reserved', MAINTENANCE:'Maintenance' };
+
+  var legendHtml = Object.keys(statusColors).map(function(s) {
+    return '<span style="display:inline-flex;align-items:center;gap:5px;margin-right:14px;font-size:.75rem">'
+      + '<span style="width:12px;height:12px;border-radius:3px;background:' + statusColors[s] + '"></span>' + statusLabels[s] + '</span>';
+  }).join('');
+
+  var gridHtml = _floorTables.map(function(t) {
+    var st = t.status || 'AVAILABLE';
+    var col = statusColors[st] || '#22c55e';
+    // Find linked reservation
+    var linked = _floorReservations.find(function(r) { return r.table_id === t.id; });
+    var resHtml = linked
+      ? '<div style="font-size:.65rem;margin-top:3px;color:#fff;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
+        + '📅 ' + linked.guest_name + '</div>' : '';
+
+    return '<div style="background:' + col + ';border-radius:14px;padding:14px 10px;text-align:center;cursor:pointer;min-width:80px;box-shadow:0 2px 8px rgba(0,0,0,.12);transition:transform .1s" '
+      + 'onclick="openFloorTableMenu(' + t.table_number + ')">'
+      + '<div style="font-size:1.4rem">🪑</div>'
+      + '<div style="font-weight:800;font-size:.85rem;color:#fff;margin-top:2px">'
+      + (t.table_name || 'Table ' + t.table_number) + '</div>'
+      + '<div style="font-size:.65rem;color:#fff;opacity:.9;margin-top:1px">' + statusLabels[st] + '</div>'
+      + resHtml
+      + '</div>';
+  }).join('');
+
+  // Pending reservations (no table linked)
+  var unlinked = _floorReservations.filter(function(r) { return !r.table_id; });
+  var pendingHtml = unlinked.length ? '<div style="margin:20px 0 8px;font-weight:700;font-size:.85rem;color:#92400e">📅 Reservations Awaiting Table Assignment (' + unlinked.length + ')</div>'
+    + unlinked.map(function(r) {
+      return '<div style="background:#fef3c7;border:1.5px solid #fbbf24;border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">'
+        + '<div><div style="font-weight:700;font-size:.85rem">' + r.guest_name + ' — ' + r.pax + ' pax</div>'
+        + '<div style="font-size:.72rem;color:#92400e">' + r.res_date + ' ' + r.res_time + '</div></div>'
+        + '<div style="display:flex;gap:8px">'
+        + _floorTables.filter(function(t){return t.status==='AVAILABLE';}).slice(0,1).length
+          ? '<select id="rlkSel_' + r.res_id + '" style="font-size:.75rem;padding:4px 6px;border-radius:7px;border:1px solid #fbbf24">'
+            + _floorTables.filter(function(t){return t.status==='AVAILABLE';}).map(function(t){
+              return '<option value="' + t.table_number + '">' + (t.table_name||'T'+t.table_number) + '</option>';
+            }).join('') + '</select>'
+          : '<span style="font-size:.72rem;color:#ef4444">No tables free</span>'
+        + '<button onclick="assignResTable(\'' + r.res_id + '\')" style="background:#f59e0b;color:#fff;border:none;border-radius:7px;padding:5px 10px;font-size:.75rem;font-weight:700;cursor:pointer">Assign</button>'
+        + '</div></div>';
+    }).join('') : '';
+
+  el.innerHTML = '<div style="padding:16px 16px 0">'
+    + '<div style="font-weight:800;font-size:1.05rem;color:var(--forest-deep);margin-bottom:10px">🗺️ Floor Map</div>'
+    + '<div style="margin-bottom:14px">' + legendHtml + '</div>'
+    + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:10px">' + gridHtml + '</div>'
+    + pendingHtml
+    + '</div>';
+}
+
+async function assignResTable(resId) {
+  var sel = document.getElementById('rlkSel_' + resId);
+  if (!sel) return;
+  var tableNo = parseInt(sel.value);
+  var r = await api('linkReservationTable', { userId: currentUser.userId, resId: resId, tableNumber: tableNo });
+  if (r.ok) { showToast('Table assigned ✅'); loadFloorMap(); }
+  else showToast('Error: ' + r.error, true);
+}
+
+function openFloorTableMenu(tableNo) {
+  var t = _floorTables.find(function(x){ return x.table_number === tableNo; });
+  if (!t) return;
+  var statusOptions = ['AVAILABLE','OCCUPIED','RESERVED','MAINTENANCE'];
+  var labels = { AVAILABLE:'✅ Available', OCCUPIED:'🔴 Occupied', RESERVED:'📅 Reserved', MAINTENANCE:'🔧 Maintenance' };
+  var curStatus = t.status || 'AVAILABLE';
+  showModal('Table ' + (t.table_name || tableNo),
+    '<div style="margin-bottom:14px;font-size:.85rem;color:#64748b">Current: <strong>' + curStatus + '</strong></div>'
+    + '<div style="display:flex;flex-direction:column;gap:8px">'
+    + statusOptions.filter(function(s){ return s !== curStatus; }).map(function(s) {
+      return '<button onclick="setFloorTableStatus(' + tableNo + ',\'' + s + '\')" '
+        + 'style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:10px;font-size:.85rem;font-weight:600;cursor:pointer;text-align:left">'
+        + labels[s] + '</button>';
+    }).join('')
+    + '</div>'
+  );
+}
+
+async function setFloorTableStatus(tableNo, status) {
+  closeModal();
+  var r = await api('setTableStatus', { userId: currentUser.userId, tableNumber: tableNo, status: status });
+  if (r.ok) { showToast('Table ' + tableNo + ' → ' + status); loadFloorMap(); }
+  else showToast('Error: ' + r.error, true);
+}
+
+// ══════════════════════════════════════════════════════════
+// INVENTORY
+// ══════════════════════════════════════════════════════════
+var _inventoryItems = [];
+
+async function loadInventoryView() {
+  var el = document.getElementById('inventoryView');
+  el.innerHTML = '<div style="padding:20px;color:#888">Loading inventory…</div>';
+  var r = await api('getInventory', { userId: currentUser.userId });
+  _inventoryItems = r.items || [];
+  renderInventoryView();
+}
+
+function renderInventoryView() {
+  var el = document.getElementById('inventoryView');
+  var lowCount = _inventoryItems.filter(function(i){ return i.low_stock; }).length;
+
+  var rowsHtml = _inventoryItems.length === 0
+    ? '<div style="text-align:center;padding:40px;color:#94a3b8">No inventory tracked yet. Click <strong>+ Add Item</strong> to start.</div>'
+    : _inventoryItems.map(function(i) {
+      var badge = i.stock_qty === 0 ? '<span style="background:#fef2f2;color:#ef4444;border-radius:6px;padding:2px 8px;font-size:.68rem;font-weight:700">OUT</span>'
+        : i.low_stock ? '<span style="background:#fff7ed;color:#f59e0b;border-radius:6px;padding:2px 8px;font-size:.68rem;font-weight:700">LOW</span>'
+        : '<span style="background:#f0fdf4;color:#22c55e;border-radius:6px;padding:2px 8px;font-size:.68rem;font-weight:700">OK</span>';
+      return '<div style="background:#fff;border-radius:12px;box-shadow:0 1px 6px rgba(0,0,0,.07);padding:14px 16px;display:flex;align-items:center;gap:12px;margin-bottom:8px">'
+        + '<div style="flex:1;min-width:0">'
+        + '<div style="font-weight:700;font-size:.87rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (i.item_name || i.item_code) + '</div>'
+        + '<div style="font-size:.72rem;color:#64748b;margin-top:2px">' + i.item_code + ' · ' + i.unit + ' · ₱' + parseFloat(i.cost_per_unit||0).toFixed(2) + '/unit</div>'
+        + '</div>'
+        + badge
+        + '<div style="font-size:1.1rem;font-weight:800;min-width:50px;text-align:right">' + parseFloat(i.stock_qty).toFixed(0) + '</div>'
+        + '<div style="display:flex;gap:6px">'
+        + '<button onclick="openInvAdjust(\'' + i.item_code + '\',\'' + (i.item_name||i.item_code).replace(/'/g,"\\'") + '\',' + i.stock_qty + ')" '
+        + 'style="background:#eff6ff;color:#3b82f6;border:none;border-radius:8px;padding:6px 10px;font-size:.78rem;font-weight:700;cursor:pointer">Adjust</button>'
+        + '<button onclick="openInvEdit(\'' + i.item_code + '\')" '
+        + 'style="background:#f8fafc;color:#64748b;border:1px solid #e2e8f0;border-radius:8px;padding:6px 10px;font-size:.78rem;cursor:pointer">Edit</button>'
+        + '</div></div>';
+    }).join('');
+
+  el.innerHTML = '<div style="padding:16px 16px 0">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'
+    + '<div><div style="font-weight:800;font-size:1.05rem;color:var(--forest-deep)">📦 Inventory</div>'
+    + (lowCount ? '<div style="font-size:.75rem;color:#f59e0b;margin-top:2px">⚠️ ' + lowCount + ' item(s) low on stock</div>' : '') + '</div>'
+    + '<button onclick="openInvAdd()" style="background:var(--forest-deep);color:#fff;border:none;border-radius:10px;padding:8px 14px;font-size:.82rem;font-weight:700;cursor:pointer">+ Add Item</button>'
+    + '</div>'
+    + rowsHtml + '</div>';
+}
+
+function openInvAdd() {
+  var menuItems = window._menuItems || [];
+  showModal('Add Inventory Item',
+    '<div style="display:flex;flex-direction:column;gap:10px">'
+    + '<label style="font-size:.8rem;font-weight:600">Menu Item Code<br>'
+    + '<input id="invItemCode" placeholder="e.g. H001" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
+    + '<label style="font-size:.8rem;font-weight:600">Initial Stock Qty<br>'
+    + '<input id="invQty" type="number" value="0" min="0" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
+    + '<label style="font-size:.8rem;font-weight:600">Low Stock Alert Threshold<br>'
+    + '<input id="invThreshold" type="number" value="10" min="0" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
+    + '<label style="font-size:.8rem;font-weight:600">Unit (pcs / cups / kg / g)<br>'
+    + '<input id="invUnit" value="pcs" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
+    + '<label style="font-size:.8rem;font-weight:600">Cost Per Unit (₱)<br>'
+    + '<input id="invCost" type="number" value="0" min="0" step="0.01" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
+    + '<label style="display:flex;align-items:center;gap:8px;font-size:.8rem;font-weight:600;cursor:pointer">'
+    + '<input type="checkbox" id="invAutoDisable"> Auto-disable menu item when stock = 0</label>'
+    + '<button onclick="saveInvItem(null)" style="background:var(--forest-deep);color:#fff;border:none;border-radius:10px;padding:10px;font-weight:700;cursor:pointer;font-size:.9rem">Save</button>'
+    + '</div>'
+  );
+}
+
+function openInvEdit(itemCode) {
+  var item = _inventoryItems.find(function(i){ return i.item_code === itemCode; });
+  if (!item) return;
+  showModal('Edit: ' + (item.item_name || itemCode),
+    '<div style="display:flex;flex-direction:column;gap:10px">'
+    + '<label style="font-size:.8rem;font-weight:600">Low Stock Threshold<br>'
+    + '<input id="invThreshold" type="number" value="' + item.low_stock_threshold + '" min="0" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
+    + '<label style="font-size:.8rem;font-weight:600">Unit<br>'
+    + '<input id="invUnit" value="' + (item.unit||'pcs') + '" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
+    + '<label style="font-size:.8rem;font-weight:600">Cost Per Unit (₱)<br>'
+    + '<input id="invCost" type="number" value="' + (item.cost_per_unit||0) + '" step="0.01" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
+    + '<label style="display:flex;align-items:center;gap:8px;font-size:.8rem;font-weight:600;cursor:pointer">'
+    + '<input type="checkbox" id="invAutoDisable"' + (item.auto_disable?' checked':'') + '> Auto-disable when stock = 0</label>'
+    + '<button onclick="saveInvItem(\'' + itemCode + '\')" style="background:var(--forest-deep);color:#fff;border:none;border-radius:10px;padding:10px;font-weight:700;cursor:pointer;font-size:.9rem">Save Changes</button>'
+    + '</div>'
+  );
+}
+
+async function saveInvItem(existingCode) {
+  var code = existingCode || (document.getElementById('invItemCode')||{}).value;
+  if (!code) { showToast('Item code required', true); return; }
+  var r = await api('upsertInventory', {
+    userId: currentUser.userId,
+    itemCode: code,
+    stockQty: (document.getElementById('invQty')||{value:0}).value,
+    lowStockThreshold: document.getElementById('invThreshold').value,
+    unit: document.getElementById('invUnit').value,
+    costPerUnit: document.getElementById('invCost').value,
+    autoDisable: document.getElementById('invAutoDisable').checked,
+  });
+  closeModal();
+  if (r.ok) { showToast('Inventory saved ✅'); loadInventoryView(); }
+  else showToast('Error: ' + r.error, true);
+}
+
+function openInvAdjust(code, name, currentQty) {
+  showModal('Adjust: ' + name,
+    '<div style="margin-bottom:10px;font-size:.85rem;color:#64748b">Current stock: <strong>' + currentQty + '</strong></div>'
+    + '<div style="display:flex;flex-direction:column;gap:10px">'
+    + '<label style="font-size:.8rem;font-weight:600">Adjustment (+ to add, - to deduct)<br>'
+    + '<input id="adjQty" type="number" value="0" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
+    + '<label style="font-size:.8rem;font-weight:600">Type<br>'
+    + '<select id="adjType" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px">'
+    + '<option value="RESTOCK">Restock</option><option value="ADJUSTMENT">Manual Adjustment</option>'
+    + '<option value="WASTE">Waste/Spoilage</option><option value="RETURN">Return</option></select></label>'
+    + '<label style="font-size:.8rem;font-weight:600">Notes<br>'
+    + '<input id="adjNotes" placeholder="Optional notes" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
+    + '<button onclick="doInvAdjust(\'' + code + '\')" style="background:var(--forest-deep);color:#fff;border:none;border-radius:10px;padding:10px;font-weight:700;cursor:pointer;font-size:.9rem">Apply</button>'
+    + '</div>'
+  );
+}
+
+async function doInvAdjust(code) {
+  var r = await api('adjustInventory', {
+    userId: currentUser.userId,
+    itemCode: code,
+    adjustment: parseFloat(document.getElementById('adjQty').value) || 0,
+    changeType: document.getElementById('adjType').value,
+    notes: document.getElementById('adjNotes').value,
+  });
+  closeModal();
+  if (r.ok) { showToast('Stock updated: ' + r.qtyBefore + ' → ' + r.qtyAfter); loadInventoryView(); }
+  else showToast('Error: ' + r.error, true);
+}
+
+// ══════════════════════════════════════════════════════════
+// ADD-ONS / MODIFIERS
+// ══════════════════════════════════════════════════════════
+var _addons = [];
+
+async function loadAddonsView() {
+  var el = document.getElementById('addonsView');
+  el.innerHTML = '<div style="padding:20px;color:#888">Loading add-ons…</div>';
+  var r = await api('getAddonsAdmin', { userId: currentUser.userId });
+  _addons = r.addons || [];
+  renderAddonsView();
+}
+
+function renderAddonsView() {
+  var el = document.getElementById('addonsView');
+  var rowsHtml = _addons.length === 0
+    ? '<div style="text-align:center;padding:40px;color:#94a3b8">No add-ons yet. Click <strong>+ Add</strong> to create your first modifier.</div>'
+    : _addons.map(function(a) {
+      var scopeLabel = a.applies_to_all ? 'All items' : (a.applies_to_codes||[]).join(', ') || 'Specific items';
+      return '<div style="background:#fff;border-radius:12px;box-shadow:0 1px 6px rgba(0,0,0,.07);padding:14px 16px;display:flex;align-items:center;gap:12px;margin-bottom:8px;opacity:' + (a.is_active?'1':'.5') + '">'
+        + '<div style="flex:1;min-width:0">'
+        + '<div style="font-weight:700;font-size:.87rem">' + a.name + ' ' + (a.is_active?'':'<span style="background:#f1f5f9;color:#94a3b8;font-size:.68rem;padding:1px 6px;border-radius:4px">Inactive</span>') + '</div>'
+        + '<div style="font-size:.72rem;color:#64748b;margin-top:2px">+₱' + parseFloat(a.price||0).toFixed(2) + ' · ' + scopeLabel + '</div>'
+        + '</div>'
+        + '<button onclick="openAddonEdit(\'' + a.addon_code + '\')" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:6px 10px;font-size:.78rem;cursor:pointer">Edit</button>'
+        + '<button onclick="deleteAddon(\'' + a.addon_code + '\')" style="background:#fef2f2;color:#ef4444;border:none;border-radius:8px;padding:6px 10px;font-size:.78rem;cursor:pointer">Del</button>'
+        + '</div>';
+    }).join('');
+
+  el.innerHTML = '<div style="padding:16px 16px 0">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'
+    + '<div style="font-weight:800;font-size:1.05rem;color:var(--forest-deep)">➕ Add-ons & Modifiers</div>'
+    + '<button onclick="openAddonAdd()" style="background:var(--forest-deep);color:#fff;border:none;border-radius:10px;padding:8px 14px;font-size:.82rem;font-weight:700;cursor:pointer">+ Add</button>'
+    + '</div>'
+    + '<div style="font-size:.75rem;color:#64748b;margin-bottom:12px">Add-ons appear as options when customers add items to their cart.</div>'
+    + rowsHtml + '</div>';
+}
+
+function addonForm(data) {
+  data = data || {};
+  return '<div style="display:flex;flex-direction:column;gap:10px">'
+    + '<label style="font-size:.8rem;font-weight:600">Name (e.g. Extra Shot, Extra Rice)<br>'
+    + '<input id="addonName" value="' + (data.name||'') + '" placeholder="Add-on name" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
+    + '<label style="font-size:.8rem;font-weight:600">Price (₱)<br>'
+    + '<input id="addonPrice" type="number" value="' + (data.price||0) + '" min="0" step="1" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
+    + '<label style="font-size:.8rem;font-weight:600">Sort Order<br>'
+    + '<input id="addonSort" type="number" value="' + (data.sort_order||0) + '" min="0" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
+    + '<label style="display:flex;align-items:center;gap:8px;font-size:.8rem;font-weight:600;cursor:pointer">'
+    + '<input type="checkbox" id="addonAll"' + (data.applies_to_all!==false?' checked':'') + '> Apply to all menu items</label>'
+    + '<label style="display:flex;align-items:center;gap:8px;font-size:.8rem;font-weight:600;cursor:pointer">'
+    + '<input type="checkbox" id="addonActive"' + (data.is_active!==false?' checked':'') + '> Active</label>'
+    + '<button onclick="saveAddonForm(\'' + (data.addon_code||'') + '\')" style="background:var(--forest-deep);color:#fff;border:none;border-radius:10px;padding:10px;font-weight:700;cursor:pointer;font-size:.9rem">Save</button>'
+    + '</div>';
+}
+
+function openAddonAdd() { showModal('New Add-on', addonForm({})); }
+function openAddonEdit(code) {
+  var a = _addons.find(function(x){ return x.addon_code === code; });
+  if (a) showModal('Edit Add-on', addonForm(a));
+}
+
+async function saveAddonForm(existingCode) {
+  var r = await api('saveAddon', {
+    userId: currentUser.userId,
+    addonCode: existingCode || undefined,
+    name: document.getElementById('addonName').value.trim(),
+    price: parseFloat(document.getElementById('addonPrice').value) || 0,
+    sortOrder: parseInt(document.getElementById('addonSort').value) || 0,
+    appliesToAll: document.getElementById('addonAll').checked,
+    isActive: document.getElementById('addonActive').checked,
+  });
+  closeModal();
+  if (r.ok) { showToast('Add-on saved ✅'); loadAddonsView(); }
+  else showToast('Error: ' + r.error, true);
+}
+
+async function deleteAddon(code) {
+  if (!confirm('Remove this add-on?')) return;
+  var r = await api('deleteAddon', { userId: currentUser.userId, addonCode: code });
+  if (r.ok) { showToast('Add-on removed'); loadAddonsView(); }
+  else showToast('Error: ' + r.error, true);
+}
+
+// ══════════════════════════════════════════════════════════
+// VOID / REFUND WORKFLOW
+// ══════════════════════════════════════════════════════════
+var _refunds = [];
+
+async function loadRefundsView() {
+  var el = document.getElementById('refundsView');
+  el.innerHTML = '<div style="padding:20px;color:#888">Loading refunds…</div>';
+  var r = await api('getRefunds', { userId: currentUser.userId, limit: 50 });
+  _refunds = r.refunds || [];
+  renderRefundsView();
+}
+
+function renderRefundsView() {
+  var el = document.getElementById('refundsView');
+  var typeColors = { FULL:'#ef4444', PARTIAL:'#f59e0b', VOID:'#8b5cf6' };
+  var reasonLabels = { WRONG_ORDER:'Wrong Order', DUPLICATE:'Duplicate', COMPLAINT:'Complaint',
+    OVERCHARGE:'Overcharge', ITEM_UNAVAILABLE:'Item N/A', OTHER:'Other' };
+
+  var rowsHtml = _refunds.length === 0
+    ? '<div style="text-align:center;padding:40px;color:#94a3b8">No refunds yet.</div>'
+    : _refunds.map(function(r) {
+      var col = typeColors[r.refund_type] || '#64748b';
+      return '<div style="background:#fff;border-radius:12px;box-shadow:0 1px 6px rgba(0,0,0,.07);padding:14px 16px;margin-bottom:8px">'
+        + '<div style="display:flex;align-items:center;justify-content:space-between">'
+        + '<div>'
+        + '<span style="background:' + col + '22;color:' + col + ';border-radius:6px;padding:2px 8px;font-size:.7rem;font-weight:700;margin-right:6px">' + r.refund_type + '</span>'
+        + '<span style="font-weight:700;font-size:.85rem">' + r.refund_id + '</span>'
+        + '</div>'
+        + '<div style="font-weight:800;color:#ef4444">-₱' + parseFloat(r.refund_amount).toFixed(2) + '</div>'
+        + '</div>'
+        + '<div style="font-size:.75rem;color:#64748b;margin-top:4px">'
+        + 'Order: ' + r.order_id + ' · ' + (reasonLabels[r.reason_code]||r.reason_code)
+        + (r.reason_note ? ' · ' + r.reason_note : '')
+        + ' · ' + (r.refund_method||'—')
+        + '</div>'
+        + '<div style="font-size:.68rem;color:#94a3b8;margin-top:2px">' + new Date(r.created_at).toLocaleString('en-PH') + ' · ' + (r.processed_by||'—') + '</div>'
+        + '</div>';
+    }).join('');
+
+  el.innerHTML = '<div style="padding:16px 16px 0">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'
+    + '<div style="font-weight:800;font-size:1.05rem;color:var(--forest-deep)">↩️ Void / Refunds</div>'
+    + '<button onclick="openRefundForm()" style="background:#ef4444;color:#fff;border:none;border-radius:10px;padding:8px 14px;font-size:.82rem;font-weight:700;cursor:pointer">+ Process</button>'
+    + '</div>'
+    + rowsHtml + '</div>';
+}
+
+function openRefundForm(prefillOrderId) {
+  showModal('Process Refund / Void',
+    '<div style="display:flex;flex-direction:column;gap:10px">'
+    + '<label style="font-size:.8rem;font-weight:600">Order ID<br>'
+    + '<input id="rfOrderId" value="' + (prefillOrderId||'') + '" placeholder="YANI-XXXX" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
+    + '<label style="font-size:.8rem;font-weight:600">Type<br>'
+    + '<select id="rfType" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px">'
+    + '<option value="FULL">Full Refund</option><option value="PARTIAL">Partial Refund</option><option value="VOID">Void (Cancel Order)</option>'
+    + '</select></label>'
+    + '<label style="font-size:.8rem;font-weight:600">Refund Amount (₱)<br>'
+    + '<input id="rfAmount" type="number" value="0" min="0" step="0.01" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
+    + '<label style="font-size:.8rem;font-weight:600">Reason<br>'
+    + '<select id="rfReason" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px">'
+    + '<option value="WRONG_ORDER">Wrong Order</option><option value="COMPLAINT">Complaint</option>'
+    + '<option value="OVERCHARGE">Overcharge</option><option value="ITEM_UNAVAILABLE">Item Unavailable</option>'
+    + '<option value="DUPLICATE">Duplicate Order</option><option value="OTHER">Other</option>'
+    + '</select></label>'
+    + '<label style="font-size:.8rem;font-weight:600">Notes<br>'
+    + '<input id="rfNote" placeholder="Optional details" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
+    + '<label style="font-size:.8rem;font-weight:600">Refund Method<br>'
+    + '<select id="rfMethod" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px">'
+    + '<option value="CASH">Cash</option><option value="GCASH">GCash</option>'
+    + '<option value="BANK_TRANSFER">Bank Transfer</option><option value="STORE_CREDIT">Store Credit</option>'
+    + '</select></label>'
+    + '<div style="background:#fef2f2;border-radius:8px;padding:10px;font-size:.75rem;color:#991b1b">⚠️ Void will also cancel the order in the system and cannot be undone.</div>'
+    + '<button onclick="submitRefund()" style="background:#ef4444;color:#fff;border:none;border-radius:10px;padding:10px;font-weight:700;cursor:pointer;font-size:.9rem">Process Refund / Void</button>'
+    + '</div>'
+  );
+}
+
+async function submitRefund() {
+  var orderId = document.getElementById('rfOrderId').value.trim();
+  var refundType = document.getElementById('rfType').value;
+  var refundAmount = parseFloat(document.getElementById('rfAmount').value) || 0;
+  var reasonCode = document.getElementById('rfReason').value;
+  var reasonNote = document.getElementById('rfNote').value.trim();
+  var refundMethod = document.getElementById('rfMethod').value;
+  if (!orderId) { showToast('Order ID required', true); return; }
+  if (refundType !== 'VOID' && refundAmount <= 0) { showToast('Enter refund amount', true); return; }
+  var r = await api('processRefund', {
+    userId: currentUser.userId, orderId, refundType, refundAmount, reasonCode, reasonNote, refundMethod
+  });
+  closeModal();
+  if (r.ok) { showToast('Refund processed: ' + r.refundId + ' ✅'); loadRefundsView(); }
+  else showToast('Error: ' + r.error, true);
+}
+
+// ══════════════════════════════════════════════════════════
+// CASH DRAWER / EOD RECONCILIATION
+// ══════════════════════════════════════════════════════════
+var _openCashSession = null;
+var _cashSessions = [];
+
+async function loadCashView() {
+  var el = document.getElementById('cashView');
+  el.innerHTML = '<div style="padding:20px;color:#888">Loading cash sessions…</div>';
+  var [openR, histR] = await Promise.all([
+    api('getOpenCashSession'),
+    api('getCashSessions', { userId: currentUser.userId, limit: 10 })
+  ]);
+  _openCashSession = openR.session || null;
+  _cashSessions = histR.sessions || [];
+  renderCashView();
+}
+
+function renderCashView() {
+  var el = document.getElementById('cashView');
+  var sessionHtml = '';
+
+  if (_openCashSession) {
+    var s = _openCashSession;
+    sessionHtml = '<div style="background:linear-gradient(135deg,#064e3b,#065f46);border-radius:16px;padding:18px;color:#fff;margin-bottom:16px">'
+      + '<div style="font-size:.72rem;opacity:.7;margin-bottom:2px">OPEN SESSION · ' + (s.shift||'AM') + ' SHIFT</div>'
+      + '<div style="font-weight:800;font-size:1.05rem">' + s.session_id + '</div>'
+      + '<div style="display:flex;gap:16px;margin-top:10px">'
+      + '<div><div style="font-size:.68rem;opacity:.7">Opening Float</div><div style="font-weight:700">₱' + parseFloat(s.opening_float||0).toFixed(2) + '</div></div>'
+      + '<div><div style="font-size:.68rem;opacity:.7">Opened At</div><div style="font-weight:700">' + new Date(s.opened_at).toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'}) + '</div></div>'
+      + '<div><div style="font-size:.68rem;opacity:.7">Opened By</div><div style="font-weight:700">' + (s.opened_by||'—') + '</div></div>'
+      + '</div>'
+      + '<button onclick="openCloseSessionModal()" style="margin-top:12px;width:100%;background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:10px;padding:10px;font-weight:700;cursor:pointer;font-size:.88rem">🔒 Close Session / EOD Count</button>'
+      + '</div>';
+  } else {
+    sessionHtml = '<div style="background:#f0fdf4;border:2px dashed #bbf7d0;border-radius:16px;padding:20px;text-align:center;margin-bottom:16px">'
+      + '<div style="font-size:1.5rem;margin-bottom:6px">💵</div>'
+      + '<div style="font-weight:700;color:#065f46;margin-bottom:4px">No Open Cash Session</div>'
+      + '<div style="font-size:.78rem;color:#64748b;margin-bottom:12px">Open a session at the start of each shift to track cash sales and reconcile at end of day.</div>'
+      + '<button onclick="openOpenSessionModal()" style="background:var(--forest-deep);color:#fff;border:none;border-radius:10px;padding:10px 20px;font-weight:700;cursor:pointer">Open Cash Session</button>'
+      + '</div>';
+  }
+
+  var histHtml = _cashSessions.filter(function(s){ return s.status === 'CLOSED'; }).length === 0
+    ? '<div style="text-align:center;padding:20px;color:#94a3b8;font-size:.82rem">No closed sessions yet.</div>'
+    : _cashSessions.filter(function(s){ return s.status === 'CLOSED'; }).map(function(s) {
+      var varColor = parseFloat(s.variance||0) === 0 ? '#64748b' : parseFloat(s.variance||0) > 0 ? '#22c55e' : '#ef4444';
+      var varLabel = parseFloat(s.variance||0) === 0 ? 'Exact' : parseFloat(s.variance||0) > 0 ? 'OVER ₱' + Math.abs(s.variance).toFixed(2) : 'SHORT ₱' + Math.abs(s.variance).toFixed(2);
+      return '<div style="background:#fff;border-radius:12px;box-shadow:0 1px 6px rgba(0,0,0,.07);padding:14px 16px;margin-bottom:8px">'
+        + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'
+        + '<div><span style="font-weight:700;font-size:.85rem">' + s.session_id + '</span>'
+        + ' <span style="font-size:.72rem;color:#64748b">' + (s.shift||'') + '</span></div>'
+        + '<span style="font-weight:700;color:' + varColor + ';font-size:.82rem">' + varLabel + '</span>'
+        + '</div>'
+        + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px">'
+        + statCard('Float', '₱' + parseFloat(s.opening_float||0).toFixed(0), '#64748b', '#f8fafc')
+        + statCard('Cash Sales', '₱' + parseFloat(s.cash_sales||0).toFixed(0), '#0284c7', '#eff6ff')
+        + statCard('Expected', '₱' + parseFloat(s.expected_cash||0).toFixed(0), '#065f46', '#f0fdf4')
+        + statCard('Counted', '₱' + parseFloat(s.closing_count||0).toFixed(0), varColor, varColor === '#ef4444' ? '#fef2f2' : '#f0fdf4')
+        + '</div>'
+        + '<div style="font-size:.68rem;color:#94a3b8;margin-top:6px">'
+        + new Date(s.opened_at).toLocaleDateString('en-PH',{month:'short',day:'numeric'})
+        + ' ' + new Date(s.opened_at).toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'})
+        + ' → ' + (s.closed_at ? new Date(s.closed_at).toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'}) : '—')
+        + ' · ' + (s.closed_by||'—')
+        + (s.notes ? ' · ' + s.notes : '')
+        + '</div></div>';
+    }).join('');
+
+  el.innerHTML = '<div style="padding:16px 16px 0">'
+    + '<div style="font-weight:800;font-size:1.05rem;color:var(--forest-deep);margin-bottom:14px">💵 Cash Drawer</div>'
+    + sessionHtml
+    + '<div style="font-weight:700;font-size:.85rem;color:#475569;margin-bottom:8px">Session History</div>'
+    + histHtml + '</div>';
+}
+
+function openOpenSessionModal() {
+  var shiftSel = '<select id="cashShift" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px">'
+    + '<option value="AM">AM Shift</option><option value="PM">PM Shift</option>'
+    + '<option value="FULL">Full Day</option><option value="CUSTOM">Custom</option></select>';
+  showModal('Open Cash Session',
+    '<div style="display:flex;flex-direction:column;gap:10px">'
+    + '<label style="font-size:.8rem;font-weight:600">Shift<br>' + shiftSel + '</label>'
+    + '<label style="font-size:.8rem;font-weight:600">Opening Float (₱) — Cash in drawer at start<br>'
+    + '<input id="cashFloat" type="number" value="500" min="0" step="50" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
+    + '<button onclick="doOpenSession()" style="background:var(--forest-deep);color:#fff;border:none;border-radius:10px;padding:10px;font-weight:700;cursor:pointer;font-size:.9rem">Open Session</button>'
+    + '</div>'
+  );
+}
+
+async function doOpenSession() {
+  var r = await api('openCashSession', {
+    userId: currentUser.userId,
+    shift: document.getElementById('cashShift').value,
+    openingFloat: parseFloat(document.getElementById('cashFloat').value) || 0,
+  });
+  closeModal();
+  if (r.ok) { showToast('Cash session opened ✅'); loadCashView(); }
+  else showToast(r.error || 'Error', true);
+}
+
+function openCloseSessionModal() {
+  if (!_openCashSession) return;
+  var denominations = [1000, 500, 200, 100, 50, 20, 10, 5, 1];
+  var denomHtml = denominations.map(function(d) {
+    return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">'
+      + '<span style="min-width:50px;font-size:.8rem;font-weight:600">₱' + d + '</span>'
+      + '<input type="number" id="denom_' + d + '" value="0" min="0" placeholder="0" '
+      + 'oninput="calcDenomTotal()" '
+      + 'style="width:80px;padding:6px;border:1px solid #e2e8f0;border-radius:7px;font-size:.85rem">'
+      + '<span style="font-size:.78rem;color:#64748b">pcs</span>'
+      + '<span id="denomAmt_' + d + '" style="font-size:.78rem;color:#475569;min-width:60px;text-align:right">= ₱0</span>'
+      + '</div>';
+  }).join('');
+
+  showModal('Close Session — EOD Count',
+    '<div style="display:flex;flex-direction:column;gap:10px">'
+    + '<div style="font-size:.8rem;font-weight:700;color:#475569;margin-bottom:4px">Count denominations (or enter total directly):</div>'
+    + denomHtml
+    + '<div style="background:#f8fafc;border-radius:10px;padding:10px;display:flex;justify-content:space-between;align-items:center">'
+    + '<span style="font-weight:700;font-size:.85rem">Total Counted:</span>'
+    + '<span id="denomTotal" style="font-weight:800;font-size:1.05rem;color:var(--forest-deep)">₱0.00</span>'
+    + '</div>'
+    + '<label style="font-size:.8rem;font-weight:600">Or enter total directly (₱):<br>'
+    + '<input id="cashClosingCount" type="number" value="" placeholder="Leave blank to use denomination count" '
+    + 'style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
+    + '<label style="font-size:.8rem;font-weight:600">Notes<br>'
+    + '<input id="cashCloseNotes" placeholder="Optional shift notes" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
+    + '<button onclick="doCloseSession()" style="background:#064e3b;color:#fff;border:none;border-radius:10px;padding:10px;font-weight:700;cursor:pointer;font-size:.9rem">Close Session & Reconcile</button>'
+    + '</div>'
+  );
+}
+
+function calcDenomTotal() {
+  var denominations = [1000,500,200,100,50,20,10,5,1];
+  var total = 0;
+  denominations.forEach(function(d) {
+    var count = parseInt(document.getElementById('denom_' + d).value) || 0;
+    var amt = count * d;
+    total += amt;
+    document.getElementById('denomAmt_' + d).textContent = '= ₱' + amt.toLocaleString();
+  });
+  document.getElementById('denomTotal').textContent = '₱' + total.toLocaleString('en-PH', {minimumFractionDigits:2});
+  // Update closing count field
+  var ccInput = document.getElementById('cashClosingCount');
+  if (ccInput && !ccInput.value) ccInput.placeholder = total.toFixed(2);
+}
+
+async function doCloseSession() {
+  var denominations = [1000,500,200,100,50,20,10,5,1];
+  var denomBreakdown = {};
+  var denomTotal = 0;
+  denominations.forEach(function(d) {
+    var count = parseInt(document.getElementById('denom_' + d).value) || 0;
+    if (count > 0) { denomBreakdown[d] = count; denomTotal += count * d; }
+  });
+  var manualTotal = parseFloat(document.getElementById('cashClosingCount').value);
+  var closingCount = isNaN(manualTotal) ? denomTotal : manualTotal;
+  var r = await api('closeCashSession', {
+    userId: currentUser.userId,
+    sessionId: _openCashSession.session_id,
+    closingCount: closingCount,
+    denominationBreakdown: denomBreakdown,
+    notes: document.getElementById('cashCloseNotes').value,
+  });
+  closeModal();
+  if (r.ok) {
+    var msg = '✅ Session closed — ' + r.overShort
+      + ' | Total Sales: ₱' + parseFloat(r.totalSales).toFixed(2);
+    showToast(msg);
+    loadCashView();
+  } else showToast('Error: ' + r.error, true);
+}
+
+// ══════════════════════════════════════════════════════════
+// QUICK REFUND button on order cards
+// ══════════════════════════════════════════════════════════
+function showRefundFromOrder(orderId) {
+  setFilter('REFUNDS');
+  setTimeout(function() { openRefundForm(orderId); }, 300);
+}
 </script>
 
+<!-- ══ GENERIC MODAL ══ -->
+<div class="pm-overlay" id="genericModal" onclick="if(event.target===this)closeModal()" style="z-index:1100">
+  <div class="pm-modal" style="max-width:420px;max-height:90vh;overflow-y:auto">
+    <div class="pm-title" id="genericModalTitle">—</div>
+    <div id="genericModalBody"></div>
+  </div>
+</div>
 
 </body>
 </html>
