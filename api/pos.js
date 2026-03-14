@@ -1821,7 +1821,7 @@ export default async function handler(req, res) {
       });
       const customers = Object.values(custMap)
         .sort((a, b) => new Date(b.lastOrderDate) - new Date(a.lastOrderDate));
-      return res.status(200).json({ success: true, customers });
+      return res.status(200).json({ ok: true, customers });
     }
 
     // ── getAnalytics ───────────────────────────────────────────────────────
@@ -2151,11 +2151,21 @@ export default async function handler(req, res) {
         last_restocked_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
-      const r = await supaFetch(
-        `${SUPABASE_URL}/rest/v1/inventory`,
-        { method: 'POST', body: JSON.stringify(row),
-          headers: { Prefer: 'resolution=merge-duplicates,return=representation' } }
+      // Try PATCH first (update existing), fallback to POST (create new)
+      const existsR = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/inventory?item_code=eq.${encodeURIComponent(itemCode)}&select=id`
       );
+      const exists = Array.isArray(existsR.data) && existsR.data.length > 0;
+      const r = exists
+        ? await supaFetch(
+            `${SUPABASE_URL}/rest/v1/inventory?item_code=eq.${encodeURIComponent(itemCode)}`,
+            { method: 'PATCH', body: JSON.stringify(row) }
+          )
+        : await supaFetch(
+            `${SUPABASE_URL}/rest/v1/inventory`,
+            { method: 'POST', body: JSON.stringify(row),
+              headers: { Prefer: 'return=representation' } }
+          );
       if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to save inventory' });
       // Log restock
       await supaFetch(`${SUPABASE_URL}/rest/v1/inventory_log`, {
