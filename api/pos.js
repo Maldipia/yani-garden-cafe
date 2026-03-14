@@ -2384,11 +2384,11 @@ export default async function handler(req, res) {
       if (!sessRes.ok || !sessRes.data?.length) return res.status(404).json({ ok: false, error: 'Session not found' });
       const sess = sessRes.data[0];
 
-      // Sum cash sales since session opened
+      // Sum cash sales since session opened — use Array.isArray guard to prevent .reduce crash
       const salesRes = await supaFetch(
-        `${SUPABASE_URL}/rest/v1/dine_in_orders?status=eq.COMPLETED&created_at=gte.${sess.opened_at}&select=total,payment_method,discounted_total`
+        `${SUPABASE_URL}/rest/v1/dine_in_orders?status=eq.COMPLETED&is_deleted=eq.false&created_at=gte.${encodeURIComponent(sess.opened_at)}&select=total,payment_method,discounted_total`
       );
-      const orders = salesRes.data || [];
+      const orders = Array.isArray(salesRes.data) ? salesRes.data : [];
       const totalSales = orders.reduce((s, o) => s + parseFloat(o.discounted_total || o.total || 0), 0);
       const cashSales = orders
         .filter(o => (o.payment_method || '').toUpperCase().includes('CASH'))
