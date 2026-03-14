@@ -6425,120 +6425,256 @@ async function loadInventoryView() {
 function renderInventoryView() {
   var el = document.getElementById('inventoryView');
   var lowCount = _inventoryItems.filter(function(i){ return i.low_stock; }).length;
+  var outCount = _inventoryItems.filter(function(i){ return parseFloat(i.stock_qty) === 0; }).length;
 
   var rowsHtml = _inventoryItems.length === 0
     ? '<div style="text-align:center;padding:40px;color:#94a3b8">No inventory tracked yet. Click <strong>+ Add Item</strong> to start.</div>'
     : _inventoryItems.map(function(i) {
-      var badge = i.stock_qty === 0 ? '<span style="background:#fef2f2;color:#ef4444;border-radius:6px;padding:2px 8px;font-size:.68rem;font-weight:700">OUT</span>'
-        : i.low_stock ? '<span style="background:#fff7ed;color:#f59e0b;border-radius:6px;padding:2px 8px;font-size:.68rem;font-weight:700">LOW</span>'
-        : '<span style="background:#f0fdf4;color:#22c55e;border-radius:6px;padding:2px 8px;font-size:.68rem;font-weight:700">OK</span>';
-      return '<div style="background:#fff;border-radius:12px;box-shadow:0 1px 6px rgba(0,0,0,.07);padding:14px 16px;display:flex;align-items:center;gap:12px;margin-bottom:8px">'
+      var badge = parseFloat(i.stock_qty) === 0
+        ? '<span style="background:#fef2f2;color:#ef4444;border-radius:6px;padding:2px 8px;font-size:.68rem;font-weight:700;flex-shrink:0">OUT</span>'
+        : i.low_stock
+        ? '<span style="background:#fff7ed;color:#f59e0b;border-radius:6px;padding:2px 8px;font-size:.68rem;font-weight:700;flex-shrink:0">LOW</span>'
+        : '<span style="background:#f0fdf4;color:#22c55e;border-radius:6px;padding:2px 8px;font-size:.68rem;font-weight:700;flex-shrink:0">OK</span>';
+
+      var photoHtml = i.photo_url
+        ? '<img src="' + esc(i.photo_url) + '" style="width:44px;height:44px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.style.display='none'">'
+        : '<div style="width:44px;height:44px;border-radius:8px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0">📦</div>';
+
+      var sizeLabel = i.size_per_unit ? ' · ' + esc(i.size_per_unit) : '';
+      var sellLabel = i.selling_price > 0 ? ' · Sell ₱' + parseFloat(i.selling_price).toFixed(0) : '';
+      var qty = parseFloat(i.stock_qty);
+      var qtyDisplay = qty === Math.floor(qty) ? qty.toFixed(0) : qty.toFixed(1);
+
+      return '<div style="background:#fff;border-radius:12px;box-shadow:0 1px 6px rgba(0,0,0,.07);padding:12px 14px;display:flex;align-items:center;gap:10px;margin-bottom:8px">'
+        + photoHtml
         + '<div style="flex:1;min-width:0">'
-        + '<div style="font-weight:700;font-size:.87rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (i.item_name || i.item_code) + '</div>'
-        + '<div style="font-size:.72rem;color:#64748b;margin-top:2px">' + i.item_code + ' · ' + i.unit + ' · ₱' + parseFloat(i.cost_per_unit||0).toFixed(2) + '/unit</div>'
+        + '<div style="font-weight:700;font-size:.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(i.item_name || i.item_code) + '</div>'
+        + '<div style="font-size:.7rem;color:#64748b;margin-top:1px">' + esc(i.item_code) + ' · ' + esc(i.unit) + sizeLabel + ' · Cost ₱' + parseFloat(i.cost_per_unit||0).toFixed(2) + sellLabel + '</div>'
+        + '<div style="font-size:.68rem;color:#94a3b8;margin-top:1px">Threshold: ' + i.low_stock_threshold + ' ' + esc(i.unit) + '</div>'
         + '</div>'
         + badge
-        + '<div style="font-size:1.1rem;font-weight:800;min-width:50px;text-align:right">' + parseFloat(i.stock_qty).toFixed(0) + '</div>'
-        + '<div style="display:flex;gap:6px">'
-        + '<button onclick="openInvAdjust(\'' + i.item_code + '\',\'' + (i.item_name||i.item_code).replace(/'/g,"\\'") + '\',' + i.stock_qty + ')" '
-        + 'style="background:#eff6ff;color:#3b82f6;border:none;border-radius:8px;padding:6px 10px;font-size:.78rem;font-weight:700;cursor:pointer">Adjust</button>'
-        + '<button onclick="openInvEdit(\'' + i.item_code + '\')" '
-        + 'style="background:#f8fafc;color:#64748b;border:1px solid #e2e8f0;border-radius:8px;padding:6px 10px;font-size:.78rem;cursor:pointer">Edit</button>'
-        + '</div></div>';
+        + '<div style="font-size:1.15rem;font-weight:800;min-width:40px;text-align:center;color:' + (parseFloat(i.stock_qty)===0?'#ef4444':i.low_stock?'#f59e0b':'#065f46') + '">' + qtyDisplay + '</div>'
+        + '<div style="display:flex;flex-direction:column;gap:4px">'
+        + '<button onclick="invQuickIn(\'' + i.item_code + '\')" style="background:#f0fdf4;color:#16a34a;border:1.5px solid #bbf7d0;border-radius:7px;padding:4px 10px;font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap">▲ IN</button>'
+        + '<button onclick="invQuickOut(\'' + i.item_code + '\')" style="background:#fef2f2;color:#dc2626;border:1.5px solid #fecaca;border-radius:7px;padding:4px 10px;font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap">▼ OUT</button>'
+        + '</div>'
+        + '<button onclick="openInvEdit(\'' + i.item_code + '\')" style="background:#f8fafc;color:#64748b;border:1px solid #e2e8f0;border-radius:8px;padding:6px 10px;font-size:.78rem;cursor:pointer;flex-shrink:0">⚙️</button>'
+        + '</div>';
     }).join('');
 
+  var summaryBadges = '';
+  if (outCount > 0) summaryBadges += '<span style="background:#fef2f2;color:#ef4444;border-radius:8px;padding:3px 10px;font-size:.75rem;font-weight:700;margin-right:6px">⚠️ ' + outCount + ' OUT OF STOCK</span>';
+  if (lowCount > 0) summaryBadges += '<span style="background:#fff7ed;color:#f59e0b;border-radius:8px;padding:3px 10px;font-size:.75rem;font-weight:700">⚠️ ' + lowCount + ' LOW STOCK</span>';
+
   el.innerHTML = '<div style="padding:16px 16px 0">'
-    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
     + '<div><div style="font-weight:800;font-size:1.05rem;color:var(--forest-deep)">📦 Inventory</div>'
-    + (lowCount ? '<div style="font-size:.75rem;color:#f59e0b;margin-top:2px">⚠️ ' + lowCount + ' item(s) low on stock</div>' : '') + '</div>'
+    + (summaryBadges ? '<div style="margin-top:4px">' + summaryBadges + '</div>' : '') + '</div>'
     + '<button onclick="openInvAdd()" style="background:var(--forest-deep);color:#fff;border:none;border-radius:10px;padding:8px 14px;font-size:.82rem;font-weight:700;cursor:pointer">+ Add Item</button>'
     + '</div>'
     + rowsHtml + '</div>';
 }
 
+// ── Quick IN modal ─────────────────────────────────────────
+function invQuickIn(code) {
+  var item = _inventoryItems.find(function(i){ return i.item_code === code; });
+  var name = item ? (item.item_name || code) : code;
+  var cur = item ? parseFloat(item.stock_qty) : 0;
+  showModal('▲ Stock IN — ' + name,
+    '<div style="background:#f0fdf4;border-radius:10px;padding:10px 14px;margin-bottom:12px;display:flex;justify-content:space-between">'
+    + '<span style="font-size:.82rem;color:#166534">Current stock</span>'
+    + '<strong style="color:#166534">' + cur + ' ' + (item?item.unit:'') + '</strong></div>'
+    + '<div style="display:flex;flex-direction:column;gap:10px">'
+    + '<label style="font-size:.8rem;font-weight:600">Qty IN (how much arriving?)<br>'
+    + '<input id="qInQty" type="number" value="1" min="0.1" step="any" autofocus style="width:100%;padding:10px;border:2px solid #bbf7d0;border-radius:8px;font-size:1rem;font-weight:700;margin-top:3px"></label>'
+    + '<label style="font-size:.8rem;font-weight:600">Type<br>'
+    + '<select id="qInType" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px">'
+    + '<option value="RESTOCK">🛒 Restock / Delivery</option>'
+    + '<option value="RETURN">↩️ Return / Unused</option>'
+    + '<option value="ADJUSTMENT">✏️ Manual Correction</option>'
+    + '</select></label>'
+    + '<label style="font-size:.8rem;font-weight:600">Cost per unit this delivery (₱) <span style="font-weight:400;opacity:.6">optional</span><br>'
+    + '<input id="qInPrice" type="number" value="' + (item?parseFloat(item.cost_per_unit||0):'0') + '" min="0" step="0.01" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
+    + '<label style="font-size:.8rem;font-weight:600">Ref / Supplier note <span style="font-weight:400;opacity:.6">optional</span><br>'
+    + '<input id="qInRef" placeholder="e.g. Supplier: ABC, PO-123" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
+    + '<button onclick="doQuickIn(\'' + code + '\')" style="background:#16a34a;color:#fff;border:none;border-radius:10px;padding:12px;font-weight:700;cursor:pointer;font-size:.95rem">▲ Add to Stock</button>'
+    + '</div>'
+  );
+}
+
+async function doQuickIn(code) {
+  var qty = parseFloat(document.getElementById('qInQty').value) || 0;
+  if (qty <= 0) { showToast('Enter a quantity > 0', true); return; }
+  var r = await api('adjustInventory', {
+    userId: currentUser.userId, itemCode: code,
+    adjustment: qty, direction: 'IN',
+    changeType: document.getElementById('qInType').value,
+    unitPrice: parseFloat(document.getElementById('qInPrice').value) || 0,
+    reference: document.getElementById('qInRef').value,
+    notes: document.getElementById('qInRef').value,
+  });
+  closeModal();
+  if (r.ok) { showToast('✅ +' + qty + ' added — stock now ' + r.qtyAfter); loadInventoryView(); }
+  else showToast('Error: ' + r.error, true);
+}
+
+// ── Quick OUT modal ────────────────────────────────────────
+function invQuickOut(code) {
+  var item = _inventoryItems.find(function(i){ return i.item_code === code; });
+  var name = item ? (item.item_name || code) : code;
+  var cur = item ? parseFloat(item.stock_qty) : 0;
+  showModal('▼ Stock OUT — ' + name,
+    '<div style="background:#fef2f2;border-radius:10px;padding:10px 14px;margin-bottom:12px;display:flex;justify-content:space-between">'
+    + '<span style="font-size:.82rem;color:#991b1b">Current stock</span>'
+    + '<strong style="color:#991b1b">' + cur + ' ' + (item?item.unit:'') + '</strong></div>'
+    + '<div style="display:flex;flex-direction:column;gap:10px">'
+    + '<label style="font-size:.8rem;font-weight:600">Qty OUT (how much used/removed?)<br>'
+    + '<input id="qOutQty" type="number" value="1" min="0.1" step="any" autofocus style="width:100%;padding:10px;border:2px solid #fecaca;border-radius:8px;font-size:1rem;font-weight:700;margin-top:3px"></label>'
+    + '<label style="font-size:.8rem;font-weight:600">Reason<br>'
+    + '<select id="qOutType" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px">'
+    + '<option value="WASTE">🗑️ Waste / Spoilage / Expired</option>'
+    + '<option value="ADJUSTMENT">✏️ Manual Correction</option>'
+    + '<option value="SALE">💰 Manual Sale Deduction</option>'
+    + '</select></label>'
+    + '<label style="font-size:.8rem;font-weight:600">Notes <span style="font-weight:400;opacity:.6">optional</span><br>'
+    + '<input id="qOutNotes" placeholder="e.g. Spoiled, wrong order..." style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
+    + '<button onclick="doQuickOut(\'' + code + '\')" style="background:#dc2626;color:#fff;border:none;border-radius:10px;padding:12px;font-weight:700;cursor:pointer;font-size:.95rem">▼ Remove from Stock</button>'
+    + '</div>'
+  );
+}
+
+async function doQuickOut(code) {
+  var qty = parseFloat(document.getElementById('qOutQty').value) || 0;
+  if (qty <= 0) { showToast('Enter a quantity > 0', true); return; }
+  var r = await api('adjustInventory', {
+    userId: currentUser.userId, itemCode: code,
+    adjustment: qty, direction: 'OUT',
+    changeType: document.getElementById('qOutType').value,
+    notes: document.getElementById('qOutNotes').value,
+  });
+  closeModal();
+  if (r.ok) { showToast('▼ -' + qty + ' removed — stock now ' + r.qtyAfter); loadInventoryView(); }
+  else showToast('Error: ' + r.error, true);
+}
+
 async function openInvAdd() {
-  // Load all menu items (use cache or fetch)
   var menuItems = menuMgrItems.length > 0 ? menuMgrItems
     : (window._menuDataCache && window._menuDataCache.length ? window._menuDataCache : null);
-
   if (!menuItems) {
     var r = await api('getMenuAdmin', { userId: currentUser && currentUser.userId });
     menuItems = r.items || [];
   }
-
-  // Get already-tracked items to exclude from dropdown
   var invR = await api('getInventory', { userId: currentUser && currentUser.userId });
   var trackedCodes = new Set((invR.items || []).map(function(i){ return i.item_code; }));
 
-  // Build options: all items, marking already-tracked ones
-  var options = menuItems.map(function(m) {
-    var tracked = trackedCodes.has(m.code || m.item_code);
-    var code = m.code || m.item_code;
-    var name = m.name;
-    return '<option value="' + esc(code) + '"' + (tracked ? ' disabled' : '') + '>'
-      + esc(name) + ' (' + esc(code) + ')' + (tracked ? ' — already tracked' : '')
-      + '</option>';
-  }).join('');
-
-  // Also keep a manual entry option for custom codes
-  options = '<option value="">— Select a menu item —</option>' + options
+  var options = '<option value="">— Select a menu item —</option>'
+    + menuItems.map(function(m) {
+      var tracked = trackedCodes.has(m.code || m.item_code);
+      var code = m.code || m.item_code;
+      return '<option value="' + esc(code) + '"' + (tracked ? ' disabled' : '') + '>'
+        + esc(m.name) + ' (' + esc(code) + ')' + (tracked ? ' — already tracked' : '') + '</option>';
+    }).join('')
     + '<option value="__CUSTOM__">✏️ Enter code manually…</option>';
 
   showModal('Add Inventory Item',
     '<div style="display:flex;flex-direction:column;gap:10px">'
     + '<label style="font-size:.8rem;font-weight:600">Menu Item<br>'
-    + '<select id="invItemSelect" onchange="invSelectChange(this)" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px">'
-    + options + '</select></label>'
+    + '<select id="invItemSelect" onchange="invSelectChange(this)" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px">' + options + '</select></label>'
     + '<div id="invManualCodeWrap" style="display:none"><label style="font-size:.8rem;font-weight:600">Item Code (manual)<br>'
     + '<input id="invItemCode" placeholder="e.g. H001" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label></div>'
-    + '<label style="font-size:.8rem;font-weight:600">Initial Stock Qty<br>'
-    + '<input id="invQty" type="number" value="0" min="0" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
-    + '<label style="font-size:.8rem;font-weight:600">Low Stock Alert Threshold<br>'
-    + '<input id="invThreshold" type="number" value="10" min="0" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
-    + '<label style="font-size:.8rem;font-weight:600">Unit (pcs / cups / kg / g)<br>'
-    + '<input id="invUnit" value="pcs" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
-    + '<label style="font-size:.8rem;font-weight:600">Cost Per Unit (₱)<br>'
-    + '<input id="invCost" type="number" value="0" min="0" step="0.01" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+    + '<label style="font-size:.8rem;font-weight:600">Initial Stock Qty<br><input id="invQty" type="number" value="0" min="0" step="any" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
+    + '<label style="font-size:.8rem;font-weight:600">Low Stock Threshold<br><input id="invThreshold" type="number" value="10" min="0" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
+    + '</div>'
+    + '<label style="font-size:.8rem;font-weight:600">Unit<br>'
+    + '<select id="invUnit" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px">'
+    + '<option>pcs</option><option>cups</option><option>shots</option><option>bottles</option><option>sachets</option>'
+    + '<option>bags</option><option>boxes</option><option>g</option><option>kg</option>'
+    + '<option>mL</option><option>L</option><option>tbsp</option><option>tsp</option><option>oz</option>'
+    + '</select></label>'
+    + '<label style="font-size:.8rem;font-weight:600">Size per unit <span style="font-weight:400;opacity:.6">e.g. 250g, 1L, 500mL</span><br>'
+    + '<input id="invSizePer" placeholder="e.g. 1kg, 500mL, 250g" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+    + '<label style="font-size:.8rem;font-weight:600">Cost Price (₱/unit)<br><input id="invCost" type="number" value="0" min="0" step="0.01" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
+    + '<label style="font-size:.8rem;font-weight:600">Selling Price (₱/unit)<br><input id="invSell" type="number" value="0" min="0" step="0.01" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
+    + '</div>'
+    + '<label style="font-size:.8rem;font-weight:600">Photo <span style="font-weight:400;opacity:.6">optional</span><br>'
+    + '<div style="display:flex;align-items:center;gap:10px;margin-top:4px">'
+    + '<div id="invPhotoPreview" style="width:56px;height:56px;border-radius:8px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:1.5rem;flex-shrink:0;overflow:hidden">📦</div>'
+    + '<label style="flex:1;background:#eff6ff;color:#2563eb;border:1.5px dashed #93c5fd;border-radius:8px;padding:10px;text-align:center;cursor:pointer;font-size:.82rem;font-weight:600">'
+    + '📷 Choose Photo<input type="file" id="invPhotoFile" accept="image/*" onchange="invPreviewPhoto(this)" style="display:none"></label>'
+    + '</div></label>'
     + '<label style="display:flex;align-items:center;gap:8px;font-size:.8rem;font-weight:600;cursor:pointer">'
     + '<input type="checkbox" id="invAutoDisable"> Auto-disable menu item when stock = 0</label>'
-    + '<button onclick="saveInvItem(null)" style="background:var(--forest-deep);color:#fff;border:none;border-radius:10px;padding:10px;font-weight:700;cursor:pointer;font-size:.9rem">Save</button>'
+    + '<button onclick="saveInvItem(null)" style="background:var(--forest-deep);color:#fff;border:none;border-radius:10px;padding:10px;font-weight:700;cursor:pointer;font-size:.9rem">Save Item</button>'
     + '</div>'
   );
 }
 
+function invPreviewPhoto(input) {
+  if (!input.files || !input.files[0]) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var prev = document.getElementById('invPhotoPreview');
+    if (prev) prev.innerHTML = '<img src="' + e.target.result + '" style="width:100%;height:100%;object-fit:cover">';
+  };
+  reader.readAsDataURL(input.files[0]);
+}
+
 function invSelectChange(sel) {
   var wrap = document.getElementById('invManualCodeWrap');
-  if (sel.value === '__CUSTOM__') {
-    wrap.style.display = 'block';
-  } else {
-    wrap.style.display = 'none';
-    if (document.getElementById('invItemCode'))
-      document.getElementById('invItemCode').value = '';
-  }
+  wrap.style.display = sel.value === '__CUSTOM__' ? 'block' : 'none';
+  if (sel.value !== '__CUSTOM__' && document.getElementById('invItemCode'))
+    document.getElementById('invItemCode').value = '';
 }
 
 function openInvEdit(itemCode) {
   var item = _inventoryItems.find(function(i){ return i.item_code === itemCode; });
   if (!item) return;
-  showModal('Edit: ' + (item.item_name || itemCode),
+  var unitOpts = ['pcs','cups','shots','bottles','sachets','bags','boxes','g','kg','mL','L','tbsp','tsp','oz'];
+  var curUnit = item.unit || 'pcs';
+
+  showModal('⚙️ Edit: ' + esc(item.item_name || itemCode),
     '<div style="display:flex;flex-direction:column;gap:10px">'
-    + '<label style="font-size:.8rem;font-weight:600">Low Stock Threshold<br>'
-    + '<input id="invThreshold" type="number" value="' + item.low_stock_threshold + '" min="0" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
-    + '<label style="font-size:.8rem;font-weight:600">Unit<br>'
-    + '<input id="invUnit" value="' + (item.unit||'pcs') + '" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
-    + '<label style="font-size:.8rem;font-weight:600">Cost Per Unit (₱)<br>'
-    + '<input id="invCost" type="number" value="' + (item.cost_per_unit||0) + '" step="0.01" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
+    + '<div style="display:flex;gap:10px;align-items:center;margin-bottom:4px">'
+    + '<div id="invEditPhotoPreview" style="width:64px;height:64px;border-radius:10px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:1.8rem;flex-shrink:0;overflow:hidden">'
+    + (item.photo_url ? '<img src="' + esc(item.photo_url) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.textContent='📦'">' : '📦')
+    + '</div>'
+    + '<label style="flex:1;background:#eff6ff;color:#2563eb;border:1.5px dashed #93c5fd;border-radius:8px;padding:10px;text-align:center;cursor:pointer;font-size:.8rem;font-weight:600">'
+    + '📷 Change Photo<input type="file" id="invEditPhotoFile" accept="image/*" onchange="invPreviewPhotoEdit(this)" style="display:none"></label>'
+    + '</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+    + '<label style="font-size:.8rem;font-weight:600">Low Stock Threshold<br><input id="invThreshold" type="number" value="' + item.low_stock_threshold + '" min="0" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
+    + '<label style="font-size:.8rem;font-weight:600">Unit<br><select id="invUnit" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px">'
+    + unitOpts.map(function(u){ return '<option' + (u===curUnit?' selected':'') + '>' + u + '</option>'; }).join('')
+    + '</select></label>'
+    + '</div>'
+    + '<label style="font-size:.8rem;font-weight:600">Size per unit <span style="font-weight:400;opacity:.6">e.g. 250g, 1L</span><br>'
+    + '<input id="invSizePer" value="' + esc(item.size_per_unit||'') + '" placeholder="e.g. 1kg, 500mL" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+    + '<label style="font-size:.8rem;font-weight:600">Cost Price (₱/unit)<br><input id="invCost" type="number" value="' + (item.cost_per_unit||0) + '" step="0.01" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
+    + '<label style="font-size:.8rem;font-weight:600">Selling Price (₱/unit)<br><input id="invSell" type="number" value="' + (item.selling_price||0) + '" step="0.01" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
+    + '</div>'
     + '<label style="display:flex;align-items:center;gap:8px;font-size:.8rem;font-weight:600;cursor:pointer">'
-    + '<input type="checkbox" id="invAutoDisable"' + (item.auto_disable?' checked':'') + '> Auto-disable when stock = 0</label>'
+    + '<input type="checkbox" id="invAutoDisable"' + (item.auto_disable?' checked':'') + '> Auto-disable menu item when stock = 0</label>'
     + '<button onclick="saveInvItem(\'' + itemCode + '\')" style="background:var(--forest-deep);color:#fff;border:none;border-radius:10px;padding:10px;font-weight:700;cursor:pointer;font-size:.9rem">Save Changes</button>'
     + '</div>'
   );
 }
 
+function invPreviewPhotoEdit(input) {
+  if (!input.files || !input.files[0]) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var prev = document.getElementById('invEditPhotoPreview');
+    if (prev) prev.innerHTML = '<img src="' + e.target.result + '" style="width:100%;height:100%;object-fit:cover">';
+  };
+  reader.readAsDataURL(input.files[0]);
+}
+
 async function saveInvItem(existingCode) {
   var code = existingCode;
   if (!code) {
-    // New item — get from dropdown or manual input
     var sel = document.getElementById('invItemSelect');
     var manual = document.getElementById('invItemCode');
     if (sel && sel.value && sel.value !== '__CUSTOM__' && sel.value !== '') {
@@ -6548,50 +6684,54 @@ async function saveInvItem(existingCode) {
     }
   }
   if (!code) { showToast('Please select a menu item', true); return; }
-  var r = await api('upsertInventory', {
+
+  // Handle photo upload first if a file was chosen
+  var photoInputId = existingCode ? 'invEditPhotoFile' : 'invPhotoFile';
+  var photoInput = document.getElementById(photoInputId);
+  var photoUrl = null;
+  if (photoInput && photoInput.files && photoInput.files[0]) {
+    var file = photoInput.files[0];
+    var reader = new FileReader();
+    var b64 = await new Promise(function(res) {
+      reader.onload = function(e) { res(e.target.result.split(',')[1]); };
+      reader.readAsDataURL(file);
+    });
+    var uploadR = await api('uploadInventoryPhoto', {
+      userId: currentUser.userId,
+      itemCode: code,
+      imageBase64: b64,
+      mimeType: file.type || 'image/jpeg',
+    });
+    if (uploadR.ok) photoUrl = uploadR.photoUrl;
+    else showToast('Photo upload failed: ' + uploadR.error, true);
+  }
+
+  var payload = {
     userId: currentUser.userId,
     itemCode: code,
-    stockQty: (document.getElementById('invQty')||{value:0}).value,
     lowStockThreshold: document.getElementById('invThreshold').value,
     unit: document.getElementById('invUnit').value,
+    sizePerUnit: (document.getElementById('invSizePer') || {value:''}).value,
     costPerUnit: document.getElementById('invCost').value,
+    sellingPrice: (document.getElementById('invSell') || {value:0}).value,
     autoDisable: document.getElementById('invAutoDisable').checked,
-  });
+  };
+  if (!existingCode) {
+    payload.stockQty = (document.getElementById('invQty')||{value:0}).value;
+  }
+  if (photoUrl) payload.photoUrl = photoUrl;
+
+  var r = await api('upsertInventory', payload);
   closeModal();
   if (r.ok) { showToast('Inventory saved ✅'); loadInventoryView(); }
   else showToast('Error: ' + r.error, true);
 }
 
-function openInvAdjust(code, name, currentQty) {
-  showModal('Adjust: ' + name,
-    '<div style="margin-bottom:10px;font-size:.85rem;color:#64748b">Current stock: <strong>' + currentQty + '</strong></div>'
-    + '<div style="display:flex;flex-direction:column;gap:10px">'
-    + '<label style="font-size:.8rem;font-weight:600">Adjustment (+ to add, - to deduct)<br>'
-    + '<input id="adjQty" type="number" value="0" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
-    + '<label style="font-size:.8rem;font-weight:600">Type<br>'
-    + '<select id="adjType" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px">'
-    + '<option value="RESTOCK">Restock</option><option value="ADJUSTMENT">Manual Adjustment</option>'
-    + '<option value="WASTE">Waste/Spoilage</option><option value="RETURN">Return</option></select></label>'
-    + '<label style="font-size:.8rem;font-weight:600">Notes<br>'
-    + '<input id="adjNotes" placeholder="Optional notes" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
-    + '<button onclick="doInvAdjust(\'' + code + '\')" style="background:var(--forest-deep);color:#fff;border:none;border-radius:10px;padding:10px;font-weight:700;cursor:pointer;font-size:.9rem">Apply</button>'
-    + '</div>'
-  );
-}
+function openInvAdjust(code, name, currentQty) { invQuickIn(code); } // legacy alias
 
-async function doInvAdjust(code) {
-  var r = await api('adjustInventory', {
-    userId: currentUser.userId,
-    itemCode: code,
-    adjustment: parseFloat(document.getElementById('adjQty').value) || 0,
-    changeType: document.getElementById('adjType').value,
-    notes: document.getElementById('adjNotes').value,
-  });
-  closeModal();
-  if (r.ok) { showToast('Stock updated: ' + r.qtyBefore + ' → ' + r.qtyAfter); loadInventoryView(); }
-  else showToast('Error: ' + r.error, true);
-}
+async function doInvAdjust(code) {} // legacy stub
 
+// ══════════════════════════════════════════════════════════
 // ══════════════════════════════════════════════════════════
 // ADD-ONS / MODIFIERS
 // ══════════════════════════════════════════════════════════
