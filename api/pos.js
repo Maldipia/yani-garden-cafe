@@ -1439,10 +1439,23 @@ export default async function handler(req, res) {
       );
       if (!r.ok) return res.status(502).json({ ok: false, payments: [], error: 'Failed to load payments' });
 
+      // Batch-fetch table numbers from dine_in_orders
+      const orderIds = [...new Set(r.data.map(p => p.order_id).filter(Boolean))];
+      let tableMap = {};
+      if (orderIds.length > 0) {
+        const ordersR = await supaFetch(
+          `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=in.(${orderIds.map(id => `"${id}"`).join(',')})&select=order_id,table_no`
+        );
+        if (ordersR.ok && Array.isArray(ordersR.data)) {
+          ordersR.data.forEach(o => { tableMap[o.order_id] = o.table_no || '?'; });
+        }
+      }
+
       const payments = r.data.map(p => ({
         paymentId:    p.payment_id,
         orderId:      p.order_id,
         orderType:    p.order_type,
+        tableNo:      tableMap[p.order_id] || '?',
         amount:       p.amount,
         paymentMethod: p.payment_method,
         imageUrl:     p.proof_url,
@@ -1452,6 +1465,7 @@ export default async function handler(req, res) {
         verifiedAt:   p.verified_at || '',
         notes:        p.rejection_reason || '',
         createdAt:    p.created_at,
+        uploadedAt:   p.created_at,
       }));
 
       return res.status(200).json({ ok: true, payments });
