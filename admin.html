@@ -6456,12 +6456,41 @@ function renderInventoryView() {
     + rowsHtml + '</div>';
 }
 
-function openInvAdd() {
-  var menuItems = window._menuItems || [];
+async function openInvAdd() {
+  // Load all menu items (use cache or fetch)
+  var menuItems = menuMgrItems.length > 0 ? menuMgrItems
+    : (window._menuDataCache && window._menuDataCache.length ? window._menuDataCache : null);
+
+  if (!menuItems) {
+    var r = await api('getMenuAdmin', { userId: currentUser && currentUser.userId });
+    menuItems = r.items || [];
+  }
+
+  // Get already-tracked items to exclude from dropdown
+  var invR = await api('getInventory', { userId: currentUser && currentUser.userId });
+  var trackedCodes = new Set((invR.items || []).map(function(i){ return i.item_code; }));
+
+  // Build options: all items, marking already-tracked ones
+  var options = menuItems.map(function(m) {
+    var tracked = trackedCodes.has(m.code || m.item_code);
+    var code = m.code || m.item_code;
+    var name = m.name;
+    return '<option value="' + esc(code) + '"' + (tracked ? ' disabled' : '') + '>'
+      + esc(name) + ' (' + esc(code) + ')' + (tracked ? ' — already tracked' : '')
+      + '</option>';
+  }).join('');
+
+  // Also keep a manual entry option for custom codes
+  options = '<option value="">— Select a menu item —</option>' + options
+    + '<option value="__CUSTOM__">✏️ Enter code manually…</option>';
+
   showModal('Add Inventory Item',
     '<div style="display:flex;flex-direction:column;gap:10px">'
-    + '<label style="font-size:.8rem;font-weight:600">Menu Item Code<br>'
-    + '<input id="invItemCode" placeholder="e.g. H001" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
+    + '<label style="font-size:.8rem;font-weight:600">Menu Item<br>'
+    + '<select id="invItemSelect" onchange="invSelectChange(this)" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px">'
+    + options + '</select></label>'
+    + '<div id="invManualCodeWrap" style="display:none"><label style="font-size:.8rem;font-weight:600">Item Code (manual)<br>'
+    + '<input id="invItemCode" placeholder="e.g. H001" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label></div>'
     + '<label style="font-size:.8rem;font-weight:600">Initial Stock Qty<br>'
     + '<input id="invQty" type="number" value="0" min="0" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
     + '<label style="font-size:.8rem;font-weight:600">Low Stock Alert Threshold<br>'
@@ -6475,6 +6504,17 @@ function openInvAdd() {
     + '<button onclick="saveInvItem(null)" style="background:var(--forest-deep);color:#fff;border:none;border-radius:10px;padding:10px;font-weight:700;cursor:pointer;font-size:.9rem">Save</button>'
     + '</div>'
   );
+}
+
+function invSelectChange(sel) {
+  var wrap = document.getElementById('invManualCodeWrap');
+  if (sel.value === '__CUSTOM__') {
+    wrap.style.display = 'block';
+  } else {
+    wrap.style.display = 'none';
+    if (document.getElementById('invItemCode'))
+      document.getElementById('invItemCode').value = '';
+  }
 }
 
 function openInvEdit(itemCode) {
@@ -6496,8 +6536,18 @@ function openInvEdit(itemCode) {
 }
 
 async function saveInvItem(existingCode) {
-  var code = existingCode || (document.getElementById('invItemCode')||{}).value;
-  if (!code) { showToast('Item code required', true); return; }
+  var code = existingCode;
+  if (!code) {
+    // New item — get from dropdown or manual input
+    var sel = document.getElementById('invItemSelect');
+    var manual = document.getElementById('invItemCode');
+    if (sel && sel.value && sel.value !== '__CUSTOM__' && sel.value !== '') {
+      code = sel.value;
+    } else if (manual && manual.value.trim()) {
+      code = manual.value.trim();
+    }
+  }
+  if (!code) { showToast('Please select a menu item', true); return; }
   var r = await api('upsertInventory', {
     userId: currentUser.userId,
     itemCode: code,
