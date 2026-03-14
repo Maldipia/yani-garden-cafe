@@ -1149,10 +1149,10 @@ export default async function handler(req, res) {
 
       // Get order to check it exists and get order_no/table_no
       const orderR = await supaFetch(
-        `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=order_no,table_no`
+        `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=order_no,table_no,order_type`
       );
       if (!orderR.ok || !orderR.data.length) return res.status(404).json({ ok: false, error: 'Order not found' });
-      const { order_no, table_no } = orderR.data[0];
+      const { order_no, table_no, order_type } = orderR.data[0];
 
       // Recalculate totals
       let subtotal = 0;
@@ -1174,7 +1174,7 @@ export default async function handler(req, res) {
         };
       });
 
-      const svcCharge  = Math.round(subtotal * SERVICE_CHARGE_RATE * 100) / 100;
+      const svcCharge  = order_type === 'TAKE-OUT' ? 0 : Math.round(subtotal * SERVICE_CHARGE_RATE * 100) / 100;
       const preTax2    = subtotal + svcCharge;
       const vatEnabled2 = (await getSetting('VAT_ENABLED')) === 'true';
       const vatRate2    = parseFloat(await getSetting('VAT_RATE') || '0.12');

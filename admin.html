@@ -2469,6 +2469,7 @@ async function eoSaveChanges() {
   btn.disabled = true; btn.textContent = 'Saving…';
   try {
     var result = await api('editOrderItems', {
+      userId: currentUser && currentUser.userId,
       orderId: eoOrderId,
       items: eoItems.map(function(it) {
         return { code: it.code, name: it.name, size: it.size, sugar: it.sugar,
