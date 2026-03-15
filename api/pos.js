@@ -800,13 +800,16 @@ export default async function handler(req, res) {
 
     // ── getOrders ──────────────────────────────────────────────────────────
     if (action === 'getOrders') {
-      const orderId = body.orderId ? String(body.orderId).trim() : null;
-      const status  = body.status  ? String(body.status).toUpperCase() : null;
-      const limit   = Math.min(parseInt(body.limit) || 200, 500);
+      const orderId     = body.orderId ? String(body.orderId).trim() : null;
+      const status      = body.status  ? String(body.status).toUpperCase() : null;
+      const limit       = Math.min(parseInt(body.limit) || 200, 500);
+      const excludeTest = body.excludeTest === true || body.excludeTest === 'true';
 
       let url = `${SUPABASE_URL}/rest/v1/dine_in_orders?order=created_at.desc&limit=${limit}&is_deleted=eq.false`;
       if (orderId) url += `&order_id=eq.${encodeURIComponent(orderId)}`;
+      else if (status === 'ACTIVE') url += `&status=in.(NEW,PREPARING,READY)`;
       else if (status && status !== 'ALL') url += `&status=eq.${encodeURIComponent(status)}`;
+      if (excludeTest) url += `&is_test=eq.false`;
 
       const ordersR = await supaFetch(url);
       if (!ordersR.ok) return res.status(502).json({ ok: false, orders: [], error: 'Failed to load orders' });
