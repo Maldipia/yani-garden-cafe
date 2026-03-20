@@ -2071,9 +2071,10 @@ export default async function handler(req, res) {
       const orders = ordersR.data || [];
       let synced = 0;
 
+      let gasError = null;
       for (const o of orders) {
         try {
-          await fetch(GAS_SYNC_URL, {
+          const gasResp = await fetch(GAS_SYNC_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -2095,11 +2096,21 @@ export default async function handler(req, res) {
               }
             }),
           });
+          if (!gasResp.ok) {
+            gasError = `GAS returned HTTP ${gasResp.status}`;
+            break;
+          }
           synced++;
-        } catch(e) { /* continue */ }
+        } catch(e) {
+          gasError = e.message;
+          break;
+        }
       }
 
-      // Mark all today's sync log entries as synced
+      if (gasError) {
+        return res.status(502).json({ ok: false, error: `Google Sheets sync failed: ${gasError}. The GAS deployment URL may be expired — please redeploy the Google Apps Script.`, synced, total: orders.length });
+      }
+
       await supa('PATCH', 'sheets_sync_log',
         { synced: true },
         { synced: 'eq.false' }
