@@ -5743,19 +5743,11 @@ async function syncToSheets() {
   btn.style.opacity = '.6';
   btn.disabled = true;
   try {
-    var resp = await fetch('/api/sheets-sync', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'syncNow', userId: currentUser && currentUser.userId })
-    });
-    var r = await resp.json();
+    var r = await api('syncToSheets', { userId: currentUser && currentUser.userId });
     if (r.ok) {
       lbl.textContent = '✅ Synced!';
-      showToast('✅ Synced to Google Sheets!');
+      showToast('✅ Synced ' + (r.synced || 0) + ' orders to Google Sheets!');
       setTimeout(function(){ lbl.textContent = 'Sync to Sheets'; }, 3000);
-    } else if (r.skipped) {
-      lbl.textContent = 'Sync to Sheets';
-      showToast('⚠️ Sheets not configured. Contact admin to set up Google Sheets sync.', 'warn');
     } else {
       lbl.textContent = '❌ Failed';
       showToast('❌ Sync failed: ' + (r.error || 'Unknown error'));

@@ -327,8 +327,8 @@ async function supaFetch(url, opts = {}) {
 
 // ── Log to sheets_sync_log (fire-and-forget) ──────────────────────────────
 // ── Sheets write-through sync ──────────────────────────────────────────────
-// Fires async, never blocks the response. Requires GAS_SYNC_URL env var.
-const GAS_SYNC_URL    = process.env.GAS_SYNC_URL;
+// Fires async, never blocks the response.
+const GAS_SYNC_URL    = process.env.GAS_SYNC_URL || 'https://script.google.com/macros/s/AKfycbytCV-jiFSOoon7Ijww5a-AABRYzhiNZPXVubaaa2zoVBOFxvcgkDH-6e4CfksMA7LC/exec';
 const GAS_SYNC_SECRET = process.env.GAS_SYNC_SECRET || 'yani-sync-2026';
 
 async function pushToSheets(action, payload) {
@@ -2047,6 +2047,67 @@ export default async function handler(req, res) {
     // ══════════════════════════════════════════════════════════════════════
     // TABLE OCCUPANCY STATUS
     // ══════════════════════════════════════════════════════════════════════
+
+    // ── syncToSheets ──────────────────────────────────────────────────────
+    // Manual trigger: push all today's orders to Google Sheets
+    if (action === 'syncToSheets') {
+      const authSync = await requireAdminRole(body);
+      if (!authSync.ok) return res.status(401).json({ ok: false, error: authSync.error });
+
+      if (!GAS_SYNC_URL) return res.status(400).json({ ok: false, error: 'GAS_SYNC_URL not configured' });
+
+      // Fetch today's orders (Manila time)
+      const tz = 'Asia/Manila';
+      const nowPH = new Date(new Date().toLocaleString('en-US', { timeZone: tz }));
+      const y = nowPH.getFullYear(), m = String(nowPH.getMonth()+1).padStart(2,'0'), d = String(nowPH.getDate()).padStart(2,'0');
+      const todayStart = `${y}-${m}-${d}T00:00:00+08:00`;
+      const todayEnd   = `${y}-${m}-${d}T23:59:59+08:00`;
+
+      const ordersR = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/dine_in_orders?created_at=gte.${encodeURIComponent(todayStart)}&created_at=lte.${encodeURIComponent(todayEnd)}&is_deleted=eq.false&is_test=eq.false&select=*`
+      );
+      if (!ordersR.ok) return res.status(500).json({ ok: false, error: 'Failed to fetch orders' });
+
+      const orders = ordersR.data || [];
+      let synced = 0;
+
+      for (const o of orders) {
+        try {
+          await fetch(GAS_SYNC_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              secret: GAS_SYNC_SECRET,
+              action: 'syncOrder',
+              order: {
+                orderId:       o.order_id,
+                tableNo:       o.table_no,
+                customerName:  o.customer_name || '',
+                status:        o.status,
+                orderType:     o.order_type,
+                subtotal:      o.subtotal,
+                serviceCharge: o.service_charge,
+                total:         o.total,
+                paymentMethod: o.payment_method || '',
+                paymentStatus: o.payment_status || '',
+                notes:         o.notes || '',
+                createdAt:     o.created_at,
+              }
+            }),
+          });
+          synced++;
+        } catch(e) { /* continue */ }
+      }
+
+      // Mark all today's sync log entries as synced
+      await supa('PATCH', 'sheets_sync_log',
+        { synced: true },
+        { synced: 'eq.false' }
+      );
+
+      auditLog({ orderId: 'MANUAL_SYNC', action: 'SHEETS_SYNC', actor: { userId: body.userId }, details: { count: synced } });
+      return res.status(200).json({ ok: true, synced, total: orders.length });
+    }
 
     // ── getTableStatus ─────────────────────────────────────────────────────
     if (action === 'getTableStatus') {
