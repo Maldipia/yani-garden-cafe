@@ -2938,13 +2938,21 @@ function renderPayCards() {
   }).join('');
 }
 
+function closeProofModal() {
+  var m = document.getElementById('proofModalOverlay');
+  if (m) m.remove();
+}
+
 async function viewPaymentProof(paymentId) {
+  var existing = document.getElementById('proofModalOverlay');
+  if (existing) existing.remove();
   var modal = document.createElement('div');
+  modal.id = 'proofModalOverlay';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
   modal.innerHTML = '<div style="background:#fff;border-radius:16px;padding:20px;max-width:500px;width:100%;text-align:center">' +
     '<div style="font-weight:700;margin-bottom:12px">📸 Payment Screenshot</div>' +
     '<div id="proofImgWrap">Loading...</div>' +
-    '<button onclick="this.closest('div[style]').remove()" style="margin-top:16px;padding:10px 24px;background:var(--forest);color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer;">Close</button>' +
+    '<button onclick="closeProofModal()" style="margin-top:16px;padding:10px 24px;background:var(--forest);color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer;">Close</button>' +
     '</div>';
   document.body.appendChild(modal);
   var r = await api('getPaymentProof', { paymentId: paymentId, userId: currentUser && currentUser.userId });
