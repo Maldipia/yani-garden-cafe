@@ -1,7 +1,7 @@
 // GET /api/payment-proof?id=PAY-xxx&userId=USR_001
 // Returns raw image bytes — much faster than base64-in-JSON via pos.js
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_URL = 'https://hnynvclpvfxzlfjphefj.supabase.co';
 const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY;
 
 export default async function handler(req, res) {
