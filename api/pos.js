@@ -1465,7 +1465,7 @@ export default async function handler(req, res) {
         tableNo:      tableMap[p.order_id] || '?',
         amount:       p.amount,
         paymentMethod: p.payment_method,
-        imageUrl:     p.proof_url,
+        hasProof:     !!(p.proof_url),           // flag only — don't send base64 in list
         filename:     p.proof_filename,
         status:       p.status,
         verifiedBy:   p.verified_by || '',
@@ -1476,6 +1476,20 @@ export default async function handler(req, res) {
       }));
 
       return res.status(200).json({ ok: true, payments });
+    }
+
+    // ── getPaymentProof ───────────────────────────────────────────────────
+    // Returns the base64 proof image for a single payment (on-demand)
+    if (action === 'getPaymentProof') {
+      const authGP = await requireAdminRole(body);
+      if (!authGP.ok) return res.status(403).json({ ok: false, error: authGP.error });
+      const payId = String(body.paymentId || '').trim();
+      if (!payId) return res.status(400).json({ ok: false, error: 'paymentId required' });
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/payments?payment_id=eq.${encodeURIComponent(payId)}&select=payment_id,proof_url,proof_filename`
+      );
+      if (!r.ok || !r.data?.length) return res.status(404).json({ ok: false, error: 'Payment not found' });
+      return res.status(200).json({ ok: true, imageUrl: r.data[0].proof_url, filename: r.data[0].proof_filename });
     }
 
     // ── verifyPayment ──────────────────────────────────────────────────────

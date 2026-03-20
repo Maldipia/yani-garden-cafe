@@ -2910,10 +2910,10 @@ function renderPayCards() {
       }
     }
 
-    // Screenshot link
-    if (p.fileUrl) {
+    // Screenshot link - load on demand (proof stored as base64, fetched separately)
+    if (p.hasProof || p.fileUrl || p.imageUrl) {
       html += '<div class="pay-screenshot">' +
-        '<a href="' + esc(p.fileUrl) + '" target="_blank">📸 View Payment Screenshot</a>' +
+        '<button class="pay-screenshot-btn" onclick="viewPaymentProof(\'' + esc(p.paymentId) + '\')">📸 View Payment Screenshot</button>' +
       '</div>';
     }
 
@@ -2936,6 +2936,24 @@ function renderPayCards() {
     html += '</div>';
     return html;
   }).join('');
+}
+
+async function viewPaymentProof(paymentId) {
+  var modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+  modal.innerHTML = '<div style="background:#fff;border-radius:16px;padding:20px;max-width:500px;width:100%;text-align:center">' +
+    '<div style="font-weight:700;margin-bottom:12px">📸 Payment Screenshot</div>' +
+    '<div id="proofImgWrap">Loading...</div>' +
+    '<button onclick="this.closest('div[style]').remove()" style="margin-top:16px;padding:10px 24px;background:var(--forest);color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer;">Close</button>' +
+    '</div>';
+  document.body.appendChild(modal);
+  var r = await api('getPaymentProof', { paymentId: paymentId, userId: currentUser && currentUser.userId });
+  var wrap = document.getElementById('proofImgWrap');
+  if (r && r.ok && r.imageUrl) {
+    wrap.innerHTML = '<img src="' + r.imageUrl + '" style="max-width:100%;max-height:60vh;border-radius:8px;object-fit:contain;">';
+  } else {
+    wrap.innerHTML = '<div style="color:#EF4444;">Could not load screenshot.</div>';
+  }
 }
 
 async function doVerifyPayment(paymentId) {
