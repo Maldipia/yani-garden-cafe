@@ -1017,6 +1017,9 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
     <a class="quick-link" href="https://docs.google.com/spreadsheets/d/14wSvfCy5LUrlgi4d48jcGjnFpy310XYUsCWCg5VMg0g/edit?gid=143920344#gid=143920344" target="_blank">
       <span class="quick-link-icon">📊</span> Daily Sales
     </a>
+    <button class="quick-link" id="syncSheetsBtn" onclick="syncToSheets()" style="border:none;cursor:pointer;font-family:var(--font-body)">
+      <span class="quick-link-icon">🔄</span> <span id="syncSheetsLabel">Sync to Sheets</span>
+    </button>
   </div>
 
   <!-- Queue Monitor Panel -->
@@ -2965,7 +2968,7 @@ async function viewPaymentProof(paymentId) {
       '<img src="' + imgSrc + '" ' +
         'style="max-width:100%;max-height:65vh;border-radius:8px;object-fit:contain;display:block;margin:0 auto;" ' +
         'onload="this.previousSibling && this.previousSibling.remove()" ' +
-        'onerror="this.outerHTML=\'<div style=\\\'color:#EF4444;padding:20px\\\'>Could not load screenshot.</div>\'"> ' +
+        'onerror="this.outerHTML=\'<div style=\\\'color:#9CA3AF;padding:20px;text-align:center\\\'>📭 No screenshot for this payment</div>\'"> ' +
     '</div>' +
     '<button onclick="closeProofModal()" style="margin-top:16px;padding:10px 24px;background:var(--forest);color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer;">Close</button>' +
     '</div>';
@@ -5728,6 +5731,45 @@ document.addEventListener('click', function(e) {
   var overlay = document.getElementById('changePinOverlay');
   if (e.target === overlay) closeChangePinModal();
 });
+
+// ══════════════════════════════════════════════════════════
+// SYNC TO SHEETS
+// ══════════════════════════════════════════════════════════
+async function syncToSheets() {
+  var btn = document.getElementById('syncSheetsBtn');
+  var lbl = document.getElementById('syncSheetsLabel');
+  if (!btn || !lbl) return;
+  lbl.textContent = 'Syncing...';
+  btn.style.opacity = '.6';
+  btn.disabled = true;
+  try {
+    var resp = await fetch('/api/sheets-sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'syncNow', userId: currentUser && currentUser.userId })
+    });
+    var r = await resp.json();
+    if (r.ok) {
+      lbl.textContent = '✅ Synced!';
+      showToast('✅ Synced to Google Sheets!');
+      setTimeout(function(){ lbl.textContent = 'Sync to Sheets'; }, 3000);
+    } else if (r.skipped) {
+      lbl.textContent = 'Sync to Sheets';
+      showToast('⚠️ Sheets not configured. Contact admin to set up Google Sheets sync.', 'warn');
+    } else {
+      lbl.textContent = '❌ Failed';
+      showToast('❌ Sync failed: ' + (r.error || 'Unknown error'));
+      setTimeout(function(){ lbl.textContent = 'Sync to Sheets'; }, 3000);
+    }
+  } catch(e) {
+    lbl.textContent = '❌ Error';
+    showToast('❌ Sync error: ' + e.message);
+    setTimeout(function(){ lbl.textContent = 'Sync to Sheets'; }, 3000);
+  } finally {
+    btn.style.opacity = '';
+    btn.disabled = false;
+  }
+}
 
 </script>
 
