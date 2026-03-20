@@ -1823,11 +1823,13 @@ function renderStats() {
   }).length;
 
   todayOrders.forEach(function(o) {
-    if (o.status === 'COMPLETED') {
-      completed++;
+    if (o.status === 'COMPLETED' || o.status === 'READY' || o.status === 'PREPARING') {
+      if (o.status === 'COMPLETED') completed++;
       var orderTotal = 0;
       if (o.subtotal && typeof o.subtotal === 'number') {
         orderTotal = o.subtotal + (o.serviceCharge || 0);
+      } else if (o.total && typeof o.total === 'number') {
+        orderTotal = o.total;
       } else if (o.items && o.items.length) {
         o.items.forEach(function(it){ orderTotal += (it.price || 0) * (it.qty || 1) });
       }
