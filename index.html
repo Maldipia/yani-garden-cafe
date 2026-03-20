@@ -192,6 +192,23 @@ a { color: var(--terra); text-decoration: none }
   position: relative;
 }
 .menu-card:active { transform: scale(.97) }
+.menu-sig-badge {
+  position: absolute;
+  top: 7px;
+  left: 7px;
+  background: #3B1F0A;
+  color: #F5E6C8;
+  font-size: .6rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  z-index: 2;
+  letter-spacing: .03em;
+  white-space: nowrap;
+}
 .menu-img-wrap {
   width: 100%;
   aspect-ratio: 1;
@@ -1076,8 +1093,9 @@ function apiItemToMenuData(item) {
     hasSizes:  !!item.hasSizes,
     hasSugar:  !!item.hasSugar,
     sizes:     sizes,
-    available: item.available !== false, // default true
-    img:       img
+    available:   item.available !== false, // default true
+    isSignature: !!item.isSignature,
+    img:         img
   };
 }
 
@@ -1343,6 +1361,7 @@ function renderMenu() {
       '<div class="menu-img-wrap">' +
         (imgUrl ? '<img class="menu-img" src="' + imgUrl + '" alt="" loading="lazy" onerror="this.style.display=\'none\'">' : '') +
         '<div class="menu-img-placeholder">' + getCategoryIcon(item.category) + '</div>' +
+        (item.isSignature ? '<div class="menu-sig-badge"><span>★</span> Yani\'s Signature</div>' : '') +
       '</div>' +
       '<div class="menu-info">' +
         '<div class="menu-name">' + esc(item.name) + '</div>' +

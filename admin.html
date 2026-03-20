@@ -767,6 +767,10 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 .mm-icon-edit:hover   { background:#DBEAFE; }
 .mm-icon-delete { background:#FEE2E2; color:#EF4444; }
 .mm-icon-delete:hover { background:#EF4444; color:#fff; }
+.mm-icon-sig { background:#FEF3C7; color:#92400E; }
+.mm-icon-sig:hover { background:#F59E0B; color:#fff; }
+.mm-icon-sig.sig-on { background:#92400E; color:#FEF3C7; }
+.mm-icon-sig.sig-on:hover { background:#78350F; color:#FEF3C7; }
 
 /* ── Edit Order Modal ─────────────────────────────────── */
 .eo-overlay {
@@ -3580,6 +3584,7 @@ function renderMenuMgrGrid() {
       + '</div>'
       + '<button class="mm-pill ' + pillClass + '" onclick="quickToggleItem(\'' + esc(item.code) + '\',' + (isActive ? 'true' : 'false') + ')" title="' + (isActive ? 'Set Unavailable' : 'Set Available') + '"></button>'
       + '<div class="mm-row-actions">'
+      +   '<button class="mm-icon-btn mm-icon-sig' + (item.isSignature ? ' sig-on' : '') + '" onclick="quickToggleSignature(\'' + esc(item.code) + '\')" title="' + (item.isSignature ? 'Remove Signature' : 'Mark as Signature') + '">★</button>'
       +   '<button class="mm-icon-btn mm-icon-edit" onclick="openEditItemModal(\'' + esc(item.code) + '\')" title="Edit">✏️</button>'
       +   '<button class="mm-icon-btn mm-icon-delete" onclick="quickDeleteItem(\'' + esc(item.code) + '\',\'' + esc(item.name) + '\')" title="Delete">🗑️</button>'
       + '</div>'
@@ -3625,6 +3630,43 @@ async function quickToggleItem(itemCode, currentlyActive) {
   }
 }
 
+
+// ── Quick toggle signature ────────────────────────────────────────────────
+async function quickToggleSignature(itemCode) {
+  var item = menuMgrItems.find(function(i){ return i.code === itemCode; });
+  if (!item) return;
+  var newVal = !item.isSignature;
+
+  // Optimistic UI
+  item.isSignature = newVal;
+  renderMenuMgrGrid();
+
+  var payload = {
+    userId:      currentUser && currentUser.userId,
+    action:      'updateMenuItem',
+    itemId:      itemCode,
+    name:        item.name,
+    category:    item.category,
+    price:       item.price,
+    hasSizes:    item.hasSizes,
+    hasSugar:    item.hasSugar,
+    priceShort:  item.priceShort,
+    priceMedium: item.priceMedium,
+    priceTall:   item.priceTall,
+    image:       item.image || '',
+    status:      item.active ? 'ACTIVE' : 'INACTIVE',
+    isSignature: newVal,
+  };
+
+  var result = await api('updateMenuItem', payload);
+  if (!result || !result.ok) {
+    item.isSignature = !newVal;
+    renderMenuMgrGrid();
+    showToast('\u274C Failed to update signature: ' + (result && result.error || 'Unknown error'), 'error');
+  } else {
+    showToast(newVal ? '\u2B50 ' + esc(item.name) + ' marked as Signature' : '\u2B50 ' + esc(item.name) + ' removed from Signature');
+  }
+}
 // ── Quick delete ─────────────────────────────────────────────────────────
 async function quickDeleteItem(itemCode, itemName) {
   var confirmed = await ygcConfirm(

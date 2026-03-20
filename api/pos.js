@@ -430,7 +430,7 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true, items: menuCache.public, cached: true });
       }
       const r = await supaFetch(
-        `${SUPABASE_URL}/rest/v1/menu_items?is_active=eq.true&order=name.asc&select=item_code,name,base_price,has_sizes,has_sugar_levels,price_short,price_medium,price_tall,image_path,category_id`
+        `${SUPABASE_URL}/rest/v1/menu_items?is_active=eq.true&order=name.asc&select=item_code,name,base_price,has_sizes,has_sugar_levels,price_short,price_medium,price_tall,image_path,category_id,is_signature`
       );
       if (!r.ok) return res.status(502).json({ ok: false, error: 'Failed to load menu' });
       const items = r.data.map(m => ({
@@ -444,6 +444,7 @@ export default async function handler(req, res) {
         priceTall:   m.price_tall,
         image:       m.image_path || '',
         category:    getCategoryName(m.category_id),
+        isSignature: !!m.is_signature,
         available:   true,
       }));
       menuCache.public = items;
@@ -461,7 +462,7 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true, items: menuCache.admin, cached: true });
       }
       const r = await supaFetch(
-        `${SUPABASE_URL}/rest/v1/menu_items?order=name.asc&select=item_code,name,base_price,has_sizes,has_sugar_levels,price_short,price_medium,price_tall,image_path,category_id,is_active`
+        `${SUPABASE_URL}/rest/v1/menu_items?order=name.asc&select=item_code,name,base_price,has_sizes,has_sugar_levels,price_short,price_medium,price_tall,image_path,category_id,is_active,is_signature`
       );
       if (!r.ok) return res.status(502).json({ ok: false, error: 'Failed to load menu' });
       const items = r.data.map(m => ({
@@ -478,6 +479,7 @@ export default async function handler(req, res) {
         active:      m.is_active,
         available:   m.is_active,
         status:      m.is_active ? 'ACTIVE' : 'INACTIVE',
+        isSignature: !!m.is_signature,
       }));
       menuCache.admin = items;
       menuCache.ts = now;
@@ -506,6 +508,7 @@ export default async function handler(req, res) {
         price_tall:       body.priceTall   != null ? parseFloat(body.priceTall)   : null,
         image_path:       body.image || null,
         is_active:        (body.status || 'ACTIVE').toUpperCase() === 'ACTIVE',
+        is_signature:     !!body.isSignature,
       };
       const r = await supa('POST', 'menu_items', row);
       if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to add menu item: ' + JSON.stringify(r.data) });
@@ -535,7 +538,8 @@ export default async function handler(req, res) {
       if (body.priceMedium !== undefined) updates.price_medium    = body.priceMedium != null ? parseFloat(body.priceMedium) : null;
       if (body.priceTall   !== undefined) updates.price_tall      = body.priceTall   != null ? parseFloat(body.priceTall)   : null;
       if (body.image     !== undefined) updates.image_path        = body.image || null;
-      if (body.status    !== undefined) updates.is_active         = (body.status || 'ACTIVE').toUpperCase() === 'ACTIVE';
+      if (body.status      !== undefined) updates.is_active         = (body.status || 'ACTIVE').toUpperCase() === 'ACTIVE';
+      if (body.isSignature !== undefined) updates.is_signature      = !!body.isSignature;
       if (Object.keys(updates).length === 0) return res.status(200).json({ ok: true });
 
       const r = await supa('PATCH', 'menu_items', updates, { item_code: `eq.${body.itemId}` });
