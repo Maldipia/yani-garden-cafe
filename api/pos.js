@@ -865,7 +865,7 @@ export default async function handler(req, res) {
         discountedTotal: o.discounted_total || null,
         discountNote:    o.discount_note    || null,
         paymentNotes:    o.payment_notes    || null,
-        createdAt:     o.created_at,
+        createdAt:     o.created_at ? (o.created_at.endsWith('Z') || o.created_at.includes('+') ? o.created_at : o.created_at + '+00:00') : null,
         updatedAt:     o.updated_at,
         isTest:        o.is_test || false,
         items:         itemsMap[o.order_id] || [],

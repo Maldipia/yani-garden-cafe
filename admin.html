@@ -1804,13 +1804,18 @@ async function loadMenuCache() {
 // STATS
 // ══════════════════════════════════════════════════════════
 function renderStats() {
-  // Use Manila time (UTC+8) for 'today' to ensure correct date comparison regardless of browser timezone
-  var nowManila = new Date(new Date().getTime() + 8 * 3600000);
-  var todayStr = nowManila.toISOString().slice(0, 10); // 'YYYY-MM-DD' in Manila time
+  // Use Manila time (UTC+8) for 'today' — always parse createdAt as UTC then shift to Manila
+  var nowUtc = Date.now();
+  var manilaOffset = 8 * 3600000;
+  var todayStr = new Date(nowUtc + manilaOffset).toISOString().slice(0, 10); // 'YYYY-MM-DD' in Manila
   var todayOrders = allOrders.filter(function(o) {
     try {
-      var d = new Date(o.createdAt);
-      var manilaStr = new Date(d.getTime() + 8 * 3600000).toISOString().slice(0, 10);
+      var raw = o.createdAt || '';
+      // Ensure we always parse as UTC: append +00:00 if no tz info present
+      if (raw && !raw.endsWith('Z') && !raw.includes('+') && raw.length > 10) raw = raw + '+00:00';
+      var d = new Date(raw);
+      if (isNaN(d.getTime())) return false;
+      var manilaStr = new Date(d.getTime() + manilaOffset).toISOString().slice(0, 10);
       return manilaStr === todayStr;
     } catch(e) { return false }
   });
