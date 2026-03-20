@@ -29,6 +29,9 @@
     },
     "api/daily-report.js": {
       "maxDuration": 30
+    },
+    "api/payment-proof.js": {
+      "maxDuration": 30
     }
   },
   "rewrites": [
@@ -71,21 +74,37 @@
     {
       "source": "/kitchen",
       "destination": "/kitchen.html"
+    },
+    {
+      "source": "/api/payment-proof",
+      "destination": "/api/payment-proof"
     }
   ],
   "headers": [
     {
       "source": "/api/(.*)",
       "headers": [
-        { "key": "Cache-Control", "value": "no-store" }
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
       ]
     },
     {
       "source": "/(.*\\.html|)",
       "headers": [
-        { "key": "X-Frame-Options",        "value": "SAMEORIGIN" },
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "Referrer-Policy",        "value": "strict-origin-when-cross-origin" }
+        {
+          "key": "X-Frame-Options",
+          "value": "SAMEORIGIN"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        }
       ]
     }
   ],
