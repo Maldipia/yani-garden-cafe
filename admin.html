@@ -2183,7 +2183,7 @@ function renderOrders() {
       var dtLabel = {PWD:'PWD 20%',SENIOR:'Senior 20%',BOTH:'PWD+Senior',PROMO:'Promo',CUSTOM:'Custom'}[o.discountType] || o.discountType;
       html += '<div class="oc-discount-row">'
         + '<span class="oc-discount-badge">🏷️ ' + dtLabel + ' -₱' + parseFloat(o.discountAmount).toFixed(2) + '</span>';
-      if (canDiscount && o.status !== 'COMPLETED' && o.status !== 'CANCELLED') {
+      if (canDiscount && o.status !== 'CANCELLED') {
         html += '<button class="oc-pm-change" onclick="openDiscountModal(\'' + o.orderId + '\')">Edit</button>';
       }
       html += '</div>';
@@ -2205,8 +2205,8 @@ function renderOrders() {
       html += '</div>';
     }
 
-    // Discount button (ADMIN/CASHIER/OWNER, active orders only)
-    if (canDiscount && o.status !== 'COMPLETED' && o.status !== 'CANCELLED') {
+    // Discount button (ADMIN/CASHIER/OWNER, non-cancelled orders)
+    if (canDiscount && o.status !== 'CANCELLED') {
       html += '<button class="oc-btn" style="background:#FEF3C7;color:#92400E;border:1px solid #FCD34D;margin-top:4px;width:calc(100% - 32px);margin-left:16px;" onclick="openDiscountModal(\'' + o.orderId + '\')">🏷️ '
         + (o.discountType ? 'Edit Discount' : 'Apply Discount') + '</button>';
     }
