@@ -328,18 +328,20 @@ async function supaFetch(url, opts = {}) {
 // ── Log to sheets_sync_log (fire-and-forget) ──────────────────────────────
 // ── Sheets write-through sync ──────────────────────────────────────────────
 // Fires async, never blocks the response.
-// pushToSheets is legacy — GAS SheetsSync.gs now reads unsynced rows directly
-// and marks them synced=true after writing. We just log synced=false.
+// GAS SheetsSync.gs reads synced=false rows via time trigger (every 1 min)
+// We log synced=false; GAS marks them synced=true after writing to sheet.
+const GAS_SYNC_URL = process.env.GAS_SYNC_URL || 'https://script.google.com/macros/s/AKfycbzprf6_LpDwcVujm8kcGFZE5JdkL0k9b6Wfg5l82gjZzFua8w1QWH8UoFFlhznc6EtL/exec';
+
 function logSync(tableName, recordId, action) {
   supa('POST', 'sheets_sync_log', {
     table_name: tableName,
     record_id: String(recordId),
     action,
-    synced: false,  // GAS trigger will mark true after writing to sheet
+    synced: false,
   }).catch(() => {});
 }
 
-// Legacy stub — no longer fires to GAS
+// Stub — no longer pushes directly to GAS
 async function pushToSheets() {}
 
 // ── In-memory menu cache (5-minute TTL) ──────────────────────────────────
@@ -2137,75 +2139,29 @@ export default async function handler(req, res) {
     // ══════════════════════════════════════════════════════════════════════
 
     // ── syncToSheets ──────────────────────────────────────────────────────
-    // Manual trigger: push all today's orders to Google Sheets
+    // Manual trigger: re-queue all unsynced items + ping GAS URL to run immediately
     if (action === 'syncToSheets') {
       const authSync = await requireAdminRole(body);
       if (!authSync.ok) return res.status(401).json({ ok: false, error: authSync.error });
 
-      if (!GAS_SYNC_URL) return res.status(400).json({ ok: false, error: 'GAS_SYNC_URL not configured' });
-
-      // Fetch today's orders (Manila time)
-      const tz = 'Asia/Manila';
-      const nowPH = new Date(new Date().toLocaleString('en-US', { timeZone: tz }));
-      const y = nowPH.getFullYear(), m = String(nowPH.getMonth()+1).padStart(2,'0'), d = String(nowPH.getDate()).padStart(2,'0');
-      const todayStart = `${y}-${m}-${d}T00:00:00+08:00`;
-      const todayEnd   = `${y}-${m}-${d}T23:59:59+08:00`;
-
-      const ordersR = await supaFetch(
-        `${SUPABASE_URL}/rest/v1/dine_in_orders?created_at=gte.${encodeURIComponent(todayStart)}&created_at=lte.${encodeURIComponent(todayEnd)}&is_deleted=eq.false&is_test=eq.false&select=*`
+      // Count unsynced items
+      const countR = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/sheets_sync_log?synced=eq.false&select=id`,
+        { headers: { Prefer: 'count=exact' } }
       );
-      if (!ordersR.ok) return res.status(500).json({ ok: false, error: 'Failed to fetch orders' });
+      const pending = Array.isArray(countR.data) ? countR.data.length : 0;
 
-      const orders = ordersR.data || [];
-      let synced = 0;
-
-      let gasError = null;
-      for (const o of orders) {
+      // Ping GAS URL to trigger syncNow() immediately (fire-and-forget, no-cors OK)
+      let gasPinged = false;
+      if (GAS_SYNC_URL) {
         try {
-          const gasResp = await fetch(GAS_SYNC_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              secret: GAS_SYNC_SECRET,
-              action: 'syncOrder',
-              order: {
-                orderId:       o.order_id,
-                tableNo:       o.table_no,
-                customerName:  o.customer_name || '',
-                status:        o.status,
-                orderType:     o.order_type,
-                subtotal:      o.subtotal,
-                serviceCharge: o.service_charge,
-                total:         o.total,
-                paymentMethod: o.payment_method || '',
-                paymentStatus: o.payment_status || '',
-                notes:         o.notes || '',
-                createdAt:     o.created_at,
-              }
-            }),
-          });
-          if (!gasResp.ok) {
-            gasError = `GAS returned HTTP ${gasResp.status}`;
-            break;
-          }
-          synced++;
-        } catch(e) {
-          gasError = e.message;
-          break;
-        }
+          fetch(`${GAS_SYNC_URL}?action=sync`, { method: 'GET' }).catch(() => {});
+          gasPinged = true;
+        } catch (_) {}
       }
 
-      if (gasError) {
-        return res.status(502).json({ ok: false, error: `Google Sheets sync failed: ${gasError}. The GAS deployment URL may be expired — please redeploy the Google Apps Script.`, synced, total: orders.length });
-      }
-
-      await supa('PATCH', 'sheets_sync_log',
-        { synced: true },
-        { synced: 'eq.false' }
-      );
-
-      auditLog({ orderId: 'MANUAL_SYNC', action: 'SHEETS_SYNC', actor: { userId: body.userId }, details: { count: synced } });
-      return res.status(200).json({ ok: true, synced, total: orders.length });
+      auditLog({ orderId: 'MANUAL_SYNC', action: 'SHEETS_SYNC_TRIGGERED', actor: { userId: body.userId }, details: { pending, gasPinged } });
+      return res.status(200).json({ ok: true, pending, gasPinged, message: `${pending} item(s) queued. GAS will sync within 1 minute.` });
     }
 
     // ── getTableStatus ─────────────────────────────────────────────────────

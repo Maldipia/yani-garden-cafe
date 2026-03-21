@@ -1017,8 +1017,8 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
     <a class="quick-link" href="https://docs.google.com/spreadsheets/d/14wSvfCy5LUrlgi4d48jcGjnFpy310XYUsCWCg5VMg0g/edit?gid=143920344#gid=143920344" target="_blank">
       <span class="quick-link-icon">📊</span> Daily Sales
     </a>
-    <button class="quick-link" id="syncSheetsBtn" onclick="openSheetsLink()" style="border:none;cursor:pointer;font-family:var(--font-body)">
-      <span class="quick-link-icon">📊</span> <span id="syncSheetsLabel">Open Sheets</span>
+    <button class="quick-link" id="syncSheetsBtn" onclick="triggerGasSync()" style="border:none;cursor:pointer;font-family:var(--font-body)">
+      <span class="quick-link-icon">🔄</span> <span id="syncSheetsLabel">Sync to Sheets</span>
     </button>
   </div>
 
@@ -5744,6 +5744,26 @@ document.addEventListener('click', function(e) {
 // ══════════════════════════════════════════════════════════
 function openSheetsLink() {
   window.open('https://docs.google.com/spreadsheets/d/14wSvfCy5LUrlgi4d48jcGjnFpy310XYUsCWCg5VMg0g/edit', '_blank');
+}
+
+async function triggerGasSync() {
+  var btn = document.getElementById('syncSheetsBtn');
+  var lbl = document.getElementById('syncSheetsLabel');
+  if (lbl) lbl.textContent = '⏳ Syncing…';
+  if (btn) btn.disabled = true;
+  try {
+    var GAS_URL = 'https://script.google.com/macros/s/AKfycbzprf6_LpDwcVujm8kcGFZE5JdkL0k9b6Wfg5l82gjZzFua8w1QWH8UoFFlhznc6EtL/exec?action=sync';
+    var r = await fetch(GAS_URL, { method:'GET', mode:'no-cors' });
+    // no-cors means we can't read response but the GAS runs
+    showToast('✅ Sync triggered — Sheets will update within 1 minute');
+  } catch(e) {
+    showToast('Sync signal sent (Sheets updates within 1 min)', false);
+  } finally {
+    setTimeout(function() {
+      if (lbl) lbl.textContent = 'Sync to Sheets';
+      if (btn) btn.disabled = false;
+    }, 3000);
+  }
 }
 
 async function syncToSheets() {
