@@ -1017,8 +1017,8 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
     <a class="quick-link" href="https://docs.google.com/spreadsheets/d/14wSvfCy5LUrlgi4d48jcGjnFpy310XYUsCWCg5VMg0g/edit?gid=143920344#gid=143920344" target="_blank">
       <span class="quick-link-icon">📊</span> Daily Sales
     </a>
-    <button class="quick-link" id="syncSheetsBtn" onclick="syncToSheets()" style="border:none;cursor:pointer;font-family:var(--font-body)">
-      <span class="quick-link-icon">🔄</span> <span id="syncSheetsLabel">Sync to Sheets</span>
+    <button class="quick-link" id="syncSheetsBtn" onclick="openSheetsLink()" style="border:none;cursor:pointer;font-family:var(--font-body)">
+      <span class="quick-link-icon">📊</span> <span id="syncSheetsLabel">Open Sheets</span>
     </button>
   </div>
 
@@ -1850,9 +1850,12 @@ function renderStats() {
   document.getElementById('statActive').textContent = active;
 
   // Count pending payments across all orders
-  var pendingPayments = allOrders.filter(function(o){ return o.paymentStatus === 'SUBMITTED' }).length;
-  document.getElementById('pendingCount').textContent = pendingPayments;
-  pendingPayCount = pendingPayments;
+  // Count orders with SUBMITTED payment (waiting for verification)
+  var pendingPayments = allOrders.filter(function(o){ return o.paymentStatus === 'SUBMITTED' && !o.isTest }).length;
+  // Use max of orders-derived count and actual payments count (whichever is higher)
+  var displayCount = Math.max(pendingPayments, pendingPayCount || 0);
+  document.getElementById('pendingCount').textContent = displayCount || '';
+  if (!displayCount) document.getElementById('pendingCount').textContent = '0';
 }
 
 // ══════════════════════════════════════════════════════════
@@ -2920,11 +2923,15 @@ function renderPayCards() {
       }
     }
 
-    // Screenshot link - load on demand (proof stored as base64, fetched separately)
-    if (p.hasProof || p.fileUrl || p.imageUrl) {
-      html += '<div class="pay-screenshot">' +
-        '<button class="pay-screenshot-btn" onclick="viewPaymentProof(\'' + esc(p.paymentId) + '\')">📸 View Payment Screenshot</button>' +
-      '</div>';
+    // Screenshot: if real Storage URL → show direct link + view button; else on-demand via API
+    if (p.hasProof || p.fileUrl || p.imageUrl || p.proofUrl) {
+      html += '<div class="pay-screenshot">';
+      if (p.proofUrl) {
+        html += '<a href="' + esc(p.proofUrl) + '" target="_blank" class="pay-screenshot-btn" style="display:inline-block;text-decoration:none;">📸 View Screenshot</a>';
+      } else {
+        html += '<button class="pay-screenshot-btn" onclick="viewPaymentProof(\'' + esc(p.paymentId) + '\')">📸 View Payment Screenshot</button>';
+      }
+      html += '</div>';
     }
 
     // Verified/Rejected info
@@ -5735,6 +5742,10 @@ document.addEventListener('click', function(e) {
 // ══════════════════════════════════════════════════════════
 // SYNC TO SHEETS
 // ══════════════════════════════════════════════════════════
+function openSheetsLink() {
+  window.open('https://docs.google.com/spreadsheets/d/14wSvfCy5LUrlgi4d48jcGjnFpy310XYUsCWCg5VMg0g/edit', '_blank');
+}
+
 async function syncToSheets() {
   var btn = document.getElementById('syncSheetsBtn');
   var lbl = document.getElementById('syncSheetsLabel');

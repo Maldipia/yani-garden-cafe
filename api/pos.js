@@ -328,29 +328,19 @@ async function supaFetch(url, opts = {}) {
 // ── Log to sheets_sync_log (fire-and-forget) ──────────────────────────────
 // ── Sheets write-through sync ──────────────────────────────────────────────
 // Fires async, never blocks the response.
-const GAS_SYNC_URL    = process.env.GAS_SYNC_URL || 'https://script.google.com/macros/s/AKfycbytCV-jiFSOoon7Ijww5a-AABRYzhiNZPXVubaaa2zoVBOFxvcgkDH-6e4CfksMA7LC/exec';
-const GAS_SYNC_SECRET = process.env.GAS_SYNC_SECRET || 'yani-sync-2026';
-
-async function pushToSheets(action, payload) {
-  if (!GAS_SYNC_URL) return; // disabled until env var is set
-  try {
-    fetch(GAS_SYNC_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ secret: GAS_SYNC_SECRET, action, ...payload }),
-    }).catch(e => console.warn('Sheets sync error:', e.message));
-  } catch (_) {}
-}
-
+// pushToSheets is legacy — GAS SheetsSync.gs now reads unsynced rows directly
+// and marks them synced=true after writing. We just log synced=false.
 function logSync(tableName, recordId, action) {
-  // Keep legacy sync log entry for audit trail
   supa('POST', 'sheets_sync_log', {
     table_name: tableName,
     record_id: String(recordId),
     action,
-    synced: !!GAS_SYNC_URL,
+    synced: false,  // GAS trigger will mark true after writing to sheet
   }).catch(() => {});
 }
+
+// Legacy stub — no longer fires to GAS
+async function pushToSheets() {}
 
 // ── In-memory menu cache (5-minute TTL) ──────────────────────────────────
 const menuCache = { public: null, admin: null, ts: 0 };
@@ -1409,18 +1399,48 @@ export default async function handler(req, res) {
       // Generate payment ID
       const paymentId = `PAY-${Date.now().toString(36).toUpperCase()}`;
 
-      // Store image as base64 data URL in proof_url (for now — can be upgraded to S3 later)
-      const proofUrl = imageData || '';
+      // Upload screenshot to Supabase Storage (public URL) — fallback to base64 if upload fails
+      let proofUrl = imageData || '';
+      let storedFilename = filename;
+      if (imageData && imageData.startsWith('data:')) {
+        try {
+          const match = imageData.match(/^data:([^;]+);base64,(.+)$/);
+          if (match) {
+            const mimeType = match[1];
+            const ext = mimeType.split('/')[1]?.replace('jpeg','jpg') || 'jpg';
+            const storageFilename = `${paymentId}.${ext}`;
+            const imgBuffer = Buffer.from(match[2], 'base64');
+            const uploadResp = await fetch(
+              `${SUPABASE_URL}/storage/v1/object/payment-proofs/${storageFilename}`,
+              {
+                method: 'POST',
+                headers: {
+                  'apikey': SUPABASE_KEY,
+                  'Authorization': `Bearer ${SUPABASE_KEY}`,
+                  'Content-Type': mimeType,
+                  'x-upsert': 'true',
+                },
+                body: imgBuffer,
+              }
+            );
+            if (uploadResp.ok) {
+              proofUrl = `${SUPABASE_URL}/storage/v1/object/public/payment-proofs/${storageFilename}`;
+              storedFilename = storageFilename;
+            }
+            // else fall back to base64 already set
+          }
+        } catch (_) { /* fallback to base64 */ }
+      }
 
       const payRow = {
         payment_id:     paymentId,
         order_id:       orderId,
         order_type:     'DINE-IN',
         amount,
-        method:         String(body.paymentMethod || 'GCASH').toUpperCase(), // DB column is 'method'
-        payment_method: String(body.paymentMethod || 'GCASH').toUpperCase(), // extra col for compat
+        method:         String(body.paymentMethod || 'GCASH').toUpperCase(),
+        payment_method: String(body.paymentMethod || 'GCASH').toUpperCase(),
         proof_url:      proofUrl,
-        proof_filename: filename,
+        proof_filename: storedFilename,
         status:         'PENDING',
       };
       const r = await supa('POST', 'payments', payRow);
@@ -1458,22 +1478,48 @@ export default async function handler(req, res) {
         }
       }
 
-      const payments = r.data.map(p => ({
-        paymentId:    p.payment_id,
-        orderId:      p.order_id,
-        orderType:    p.order_type,
-        tableNo:      tableMap[p.order_id] || '?',
-        amount:       p.amount,
-        paymentMethod: p.payment_method,
-        hasProof:     !!(p.proof_url),           // flag only — don't send base64 in list
-        filename:     p.proof_filename,
-        status:       p.status,
-        verifiedBy:   p.verified_by || '',
-        verifiedAt:   p.verified_at || '',
-        notes:        p.rejection_reason || '',
-        createdAt:    p.created_at,
-        uploadedAt:   p.created_at,
-      }));
+      // Also fetch receipt + customer info from orders
+      let orderInfoMap = {};
+      if (orderIds.length > 0) {
+        const ordInfoR = await supaFetch(
+          `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=in.(${orderIds.map(id => `"${id}"`).join(',')})&select=order_id,customer_name,receipt_type,receipt_delivery,receipt_email,receipt_name,receipt_address,receipt_tin`
+        );
+        if (ordInfoR.ok && Array.isArray(ordInfoR.data)) {
+          ordInfoR.data.forEach(o => { orderInfoMap[o.order_id] = o; });
+        }
+      }
+
+      const payments = r.data.map(p => {
+        const orderInfo = orderInfoMap[p.order_id] || {};
+        // If proof_url is a real URL (Storage), use it directly; if base64, use the /api/payment-proof endpoint
+        const proofIsUrl = p.proof_url && p.proof_url.startsWith('http');
+        const proofUrl = proofIsUrl ? p.proof_url : null;
+        return {
+          paymentId:      p.payment_id,
+          orderId:        p.order_id,
+          orderType:      p.order_type,
+          tableNo:        tableMap[p.order_id] || '?',
+          amount:         p.amount,
+          paymentMethod:  p.payment_method || p.method,
+          hasProof:       !!(p.proof_url),
+          proofUrl:       proofUrl,       // real URL or null (base64 served via /api/payment-proof)
+          filename:       p.proof_filename,
+          status:         p.status,
+          verifiedBy:     p.verified_by || '',
+          verifiedAt:     p.verified_at || '',
+          notes:          p.rejection_reason || '',
+          createdAt:      p.created_at,
+          uploadedAt:     p.created_at,
+          // Receipt info from order
+          customerName:   orderInfo.customer_name || '',
+          receiptType:    orderInfo.receipt_type || '',
+          receiptDelivery:orderInfo.receipt_delivery || '',
+          receiptEmail:   orderInfo.receipt_email || '',
+          receiptName:    orderInfo.receipt_name || '',
+          receiptAddress: orderInfo.receipt_address || '',
+          receiptTin:     orderInfo.receipt_tin || '',
+        };
+      });
 
       return res.status(200).json({ ok: true, payments });
     }
@@ -1490,6 +1536,48 @@ export default async function handler(req, res) {
       );
       if (!r.ok || !r.data?.length) return res.status(404).json({ ok: false, error: 'Payment not found' });
       return res.status(200).json({ ok: true, imageUrl: r.data[0].proof_url, filename: r.data[0].proof_filename });
+    }
+
+    // ── migrateProofs (one-time: move base64 → Supabase Storage) ──────────
+    if (action === 'migrateProofs') {
+      const auth = await requireAuth(body, ['OWNER']);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      // Find all payments where proof_url starts with 'data:'
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/payments?proof_url=like.data%3A*&select=payment_id,proof_url,proof_filename`
+      );
+      if (!r.ok) return res.status(502).json({ ok: false, error: 'Failed to fetch payments' });
+      let migrated = 0, failed = 0;
+      for (const p of r.data || []) {
+        try {
+          const match = p.proof_url?.match(/^data:([^;]+);base64,(.+)$/);
+          if (!match) { failed++; continue; }
+          const mimeType = match[1];
+          const ext = mimeType.split('/')[1]?.replace('jpeg','jpg') || 'jpg';
+          const storageFilename = `${p.payment_id}.${ext}`;
+          const imgBuffer = Buffer.from(match[2], 'base64');
+          const uploadResp = await fetch(
+            `${SUPABASE_URL}/storage/v1/object/payment-proofs/${storageFilename}`,
+            {
+              method: 'POST',
+              headers: {
+                'apikey': SUPABASE_KEY,
+                'Authorization': `Bearer ${SUPABASE_KEY}`,
+                'Content-Type': mimeType,
+                'x-upsert': 'true',
+              },
+              body: imgBuffer,
+            }
+          );
+          if (uploadResp.ok) {
+            const newUrl = `${SUPABASE_URL}/storage/v1/object/public/payment-proofs/${storageFilename}`;
+            await supa('PATCH', 'payments', { proof_url: newUrl, proof_filename: storageFilename },
+              { payment_id: `eq.${p.payment_id}` });
+            migrated++;
+          } else { failed++; }
+        } catch (_) { failed++; }
+      }
+      return res.status(200).json({ ok: true, migrated, failed, total: r.data?.length || 0 });
     }
 
     // ── verifyPayment ──────────────────────────────────────────────────────
