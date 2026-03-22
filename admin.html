@@ -2362,7 +2362,7 @@ async function deleteOrder(orderId) {
   if (!confirmed) return;
   
   try {
-    var result = await api('deleteOrder', { orderId: orderId });
+    var result = await api('deleteOrder', { orderId: orderId, userId: currentUser && currentUser.userId });
     
     if (result.ok) {
       // Remove from local state
