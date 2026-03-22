@@ -2228,8 +2228,8 @@ export default async function handler(req, res) {
       const items = pending.map(p => {
         if (p.table_name === 'dine_in_orders') {
           const order = ordersMap[p.record_id];
-          if (!order || order.is_test) {
-            skippedSyncIds.push(p.id); // mark test/missing orders done
+          if (!order || order.is_test || order.is_deleted) {
+            skippedSyncIds.push(p.id); // skip: test, deleted, or not found
             return null;
           }
           return {
