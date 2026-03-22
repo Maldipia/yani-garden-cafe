@@ -2223,11 +2223,15 @@ export default async function handler(req, res) {
         if (pR.ok) (pR.data||[]).forEach(p => { paymentsMap[p.payment_id] = p; });
       }
 
-      // Build response items
+      // Build response items, collect skipped IDs to auto-mark synced
+      const skippedSyncIds = [];
       const items = pending.map(p => {
         if (p.table_name === 'dine_in_orders') {
           const order = ordersMap[p.record_id];
-          if (!order || order.is_test) return null;
+          if (!order || order.is_test) {
+            skippedSyncIds.push(p.id); // mark test/missing orders done
+            return null;
+          }
           return {
             syncId: p.id, tableType: 'ORDER', action: p.action,
             order,
@@ -2247,7 +2251,15 @@ export default async function handler(req, res) {
         return { syncId: p.id, tableType: 'OTHER', action: p.action };
       }).filter(Boolean);
 
-      return res.status(200).json({ ok: true, items, total: pending.length, syncLogIds });
+      // Auto-mark test/missing orders as synced so they don't pile up
+      if (skippedSyncIds.length > 0) {
+        supa('PATCH', 'sheets_sync_log',
+          { synced: true, synced_at: new Date().toISOString() },
+          { id: `in.(${skippedSyncIds.join(',')})` }
+        ).catch(() => {});
+      }
+
+      return res.status(200).json({ ok: true, items, total: pending.length, syncLogIds, skipped: skippedSyncIds.length });
     }
 
     // ── markSynced ─────────────────────────────────────────────────────────
