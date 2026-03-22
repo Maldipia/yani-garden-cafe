@@ -2172,8 +2172,9 @@ export default async function handler(req, res) {
       if (secret !== 'yani-sync-2026') return res.status(403).json({ ok: false, error: 'Invalid secret' });
 
       // Get pending sync items (limit 100 per batch)
+      const batchLimit = Math.min(parseInt(body.limit) || 50, 100);
       const pendingR = await supaFetch(
-        `${SUPABASE_URL}/rest/v1/sheets_sync_log?synced=eq.false&order=created_at.asc&limit=100&select=id,table_name,record_id,action`
+        `${SUPABASE_URL}/rest/v1/sheets_sync_log?synced=eq.false&order=created_at.asc&limit=${batchLimit}&select=id,table_name,record_id,action`
       );
       if (!pendingR.ok) return res.status(500).json({ ok: false, error: 'Failed to read sync log' });
       const pending = pendingR.data || [];
