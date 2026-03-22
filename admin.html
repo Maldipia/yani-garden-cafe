@@ -2136,9 +2136,9 @@ function renderOrders() {
       var barColor = preparedCount === totalItems ? '#27ae60' : preparedCount > 0 ? '#f39c12' : '#ccc';
       html += '<div style="margin:6px 0 2px;display:flex;align-items:center;gap:8px;">' +
         '<div style="flex:1;height:5px;background:#e0e0e0;border-radius:3px;overflow:hidden;">' +
-          '<div style="height:100%;width:' + pct + '%;background:' + barColor + ';border-radius:3px;transition:width .3s;"></div>' +
+          '<div class="prep-bar-fill" style="height:100%;width:' + pct + '%;background:' + barColor + ';border-radius:3px;transition:width .3s;"></div>' +
         '</div>' +
-        '<span style="font-size:.7rem;font-weight:700;color:' + barColor + ';white-space:nowrap;">' + preparedCount + '/' + totalItems + ' prepped</span>' +
+        '<span class="prep-bar-label" style="font-size:.7rem;font-weight:700;color:' + barColor + ';white-space:nowrap;">' + preparedCount + '/' + totalItems + ' prepped</span>' +
       '</div>';
     }
     html += '</div>';
@@ -2258,6 +2258,43 @@ function renderOrders() {
 // ══════════════════════════════════════════════════════════
 // STATUS UPDATE
 // ══════════════════════════════════════════════════════════
+async function adminTogglePrep(rowEl, orderId, itemId, currentPrepared) {
+  if (!itemId) return;
+  var newPrepared = currentPrepared ? 0 : 1;
+  var icon = rowEl.querySelector('span');
+  if (icon) icon.textContent = newPrepared ? '✅' : '⬜';
+  rowEl.style.opacity = newPrepared ? '.5' : '1';
+  rowEl.style.textDecoration = newPrepared ? 'line-through' : '';
+  rowEl.setAttribute('onclick', 'adminTogglePrep(this,\'' + orderId + '\',' + itemId + ',' + newPrepared + ')');
+  rowEl.title = newPrepared ? 'Mark as NOT prepared' : 'Mark as PREPARED';
+  // Update prep bar counts
+  var card = rowEl.closest('.order-card') || rowEl.parentElement;
+  while (card && !card.querySelector('.prep-bar-label')) { card = card.parentElement; }
+  if (card) {
+    var allRows = card.querySelectorAll('[data-item-id]');
+    var prepCount = 0;
+    allRows.forEach(function(r) {
+      var ic = r.querySelector('span');
+      if (ic && (ic.textContent === '✅' || ic.textContent.trim() === '✅')) prepCount++;
+    });
+    var label = card.querySelector('.prep-bar-label');
+    if (label) label.textContent = prepCount + '/' + allRows.length + ' prepped';
+    var fill = card.querySelector('.prep-bar-fill');
+    if (fill && allRows.length > 0) fill.style.width = Math.round((prepCount/allRows.length)*100) + '%';
+  }
+  try {
+    await api('toggleItemPrepared', {
+      userId: currentUser && currentUser.userId,
+      orderId: orderId, itemId: itemId, prepared: newPrepared
+    });
+  } catch(e) {
+    // revert on error
+    if (icon) icon.textContent = currentPrepared ? '✅' : '⬜';
+    rowEl.style.opacity = currentPrepared ? '.5' : '1';
+    rowEl.style.textDecoration = currentPrepared ? 'line-through' : '';
+  }
+}
+
 async function updateStatus(orderId, newStatus) {
   if (newStatus === 'CANCELLED') {
     // Ask for cancel reason
