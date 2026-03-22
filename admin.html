@@ -1865,7 +1865,7 @@ function renderFilters() {
   var counts = { ALL:0, ACTIVE:0, NEW:0, PREPARING:0, READY:0, COMPLETED:0, CANCELLED:0, PLATFORM:0 };
   allOrders.forEach(function(o) {
     counts.ALL++;
-    counts[o.status] = (counts[o.status] || 0) + 1;
+    if (!o.isTest) counts[o.status] = (counts[o.status] || 0) + 1; // exclude test from status counts
     if (!o.isTest && (o.status === 'NEW' || o.status === 'PREPARING' || o.status === 'READY')) counts.ACTIVE++;
     if (o.platform) counts.PLATFORM++;
   });
@@ -2033,6 +2033,8 @@ function renderOrders() {
     if (currentFilter === 'ALL') return true;
     if (currentFilter === 'ACTIVE') return !o.isTest && (o.status === 'NEW' || o.status === 'PREPARING' || o.status === 'READY');
     if (currentFilter === 'PLATFORM') return !!o.platform;
+    // For status-based filters (NEW/PREPARING/READY/COMPLETED/CANCELLED), hide test orders
+    if (['NEW','PREPARING','READY'].includes(currentFilter)) return !o.isTest && o.status === currentFilter;
     return o.status === currentFilter;
   });
 
