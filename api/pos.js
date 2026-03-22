@@ -666,7 +666,8 @@ export default async function handler(req, res) {
 
       // Generate order ID using sequence — with self-healing retry on duplicate key
       const TEST_TABLES = ['T99', '0', 'T0'];
-      const TEST_NAMES  = ['juan dela cruz', 'maria santos', 'price test', 'guest', 'pia test', 'e2e test'];
+      // Only specific programmatic test names — NOT 'guest' (real customers don't enter names)
+      const TEST_NAMES  = ['e2e test', 'price test', 'logtest', 'healthcheck'];
       const isTest = TEST_TABLES.includes(tableNo.toUpperCase()) ||
                      TEST_NAMES.includes(customerName.toLowerCase());
 
