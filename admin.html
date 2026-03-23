@@ -2124,7 +2124,7 @@ function renderOrders() {
           '<div class="oc-item-info">' +
             '<div class="oc-item-name">' + esc(it.name) + '</div>' +
             (opts.length ? '<div class="oc-item-opts">' + esc(opts.join(' · ')) + '</div>' : '') +
-            (it.addons && it.addons.length ? '<div class="oc-item-opts" style="color:#065f46;font-weight:600">+' + it.addons.map(function(a){ return esc(a.name) + ' (+₱' + parseFloat(a.price||0).toFixed(0) + ')'; }).join(' · +') + '</div>' : '') +
+            (it.addons && it.addons.length ? '<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px">' + it.addons.map(function(a){ return '<span style="background:#dcfce7;color:#14532d;border:1.5px solid #86efac;border-radius:6px;padding:2px 8px;font-size:.75rem;font-weight:800">➕ ' + esc(a.name) + ' +₱' + parseFloat(a.price||0).toFixed(0) + '</span>'; }).join('') + '</div>' : '') +
             (it.notes ? '<div class="oc-item-notes">"' + esc(it.notes) + '"</div>' : '') +
           '</div>' +
         '</div>';
