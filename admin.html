@@ -6952,35 +6952,81 @@ function renderAddonsView() {
 
 function addonForm(data) {
   data = data || {};
+  var appliesToAll = data.applies_to_all !== false;
+  var selectedCodes = data.applies_to_codes || [];
+
+  // Build menu item checkboxes grouped by category
+  var cats = {};
+  var _menuForAddon = window._menuDataCache || eoMenuData || [];
+  _menuForAddon.forEach(function(it) {
+    var cat = it.category || 'Other';
+    if (!cats[cat]) cats[cat] = [];
+    cats[cat].push(it);
+  });
+
+  var itemsHtml = '';
+  Object.keys(cats).sort().forEach(function(cat) {
+    itemsHtml += '<div style="font-size:.72rem;font-weight:700;color:#64748b;text-transform:uppercase;margin:8px 0 4px">' + esc(cat) + '</div>';
+    cats[cat].forEach(function(it) {
+      var chk = selectedCodes.includes(it.code) ? ' checked' : '';
+      itemsHtml += '<label style="display:flex;align-items:center;gap:8px;font-size:.8rem;cursor:pointer;padding:3px 0">'
+        + '<input type="checkbox" class="addonItemChk" value="' + esc(it.code) + '"' + chk + '>'
+        + esc(it.name) + ' <span style="color:#94a3b8;font-size:.72rem">' + it.code + '</span>'
+        + '</label>';
+    });
+  });
+
   return '<div style="display:flex;flex-direction:column;gap:10px">'
-    + '<label style="font-size:.8rem;font-weight:600">Name (e.g. Extra Shot, Extra Rice)<br>'
-    + '<input id="addonName" value="' + (data.name||'') + '" placeholder="Add-on name" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
+    + '<label style="font-size:.8rem;font-weight:600">Name<br>'
+    + '<input id="addonName" value="' + esc(data.name||'') + '" placeholder="e.g. Extra Shot, Nata De Coco" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
     + '<label style="font-size:.8rem;font-weight:600">Price (₱)<br>'
     + '<input id="addonPrice" type="number" value="' + (data.price||0) + '" min="0" step="1" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
-    + '<label style="font-size:.8rem;font-weight:600">Sort Order<br>'
-    + '<input id="addonSort" type="number" value="' + (data.sort_order||0) + '" min="0" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
     + '<label style="display:flex;align-items:center;gap:8px;font-size:.8rem;font-weight:600;cursor:pointer">'
-    + '<input type="checkbox" id="addonAll"' + (data.applies_to_all!==false?' checked':'') + '> Apply to all menu items</label>'
+    + '<input type="checkbox" id="addonAll" onchange="toggleAddonAllItems(this)"' + (appliesToAll?' checked':'') + '> Apply to ALL menu items</label>'
+    + '<div id="addonItemsSection" style="' + (appliesToAll?'display:none':'') + ';border:1px solid #e2e8f0;border-radius:8px;padding:10px;max-height:240px;overflow-y:auto">'
+    + '<div style="font-size:.75rem;font-weight:700;color:var(--forest);margin-bottom:6px">Select which drinks/items this applies to:</div>'
+    + '<div style="display:flex;gap:8px;margin-bottom:8px">'
+    + '<button type="button" onclick="addonCheckAll(true)" style="font-size:.7rem;padding:3px 10px;border:1px solid #e2e8f0;border-radius:6px;cursor:pointer;background:#f8fafc">All</button>'
+    + '<button type="button" onclick="addonCheckAll(false)" style="font-size:.7rem;padding:3px 10px;border:1px solid #e2e8f0;border-radius:6px;cursor:pointer;background:#f8fafc">None</button>'
+    + '</div>'
+    + itemsHtml
+    + '</div>'
     + '<label style="display:flex;align-items:center;gap:8px;font-size:.8rem;font-weight:600;cursor:pointer">'
     + '<input type="checkbox" id="addonActive"' + (data.is_active!==false?' checked':'') + '> Active</label>'
     + '<button onclick="saveAddonForm(\'' + (data.addon_code||'') + '\')" style="background:var(--forest-deep);color:#fff;border:none;border-radius:10px;padding:10px;font-weight:700;cursor:pointer;font-size:.9rem">Save</button>'
     + '</div>';
 }
 
-function openAddonAdd() { showModal('New Add-on', addonForm({})); }
+function toggleAddonAllItems(cb) {
+  document.getElementById('addonItemsSection').style.display = cb.checked ? 'none' : '';
+}
+function addonCheckAll(val) {
+  document.querySelectorAll('.addonItemChk').forEach(function(c){ c.checked = val; });
+}
+
+function openAddonAdd() {
+  loadMenuCache().then(function() { showModal('New Add-on', addonForm({})); });
+}
 function openAddonEdit(code) {
   var a = _addons.find(function(x){ return x.addon_code === code; });
-  if (a) showModal('Edit Add-on', addonForm(a));
+  if (!a) return;
+  loadMenuCache().then(function() { showModal('Edit Add-on', addonForm(a)); });
 }
 
 async function saveAddonForm(existingCode) {
+  var appliesToAll = document.getElementById('addonAll').checked;
+  var appliesTo = [];
+  if (!appliesToAll) {
+    document.querySelectorAll('.addonItemChk:checked').forEach(function(c){ appliesTo.push(c.value); });
+  }
   var r = await api('saveAddon', {
     userId: currentUser.userId,
     addonCode: existingCode || undefined,
     name: document.getElementById('addonName').value.trim(),
     price: parseFloat(document.getElementById('addonPrice').value) || 0,
-    sortOrder: parseInt(document.getElementById('addonSort').value) || 0,
-    appliesToAll: document.getElementById('addonAll').checked,
+    sortOrder: 0,
+    appliesToAll: appliesToAll,
+    appliesToCodes: appliesTo,
     isActive: document.getElementById('addonActive').checked,
   });
   closeModal();
