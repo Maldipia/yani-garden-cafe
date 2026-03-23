@@ -639,6 +639,10 @@ export default async function handler(req, res) {
         }
         const qty = Math.max(1, parseInt(item.qty) || 1);
         subtotal += unitPrice * qty;
+        // Collect addons for this item
+        const itemAddons = Array.isArray(item.addons) ? item.addons : [];
+        const addonPrice = itemAddons.reduce((sum, a) => sum + (parseFloat(a.price) || 0), 0);
+        unitPrice += addonPrice; // addons already baked into the unit price from frontend
         orderItems.push({
           item_code:    item.code,
           item_name:    menuItem.name,
@@ -647,6 +651,7 @@ export default async function handler(req, res) {
           size_choice:  item.size || '',
           sugar_choice: item.sugarLevel || item.sugar || '',
           item_notes:   item.notes || '',
+          addons:       itemAddons,
         });
       }
 
@@ -727,6 +732,7 @@ export default async function handler(req, res) {
         size_choice:  it.size_choice,
         sugar_choice: it.sugar_choice,
         item_notes:   it.item_notes,
+        addons:       it.addons && it.addons.length > 0 ? JSON.stringify(it.addons) : null,
       }));
       await supa('POST', 'dine_in_order_items', itemRows);
 
@@ -821,6 +827,9 @@ export default async function handler(req, res) {
         if (itemsR.ok && Array.isArray(itemsR.data)) {
           itemsR.data.forEach(it => {
             if (!itemsMap[it.order_id]) itemsMap[it.order_id] = [];
+            // Parse addons from JSON if stored
+            let parsedAddons = [];
+            try { parsedAddons = it.addons ? JSON.parse(it.addons) : []; } catch(_) {}
             itemsMap[it.order_id].push({
               id:       it.id,
               code:     it.item_code,
@@ -831,6 +840,7 @@ export default async function handler(req, res) {
               sugar:    it.sugar_choice || '',
               notes:    it.item_notes || '',
               prepared: it.prepared || false,
+              addons:   parsedAddons,
             });
           });
         }
