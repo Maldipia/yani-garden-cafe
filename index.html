@@ -1392,6 +1392,21 @@ function addItem(code) {
   var item = MENU_DATA.find(function(m) { return m.code === code });
   if (!item || !item.available) return;
 
+  // Re-fetch addons if none loaded yet (handles case where addon was created after page load)
+  if (ADDONS_DATA.length === 0) {
+    api('getAddons', {}).then(function(r) {
+      if (r && r.ok) { ADDONS_DATA = r.addons || []; }
+      _doAddItem(code);
+    });
+    return;
+  }
+  _doAddItem(code);
+}
+
+function _doAddItem(code) {
+  var item = MENU_DATA.find(function(m) { return m.code === code });
+  if (!item || !item.available) return;
+
   var applicableAddons = ADDONS_DATA.filter(function(a) {
     return a.applies_to_all || (a.applies_to_codes || []).includes(code);
   });

@@ -565,6 +565,8 @@ function buildCard(o) {
   const itemsHTML = o.items.map(it => {
     const sizeTag  = it.size  ? `<span class="opt-tag opt-size">${it.size}</span>`  : '';
     const sugarTag = it.sugar ? `<span class="opt-tag opt-sugar">${it.sugar}</span>` : '';
+    const addonTags = (it.addons && it.addons.length)
+      ? it.addons.map(a => `<span class="opt-tag" style="background:#d1fae5;color:#065f46">+${a.name}</span>`).join('') : '';
     const noteHtml = it.notes ? `<div class="item-note">⚠ ${it.notes}</div>` : '';
     const doneClass = it.prepared ? ' item-row-done' : '';
     const checkIcon = it.prepared ? '✅' : '⬜';
@@ -573,7 +575,7 @@ function buildCard(o) {
       <div class="item-qty">${it.qty}×</div>
       <div class="item-details">
         <div class="item-name">${it.name}</div>
-        <div class="item-opts">${sizeTag}${sugarTag}</div>
+        <div class="item-opts">${sizeTag}${sugarTag}${addonTags}</div>
         ${noteHtml}
       </div>
     </div>`;
