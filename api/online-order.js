@@ -311,11 +311,24 @@ export default async function handler(req, res) {
         return mapped;
       });
       
+      // Fetch active addons too
+      const addons = await supabase('GET', 'menu_addons', null, {
+        'is_active': 'eq.true',
+        'order': 'sort_order.asc,name.asc'
+      });
+
       return res.status(200).json({ 
         ok: true, 
         categories: categories || [], 
         items: mappedItems, 
-        grouped 
+        grouped,
+        addons: (addons || []).map(a => ({
+          addon_code: a.addon_code,
+          name: a.name,
+          price: parseFloat(a.price || 0),
+          applies_to_all: a.applies_to_all,
+          applies_to_codes: a.applies_to_codes || []
+        }))
       });
     }
 
@@ -379,7 +392,8 @@ export default async function handler(req, res) {
         item_name: item.name,
         size: item.size || null,
         unit_price: parseFloat(item.price || item.unitPrice || 0),
-        quantity: parseInt(item.qty || item.quantity || 1)
+        quantity: parseInt(item.qty || item.quantity || 1),
+        addons: (item.addons && item.addons.length) ? JSON.stringify(item.addons) : null
       }));
       
       await supabase('POST', 'online_order_items', itemsToInsert);

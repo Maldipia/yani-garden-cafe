@@ -620,6 +620,7 @@ const API = '/api/online-order';
 const UPLOAD_API = '/api/upload-proof';
 
 var menuData = [];
+var addonsData = [];
 var cart = [];
 var currentStep = 1;
 var currentCat = 'ALL';
@@ -677,6 +678,7 @@ async function loadMenu() {
     if (!data.ok) throw new Error(data.error || 'Failed to load menu');
     
     menuData = data.items || [];
+    addonsData = data.addons || [];
     renderCatTabs(data.categories || []);
     renderMenu('ALL');
     hideLoading();
@@ -886,15 +888,54 @@ function onSugarDone() {
 }
 
 function finishAddToCart() {
+  var code = sizeItem.item_code || sizeItem.code;
   var price = sizeItem._selectedPrice || parseFloat(sizeItem.price || sizeItem.base_price);
-  addToCart(
-    sizeItem.item_code || sizeItem.code,
-    sizeItem.name,
-    selectedSize || '',
-    selectedSugar || '',
-    price,
-    sizeItem.image || ''
-  );
+  // Check for applicable addons
+  var applicable = addonsData.filter(function(a) {
+    return a.is_active !== false && (a.applies_to_all || (a.applies_to_codes || []).includes(code));
+  });
+  if (applicable.length > 0) {
+    showAddonStep(applicable, code, price);
+  } else {
+    addToCart(code, sizeItem.name, selectedSize || '', selectedSugar || '', price, sizeItem.image || '');
+    closeSizeModal();
+  }
+}
+
+var selectedAddons = [];
+function showAddonStep(addons, code, basePrice) {
+  selectedAddons = [];
+  var html = '<div style="padding:4px 0 10px"><div style="font-size:.82rem;font-weight:700;color:var(--forest);margin-bottom:10px">Optional Add-ons</div>';
+  addons.forEach(function(a) {
+    html += '<div class="size-opt" id="addon-' + a.addon_code + '" onclick="toggleOnlineAddon(this,\'' + a.addon_code + '\',\'' + esc(a.name) + '\',' + a.price + ')" style="justify-content:space-between">' +
+      '<span style="font-weight:600">' + esc(a.name) + '</span>' +
+      '<span style="color:var(--terra);font-weight:700">+₱' + parseFloat(a.price).toFixed(0) + '</span>' +
+    '</div>';
+  });
+  html += '</div>';
+  document.getElementById('sugarStep').style.display = 'none';
+  document.getElementById('sizeStep').style.display = 'none';
+  // Show addon step in directStep area
+  document.getElementById('directStep').style.display = '';
+  document.getElementById('directStep').innerHTML = html +
+    '<button class="size-add-btn" onclick="confirmOnlineAddons(\'' + code + '\',' + basePrice + ')">Add to Cart</button>';
+}
+
+function toggleOnlineAddon(el, code, name, price) {
+  var idx = selectedAddons.findIndex(function(a){ return a.code === code; });
+  if (idx >= 0) {
+    selectedAddons.splice(idx, 1);
+    el.classList.remove('selected');
+  } else {
+    selectedAddons.push({ code: code, name: name, price: price });
+    el.classList.add('selected');
+  }
+}
+
+function confirmOnlineAddons(itemCode, basePrice) {
+  var addonTotal = selectedAddons.reduce(function(s, a){ return s + a.price; }, 0);
+  addToCart(itemCode, sizeItem.name, selectedSize || '', selectedSugar || '', basePrice + addonTotal, sizeItem.image || '', selectedAddons.slice());
+  selectedAddons = [];
   closeSizeModal();
 }
 
@@ -913,17 +954,19 @@ function closeSizeModal(e) {
 // ══════════════════════════════════════════════════════════════
 // CART MANAGEMENT
 // ══════════════════════════════════════════════════════════════
-function addToCart(code, name, size, sugar, price, imagePath) {
-  var key = code + '_' + (size || '') + '_' + (sugar || '');
+function addToCart(code, name, size, sugar, price, imagePath, addons) {
+  addons = addons || [];
+  var addonKey = addons.map(function(a){ return a.code; }).sort().join(',');
+  var key = code + '_' + (size || '') + '_' + (sugar || '') + '_' + addonKey;
   var existing = cart.find(function(c) { return c.key === key });
   if (existing) {
     existing.quantity++;
   } else {
-    cart.push({ key: key, code: code, name: name, size: size || '', sugar: sugar || '', unitPrice: price, quantity: 1, imagePath: imagePath });
+    cart.push({ key: key, code: code, name: name, size: size || '', sugar: sugar || '', unitPrice: price, quantity: 1, imagePath: imagePath, addons: addons });
   }
   updateCartUI();
-  showToast(name + ' added to cart!', 'success');
-  // Update only the affected card (avoid full re-render for INP performance)
+  var addonNames = addons.map(function(a){ return '+' + a.name; }).join(', ');
+  showToast(name + (addonNames ? ' ' + addonNames : '') + ' added!', 'success');
   requestAnimationFrame(function() { updateCardInPlace(code); });
 }
 
@@ -1054,6 +1097,7 @@ function renderCartView() {
       '<div class="cart-item-info">' +
         '<div class="cart-item-name">' + esc(item.name) + '</div>' +
         ((item.size || item.sugar) ? '<div class="cart-item-size">' + [item.size, item.sugar].filter(Boolean).map(esc).join(' · ') + '</div>' : '') +
+        (item.addons && item.addons.length ? '<div style="font-size:.72rem;color:#065f46;font-weight:700;margin-top:2px">' + item.addons.map(function(a){ return '➕ ' + esc(a.name); }).join(' · ') + '</div>' : '') +
         '<div class="cart-item-price">₱' + (item.unitPrice * item.quantity).toFixed(0) + '</div>' +
         '<div class="cart-item-controls">' +
           '<button class="qty-btn minus" onclick="changeCartQty(\'' + esc(item.key) + '\',-1)">−</button>' +
@@ -1239,9 +1283,8 @@ async function submitOrder() {
         courierType: document.getElementById('courierType').value,
         paymentMethod: selectedPayMethod,
         items: cart.map(function(c) {
-          // Combine size and sugar into a single label for storage (e.g. "Medium · YANI")
           var sizeLabel = [c.size, c.sugar].filter(Boolean).join(' · ');
-          return { code: c.code, name: c.name, size: sizeLabel, unitPrice: c.unitPrice, quantity: c.quantity };
+          return { code: c.code, name: c.name, size: sizeLabel, unitPrice: c.unitPrice, quantity: c.quantity, addons: c.addons || [] };
         })
       })
     });
