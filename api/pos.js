@@ -1838,7 +1838,7 @@ export default async function handler(req, res) {
         deliveryZone:        o.delivery_zone || null,
         lastUpdated:         o.updated_at,
       }));
-      return res.status(200).json({ success: true, orders });
+      return res.status(200).json({ ok: true, orders });
     }
 
     // ── getCustomers ───────────────────────────────────────────────────────

@@ -4806,7 +4806,7 @@ async function loadSheetsData() {
       body: JSON.stringify({ action: 'getOnlineOrders' })
     });
     var data = await resp.json();
-    sheetsOrdersData = (data.success && data.orders) ? data.orders : [];
+    sheetsOrdersData = (data.ok && data.orders) ? data.orders : [];
 
     // Fetch customers via Vercel proxy
     var custResp = await fetch(API_URL, {
@@ -4815,7 +4815,7 @@ async function loadSheetsData() {
       body: JSON.stringify({ action: 'getCustomers' })
     });
     var custData = await custResp.json();
-    sheetsCustomersData = (custData.success && custData.customers) ? custData.customers : [];
+    sheetsCustomersData = (custData.ok && custData.customers) ? custData.customers : [];
 
     if (countEl) countEl.textContent = sheetsOrdersData.length + ' orders · ' + sheetsCustomersData.length + ' customers';
     showSheetsTab(currentSheetsTab);
