@@ -808,7 +808,7 @@ export default async function handler(req, res) {
       const limit       = Math.min(parseInt(body.limit) || 200, 500);
       const excludeTest = body.excludeTest === true || body.excludeTest === 'true';
 
-      let url = `${SUPABASE_URL}/rest/v1/dine_in_orders?order=created_at.desc&limit=${limit}&is_deleted=eq.false`;
+      let url = `${SUPABASE_URL}/rest/v1/dine_in_orders?order=created_at.desc&limit=${limit}&is_deleted=eq.false&select=*`;
       if (orderId) url += `&order_id=eq.${encodeURIComponent(orderId)}`;
       else if (status === 'ACTIVE') url += `&status=in.(NEW,PREPARING,READY)`;
       else if (status && status !== 'ALL') url += `&status=eq.${encodeURIComponent(status)}`;
@@ -850,6 +850,7 @@ export default async function handler(req, res) {
         orderId:       o.order_id,
         orderNo:       o.order_no,
         tableNo:       o.table_no,
+        customer:      o.customer_name,   // alias used by printReceipt
         customerName:  o.customer_name,
         status:        o.status,
         orderType:     o.order_type,
@@ -857,7 +858,14 @@ export default async function handler(req, res) {
         serviceCharge: o.service_charge,
         vatAmount:     o.vat_amount || 0,
         total:         o.total,
+        discountedTotal: o.discounted_total || null,
         notes:         o.notes || '',
+        receiptType:     o.receipt_type     || '',
+        receiptDelivery: o.receipt_delivery || '',
+        receiptEmail:    o.receipt_email    || '',
+        receiptName:     o.receipt_name     || '',
+        receiptAddress:  o.receipt_address  || '',
+        receiptTIN:      o.receipt_tin      || '',
         source:        o.source || 'QR',
         platform:      o.platform || '',
         platformRef:   o.platform_ref || '',
