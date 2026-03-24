@@ -5999,11 +5999,11 @@ async function syncToSheets() {
     <div class="pm-title">Set Payment Method</div>
     <div class="pm-sub" id="pmOrderLabel">Order: —</div>
     <div class="pm-grid">
-      <button class="pm-btn" id="pmBtnQR" onclick="selectPM('GCASH')">
+      <button class="pm-btn" id="pmBtnGCASH" onclick="selectPM('GCASH')">
         <span class="pm-btn-icon">📱</span>
         <span class="pm-btn-label">QR / GCash</span>
         <span class="pm-btn-sub">GCash · Bank · InstaPay</span>
-        <span class="pm-split-badge" style="display:none" id="pmBadgeQR">1st</span>
+        <span class="pm-split-badge" style="display:none" id="pmBadgeGCASH">1st</span>
       </button>
       <button class="pm-btn" id="pmBtnCASH" onclick="selectPM('CASH')">
         <span class="pm-btn-icon">💵</span>
@@ -6107,7 +6107,7 @@ function openPaymentModal(orderId, fromComplete) {
   confirmBtn.disabled = true;
 
   // Reset all 3 buttons
-  ['QR','CASH','CARD'].forEach(function(k) {
+  ['GCASH','CASH','CARD'].forEach(function(k) {
     var btn   = document.getElementById('pmBtn'   + k);
     var badge = document.getElementById('pmBadge' + k);
     if (btn)   btn.className = 'pm-btn';
