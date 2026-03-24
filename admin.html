@@ -986,7 +986,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
       <span class="role-badge" id="roleBadge" onclick="logout()" title="Tap to switch user" style="cursor:pointer"></span>
       <span style="font-size:.72rem;font-weight:600;opacity:.85" id="usernameLabel"></span>
       <button class="logout-btn" onclick="openChangePinModal()" style="background:rgba(255,255,255,.12);margin-right:4px">🔑 PIN</button>
-      <button class="logout-btn" id="switchUserHint" onclick="logout()" style="display:none;background:#e8a020;color:#fff;font-weight:800">⇄ Switch</button>
+      <button class="logout-btn" id="switchUserHint" onclick="logout()" style="display:none;background:#e8a020;color:#fff;font-weight:800;animation:pulse-btn 1.5s infinite">⇄ Switch User</button>
       <button class="logout-btn" onclick="logout()">Logout</button>
     </div>
   </div>
@@ -1826,15 +1826,13 @@ function startPolling() {
   _onlinePollTimer = setInterval(function() {
     if (currentFilter === 'ONLINE_ORDERS') {
       loadOnlineOrders().catch(function(){});
-    } else if (currentUser.role === 'OWNER' || currentUser.role === 'ADMIN') {
-      // Silently refresh badge count even when not on Online tab
+    } else {
+      // Silently refresh badge count for all roles
       _refreshOnlineCount().catch(function(){});
     }
   }, 30000);
-  // Load online count immediately on startup for ADMIN/OWNER
-  if (currentUser.role === 'OWNER' || currentUser.role === 'ADMIN') {
-    setTimeout(function(){ _refreshOnlineCount().catch(function(){}); }, 1500);
-  }
+  // Load online count immediately on startup for all roles
+  setTimeout(function(){ _refreshOnlineCount().catch(function(){}); }, 1500);
 }
 
 async function _refreshOnlineCount() {
@@ -1993,10 +1991,8 @@ function renderFilters() {
   if (currentUser.role === 'ADMIN' || currentUser.role === 'OWNER') {
     tabs.push({ key:'MENU_MANAGER', label:'🍽️ Menu', count:'' });
   }
-  // Online Orders tab: ADMIN and OWNER only
-  if (currentUser.role === 'ADMIN' || currentUser.role === 'OWNER') {
-    tabs.push({ key:'ONLINE_ORDERS', label:'🛵 Online', count:onlineOrderPendingCount || '' });
-  }
+  // Online Orders tab: ALL roles can see it
+  tabs.push({ key:'ONLINE_ORDERS', label:'🛵 Online', count:onlineOrderPendingCount || '' });
   // Sheets tab: ADMIN and OWNER only
   if (currentUser.role === 'ADMIN' || currentUser.role === 'OWNER') {
     tabs.push({ key:'SHEETS', label:'📊 Sheets', count:'' });
