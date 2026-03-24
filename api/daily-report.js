@@ -279,7 +279,9 @@ export default async function handler(req, res) {
   const bodySecret = isPost ? (req.body?.secret || '') : '';
 
   const cronOk   = cronAuth === `Bearer ${process.env.CRON_SECRET || ''}`;
-  const manualOk = REPORT_SECRET && bodySecret === REPORT_SECRET;
+  // REPORT_SECRET for manual trigger; fall back to CRON_SECRET if not set
+  const effectiveSecret = REPORT_SECRET || process.env.CRON_SECRET || '';
+  const manualOk = effectiveSecret && bodySecret === effectiveSecret;
 
   if (!cronOk && !manualOk) {
     return res.status(401).json({ ok: false, error: 'Unauthorized' });
