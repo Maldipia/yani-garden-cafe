@@ -502,9 +502,8 @@ export default async function handler(req, res) {
 
     // ── getMenuAdmin ───────────────────────────────────────────────────────
     if (action === 'getMenuAdmin') {
-      const authMA = await checkAuth();
+      const authMA = await checkAdminAuth();
       if (!authMA.ok) return res.status(403).json({ ok: false, error: authMA.error });
-      if (authMA.role === 'KITCHEN') return res.status(403).json({ ok: false, error: 'Kitchen staff cannot access menu admin' });
       const now = Date.now();
       if (menuCache.admin && (now - menuCache.ts) < MENU_CACHE_TTL) {
         return res.status(200).json({ ok: true, items: menuCache.admin, cached: true });
