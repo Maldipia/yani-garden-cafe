@@ -2834,25 +2834,31 @@ function printReceipt(orderId) {
     // NO BOTTOM MARGIN - Cut immediately after footer
 
     // Auto-print
-    '<script>window.onload=function(){window.print();}<\/script>' +
     '</body></html>';
 
-  var printWin = window.open('', '_blank', 'width=380,height=680');
-  if (printWin) {
-    printWin.document.open();
-    printWin.document.write(receiptHTML);
-    printWin.document.close();
-    printWin.focus();
-    // Fallback: if onload doesn't fire, setTimeout will catch it
+  // Use hidden iframe — bypasses popup blockers
+  var existingFrame = document.getElementById('receiptPrintFrame');
+  if (existingFrame) existingFrame.remove();
+  var iframe = document.createElement('iframe');
+  iframe.id = 'receiptPrintFrame';
+  iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:80mm;height:1px;border:none;';
+  document.body.appendChild(iframe);
+  iframe.contentWindow.document.open();
+  iframe.contentWindow.document.write(receiptHTML);
+  iframe.contentWindow.document.close();
+  iframe.onload = function() {
     setTimeout(function() {
-      try { if (printWin && !printWin.closed) printWin.print(); } catch(e) {}
-    }, 600);
-  } else {
-    showToast('⚠️ Pop-up blocked! Allow pop-ups for this site to print receipts.', 'warn');
-    // Fallback: open in same tab
-    var w = window.open('about:blank');
-    if (w) { w.document.write(receiptHTML); w.document.close(); }
-  }
+      try {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+      } catch(e) {
+        // Last resort: new window
+        var w = window.open('', '_blank', 'width=400,height=700');
+        if (w) { w.document.write(receiptHTML); w.document.close(); }
+        else { showToast('⚠️ Could not print. Check browser settings.', 'error'); }
+      }
+    }, 300);
+  };
 }
 
 // ══════════════════════════════════════════════════════════
@@ -4435,18 +4441,28 @@ function printOnlineReceipt(orderRef) {
     '<p style="font-size:9pt;margin-top:2px">Payment via: ' + esc(o.payment_method || 'Online') + '</p>' +
     '<p style="font-size:9pt;margin-top:2px">Status: ' + esc(o.status || '') + '</p></div>' +
     '</body></html>';
-  var printWin = window.open('', '_blank', 'width=380,height=680');
-  if (printWin) {
-    printWin.document.open();
-    printWin.document.write(receiptHTML);
-    printWin.document.close();
-    printWin.focus();
+  // Use hidden iframe — bypasses popup blockers
+  var existingFrame2 = document.getElementById('receiptPrintFrame');
+  if (existingFrame2) existingFrame2.remove();
+  var iframe2 = document.createElement('iframe');
+  iframe2.id = 'receiptPrintFrame';
+  iframe2.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:80mm;height:1px;border:none;';
+  document.body.appendChild(iframe2);
+  iframe2.contentWindow.document.open();
+  iframe2.contentWindow.document.write(receiptHTML);
+  iframe2.contentWindow.document.close();
+  iframe2.onload = function() {
     setTimeout(function() {
-      try { if (printWin && !printWin.closed) printWin.print(); } catch(e) {}
-    }, 600);
-  } else {
-    showToast('⚠️ Pop-up blocked! Allow pop-ups for this site to print receipts.', 'warn');
-  }
+      try {
+        iframe2.contentWindow.focus();
+        iframe2.contentWindow.print();
+      } catch(e) {
+        var w = window.open('', '_blank', 'width=400,height=700');
+        if (w) { w.document.write(receiptHTML); w.document.close(); }
+        else { showToast('⚠️ Could not print. Check browser settings.', 'error'); }
+      }
+    }, 300);
+  };
 }
 // ════════════════════════════════════════════════════════
 // ONLINE ORDER EDIT MODAL (OWNER only)
