@@ -1644,12 +1644,13 @@ function tryRestoreSession() {
     var stored = localStorage.getItem(YANI_TOKEN_KEY);
     if (!stored) return false;
     var s = JSON.parse(stored);
-    if (!s.token || !s.userId || !s.role) return false;
-    // Check not expired (with 5-min buffer)
+    if (!s.userId || !s.role) return false;
+    // If we have a token, check it's not expired
     if (s.expiresAt && Date.now() > s.expiresAt - 5 * 60 * 1000) {
       localStorage.removeItem(YANI_TOKEN_KEY);
       return false;
     }
+    // No token (JWT not yet active) — still allow session restore via userId
     // Restore session state
     currentUser.userId    = s.userId;
     currentUser.username  = s.username;
@@ -1720,17 +1721,16 @@ async function login() {
       currentUser.token     = data.token || null;
       currentUser.expiresAt = data.token ? (Date.now() + (data.expiresIn || 28800) * 1000) : null;
       // Persist token so page refresh doesn't force re-login
-      if (data.token) {
-        try {
-          localStorage.setItem(YANI_TOKEN_KEY, JSON.stringify({
-            token:       data.token,
-            userId:      data.userId,
-            username:    data.username,
-            role:        data.role,
-            expiresAt:   currentUser.expiresAt,
-          }));
-        } catch(_) {}
-      }
+      // Always store session (with or without JWT token)
+      try {
+        localStorage.setItem(YANI_TOKEN_KEY, JSON.stringify({
+          token:     data.token || null,
+          userId:    data.userId,
+          username:  data.username,
+          role:      data.role,
+          expiresAt: data.token ? currentUser.expiresAt : Date.now() + 8 * 60 * 60 * 1000,
+        }));
+      } catch(_) {}
       
       console.log('✅ Logged in as', data.username, '(' + data.role + ')');
       
@@ -2888,38 +2888,34 @@ function printReceipt(orderId) {
     // Auto-print
     '</body></html>';
 
-  // Open receipt in new window — most reliable across desktop + mobile browsers
-  var w = window.open('', '_blank', 'width=420,height=750,scrollbars=yes');
-  if (w) {
-    w.document.open();
-    w.document.write(receiptHTML);
-    w.document.close();
-    // Auto-trigger print after content loads
-    w.onload = function() { 
-      setTimeout(function() { w.focus(); w.print(); }, 250); 
-    };
-    // Fallback if onload doesn't fire (mobile)
+  // Use hidden iframe — bypasses popup blockers, works on mobile
+  var existingFrame = document.getElementById('receiptPrintFrame');
+  if (existingFrame) existingFrame.remove();
+  var iframe = document.createElement('iframe');
+  iframe.id = 'receiptPrintFrame';
+  iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:80mm;height:1px;border:none;visibility:hidden;';
+  iframe.onload = function() {
     setTimeout(function() {
-      try { w.focus(); w.print(); } catch(e) {}
-    }, 800);
-  } else {
-    // Popup blocked — fall back to iframe
-    var existingFrame = document.getElementById('receiptPrintFrame');
-    if (existingFrame) existingFrame.remove();
-    var iframe = document.createElement('iframe');
-    iframe.id = 'receiptPrintFrame';
-    iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:80mm;height:1px;border:none;';
-    iframe.onload = function() {
-      setTimeout(function() {
-        try { iframe.contentWindow.focus(); iframe.contentWindow.print(); } catch(e) {}
-      }, 300);
-    };
-    document.body.appendChild(iframe);
-    iframe.contentWindow.document.open();
-    iframe.contentWindow.document.write(receiptHTML);
-    iframe.contentWindow.document.close();
-    showToast('⚠️ Popup blocked — allow popups for printing.', 'error');
-  }
+      try {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+      } catch(e) {
+        // Fallback: open new window
+        var w = window.open('', '_blank', 'width=420,height=750');
+        if (w) { w.document.write(receiptHTML); w.document.close();
+          setTimeout(function(){ try{w.focus();w.print();}catch(e2){} }, 500); }
+        else { showToast('⚠️ Allow popups to print receipts', 'error'); }
+      }
+    }, 400);
+  };
+  document.body.appendChild(iframe);
+  iframe.contentWindow.document.open();
+  iframe.contentWindow.document.write(receiptHTML);
+  iframe.contentWindow.document.close();
+  // Safety fallback: if onload doesn't fire within 2s
+  setTimeout(function() {
+    try { iframe.contentWindow.focus(); iframe.contentWindow.print(); } catch(e) {}
+  }, 2000);
 }
 
 // ══════════════════════════════════════════════════════════
@@ -4502,29 +4498,32 @@ function printOnlineReceipt(orderRef) {
     '<p style="font-size:9pt;margin-top:2px">Payment via: ' + esc(o.payment_method || 'Online') + '</p>' +
     '<p style="font-size:9pt;margin-top:2px">Status: ' + esc(o.status || '') + '</p></div>' +
     '</body></html>';
-  // Use hidden iframe — bypasses popup blockers
-  var w2 = window.open('', '_blank', 'width=420,height=750,scrollbars=yes');
-  if (w2) {
-    w2.document.open();
-    w2.document.write(receiptHTML);
-    w2.document.close();
-    w2.onload = function() { setTimeout(function() { w2.focus(); w2.print(); }, 250); };
-    setTimeout(function() { try { w2.focus(); w2.print(); } catch(e) {} }, 800);
-  } else {
-    var existingFrame2 = document.getElementById('receiptPrintFrame');
-    if (existingFrame2) existingFrame2.remove();
-    var iframe2 = document.createElement('iframe');
-    iframe2.id = 'receiptPrintFrame';
-    iframe2.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:80mm;height:1px;border:none;';
-    iframe2.onload = function() {
-      setTimeout(function() { try { iframe2.contentWindow.focus(); iframe2.contentWindow.print(); } catch(e) {} }, 300);
-    };
-    document.body.appendChild(iframe2);
-    iframe2.contentWindow.document.open();
-    iframe2.contentWindow.document.write(receiptHTML);
-    iframe2.contentWindow.document.close();
-    showToast('⚠️ Popup blocked — allow popups for printing.', 'error');
-  }
+  // Use hidden iframe — bypasses popup blockers, works on mobile
+  var existingFrame2 = document.getElementById('receiptPrintFrame');
+  if (existingFrame2) existingFrame2.remove();
+  var iframe2 = document.createElement('iframe');
+  iframe2.id = 'receiptPrintFrame';
+  iframe2.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:80mm;height:1px;border:none;visibility:hidden;';
+  iframe2.onload = function() {
+    setTimeout(function() {
+      try {
+        iframe2.contentWindow.focus();
+        iframe2.contentWindow.print();
+      } catch(e) {
+        var w2 = window.open('', '_blank', 'width=420,height=750');
+        if (w2) { w2.document.write(receiptHTML); w2.document.close();
+          setTimeout(function(){ try{w2.focus();w2.print();}catch(e2){} }, 500); }
+        else { showToast('⚠️ Allow popups to print receipts', 'error'); }
+      }
+    }, 400);
+  };
+  document.body.appendChild(iframe2);
+  iframe2.contentWindow.document.open();
+  iframe2.contentWindow.document.write(receiptHTML);
+  iframe2.contentWindow.document.close();
+  setTimeout(function() {
+    try { iframe2.contentWindow.focus(); iframe2.contentWindow.print(); } catch(e) {}
+  }, 2000);
 }
 // ════════════════════════════════════════════════════════
 // ONLINE ORDER EDIT MODAL (OWNER only)
@@ -6335,6 +6334,18 @@ function updateDmPreview() {
 }
 // Wire preview on input change
 document.addEventListener('DOMContentLoaded', function() {
+  // Try to restore previous session so page refresh doesn't force re-login
+  if (tryRestoreSession()) {
+    document.getElementById('loginOverlay').classList.add('hidden');
+    document.getElementById('dashboard').style.display = 'block';
+    applyRoleUI();
+    resetSessionTimer();
+    startPolling();
+    if (currentUser.role === 'ADMIN' || currentUser.role === 'OWNER') {
+      setTimeout(runHealthCheck, 2000);
+      setTimeout(initQueueMonitor, 1000);
+    }
+  }
   ['dmTotalPax','dmQualPax','dmPromoPct','dmCustomAmt'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.addEventListener('input', function(){ if(dmSelectedType) updateDmPreview(); });
