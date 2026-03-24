@@ -1752,8 +1752,8 @@ function startPolling() {
   if (pollTimer) clearInterval(pollTimer);
   pollTimer = setInterval(function() {
     loadOrders();
-    // Auto-refresh online orders count if on that tab
-    if (typeof allOnlineOrders !== 'undefined') {
+    // Only refresh online orders when the Online tab is active
+    if (currentFilter === 'ONLINE_ORDERS') {
       loadOnlineOrders().catch(function(){});
     }
   }, POLL_INTERVAL);
