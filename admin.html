@@ -2842,23 +2842,23 @@ function printReceipt(orderId) {
   var iframe = document.createElement('iframe');
   iframe.id = 'receiptPrintFrame';
   iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:80mm;height:1px;border:none;';
-  document.body.appendChild(iframe);
-  iframe.contentWindow.document.open();
-  iframe.contentWindow.document.write(receiptHTML);
-  iframe.contentWindow.document.close();
+  // Assign onload BEFORE writing — avoids race condition where load fires before handler is set
   iframe.onload = function() {
     setTimeout(function() {
       try {
         iframe.contentWindow.focus();
         iframe.contentWindow.print();
       } catch(e) {
-        // Last resort: new window
         var w = window.open('', '_blank', 'width=400,height=700');
         if (w) { w.document.write(receiptHTML); w.document.close(); }
         else { showToast('⚠️ Could not print. Check browser settings.', 'error'); }
       }
     }, 300);
   };
+  document.body.appendChild(iframe);
+  iframe.contentWindow.document.open();
+  iframe.contentWindow.document.write(receiptHTML);
+  iframe.contentWindow.document.close();
 }
 
 // ══════════════════════════════════════════════════════════
@@ -4447,10 +4447,7 @@ function printOnlineReceipt(orderRef) {
   var iframe2 = document.createElement('iframe');
   iframe2.id = 'receiptPrintFrame';
   iframe2.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:80mm;height:1px;border:none;';
-  document.body.appendChild(iframe2);
-  iframe2.contentWindow.document.open();
-  iframe2.contentWindow.document.write(receiptHTML);
-  iframe2.contentWindow.document.close();
+  // Assign onload BEFORE writing — avoids race condition
   iframe2.onload = function() {
     setTimeout(function() {
       try {
@@ -4463,6 +4460,10 @@ function printOnlineReceipt(orderRef) {
       }
     }, 300);
   };
+  document.body.appendChild(iframe2);
+  iframe2.contentWindow.document.open();
+  iframe2.contentWindow.document.write(receiptHTML);
+  iframe2.contentWindow.document.close();
 }
 // ════════════════════════════════════════════════════════
 // ONLINE ORDER EDIT MODAL (OWNER only)
