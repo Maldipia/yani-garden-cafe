@@ -1646,6 +1646,12 @@ function tryRestoreSession() {
     if (!stored) return false;
     var s = JSON.parse(stored);
     if (!s.userId || !s.role) return false;
+    // KITCHEN sessions are never auto-restored — kitchen staff re-enters PIN each time
+    // This prevents kitchen session from blocking admin login on shared devices
+    if (s.role === 'KITCHEN') {
+      localStorage.removeItem(YANI_TOKEN_KEY);
+      return false;
+    }
     // If we have a token, check it's not expired
     if (s.expiresAt && Date.now() > s.expiresAt - 5 * 60 * 1000) {
       localStorage.removeItem(YANI_TOKEN_KEY);
@@ -1725,16 +1731,21 @@ async function login() {
       currentUser.token     = data.token || null;
       currentUser.expiresAt = data.token ? (Date.now() + (data.expiresIn || 28800) * 1000) : null;
       // Persist token so page refresh doesn't force re-login
-      // Always store session (with or without JWT token)
-      try {
-        localStorage.setItem(YANI_TOKEN_KEY, JSON.stringify({
-          token:     data.token || null,
-          userId:    data.userId,
-          username:  data.username,
-          role:      data.role,
-          expiresAt: data.token ? currentUser.expiresAt : Date.now() + 8 * 60 * 60 * 1000,
-        }));
-      } catch(_) {}
+      // Store session — but NOT for KITCHEN (they never get auto-restored)
+      if (data.role !== 'KITCHEN') {
+        try {
+          localStorage.setItem(YANI_TOKEN_KEY, JSON.stringify({
+            token:     data.token || null,
+            userId:    data.userId,
+            username:  data.username,
+            role:      data.role,
+            expiresAt: data.token ? currentUser.expiresAt : Date.now() + 8 * 60 * 60 * 1000,
+          }));
+        } catch(_) {}
+      } else {
+        // Clear any previous session so admin isn't stuck on kitchen
+        try { localStorage.removeItem(YANI_TOKEN_KEY); } catch(_) {}
+      }
       
       console.log('✅ Logged in as', data.username, '(' + data.role + ')');
       
