@@ -669,7 +669,7 @@ textarea.form-input{resize:none;min-height:72px}
     <div class="form-card">
       <div class="form-card-title">📍 Delivery Address</div>
       <div class="form-group">
-        <label class="form-label">Complete Address *</label>
+        <label class="form-label">Complete Address <span id="addrRequired">*</span></label>
         <textarea class="form-input" id="custAddress" placeholder="House/Unit No., Street, Barangay, City"></textarea>
       </div>
       <div class="form-group">
@@ -1254,6 +1254,13 @@ function selectDeliveryType(type) {
   document.getElementById('yaniZoneSection').style.display  = type==='YANI'?'':'none';
   document.getElementById('ownCourierSection').style.display = type==='OWN'?'':'none';
   if (type==='OWN') { selectedZone=null; selectedDeliveryFee=0; }
+  // Update address field — required for delivery, optional for own courier
+  var addrReq = document.getElementById('addrRequired');
+  var addrInput = document.getElementById('custAddress');
+  if (addrReq) addrReq.textContent = type==='YANI' ? '*' : '(optional)';
+  if (addrInput) addrInput.placeholder = type==='YANI'
+    ? 'House/Unit No., Street, Barangay, City'
+    : 'Optional — for your own reference';
   renderCartView();
 }
 
@@ -1358,7 +1365,8 @@ function proceedToPayment() {
   var errors  = [];
   if (!name) errors.push('custName');
   if (!phone||!/^(09|\+639)\d{9}$/.test(phone.replace(/\s/g,''))) errors.push('custPhone');
-  if (!address||address.length<10) errors.push('custAddress');
+  // Address required only for YANI delivery (not pickup)
+  if (selectedDeliveryType==='YANI' && (!address||address.length<5)) errors.push('custAddress');
   if (selectedDeliveryType==='YANI'&&!selectedZone) {
     showToast('Please select a delivery zone 🚚','error');
     document.getElementById('yaniZoneSection').scrollIntoView({behavior:'smooth',block:'center'});
