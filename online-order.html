@@ -728,7 +728,7 @@ textarea.form-input{resize:none;min-height:72px}
     <!-- Upload proof -->
     <div class="form-card">
       <div class="form-card-title">📸 Payment Proof</div>
-      <div class="proof-area" id="proofUploadArea"
+      <div class="proof-area" id="proofUploadArea" style="-webkit-user-select:none"
         onclick="document.getElementById('proofFileInput').click()"
         ondragover="onDragOver(event)" ondrop="onDrop(event)">
         <div class="proof-icon" id="proofIcon">📷</div>
@@ -1423,8 +1423,8 @@ async function submitOrder() {
     goToStep(5);
   } catch(e) {
     hideLoading();
-    btn.disabled=false; btn.textContent='Place Order →';
-    showToast('Error: '+e.message,'error');
+    btn.disabled=false; btn.textContent='Place Order →'; btn.style.opacity='1';
+    showToast('❌ '+e.message,'error');
   }
 }
 
@@ -1462,7 +1462,7 @@ function showToast(msg, type) {
   var t=document.getElementById('toast');
   t.textContent=msg; t.className='toast show'+(type?' '+type:'');
   clearTimeout(toastTimer);
-  toastTimer=setTimeout(function(){t.className='toast'},3000);
+  toastTimer=setTimeout(function(){t.className='toast'},type==='error'?5000:3000);
 }
 </script>
 </body>
