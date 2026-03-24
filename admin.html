@@ -983,9 +983,10 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
     <div class="topbar-title">Order Board</div>
     <div class="topbar-live"><div class="topbar-dot"></div> LIVE</div>
     <div class="topbar-user" id="topbarUser" style="display:none">
-      <span class="role-badge" id="roleBadge"></span>
+      <span class="role-badge" id="roleBadge" onclick="logout()" title="Tap to switch user" style="cursor:pointer"></span>
       <span style="font-size:.72rem;font-weight:600;opacity:.85" id="usernameLabel"></span>
       <button class="logout-btn" onclick="openChangePinModal()" style="background:rgba(255,255,255,.12);margin-right:4px">🔑 PIN</button>
+      <button class="logout-btn" id="switchUserHint" onclick="logout()" style="display:none;background:#e8a020;color:#fff;font-weight:800">⇄ Switch</button>
       <button class="logout-btn" onclick="logout()">Logout</button>
     </div>
   </div>
@@ -1671,6 +1672,9 @@ function applyRoleUI() {
   document.getElementById('roleBadge').textContent = role;
   document.getElementById('roleBadge').className = 'role-badge ' + role;
   document.getElementById('usernameLabel').textContent = currentUser.username || '';
+  // For KITCHEN: show "switch" hint since they can't access admin features
+  var switchHint = document.getElementById('switchUserHint');
+  if (switchHint) switchHint.style.display = (role === 'KITCHEN') ? '' : 'none';
   
   // Edit order button: ADMIN and OWNER only
   var canEditOrders = (role === 'ADMIN' || role === 'OWNER');
