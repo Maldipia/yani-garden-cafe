@@ -2287,7 +2287,7 @@ function renderOrders() {
       html += '<div class="oc-payment-row">'
         + '<div class="oc-payment submitted">💳 Payment Submitted · Pending</div>';
       if (canSetPayment) {
-        html += '<button class="oc-pm-change" onclick="openPaymentModal(\'' + esc(o.orderId) + '\')">Verify</button>';
+        html += '<button class="oc-pm-change" onclick="openVerifyFromOrder(\'' + esc(o.orderId) + '\')">📸 Verify Payment</button>';
       }
       html += '</div>';
     } else {
@@ -3132,6 +3132,52 @@ function renderPayCards() {
 function closeProofModal() {
   var m = document.getElementById('proofModalOverlay');
   if (m) m.remove();
+}
+
+// Opens proof photo + verify/reject for an order card Verify button
+async function openVerifyFromOrder(orderId) {
+  // Find the paymentId for this order from the payments list
+  var r = await api('listPayments', { userId: currentUser && currentUser.userId });
+  if (!r || !r.ok) { showToast('Could not load payment data', 'error'); return; }
+  var payment = (r.payments || []).find(function(p) {
+    return p.orderId === orderId && (p.status === 'SUBMITTED' || p.status === 'PENDING');
+  });
+  if (!payment) {
+    // No payment record — maybe proof was uploaded directly to order
+    // Fall back to opening the set payment modal
+    openPaymentModal(orderId);
+    return;
+  }
+
+  // Build a verify modal that shows proof + verify/reject buttons
+  var existing = document.getElementById('proofModalOverlay');
+  if (existing) existing.remove();
+  var modal = document.createElement('div');
+  modal.id = 'proofModalOverlay';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+  var uid = currentUser && currentUser.userId ? currentUser.userId : '';
+  var imgSrc = '/api/payment-proof?id=' + encodeURIComponent(payment.paymentId) + '&userId=' + encodeURIComponent(uid);
+  var amtStr = payment.amount ? '₱' + parseFloat(payment.amount).toFixed(2) : '';
+  modal.innerHTML =
+    '<div style="background:#fff;border-radius:16px;padding:20px;max-width:92vw;width:500px;text-align:center">' +
+      '<div style="font-weight:700;font-size:1rem;margin-bottom:4px">📸 Payment Proof</div>' +
+      '<div style="font-size:.82rem;color:#6B7280;margin-bottom:12px">' + esc(orderId) + ' · ' + esc(payment.method || '') + ' ' + amtStr + '</div>' +
+      '<div id="proofImgWrap">' +
+        '<div style="color:#9CA3AF;padding:10px">Loading...</div>' +
+        '<img src="' + imgSrc + '" ' +
+          'style="max-width:100%;max-height:55vh;border-radius:8px;object-fit:contain;display:block;margin:0 auto;" ' +
+          'onload="this.previousSibling&&this.previousSibling.remove()" ' +
+          'onerror="this.outerHTML='<div style=\'color:#9CA3AF;padding:20px\'>📭 No screenshot found</div>'">' +
+      '</div>' +
+      '<div style="display:flex;gap:10px;margin-top:16px;justify-content:center">' +
+        '<button onclick="closeProofModal();doVerifyPayment('' + esc(payment.paymentId) + '')" ' +
+          'style="flex:1;max-width:160px;padding:10px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer;font-size:.9rem">✅ Verify</button>' +
+        '<button onclick="closeProofModal();doRejectPayment('' + esc(payment.paymentId) + '')" ' +
+          'style="flex:1;max-width:160px;padding:10px;background:#dc2626;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer;font-size:.9rem">✕ Reject</button>' +
+      '</div>' +
+      '<button onclick="closeProofModal()" style="margin-top:10px;padding:8px 20px;background:transparent;color:#6B7280;border:1px solid #e5e7eb;border-radius:8px;cursor:pointer;font-size:.82rem">Close</button>' +
+    '</div>';
+  document.body.appendChild(modal);
 }
 
 async function viewPaymentProof(paymentId) {
