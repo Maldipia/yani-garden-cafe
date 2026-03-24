@@ -46,25 +46,30 @@ async function buildReport() {
 
   // ── Orders for yesterday ──────────────────────────────────────────────
   const ordersR = await supaFetch(
-    `dine_in_orders?created_at=gte.${startISO}&created_at=lt.${endISO}&is_deleted=eq.false&is_test=eq.false&select=order_id,status,total,order_type,payment_method,created_at`
+    `dine_in_orders?created_at=gte.${startISO}&created_at=lt.${endISO}&is_deleted=eq.false&is_test=eq.false&select=order_id,status,total,discounted_total,discount_type,discount_amount,order_type,payment_method,created_at`
   );
   const orders = ordersR.data || [];
 
   const completed = orders.filter(o => o.status === 'COMPLETED');
   const cancelled = orders.filter(o => o.status === 'CANCELLED');
-  const totalSales = completed.reduce((s, o) => s + parseFloat(o.total || 0), 0);
-  const avgOrder   = completed.length ? totalSales / completed.length : 0;
+
+  // Use discounted_total when available — reflects actual amount paid
+  const getAmt = o => parseFloat(o.discounted_total ?? o.total ?? 0);
+
+  const totalSales    = completed.reduce((s, o) => s + getAmt(o), 0);
+  const totalDiscount = completed.reduce((s, o) => s + parseFloat(o.discount_amount || 0), 0);
+  const avgOrder      = completed.length ? totalSales / completed.length : 0;
 
   // Payment method breakdown
   const payBreakdown = {};
   completed.forEach(o => {
     const pm = o.payment_method || 'Unknown';
-    payBreakdown[pm] = (payBreakdown[pm] || 0) + parseFloat(o.total || 0);
+    payBreakdown[pm] = (payBreakdown[pm] || 0) + getAmt(o);
   });
 
-  // Order type breakdown
-  const dineIn  = completed.filter(o => o.order_type === 'DINE_IN').length;
-  const takeOut = completed.filter(o => o.order_type === 'TAKE_OUT').length;
+  // Order type breakdown — DB stores 'DINE-IN' and 'TAKE-OUT' (hyphens)
+  const dineIn  = completed.filter(o => o.order_type === 'DINE-IN').length;
+  const takeOut = completed.filter(o => o.order_type === 'TAKE-OUT').length;
 
   // ── Top items ─────────────────────────────────────────────────────────
   const orderIds = completed.map(o => o.order_id);
@@ -93,7 +98,7 @@ async function buildReport() {
     const label = `${String(phtHour).padStart(2,'0')}:00`;
     if (!hourly[label]) hourly[label] = { count: 0, revenue: 0 };
     hourly[label].count++;
-    hourly[label].revenue += parseFloat(o.total || 0);
+    hourly[label].revenue += getAmt(o);
   });
   const peakHour = Object.entries(hourly).sort((a,b) => b[1].count - a[1].count)[0];
 
@@ -102,7 +107,7 @@ async function buildReport() {
     totalOrders: orders.length,
     completedOrders: completed.length,
     cancelledOrders: cancelled.length,
-    totalSales, avgOrder,
+    totalSales, avgOrder, totalDiscount,
     dineIn, takeOut,
     payBreakdown, topItems,
     peakHour: peakHour ? { hour: peakHour[0], count: peakHour[1].count } : null,
@@ -183,6 +188,10 @@ function buildEmailHTML(r) {
         </td>
       </tr>
     </table>
+    ${r.totalDiscount > 0 ? `
+    <div style="margin-top:12px;background:#fff7ed;border-radius:10px;padding:12px 16px;font-size:13px;color:#92400e;">
+      💸 Total discounts applied: <strong>${fmt(r.totalDiscount)}</strong> (PWD / Senior / Promo)
+    </div>` : ''}
   </td></tr>
 
   <!-- ORDER TYPE -->
