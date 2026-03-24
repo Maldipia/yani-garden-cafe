@@ -2117,7 +2117,7 @@ export default async function handler(req, res) {
               AND o.created_at >= NOW() - INTERVAL '30 days'
             GROUP BY i.item_name
             ORDER BY qty DESC
-            LIMIT 10
+            LIMIT 20
           ` })
         }
       );
@@ -2148,7 +2148,7 @@ export default async function handler(req, res) {
           itemMap[name].qty     += parseInt(i.qty || 0);
           itemMap[name].revenue += parseFloat(i.line_total || 0);
         });
-        topItems = Object.values(itemMap).sort((a,b) => b.qty - a.qty).slice(0,10);
+        topItems = Object.values(itemMap).sort((a,b) => b.qty - a.qty).slice(0,20);
       }
 
       // ── Cancellation stats ────────────────────────────────────────────
