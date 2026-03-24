@@ -6,7 +6,6 @@
 // ══════════════════════════════════════════════════════════════════════
 
 import bcrypt from 'bcryptjs';
-import { SignJWT, jwtVerify } from 'jose';
 const SUPABASE_URL  = 'https://hnynvclpvfxzlfjphefj.supabase.co';
 const RESEND_KEY    = process.env.RESEND_API_KEY || '';
 const FROM_EMAIL    = 'onboarding@resend.dev';  // upgrade to branded domain when DNS ready
@@ -383,54 +382,14 @@ async function checkAdminAuth() {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// JWT AUTH LAYER  (Phase 2 — secure token-based auth)
-// ══════════════════════════════════════════════════════════════════════
-// Secret loaded from env var (JWT_SECRET) or settings table as fallback.
-// Tokens are HS256, 8-hour expiry — covers a full cafe shift.
-
-let _jwtSecretCache = null;
-async function getJwtSecret() {
-  if (_jwtSecretCache) return _jwtSecretCache;
-  const envSecret = process.env.JWT_SECRET;
-  if (envSecret) {
-    _jwtSecretCache = new TextEncoder().encode(envSecret);
-    return _jwtSecretCache;
-  }
-  // Fallback: read from settings table (set during security upgrade)
-  try {
-    const r = await supaFetch(
-      `${SUPABASE_URL}/rest/v1/settings?key=eq.jwt_secret&select=value&limit=1`
-    );
-    if (r.ok && r.data && r.data.length > 0) {
-      _jwtSecretCache = new TextEncoder().encode(r.data[0].value);
-      return _jwtSecretCache;
-    }
-  } catch (_) {}
-  throw new Error('JWT_SECRET not configured');
-}
-
+// JWT AUTH LAYER — STUB (jose removed; JWT upgrade pending proper implementation)
+// signToken returns null; verifyToken always returns null → falls back to legacy userId auth.
+// All existing functionality preserved via requireAuth(body) DB lookup.
 async function signToken(userId, role, displayName) {
-  const secret = await getJwtSecret();
-  return new SignJWT({ sub: userId, role, displayName: displayName || '' })
-    .setProtectedHeader({ alg: 'HS256' })
-    .setIssuedAt()
-    .setExpirationTime('8h')
-    .sign(secret);
+  return null; // TODO: implement with jsonwebtoken when JWT upgrade is done
 }
-
 async function verifyToken(token) {
-  if (!token) return null;
-  try {
-    const secret = await getJwtSecret();
-    const { payload } = await jwtVerify(token, secret);
-    return {
-      userId:      payload.sub,
-      role:        payload.role,
-      displayName: payload.displayName || '',
-    };
-  } catch {
-    return null; // expired, tampered, or invalid — treat as unauthenticated
-  }
+  return null; // falls through to legacy body.userId auth
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────
