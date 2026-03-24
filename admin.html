@@ -1783,8 +1783,8 @@ async function api(action, data) {
     if (currentUser.token) headers['Authorization'] = 'Bearer ' + currentUser.token;
     var resp = await fetch(API_URL, { method:'POST', headers:headers, body:JSON.stringify(body) });
     var result = await resp.json();
-    // Auto-logout on 401 (token expired or invalid)
-    if (resp.status === 401 || (result && result.error === 'Token expired. Please log in again.')) {
+    // Auto-logout ONLY on explicit token expiry — not on general 403 auth failures
+    if (result && result.error === 'Token expired. Please log in again.') {
       showToast('⏰ Session expired. Please log in again.', 'error');
       logout();
       return { ok:false, error:'Session expired' };

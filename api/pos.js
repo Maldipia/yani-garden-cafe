@@ -931,7 +931,7 @@ export default async function handler(req, res) {
 
       // Role guard — staff only (all roles permitted for kitchen workflow)
       const userId = String(body.userId || '').trim();
-      if (!userId) return res.status(401).json({ ok: false, error: 'userId is required to update order status' });
+      if (!userId) return res.status(403).json({ ok: false, error: 'userId is required to update order status' });
       const staffR = await supaFetch(
         `${SUPABASE_URL}/rest/v1/staff_users?user_id=eq.${encodeURIComponent(userId)}&active=eq.true&select=role`
       );
@@ -981,7 +981,7 @@ export default async function handler(req, res) {
     // ── deleteOrder ────────────────────────────────────────────────────────
     if (action === 'deleteOrder') {
       const authDO = await checkAdminAuth();
-      if (!authDO.ok) return res.status(401).json({ ok: false, error: authDO.error });
+      if (!authDO.ok) return res.status(403).json({ ok: false, error: authDO.error });
       const orderId = String(body.orderId || '').trim();
       if (!orderId) return res.status(400).json({ ok: false, error: 'orderId is required' });
       if (!isValidOrderId(orderId)) return res.status(400).json({ ok: false, error: 'Invalid orderId format' });
@@ -1003,7 +1003,7 @@ export default async function handler(req, res) {
     // Allowed for KITCHEN, CASHIER, ADMIN, OWNER.
     if (action === 'toggleItemPrepared') {
       const authK = await checkAuth();
-      if (!authK.ok) return res.status(401).json({ ok: false, error: authK.error });
+      if (!authK.ok) return res.status(403).json({ ok: false, error: authK.error });
 
       const itemId  = parseInt(body.itemId, 10);
       const prepared = Boolean(body.prepared);
@@ -1022,7 +1022,7 @@ export default async function handler(req, res) {
     // method can be single (CASH) or split (GCASH+CASH, CARD+GCASH, etc.)
     if (action === 'setPaymentMethod') {
       const authP = await checkAuth(['OWNER','ADMIN','CASHIER']);
-      if (!authP.ok) return res.status(401).json({ ok: false, error: authP.error });
+      if (!authP.ok) return res.status(403).json({ ok: false, error: authP.error });
 
       const orderId = String(body.orderId || '').trim();
       const method  = String(body.method  || '').trim().toUpperCase();
@@ -1057,7 +1057,7 @@ export default async function handler(req, res) {
     // OWNER/ADMIN/CASHIER can apply PWD, SENIOR, PROMO, or CUSTOM discount
     if (action === 'applyDiscount') {
       const authD = await checkAuth(['OWNER','ADMIN','CASHIER']);
-      if (!authD.ok) return res.status(401).json({ ok: false, error: authD.error });
+      if (!authD.ok) return res.status(403).json({ ok: false, error: authD.error });
 
       const orderId   = String(body.orderId || '').trim();
       const type      = String(body.discountType || '').toUpperCase(); // PWD | SENIOR | BOTH | PROMO | CUSTOM
@@ -1131,7 +1131,7 @@ export default async function handler(req, res) {
     // Returns today's sales breakdown by payment method for end-of-day reconciliation
     if (action === 'getShiftSummary') {
       const authSh = await checkAuth(['OWNER','ADMIN','CASHIER']);
-      if (!authSh.ok) return res.status(401).json({ ok: false, error: authSh.error });
+      if (!authSh.ok) return res.status(403).json({ ok: false, error: authSh.error });
 
       // Get timezone from settings (default Asia/Manila)
       const tz = await getSetting('TIMEZONE') || 'Asia/Manila';
@@ -1192,7 +1192,7 @@ export default async function handler(req, res) {
     // ── editOrderItems ─────────────────────────────────────────────────────
     if (action === 'editOrderItems') {
       const authE = await checkAuth(['OWNER','ADMIN','CASHIER']);
-      if (!authE.ok) return res.status(401).json({ ok: false, error: authE.error });
+      if (!authE.ok) return res.status(403).json({ ok: false, error: authE.error });
 
       const orderId = String(body.orderId || '').trim();
       const items   = Array.isArray(body.items) ? body.items : [];
@@ -1403,7 +1403,7 @@ export default async function handler(req, res) {
     // Staff-triggered: resend receipt email for any completed order
     if (action === 'resendReceipt') {
       const authR = await checkAuth(['OWNER','ADMIN','CASHIER']);
-      if (!authR.ok) return res.status(401).json({ ok: false, error: authR.error });
+      if (!authR.ok) return res.status(403).json({ ok: false, error: authR.error });
 
       const orderId   = String(body.orderId   || '').trim();
       const toEmail   = String(body.email     || '').trim().toLowerCase();
@@ -1733,10 +1733,10 @@ export default async function handler(req, res) {
       } else if (currentPin) {
         // Non-admin (or no userId sent) changing their own PIN — verify current PIN
         authorized = await bcrypt.compare(currentPin, targetUser.pin_hash);
-        if (!authorized) return res.status(401).json({ ok: false, error: 'Current PIN is incorrect' });
+        if (!authorized) return res.status(403).json({ ok: false, error: 'Current PIN is incorrect' });
       }
 
-      if (!authorized) return res.status(401).json({ ok: false, error: 'Unauthorized to change this PIN' });
+      if (!authorized) return res.status(403).json({ ok: false, error: 'Unauthorized to change this PIN' });
 
       // Hash new PIN and save
       const newHash = await bcrypt.hash(newPin, 12);
@@ -1848,7 +1848,7 @@ export default async function handler(req, res) {
       const isOnline = !body.userId;
       if (!isOnline) {
         const authR = await checkAdminAuth();
-        if (!authR.ok) return res.status(401).json({ ok: false, error: authR.error });
+        if (!authR.ok) return res.status(403).json({ ok: false, error: authR.error });
       }
 
       const { guestName, guestPhone, guestEmail, tableNo, pax, resDate, resTime,
@@ -1896,7 +1896,7 @@ export default async function handler(req, res) {
     // ── getTables ──────────────────────────────────────────────────────────
     if (action === 'getTables') {
       const authR = await checkAuth();
-      if (!authR.ok) return res.status(401).json({ ok: false, error: authR.error });
+      if (!authR.ok) return res.status(403).json({ ok: false, error: authR.error });
       const r = await supaFetch(
         `${SUPABASE_URL}/rest/v1/cafe_tables?order=table_number.asc&select=table_number,qr_token,table_name,capacity`
       );
@@ -1906,7 +1906,7 @@ export default async function handler(req, res) {
     // ── updateTable ────────────────────────────────────────────────────────
     if (action === 'updateTable') {
       const authR = await checkAdminAuth();
-      if (!authR.ok) return res.status(401).json({ ok: false, error: authR.error });
+      if (!authR.ok) return res.status(403).json({ ok: false, error: authR.error });
       const { tableNo, tableName, capacity } = body;
       if (!tableNo) return res.status(400).json({ ok: false, error: 'tableNo required' });
       const updates = {};
@@ -1923,7 +1923,7 @@ export default async function handler(req, res) {
     // ── deleteTable ────────────────────────────────────────────────────────
     if (action === 'deleteTable') {
       const authR = await checkAdminAuth();
-      if (!authR.ok) return res.status(401).json({ ok: false, error: authR.error });
+      if (!authR.ok) return res.status(403).json({ ok: false, error: authR.error });
       const { tableNo } = body;
       if (!tableNo) return res.status(400).json({ ok: false, error: 'tableNo required' });
       const r = await supaFetch(
@@ -1937,7 +1937,7 @@ export default async function handler(req, res) {
     // ── addTable ───────────────────────────────────────────────────────────
     if (action === 'addTable') {
       const authR = await checkAdminAuth();
-      if (!authR.ok) return res.status(401).json({ ok: false, error: authR.error });
+      if (!authR.ok) return res.status(403).json({ ok: false, error: authR.error });
       const tableNo = parseInt(body.tableNo);
       if (!tableNo || tableNo < 1 || tableNo > 99)
         return res.status(400).json({ ok: false, error: 'Invalid table number (1-99)' });
@@ -1953,7 +1953,7 @@ export default async function handler(req, res) {
     // ── getReservations ────────────────────────────────────────────────────
     if (action === 'getReservations') {
       const authR = await checkAdminAuth();
-      if (!authR.ok) return res.status(401).json({ ok: false, error: authR.error });
+      if (!authR.ok) return res.status(403).json({ ok: false, error: authR.error });
 
       const date = body.date ? String(body.date) : new Date().toISOString().slice(0,10);
       const r = await supaFetch(
@@ -1965,7 +1965,7 @@ export default async function handler(req, res) {
     // ── updateReservation ──────────────────────────────────────────────────
     if (action === 'updateReservation') {
       const authR = await checkAdminAuth();
-      if (!authR.ok) return res.status(401).json({ ok: false, error: authR.error });
+      if (!authR.ok) return res.status(403).json({ ok: false, error: authR.error });
 
       const { resId, status, notes } = body;
       if (!resId) return res.status(400).json({ ok: false, error: 'resId is required' });
@@ -1984,7 +1984,7 @@ export default async function handler(req, res) {
 
     if (action === 'getCustomers') {
       const authGC = await checkAdminAuth();
-      if (!authGC.ok) return res.status(401).json({ ok: false, error: authGC.error });
+      if (!authGC.ok) return res.status(403).json({ ok: false, error: authGC.error });
       const r = await supaFetch(
         `${SUPABASE_URL}/rest/v1/online_orders?order=created_at.asc&limit=500&select=customer_phone,customer_name,created_at,total_amount,order_ref`
       );
@@ -2204,7 +2204,7 @@ export default async function handler(req, res) {
     // Manual trigger: re-queue all unsynced items + ping GAS URL to run immediately
     if (action === 'syncToSheets') {
       const authSync = await checkAdminAuth();
-      if (!authSync.ok) return res.status(401).json({ ok: false, error: authSync.error });
+      if (!authSync.ok) return res.status(403).json({ ok: false, error: authSync.error });
 
       // Count unsynced items
       const countR = await supaFetch(
