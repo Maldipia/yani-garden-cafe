@@ -1935,13 +1935,17 @@ function renderStats() {
   }).length;
 
   todayOrders.forEach(function(o) {
-    if (o.status === 'COMPLETED' || o.status === 'READY' || o.status === 'PREPARING') {
-      if (o.status === 'COMPLETED') completed++;
+    // Sales = COMPLETED orders only (not READY/PREPARING — not paid yet)
+    // Use discounted_total when available so discounts are reflected correctly
+    if (o.status === 'COMPLETED') {
+      completed++;
       var orderTotal = 0;
-      if (o.subtotal && typeof o.subtotal === 'number') {
-        orderTotal = o.subtotal + (o.serviceCharge || 0);
+      if (o.discountedTotal && typeof o.discountedTotal === 'number') {
+        orderTotal = o.discountedTotal;          // discounted price (correct)
       } else if (o.total && typeof o.total === 'number') {
-        orderTotal = o.total;
+        orderTotal = o.total;                    // full price fallback
+      } else if (o.subtotal && typeof o.subtotal === 'number') {
+        orderTotal = o.subtotal + (o.serviceCharge || 0);
       } else if (o.items && o.items.length) {
         o.items.forEach(function(it){ orderTotal += (it.price || 0) * (it.qty || 1) });
       }
@@ -1950,7 +1954,7 @@ function renderStats() {
   });
 
   document.getElementById('statSales').textContent = '₱' + totalSales.toLocaleString();
-  document.getElementById('statOrders').textContent = todayOrders.length;
+  document.getElementById('statOrders').textContent = completed; // COMPLETED orders only
   document.getElementById('statActive').textContent = active;
 
   // Count pending payments across all orders

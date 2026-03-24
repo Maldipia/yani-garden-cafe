@@ -2023,7 +2023,7 @@ export default async function handler(req, res) {
       // ── Daily revenue last 30 days ─────────────────────────────────────
       const thirtyAgo = new Date(Date.now() - 30*24*3600*1000).toISOString();
       const ordersR = await fetch(
-        `${BASE}/dine_in_orders?status=eq.COMPLETED&is_test=eq.false&is_deleted=eq.false&created_at=gte.${thirtyAgo}&select=created_at,total,order_type`,
+        `${BASE}/dine_in_orders?status=eq.COMPLETED&is_test=eq.false&is_deleted=eq.false&created_at=gte.${thirtyAgo}&select=created_at,total,discounted_total,order_type`,
         { headers: H }
       );
       const orders = ordersR.ok ? (await ordersR.json()) : [];
@@ -2031,18 +2031,22 @@ export default async function handler(req, res) {
       // Daily revenue map
       const dailyMap = {};
       orders.forEach(o => {
-        const day = o.created_at.slice(0,10);
+        // Use PH date (UTC+8) for day grouping
+        const phDate = new Date(new Date(o.created_at).getTime() + phOffset);
+        const day = phDate.toISOString().slice(0,10);
         if (!dailyMap[day]) dailyMap[day] = { revenue:0, count:0 };
-        dailyMap[day].revenue += parseFloat(o.total || 0);
+        // Use discounted_total when available (reflects actual amount paid)
+        dailyMap[day].revenue += parseFloat(o.discounted_total || o.total || 0);
         dailyMap[day].count   += 1;
       });
       const daily = Object.entries(dailyMap)
         .map(([day,v]) => ({ day, revenue: Math.round(v.revenue*100)/100, count: v.count }))
         .sort((a,b) => a.day.localeCompare(b.day));
 
-      // Today vs yesterday
-      const todayStr     = new Date().toISOString().slice(0,10);
-      const yesterdayStr = new Date(Date.now()-86400000).toISOString().slice(0,10);
+      // Today vs yesterday — use Philippines time (UTC+8)
+      const phOffset = 8 * 3600000;
+      const todayStr     = new Date(Date.now() + phOffset).toISOString().slice(0,10);
+      const yesterdayStr = new Date(Date.now() + phOffset - 86400000).toISOString().slice(0,10);
       const todayData     = dailyMap[todayStr]     || { revenue:0, count:0 };
       const yesterdayData = dailyMap[yesterdayStr] || { revenue:0, count:0 };
 
@@ -2053,10 +2057,14 @@ export default async function handler(req, res) {
 
       // ── Hourly distribution (today) ────────────────────────────────────
       const hourly = Array.from({length:24}, (_,i) => ({ hour:i, count:0, revenue:0 }));
-      orders.filter(o => o.created_at.slice(0,10) === todayStr).forEach(o => {
-        const h = parseInt(o.created_at.slice(11,13));
+      orders.filter(o => {
+        const phDate = new Date(new Date(o.created_at).getTime() + phOffset);
+        return phDate.toISOString().slice(0,10) === todayStr;
+      }).forEach(o => {
+        const phDate = new Date(new Date(o.created_at).getTime() + phOffset);
+        const h = phDate.getUTCHours(); // hour in PH time
         hourly[h].count   += 1;
-        hourly[h].revenue += parseFloat(o.total || 0);
+        hourly[h].revenue += parseFloat(o.discounted_total || o.total || 0);
       });
 
       // ── Order type split (last 30d) ───────────────────────────────────
