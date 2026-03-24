@@ -1781,10 +1781,14 @@ async function loadOrders() {
   window._knownOrderIds = {};
   freshOrders.forEach(function(o) { window._knownOrderIds[o.orderId] = true; });
 
+  // Change detection — only re-render if order data actually changed
+  var freshHash = freshOrders.map(function(o){ return o.orderId+':'+o.status+':'+(o.paymentStatus||''); }).join('|');
+  var changed = freshHash !== window._lastOrdersHash;
+  window._lastOrdersHash = freshHash;
+
   allOrders = freshOrders;
 
-  // Apply local status overrides so polling never reverts an optimistic UI update
-  // (e.g. cancel that hasn't synced back from GAS yet). Expires after 90s.
+  // Apply local status overrides
   var now = Date.now();
   Object.keys(_statusOverrides).forEach(function(oid) {
     var ov = _statusOverrides[oid];
@@ -1795,7 +1799,7 @@ async function loadOrders() {
 
   renderStats();
   renderFilters();
-  renderOrders();
+  if (changed) renderOrders(); // Only re-render cards if something changed
 }
 
 // Load menu into cache for Edit Order modal (called once after login)
