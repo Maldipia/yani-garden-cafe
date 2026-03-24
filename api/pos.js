@@ -2029,6 +2029,7 @@ export default async function handler(req, res) {
       const orders = ordersR.ok ? (await ordersR.json()) : [];
 
       // Daily revenue map
+      const phOffset = 8 * 3600000; // UTC+8 Philippines time
       const dailyMap = {};
       orders.forEach(o => {
         // Use PH date (UTC+8) for day grouping
@@ -2044,7 +2045,6 @@ export default async function handler(req, res) {
         .sort((a,b) => a.day.localeCompare(b.day));
 
       // Today vs yesterday — use Philippines time (UTC+8)
-      const phOffset = 8 * 3600000;
       const todayStr     = new Date(Date.now() + phOffset).toISOString().slice(0,10);
       const yesterdayStr = new Date(Date.now() + phOffset - 86400000).toISOString().slice(0,10);
       const todayData     = dailyMap[todayStr]     || { revenue:0, count:0 };
