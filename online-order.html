@@ -536,7 +536,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
         </div>
       </div>
       <div class="info-box" style="margin-top:10px">
-        🎁 <strong>Free delivery</strong> for orders ₱500+ (Zone 1 & 2 only)
+        
       </div>
     </div>
 
@@ -904,7 +904,6 @@ function selectDeliveryType(type) {
 
 function selectZone(zone, fee) {
   selectedZone = zone;
-  // Free delivery for Zone 1 & 2 if subtotal >= 500
   var cartSubtotal = cart.reduce(function(s,c){ return s + (c.unitPrice * c.quantity); }, 0);
   if ((zone === 1 || zone === 2) && cartSubtotal >= 500) {
     selectedDeliveryFee = 0;
@@ -924,9 +923,8 @@ function updateCartSummaryFee() {
   var feeRow = document.getElementById('cartDeliveryFeeRow');
   if (!feeRow) return;
   if (selectedDeliveryType === 'YANI' && selectedZone) {
-    var label = selectedDeliveryFee === 0 ? '🎁 Delivery (FREE!)' : '🚚 Delivery (Zone ' + selectedZone + ')';
-    var feeText = selectedDeliveryFee === 0 ? '₱0' : '₱' + selectedDeliveryFee;
-    if (selectedZone === 4) { label = '🚚 Delivery (Zone 4)'; feeText = 'Custom'; }
+    var label = '🚚 Delivery (Zone ' + selectedZone + ')';
+    var feeText = selectedZone === 4 ? 'Custom' : '₱' + selectedDeliveryFee;
     feeRow.innerHTML = '<span>' + label + '</span><span style="color:var(--forest);font-weight:700">' + feeText + '</span>';
     feeRow.style.display = 'flex';
     // Update total
