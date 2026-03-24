@@ -4224,23 +4224,54 @@ function renderOnlineOrders() {
       html += '<div style="color:var(--timber);margin-top:2px">📦 Own courier: ' + esc(o.courier_type) + '</div>';
     }
     html += '</div>';
+    // Special instructions
+    if (o.special_instructions) {
+      html += '<div style="margin:0 16px 8px;padding:8px 10px;background:#fff8f0;border-radius:6px;border:1px solid #fed7aa;font-size:.78rem;color:#92400e">'
+        + '📝 <strong>Note:</strong> ' + esc(o.special_instructions) + '</div>';
+    }
     // Items
     if (o.items && o.items.length) {
       html += '<div class="oc-items">';
       o.items.forEach(function(item) {
+        var itemAddons = [];
+        if (item.addons) {
+          try { itemAddons = typeof item.addons === 'string' ? JSON.parse(item.addons) : item.addons; } catch(e){}
+        }
         html += '<div class="oc-item">';
         html += '<div class="oc-item-qty">' + esc(String(item.quantity || 1)) + '</div>';
         html += '<div class="oc-item-info">';
         html += '<div class="oc-item-name">' + esc(item.item_name || item.name || '') + '</div>';
         if (item.size && item.size !== 'REGULAR') html += '<div class="oc-item-opts">' + esc(item.size) + '</div>';
+        if (itemAddons && itemAddons.length) {
+          html += '<div style="margin-top:3px;display:flex;flex-wrap:wrap;gap:3px">';
+          itemAddons.forEach(function(a) {
+            html += '<span style="background:#dcfce7;color:#14532d;border:1px solid #86efac;border-radius:5px;padding:1px 7px;font-size:.7rem;font-weight:700">➕ ' + esc(a.name) + ' +₱' + parseFloat(a.price||0).toFixed(0) + '</span>';
+          });
+          html += '</div>';
+        }
         html += '</div>';
         html += '<div style="font-size:.82rem;font-weight:700;color:var(--terra)">₱' + Number(item.subtotal || (item.unit_price * item.quantity) || 0).toFixed(0) + '</div>';
         html += '</div>';
       });
       html += '</div>';
     }
-    // Total
-    html += '<div class="oc-total">Total: ₱' + Number(o.total_amount || 0).toFixed(0) + '</div>';
+    // Price breakdown
+    html += '<div class="oc-total" style="padding:10px 16px;border-top:1px solid var(--mist)">';
+    var foodSubtotal = Number(o.subtotal || 0);
+    var delivFee     = Number(o.delivery_fee || 0);
+    var grandTotal   = Number(o.total_amount || 0);
+    if (delivFee > 0) {
+      html += '<div style="display:flex;justify-content:space-between;font-size:.8rem;color:var(--timber);margin-bottom:4px">'
+        + '<span>Food subtotal</span><span>₱' + foodSubtotal.toFixed(0) + '</span></div>';
+      html += '<div style="display:flex;justify-content:space-between;font-size:.8rem;color:var(--timber);margin-bottom:6px">'
+        + '<span>🚚 Delivery (Zone ' + (o.delivery_zone||'') + ')</span><span>₱' + delivFee.toFixed(0) + '</span></div>';
+    }
+    html += '<div style="display:flex;justify-content:space-between;font-size:.9rem;font-weight:800;color:var(--forest-deep)">'
+      + '<span>Total</span><span>₱' + grandTotal.toFixed(0) + '</span></div>';
+    if (o.payment_method) {
+      html += '<div style="font-size:.72rem;color:var(--timber);margin-top:4px">💳 ' + esc(o.payment_method.toUpperCase()) + '</div>';
+    }
+    html += '</div>';
     // Payment proof
     if (o.payment_proof_url) {
       html += '<div style="padding:6px 16px 10px">';
