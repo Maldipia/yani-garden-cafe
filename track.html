@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Track Your Order — YANI Garden Cafe</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --g1:#1a2e1c;--g2:#2d4a30;--g3:#3d6142;--g4:#5a7d5f;--g5:#8aab8e;
+  --g6:#c2d4c4;--g7:#e8f0e9;--g8:#f4f8f4;
+  --amber:#c87941;--cream:#faf7f2;--ink:#1a2018;--muted:#6b7c6d;
+  --border:#d4e0d5;--white:#ffffff;
+  --font-d:'Playfair Display',Georgia,serif;
+  --font-b:'DM Sans',sans-serif;
+  --r:14px;--r-sm:10px;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{font-family:var(--font-b);background:var(--cream);color:var(--ink);min-height:100dvh}
+
+/* Header */
+.hdr{background:var(--g1);padding:0 20px;position:sticky;top:0;z-index:100;border-bottom:1px solid rgba(255,255,255,.07)}
+.hdr-inner{max-width:520px;margin:0 auto;display:flex;align-items:center;gap:10px;height:56px}
+.hdr-logo{width:34px;height:34px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,.15)}
+.hdr-name{font-family:var(--font-d);font-size:1rem;font-weight:700;color:var(--white)}
+.hdr-tag{font-size:.62rem;color:#8aab8e;margin-top:1px}
+
+/* Main */
+.main{max-width:520px;margin:0 auto;padding:24px 16px 80px}
+
+/* Search card */
+.search-card{background:var(--white);border-radius:var(--r);border:1.5px solid var(--border);padding:24px;margin-bottom:20px}
+.search-title{font-family:var(--font-d);font-size:1.3rem;font-weight:700;color:var(--g1);margin-bottom:4px}
+.search-sub{font-size:.8rem;color:var(--muted);margin-bottom:18px}
+.search-row{display:flex;gap:8px}
+.search-input{
+  flex:1;padding:12px 14px;border:1.5px solid var(--border);
+  border-radius:var(--r-sm);font-family:var(--font-b);font-size:.92rem;
+  background:var(--cream);color:var(--ink);outline:none;
+  text-transform:uppercase;letter-spacing:.05em;
+  transition:border .18s;
+}
+.search-input:focus{border-color:var(--g3);background:var(--white)}
+.search-input::placeholder{text-transform:none;letter-spacing:0;color:var(--muted)}
+.search-btn{
+  padding:12px 18px;background:var(--g2);color:var(--white);
+  border:none;border-radius:var(--r-sm);font-family:var(--font-b);
+  font-size:.88rem;font-weight:700;cursor:pointer;white-space:nowrap;
+  transition:background .18s;
+}
+.search-btn:active{background:var(--g1)}
+.search-btn:disabled{background:var(--g5);cursor:not-allowed}
+
+/* Error */
+.error-box{
+  background:#fff5f5;border:1.5px solid #fca5a5;border-radius:var(--r-sm);
+  padding:12px 14px;font-size:.82rem;color:#991b1b;margin-top:12px;
+  display:none;
+}
+
+/* Order card */
+.order-card{background:var(--white);border-radius:var(--r);border:1.5px solid var(--border);overflow:hidden;display:none}
+
+/* Status banner */
+.status-banner{padding:16px 20px;display:flex;align-items:center;gap:12px}
+.status-icon{font-size:1.8rem;flex-shrink:0}
+.status-ref{font-family:var(--font-d);font-size:1.1rem;font-weight:700;color:var(--ink)}
+.status-badge{
+  display:inline-block;font-size:.72rem;font-weight:700;
+  border-radius:20px;padding:3px 10px;margin-top:3px;
+}
+
+/* Status timeline */
+.timeline{padding:16px 20px;border-top:1px solid var(--border)}
+.tl-step{display:flex;gap:12px;align-items:flex-start;margin-bottom:0}
+.tl-left{display:flex;flex-direction:column;align-items:center;width:28px;flex-shrink:0}
+.tl-dot{
+  width:22px;height:22px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:.65rem;font-weight:700;flex-shrink:0;
+  border:2px solid var(--g6);background:var(--g8);color:var(--muted);
+}
+.tl-dot.done{background:var(--g2);border-color:var(--g2);color:var(--white)}
+.tl-dot.active{background:var(--amber);border-color:var(--amber);color:var(--white);animation:pulse 1.8s infinite}
+.tl-dot.cancelled{background:#ef4444;border-color:#ef4444;color:var(--white)}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(200,121,65,.4)}50%{box-shadow:0 0 0 6px rgba(200,121,65,0)}}
+.tl-line{width:2px;flex:1;min-height:24px;background:var(--border);margin:2px 0}
+.tl-line.done{background:var(--g3)}
+.tl-step:last-child .tl-line{display:none}
+.tl-content{padding:1px 0 24px;flex:1}
+.tl-step:last-child .tl-content{padding-bottom:0}
+.tl-step-name{font-size:.84rem;font-weight:700;color:var(--ink);margin-bottom:2px}
+.tl-step-desc{font-size:.72rem;color:var(--muted);line-height:1.5}
+.tl-step.inactive .tl-step-name{color:var(--muted);font-weight:500}
+
+/* Order details */
+.order-details{padding:16px 20px;border-top:1px solid var(--border)}
+.detail-row{display:flex;justify-content:space-between;align-items:flex-start;padding:6px 0;font-size:.82rem;border-bottom:1px dashed var(--border)}
+.detail-row:last-child{border-bottom:none}
+.detail-label{color:var(--muted);flex-shrink:0;margin-right:12px}
+.detail-val{font-weight:600;text-align:right}
+
+/* Items */
+.items-section{padding:0 20px 16px;border-top:1px solid var(--border)}
+.items-title{font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin:12px 0 8px}
+.item-row{display:flex;justify-content:space-between;align-items:flex-start;padding:7px 0;border-bottom:1px solid var(--g8);font-size:.82rem}
+.item-row:last-child{border-bottom:none}
+.item-qty{min-width:22px;height:22px;border-radius:5px;background:var(--g8);display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;color:var(--g3);margin-right:8px;flex-shrink:0}
+.item-name{flex:1;font-weight:600;line-height:1.3}
+.item-opts{font-size:.68rem;color:var(--muted);margin-top:2px}
+.item-addon{font-size:.68rem;color:var(--g3);font-weight:600;margin-top:2px}
+.item-price{font-weight:700;color:var(--amber);white-space:nowrap;margin-left:8px}
+
+/* Total section */
+.total-section{padding:12px 20px;background:var(--g8);border-top:1px solid var(--border)}
+.total-row{display:flex;justify-content:space-between;font-size:.8rem;padding:3px 0;color:var(--muted)}
+.total-row.grand{font-size:.92rem;font-weight:800;color:var(--g1);padding-top:8px;border-top:1px solid var(--border);margin-top:4px}
+
+/* Contact */
+.contact-strip{background:var(--g7);border-top:1px solid var(--g6);padding:12px 20px;font-size:.75rem;color:var(--g3);text-align:center}
+.contact-strip a{color:var(--g2);font-weight:700;text-decoration:none}
+
+/* Loading */
+.loading{text-align:center;padding:32px;color:var(--muted);font-size:.85rem;display:none}
+.spinner{width:32px;height:32px;border:3px solid var(--g7);border-top-color:var(--g3);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 10px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Payment status */
+.payment-box{
+  margin:0 20px 16px;padding:12px 14px;border-radius:var(--r-sm);
+  font-size:.78rem;line-height:1.6;
+}
+.payment-box.submitted{background:#fef9c3;border:1.5px solid #fde047;color:#713f12}
+.payment-box.verified{background:#dcfce7;border:1.5px solid #86efac;color:#14532d}
+.payment-box.rejected{background:#fee2e2;border:1.5px solid #fca5a5;color:#991b1b}
+.payment-box.pending{background:#f3f4f6;border:1.5px solid var(--border);color:var(--muted)}
+
+/* Auto-refresh badge */
+.refresh-badge{
+  display:inline-flex;align-items:center;gap:5px;
+  font-size:.65rem;font-weight:600;color:var(--g4);
+  background:var(--g7);border:1px solid var(--g6);
+  border-radius:20px;padding:3px 10px;margin-top:12px;
+}
+.refresh-dot{width:6px;height:6px;border-radius:50%;background:var(--g3);animation:blink 1.8s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-inner">
+    <img class="hdr-logo" src="/images/logo.png" alt="YANI" onerror="this.style.display='none'">
+    <div>
+      <div class="hdr-name">YANI Garden Cafe</div>
+      <div class="hdr-tag">Order Tracker</div>
+    </div>
+  </div>
+</div>
+
+<div class="main">
+
+  <div class="search-card">
+    <div class="search-title">Track Your Order</div>
+    <div class="search-sub">Enter your order reference number to see the current status.</div>
+    <div class="search-row">
+      <input class="search-input" id="refInput" type="text" placeholder="e.g. YANI-OL-001"
+        maxlength="20" autocomplete="off" autocapitalize="characters"
+        onkeydown="if(event.key==='Enter')searchOrder()">
+      <button class="search-btn" id="searchBtn" onclick="searchOrder()">Track</button>
+    </div>
+    <div class="error-box" id="errorBox"></div>
+    <div style="margin-top:14px;text-align:center" id="refreshRow" style="display:none">
+      <span class="refresh-badge" id="refreshBadge"><span class="refresh-dot"></span>Auto-refreshing every 10s</span>
+    </div>
+  </div>
+
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    Looking up your order...
+  </div>
+
+  <div class="order-card" id="orderCard">
+    <!-- Filled by JS -->
+  </div>
+
+</div>
+
+<script>
+const API = '/api/online-order';
+var pollTimer = null;
+var currentRef = '';
+
+// ── Pre-fill from URL param ─────────────────────────────
+(function() {
+  var params = new URLSearchParams(window.location.search);
+  var ref = params.get('ref') || params.get('order') || params.get('id');
+  if (ref) {
+    document.getElementById('refInput').value = ref.toUpperCase();
+    searchOrder();
+  }
+})();
+
+async function searchOrder() {
+  var raw = document.getElementById('refInput').value.trim().toUpperCase();
+  if (!raw) { showError('Please enter your order reference number.'); return; }
+  if (!raw.startsWith('YANI-OL-')) {
+    if (/^\d+$/.test(raw)) raw = 'YANI-OL-' + raw;
+    else { showError('Reference should look like YANI-OL-001. Check your confirmation.'); return; }
+  }
+
+  clearError();
+  showLoading(true);
+  document.getElementById('searchBtn').disabled = true;
+
+  try {
+    var resp = await fetch(API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'getOrderStatus', orderRef: raw })
+    });
+    var data = await resp.json();
+    showLoading(false);
+    document.getElementById('searchBtn').disabled = false;
+
+    if (!data.ok || !data.order) {
+      showError('Order not found. Please check the reference number.');
+      hideOrderCard();
+      return;
+    }
+
+    currentRef = raw;
+    renderOrder(data.order);
+
+    // Start auto-polling for active orders
+    if (pollTimer) clearInterval(pollTimer);
+    document.getElementById('refreshRow').style.display = '';
+    document.getElementById('refreshBadge').style.display = '';
+    if (!['COMPLETED','CANCELLED'].includes(data.order.status)) {
+      pollTimer = setInterval(function() { silentRefresh(); }, 10000);
+    } else {
+      document.getElementById('refreshBadge').style.display = 'none';
+    }
+
+    // Update URL without reload
+    try { history.replaceState(null, '', '?ref=' + raw); } catch(e) {}
+
+  } catch(e) {
+    showLoading(false);
+    document.getElementById('searchBtn').disabled = false;
+    showError('Connection error. Please try again.');
+  }
+}
+
+async function silentRefresh() {
+  if (!currentRef) return;
+  try {
+    var resp = await fetch(API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'getOrderStatus', orderRef: currentRef })
+    });
+    var data = await resp.json();
+    if (data.ok && data.order) {
+      renderOrder(data.order);
+      if (['COMPLETED','CANCELLED'].includes(data.order.status)) {
+        clearInterval(pollTimer);
+        document.getElementById('refreshBadge').style.display = 'none';
+      }
+    }
+  } catch(e) {}
+}
+
+var STATUS_CONFIG = {
+  PENDING:   { label: 'Awaiting Payment',  color: '#FEF3C7', text: '#92400E', icon: '⏳' },
+  CONFIRMED: { label: 'Payment Confirmed', color: '#D1FAE5', text: '#065F46', icon: '✅' },
+  PREPARING: { label: 'Being Prepared',    color: '#EDE9FE', text: '#6D28D9', icon: '👨‍🍳' },
+  READY:     { label: 'Ready for Pickup',  color: '#D1FAE5', text: '#065F46', icon: '🎉' },
+  COMPLETED: { label: 'Completed',         color: '#F3F4F6', text: '#374151', icon: '🙏' },
+  CANCELLED: { label: 'Cancelled',         color: '#FEE2E2', text: '#991B1B', icon: '❌' },
+};
+
+var STEPS = [
+  { key: 'PENDING',   name: 'Order Received',      desc: 'We\'ve received your order. Awaiting payment verification.' },
+  { key: 'CONFIRMED', name: 'Payment Verified',    desc: 'Your payment has been confirmed. Preparing your order soon.' },
+  { key: 'PREPARING', name: 'Being Prepared',      desc: 'Your order is being made in our kitchen.' },
+  { key: 'READY',     name: 'Ready for Delivery',  desc: 'Your order is ready and on its way!' },
+  { key: 'COMPLETED', name: 'Delivered',           desc: 'Order complete. Thank you for your order!' },
+];
+
+var STATUS_ORDER = { PENDING:0, CONFIRMED:1, PREPARING:2, READY:3, COMPLETED:4, CANCELLED:5 };
+
+function renderOrder(o) {
+  var cfg = STATUS_CONFIG[o.status] || STATUS_CONFIG.PENDING;
+  var statusIdx = STATUS_ORDER[o.status] || 0;
+  var isCancelled = o.status === 'CANCELLED';
+
+  // Format time
+  var timeStr = '';
+  try {
+    var d = new Date(o.created_at);
+    timeStr = d.toLocaleString('en-PH', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit', hour12:true, timeZone:'Asia/Manila' });
+  } catch(e) {}
+
+  var html = '';
+
+  // Status banner
+  html += '<div class="status-banner" style="background:' + cfg.color + '">';
+  html += '<div class="status-icon">' + cfg.icon + '</div>';
+  html += '<div>';
+  html += '<div class="status-ref">' + esc(o.order_ref) + '</div>';
+  html += '<span class="status-badge" style="background:rgba(0,0,0,.08);color:' + cfg.text + '">' + esc(cfg.label) + '</span>';
+  html += '</div></div>';
+
+  // Payment status box
+  var ps = (o.payment_status || '').toLowerCase();
+  var psMap = {
+    submitted: { cls:'submitted', text:'📸 Payment proof received — we\'re verifying your payment. Usually within 30 minutes.' },
+    verified:  { cls:'verified',  text:'✅ Payment verified.' },
+    rejected:  { cls:'rejected',  text:'❌ Payment was rejected. Please contact us at 0967-4000-040.' },
+    pending:   { cls:'pending',   text:'⏳ Awaiting your payment. Please send payment and upload your screenshot.' },
+  };
+  var psInfo = psMap[ps] || psMap.pending;
+  html += '<div class="payment-box ' + psInfo.cls + '" style="margin-top:0;border-radius:0">' + psInfo.text + '</div>';
+
+  // Timeline
+  if (!isCancelled) {
+    html += '<div class="timeline">';
+    STEPS.forEach(function(step, i) {
+      var isDone   = i < statusIdx;
+      var isActive = i === statusIdx;
+      var dotClass = isDone ? 'done' : (isActive ? 'active' : '');
+      var stepClass = (!isDone && !isActive) ? 'inactive' : '';
+      html += '<div class="tl-step ' + stepClass + '">';
+      html += '<div class="tl-left">';
+      html += '<div class="tl-dot ' + dotClass + '">' + (isDone ? '✓' : (i+1)) + '</div>';
+      html += '<div class="tl-line ' + (isDone ? 'done' : '') + '"></div>';
+      html += '</div>';
+      html += '<div class="tl-content">';
+      html += '<div class="tl-step-name">' + esc(step.name) + '</div>';
+      if (isDone || isActive) html += '<div class="tl-step-desc">' + esc(step.desc) + '</div>';
+      html += '</div></div>';
+    });
+    html += '</div>';
+  } else {
+    html += '<div style="padding:16px 20px;border-top:1px solid var(--border);font-size:.82rem;color:#991b1b">This order was cancelled. If you have questions, please contact us at <strong>0967-4000-040</strong>.</div>';
+  }
+
+  // Order details
+  html += '<div class="order-details">';
+  html += '<div class="detail-row"><span class="detail-label">Order Ref</span><span class="detail-val">' + esc(o.order_ref) + '</span></div>';
+  html += '<div class="detail-row"><span class="detail-label">Name</span><span class="detail-val">' + esc(o.customer_name) + '</span></div>';
+  if (o.delivery_address) html += '<div class="detail-row"><span class="detail-label">Address</span><span class="detail-val" style="max-width:200px">' + esc(o.delivery_address) + '</span></div>';
+  var courierLabel = o.courier_type === 'YANI_DELIVERY'
+    ? '🛵 YANI Delivery · Zone ' + (o.delivery_zone || '?')
+    : '📦 Own Courier (' + esc(o.courier_type || '') + ')';
+  html += '<div class="detail-row"><span class="detail-label">Courier</span><span class="detail-val">' + courierLabel + '</span></div>';
+  html += '<div class="detail-row"><span class="detail-label">Payment</span><span class="detail-val">' + esc((o.payment_method || '').toUpperCase()) + '</span></div>';
+  html += '<div class="detail-row"><span class="detail-label">Placed</span><span class="detail-val">' + esc(timeStr) + '</span></div>';
+  if (o.special_instructions) html += '<div class="detail-row"><span class="detail-label">Notes</span><span class="detail-val" style="max-width:200px">' + esc(o.special_instructions) + '</span></div>';
+  html += '</div>';
+
+  // Items (from order data if available)
+  if (o.items && o.items.length) {
+    html += '<div class="items-section">';
+    html += '<div class="items-title">Your Items</div>';
+    o.items.forEach(function(item) {
+      var addons = [];
+      try { addons = typeof item.addons === 'string' ? JSON.parse(item.addons) : (item.addons || []); } catch(e) {}
+      var opts = item.size && item.size !== 'REGULAR' ? item.size : '';
+      html += '<div class="item-row">';
+      html += '<div class="item-qty">' + (item.quantity || 1) + '</div>';
+      html += '<div style="flex:1">';
+      html += '<div class="item-name">' + esc(item.item_name || item.name || '') + '</div>';
+      if (opts) html += '<div class="item-opts">' + esc(opts) + '</div>';
+      if (addons.length) html += '<div class="item-addon">' + addons.map(function(a){return '➕'+esc(a.name)+' +₱'+parseFloat(a.price||0).toFixed(0);}).join(' ') + '</div>';
+      html += '</div>';
+      html += '<div class="item-price">₱' + parseFloat(item.subtotal || (item.unit_price * item.quantity) || 0).toFixed(0) + '</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+
+  // Totals
+  html += '<div class="total-section">';
+  if (parseFloat(o.delivery_fee || 0) > 0) {
+    html += '<div class="total-row"><span>Food subtotal</span><span>₱' + parseFloat(o.subtotal || 0).toFixed(0) + '</span></div>';
+    html += '<div class="total-row"><span>🚚 Delivery (Zone ' + (o.delivery_zone || '') + ')</span><span>₱' + parseFloat(o.delivery_fee).toFixed(0) + '</span></div>';
+  }
+  html += '<div class="total-row grand"><span>Total</span><span>₱' + parseFloat(o.total_amount || o.subtotal || 0).toFixed(0) + '</span></div>';
+  html += '</div>';
+
+  // Contact strip
+  html += '<div class="contact-strip">Questions? Call/text <a href="tel:09674000040">0967-4000-040</a> · <a href="https://facebook.com/YANIgardencafe" target="_blank">Facebook</a></div>';
+
+  var card = document.getElementById('orderCard');
+  card.innerHTML = html;
+  card.style.display = 'block';
+}
+
+function hideOrderCard() {
+  document.getElementById('orderCard').style.display = 'none';
+  document.getElementById('refreshRow').style.display = 'none';
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  currentRef = '';
+}
+
+function showLoading(v) { document.getElementById('loading').style.display = v ? 'block' : 'none'; }
+function showError(msg) { var e = document.getElementById('errorBox'); e.textContent = msg; e.style.display = 'block'; }
+function clearError() { document.getElementById('errorBox').style.display = 'none'; }
+
+function esc(str) {
+  if (typeof str !== 'string') return String(str || '');
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+</script>
+</body>
+</html>

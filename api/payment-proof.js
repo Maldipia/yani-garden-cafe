@@ -5,8 +5,11 @@ const SUPABASE_URL = 'https://hnynvclpvfxzlfjphefj.supabase.co';
 const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY;
 
 export default async function handler(req, res) {
-  // CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  // CORS — restricted to known domains
+  const _origin = req.headers.origin || '';
+  const _allowed = ['https://yanigardencafe.com','https://admin.yanigardencafe.com','https://pos.yanigardencafe.com'];
+  if (_allowed.includes(_origin)) res.setHeader('Access-Control-Allow-Origin', _origin);
+  else if (!_origin) res.setHeader('Access-Control-Allow-Origin', 'https://yanigardencafe.com');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   const { id, userId } = req.query;

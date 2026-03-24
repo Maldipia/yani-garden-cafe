@@ -78,6 +78,14 @@
     {
       "source": "/api/payment-proof",
       "destination": "/api/payment-proof"
+    },
+    {
+      "source": "/track",
+      "destination": "/track.html"
+    },
+    {
+      "source": "/track-order",
+      "destination": "/track.html"
     }
   ],
   "headers": [

@@ -1782,6 +1782,22 @@ function setOrderType(type) {
 // PLACE ORDER
 // ══════════════════════════════════════════════════════════
 async function placeOrder() {
+  // ── Duplicate order prevention ──────────────────────────
+  var _dupKey = 'lastOrder_T' + (state.tableNo || '1');
+  var _dupRaw = sessionStorage.getItem(_dupKey);
+  if (_dupRaw) {
+    try {
+      var _dup = JSON.parse(_dupRaw);
+      var _age = Date.now() - _dup.ts;
+      if (_age < 2 * 60 * 1000) { // 2 minutes
+        var _mins = Math.ceil((2 * 60 * 1000 - _age) / 1000);
+        toast('⚠️ You already placed an order (' + _dup.orderId + '). Please wait ' + _mins + 's or scroll down to track it.');
+        return;
+      }
+    } catch(e) {}
+  }
+  // ── End duplicate prevention ─────────────────────────────
+
   var btn = document.getElementById('placeOrderBtn');
   btn.disabled = true;
   btn.textContent = 'Placing Order...';
@@ -1816,6 +1832,11 @@ async function placeOrder() {
     state.orderId = result.orderId || result.ORDER_ID || 'YANI-???';
     state.orderTotal = result.total || total;
     state.orderStatus = 'NEW';
+    // Store for duplicate prevention
+    try {
+      sessionStorage.setItem('lastOrder_T' + (state.tableNo || '1'),
+        JSON.stringify({ orderId: state.orderId, ts: Date.now() }));
+    } catch(e) {}
     closePage('checkout');
     openPage('receipt'); // Go to receipt question first
     renderReceiptPage();

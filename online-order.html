@@ -780,6 +780,9 @@ textarea.form-input{resize:none;min-height:72px}
         </div>
       </div>
 
+      <div class="contact-box" style="margin-bottom:10px">
+        🔍 <a href="/track" id="trackLink" style="color:var(--g2);font-weight:700">Track this order</a> anytime using your reference number.
+      </div>
       <div class="contact-box">
         📞 Questions? Call/text <a href="tel:09674000040">0967-4000-040</a> · Message us on <a href="https://facebook.com/YANIgardencafe" target="_blank">Facebook</a>
       </div>
@@ -1435,6 +1438,9 @@ async function submitOrder() {
     });
     hideLoading();
     document.getElementById('successRef').textContent = orderRef;
+    // Update track link with actual order ref
+    var tl = document.getElementById('trackLink');
+    if (tl) tl.href = '/track?ref=' + encodeURIComponent(orderRef);
     // Update success delivery note
     var note = selectedDeliveryType==='YANI'
       ? '<strong>Delivery</strong> — Your rider will bring it to you.'
@@ -1450,6 +1456,9 @@ async function submitOrder() {
 
 // ════ RESET ════
 function startNewOrder() {
+  // Reset track link
+  var tl = document.getElementById('trackLink');
+  if (tl) tl.href = '/track';
   cart=[]; proofImageData=null; proofMimeType=null; proofFilename=null; pendingOrderRef=null;
   selectedZone=null; selectedDeliveryFee=0; selectedDeliveryType='YANI';
   ['custName','custPhone','custEmail','custAddress','custNotes'].forEach(function(id){
