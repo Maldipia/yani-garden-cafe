@@ -354,6 +354,8 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
   display:none; align-items:flex-end; justify-content:center;
 }
 .pm-overlay.open { display:flex; }
+.co-disc-btn { padding:7px 14px;border:1.5px solid var(--mist);border-radius:8px;background:var(--bg);font-size:.82rem;cursor:pointer;color:var(--forest-deep);transition:all .15s }
+.co-disc-btn.selected { background:var(--forest);color:#fff;border-color:var(--forest) }
 .pm-modal {
   background:#fff; width:100%; max-width:480px;
   border-radius:20px 20px 0 0;
@@ -2435,14 +2437,12 @@ async function updateStatus(orderId, newStatus) {
     return;
   }
 
-  // ── FORCED PAYMENT CHECK before COMPLETE ────────────────────────────
-  // Only prompt for payment if this role CAN set payment (not KITCHEN)
+  // ── CHECKOUT FLOW before COMPLETE ──────────────────────────────────
   if (newStatus === 'COMPLETED') {
     var order = allOrders.find(function(o) { return o.orderId === orderId; });
     var canPay = (currentUser.role === 'OWNER' || currentUser.role === 'ADMIN' || currentUser.role === 'CASHIER');
-    if (canPay && order && !order.paymentMethod && order.paymentStatus !== 'PLATFORM_PAID') {
-      // Must set payment method first — prompt only if user can actually set it
-      openPaymentModal(orderId, true /* fromComplete */);
+    if (canPay && order && order.orderType !== 'PLATFORM') {
+      openCheckoutModal(orderId);
       return;
     }
   }
@@ -6132,6 +6132,104 @@ async function syncToSheets() {
   </div>
 </div>
 
+<!-- ── Checkout Modal (Payment + Discount + Complete) ──── -->
+<div class="pm-overlay" id="checkoutOverlay" onclick="if(event.target===this)closeCheckoutModal()" style="z-index:1050">
+  <div class="pm-modal" style="max-width:400px;max-height:90vh;overflow-y:auto">
+    <div class="pm-title">🧾 Complete Order</div>
+    <div class="pm-sub" id="coOrderLabel">Order: —</div>
+
+    <!-- STEP 1: Payment method -->
+    <div style="font-size:.78rem;font-weight:700;color:var(--forest-mid);text-transform:uppercase;letter-spacing:.06em;margin:16px 0 8px">Payment method <span style="color:#e04444">*</span></div>
+    <div class="pm-grid">
+      <button class="pm-btn" id="coBtnGCASH" onclick="coSelectPM('GCASH',event)">
+        <span class="pm-btn-icon">📱</span>
+        <span class="pm-btn-label">GCash / QR</span>
+        <span class="pm-btn-sub">Bank · InstaPay</span>
+      </button>
+      <button class="pm-btn" id="coBtnCASH" onclick="coSelectPM('CASH',event)">
+        <span class="pm-btn-icon">💵</span>
+        <span class="pm-btn-label">Cash</span>
+        <span class="pm-btn-sub">&nbsp;</span>
+      </button>
+      <button class="pm-btn" id="coBtnCARD" onclick="coSelectPM('CARD',event)">
+        <span class="pm-btn-icon">💳</span>
+        <span class="pm-btn-label">Card</span>
+        <span class="pm-btn-sub">Terminal</span>
+      </button>
+    </div>
+
+    <!-- STEP 2: Discount -->
+    <div style="border-top:1px solid var(--mist);margin:16px 0 12px"></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.88rem;font-weight:600;color:var(--forest-deep)">
+        <input type="checkbox" id="coHasDiscount" onchange="coToggleDiscount()" style="width:18px;height:18px;cursor:pointer">
+        Has PWD / Senior / Promo discount?
+      </label>
+    </div>
+
+    <div id="coDiscountSection" style="display:none;background:var(--mist-light);border-radius:10px;padding:14px;margin-bottom:12px">
+
+      <!-- Discount type -->
+      <div style="font-size:.78rem;font-weight:700;color:var(--forest-mid);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Discount type</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <button class="co-disc-btn" id="coDiscPWD"    onclick="coSelectDisc('PWD')">👥 PWD</button>
+        <button class="co-disc-btn" id="coDiscSENIOR" onclick="coSelectDisc('SENIOR')">👴 Senior</button>
+        <button class="co-disc-btn" id="coDiscBOTH"   onclick="coSelectDisc('BOTH')">👥👴 Both</button>
+        <button class="co-disc-btn" id="coDiscPROMO"  onclick="coSelectDisc('PROMO')">🏷️ Promo</button>
+      </div>
+
+      <!-- Pax count (for PWD/Senior/Both) -->
+      <div id="coPaxSection" style="display:none">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+          <div>
+            <label style="font-size:.78rem;font-weight:600;color:var(--forest-mid);display:block;margin-bottom:4px">Total pax in group</label>
+            <input type="number" id="coPaxTotal" min="1" max="50" value="2" onchange="coCalcDiscount()" style="width:100%;padding:8px;border:1.5px solid var(--mist);border-radius:8px;font-size:.9rem;text-align:center">
+          </div>
+          <div>
+            <label style="font-size:.78rem;font-weight:600;color:var(--forest-mid);display:block;margin-bottom:4px">Qualified pax</label>
+            <input type="number" id="coPaxQualified" min="1" max="50" value="1" onchange="coCalcDiscount()" style="width:100%;padding:8px;border:1.5px solid var(--mist);border-radius:8px;font-size:.9rem;text-align:center">
+          </div>
+        </div>
+      </div>
+
+      <!-- Promo % (for PROMO) -->
+      <div id="coPromoSection" style="display:none;margin-bottom:10px">
+        <label style="font-size:.78rem;font-weight:600;color:var(--forest-mid);display:block;margin-bottom:4px">Promo discount %</label>
+        <input type="number" id="coPromoPct" min="1" max="100" value="10" onchange="coCalcDiscount()" style="width:100%;padding:8px;border:1.5px solid var(--mist);border-radius:8px;font-size:.9rem;text-align:center" placeholder="e.g. 10">
+      </div>
+
+      <!-- ID Photo upload -->
+      <div id="coIdPhotoSection" style="display:none;margin-bottom:10px">
+        <div style="font-size:.78rem;font-weight:700;color:var(--forest-mid);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Upload ID photo <span style="color:#e04444">*</span></div>
+        <div id="coIdDropzone" onclick="document.getElementById('coIdFileInput').click()" 
+          style="border:2px dashed var(--mist);border-radius:10px;padding:16px;text-align:center;cursor:pointer;transition:all .2s">
+          <div style="font-size:1.8rem">📷</div>
+          <div style="font-size:.82rem;color:var(--forest-mid);margin-top:4px">Tap to upload PWD / Senior ID photo</div>
+        </div>
+        <input type="file" id="coIdFileInput" accept="image/*" capture="camera" style="display:none" onchange="coHandleIdPhoto(event)">
+        <img id="coIdPreview" style="display:none;width:100%;border-radius:8px;margin-top:8px;max-height:120px;object-fit:cover" alt="ID preview">
+        <div id="coIdStatus" style="font-size:.78rem;color:var(--forest-mid);margin-top:4px"></div>
+      </div>
+
+      <!-- Calculated discount -->
+      <div id="coDiscResult" style="display:none;background:var(--forest);color:#fff;border-radius:8px;padding:12px;text-align:center">
+        <div style="font-size:.78rem;opacity:.8">Discount</div>
+        <div id="coDiscAmount" style="font-size:1.4rem;font-weight:700">−₱0.00</div>
+        <div style="font-size:.78rem;opacity:.8;margin-top:2px">New total: <span id="coNewTotal">₱0.00</span></div>
+      </div>
+    </div>
+
+    <!-- Notes -->
+    <div class="pm-notes-wrap" style="margin-bottom:12px">
+      <label for="coNotes">Notes (optional)</label>
+      <textarea id="coNotes" class="pm-notes-input" rows="2" placeholder="e.g. Table 3 · Reference: 12345 · Split: ₱200 cash + ₱300 GCash"></textarea>
+    </div>
+
+    <button class="pm-confirm" id="coConfirmBtn" disabled onclick="confirmCheckout()">✅ Confirm & Complete</button>
+    <span class="pm-cancel-link" onclick="closeCheckoutModal()">Cancel</span>
+  </div>
+</div>
+
 <!-- ── Discount Modal ────────────────────────────────── -->
 <div class="pm-overlay" id="discountOverlay" onclick="if(event.target===this)closeDiscountModal()">
   <div class="pm-modal" style="max-width:360px">
@@ -6192,6 +6290,239 @@ var pmCurrentOrder = null;
 var pmSelectedMethod  = null;   // first pick  (GCASH | CASH | CARD)
 var pmSelectedMethod2 = null;   // second pick for split
 var pmFromComplete = false;
+
+// ══════════════════════════════════════════════════════════
+// CHECKOUT MODAL — Payment + Discount + Complete in one flow
+// ══════════════════════════════════════════════════════════
+var coOrderId       = null;
+var coPayMethod     = null;
+var coDiscType      = null;
+var coIdImageData   = null;
+var coIdUploading   = false;
+
+function openCheckoutModal(orderId) {
+  coOrderId = orderId; coPayMethod = null; coDiscType = null; coIdImageData = null;
+
+  var order = allOrders.find(function(o){ return o.orderId === orderId; });
+  var total = order ? '₱' + parseFloat(order.discountedTotal || order.total || 0).toFixed(2) : '';
+  document.getElementById('coOrderLabel').textContent = orderId + ' — ' + total;
+
+  // Reset payment buttons
+  ['GCASH','CASH','CARD'].forEach(function(k){
+    var b = document.getElementById('coBtnGCASH'.replace('GCASH',k));
+    if (b) b.className = 'pm-btn';
+  });
+
+  // Reset discount section
+  document.getElementById('coHasDiscount').checked = false;
+  document.getElementById('coDiscountSection').style.display = 'none';
+  ['PWD','SENIOR','BOTH','PROMO'].forEach(function(t){
+    var b = document.getElementById('coDisc'+t);
+    if (b) b.className = 'co-disc-btn';
+  });
+  document.getElementById('coPaxSection').style.display = 'none';
+  document.getElementById('coPromoSection').style.display = 'none';
+  document.getElementById('coIdPhotoSection').style.display = 'none';
+  document.getElementById('coIdPreview').style.display = 'none';
+  document.getElementById('coIdStatus').textContent = '';
+  document.getElementById('coDiscResult').style.display = 'none';
+  document.getElementById('coPaxTotal').value = 2;
+  document.getElementById('coPaxQualified').value = 1;
+  document.getElementById('coPromoPct').value = 10;
+  document.getElementById('coNotes').value = '';
+  document.getElementById('coConfirmBtn').disabled = true;
+  document.getElementById('coConfirmBtn').textContent = '✅ Confirm & Complete';
+
+  // If order already has payment method pre-select it
+  if (order && order.paymentMethod) {
+    var pm = order.paymentMethod.split('+')[0];
+    if (['GCASH','CASH','CARD'].includes(pm)) { coPayMethod = pm; document.getElementById('coBtnGCASH'.replace('GCASH',pm)).className = 'pm-btn selected'; }
+    coUpdateConfirmBtn();
+  }
+
+  document.getElementById('checkoutOverlay').classList.add('open');
+}
+
+function closeCheckoutModal() {
+  document.getElementById('checkoutOverlay').classList.remove('open');
+  coOrderId = null; coPayMethod = null; coDiscType = null; coIdImageData = null;
+}
+
+function coSelectPM(method, ev) {
+  if (ev) ev.stopPropagation();
+  coPayMethod = method;
+  ['GCASH','CASH','CARD'].forEach(function(k){
+    var b = document.getElementById('coBtnGCASH'.replace('GCASH',k));
+    if (b) b.className = 'pm-btn' + (k===method ? ' selected' : '');
+  });
+  coUpdateConfirmBtn();
+}
+
+function coToggleDiscount() {
+  var has = document.getElementById('coHasDiscount').checked;
+  document.getElementById('coDiscountSection').style.display = has ? '' : 'none';
+  if (!has) { coDiscType = null; document.getElementById('coDiscResult').style.display = 'none'; }
+  coUpdateConfirmBtn();
+}
+
+function coSelectDisc(type) {
+  coDiscType = type;
+  ['PWD','SENIOR','BOTH','PROMO'].forEach(function(t){
+    var b = document.getElementById('coDisc'+t);
+    if (b) b.className = 'co-disc-btn' + (t===type ? ' selected' : '');
+  });
+  // Show/hide pax vs promo inputs
+  document.getElementById('coPaxSection').style.display   = (type!=='PROMO') ? '' : 'none';
+  document.getElementById('coPromoSection').style.display  = (type==='PROMO') ? '' : 'none';
+  // ID photo required for PWD/Senior/Both
+  document.getElementById('coIdPhotoSection').style.display = (type!=='PROMO') ? '' : 'none';
+  coCalcDiscount();
+  coUpdateConfirmBtn();
+}
+
+function coCalcDiscount() {
+  if (!coDiscType || !coOrderId) return;
+  var order = allOrders.find(function(o){ return o.orderId === coOrderId; });
+  if (!order) return;
+  var baseTotal = parseFloat(order.discountedTotal || order.total || 0);
+
+  var discAmt = 0;
+  if (coDiscType === 'PROMO') {
+    var pct = parseFloat(document.getElementById('coPromoPct').value) || 0;
+    discAmt = Math.round(baseTotal * (pct/100) * 100) / 100;
+  } else {
+    var totalPax = parseInt(document.getElementById('coPaxTotal').value) || 1;
+    var qualPax  = parseInt(document.getElementById('coPaxQualified').value) || 1;
+    qualPax = Math.min(qualPax, totalPax);
+    var perPerson = baseTotal / totalPax;
+    var multiplier = (coDiscType === 'BOTH') ? qualPax * 2 : qualPax;
+    discAmt = Math.round(perPerson * 0.20 * Math.min(multiplier, totalPax) * 100) / 100;
+  }
+
+  var newTotal = Math.max(0, baseTotal - discAmt);
+  document.getElementById('coDiscAmount').textContent = '−₱' + discAmt.toFixed(2);
+  document.getElementById('coNewTotal').textContent = '₱' + newTotal.toFixed(2);
+  document.getElementById('coDiscResult').style.display = '';
+}
+
+function coHandleIdPhoto(ev) {
+  var file = ev.target.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    coIdImageData = e.target.result;
+    var img = document.getElementById('coIdPreview');
+    img.src = coIdImageData;
+    img.style.display = '';
+    document.getElementById('coIdStatus').textContent = '✅ ID photo ready';
+    document.getElementById('coIdDropzone').style.borderColor = 'var(--forest)';
+    coUpdateConfirmBtn();
+  };
+  reader.readAsDataURL(file);
+}
+
+function coUpdateConfirmBtn() {
+  var btn = document.getElementById('coConfirmBtn');
+  var hasDisc = document.getElementById('coHasDiscount').checked;
+  // Requirements: payment selected; if discount → type selected; if PWD/Senior/Both → ID photo
+  var needsId = hasDisc && coDiscType && coDiscType !== 'PROMO';
+  var ok = !!coPayMethod && (!hasDisc || (!!coDiscType && (!needsId || !!coIdImageData)));
+  btn.disabled = !ok;
+}
+
+async function confirmCheckout() {
+  if (!coOrderId || !coPayMethod) return;
+  var btn = document.getElementById('coConfirmBtn');
+  btn.disabled = true; btn.textContent = 'Processing...';
+
+  var order = allOrders.find(function(o){ return o.orderId === coOrderId; });
+  var hasDisc = document.getElementById('coHasDiscount').checked;
+  var notes   = document.getElementById('coNotes').value.trim();
+
+  try {
+    // 1. Set payment method
+    var pmResult = await api('setPaymentMethod', {
+      userId: currentUser && currentUser.userId,
+      orderId: coOrderId,
+      method: coPayMethod,
+      notes: notes || undefined
+    });
+    if (!pmResult || !pmResult.ok) throw new Error(pmResult && pmResult.error || 'Failed to set payment');
+
+    // 2. Apply discount (if any)
+    if (hasDisc && coDiscType) {
+      var baseTotal = parseFloat(order && (order.discountedTotal || order.total) || 0);
+      var discPayload = { userId: currentUser && currentUser.userId, orderId: coOrderId };
+
+      if (coDiscType === 'PROMO') {
+        discPayload.discountType = 'PROMO';
+        discPayload.promoPct = parseFloat(document.getElementById('coPromoPct').value) || 10;
+      } else {
+        var totalPax = parseInt(document.getElementById('coPaxTotal').value) || 1;
+        var qualPax  = parseInt(document.getElementById('coPaxQualified').value) || 1;
+        qualPax = Math.min(qualPax, totalPax);
+        if (coDiscType === 'BOTH') {
+          discPayload.discountType = 'BOTH';
+          discPayload.totalPax    = totalPax;
+          discPayload.qualifiedPax = qualPax * 2;
+        } else {
+          discPayload.discountType = coDiscType;
+          discPayload.totalPax    = totalPax;
+          discPayload.qualifiedPax = qualPax;
+        }
+      }
+
+      // Upload ID photo first if present
+      if (coIdImageData) {
+        try {
+          var uploadRes = await api('uploadInventoryPhoto', {
+            userId: currentUser && currentUser.userId,
+            itemCode: 'DISC_ID_' + coOrderId + '_' + Date.now(),
+            imageBase64: coIdImageData.split(',')[1],
+            mimeType: 'image/jpeg'
+          });
+          if (uploadRes && uploadRes.photoUrl) {
+            discPayload.idPhotoUrl = uploadRes.photoUrl;
+          }
+        } catch(e) { /* non-critical — continue even if photo upload fails */ }
+      }
+
+      var discResult = await api('applyDiscount', discPayload);
+      if (!discResult || !discResult.ok) {
+        showToast('⚠️ Discount failed: ' + (discResult && discResult.error || 'Error') + ' — completing without discount', 'warn');
+      } else {
+        // Update local order total so stats refresh correctly
+        allOrders.forEach(function(o){
+          if (o.orderId === coOrderId) {
+            o.discountedTotal = discResult.discountedTotal;
+            o.discountType    = coDiscType;
+            o.discountAmount  = discResult.discountAmount;
+          }
+        });
+      }
+    }
+
+    // 3. Complete the order
+    closeCheckoutModal();
+    var completeResult = await api('updateOrderStatus', {
+      orderId: coOrderId,
+      status: 'COMPLETED',
+      userId: currentUser && currentUser.userId
+    });
+    if (completeResult && completeResult.ok) {
+      _statusOverrides[coOrderId] = { status: 'COMPLETED', ts: Date.now() };
+      allOrders.forEach(function(o){ if (o.orderId === coOrderId) { o.status = 'COMPLETED'; o.paymentMethod = coPayMethod; } });
+      renderStats(); renderFilters(); renderOrders();
+      showToast(coOrderId + ' — Completed' + (hasDisc && coDiscType ? ' · Discount applied' : '') + ' · ' + coPayMethod, 2200);
+    } else {
+      throw new Error(completeResult && completeResult.error || 'Failed to complete');
+    }
+
+  } catch(e) {
+    btn.disabled = false; btn.textContent = '✅ Confirm & Complete';
+    showToast('❌ ' + e.message, 'error');
+  }
+}
 
 function openPaymentModal(orderId, fromComplete) {
   pmCurrentOrder   = orderId;
