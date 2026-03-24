@@ -2114,7 +2114,6 @@ export default async function handler(req, res) {
             WHERE o.status      = 'COMPLETED'
               AND o.is_test     = false
               AND o.is_deleted  = false
-              AND o.created_at >= NOW() - INTERVAL '30 days'
             GROUP BY i.item_name
             ORDER BY qty DESC
             LIMIT 20
@@ -2131,7 +2130,7 @@ export default async function handler(req, res) {
       // Fallback: if PAT not set, use the old method with higher limit
       if (topItems.length === 0) {
         const ordersWithId = await fetch(
-          `${BASE}/dine_in_orders?status=eq.COMPLETED&is_test=eq.false&is_deleted=eq.false&created_at=gte.${thirtyAgo}&select=order_id`,
+          `${BASE}/dine_in_orders?status=eq.COMPLETED&is_test=eq.false&is_deleted=eq.false&select=order_id&limit=5000`,
           { headers: H }
         );
         const completedIds = new Set((ordersWithId.ok ? await ordersWithId.json() : []).map(o=>o.order_id));
