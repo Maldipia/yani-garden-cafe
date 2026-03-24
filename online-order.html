@@ -212,6 +212,25 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 .cart-item-controls { display:flex; align-items:center; gap:8px; margin-top:6px }
 .cart-remove { background:none; border:none; color:var(--terra); font-size:.72rem; cursor:pointer; font-family:var(--font-body); font-weight:600 }
 
+  /* ── Delivery zone cards ── */
+  .delivery-type-row { display:flex; gap:10px; margin-bottom:14px; }
+  .delivery-type-btn { flex:1; border:2px solid var(--mist); border-radius:12px; padding:12px 10px; background:#fff;
+    cursor:pointer; font-family:var(--font-body); font-size:.82rem; font-weight:600; text-align:center;
+    transition:all .18s; color:var(--timber); }
+  .delivery-type-btn.selected { border-color:var(--forest); background:#f0fdf4; color:var(--forest); }
+  .zone-grid { display:flex; flex-direction:column; gap:8px; margin-top:4px; }
+  .zone-card { border:2px solid var(--mist); border-radius:12px; padding:12px 14px; cursor:pointer;
+    background:#fff; display:flex; align-items:center; justify-content:space-between;
+    transition:all .18s; }
+  .zone-card.selected { border-color:var(--forest); background:#f0fdf4; }
+  .zone-card-left { display:flex; align-items:center; gap:10px; }
+  .zone-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+  .zone-name { font-weight:700; font-size:.82rem; color:var(--timber); }
+  .zone-areas { font-size:.72rem; color:#94a3b8; margin-top:1px; }
+  .zone-fee { font-weight:800; font-size:.9rem; color:var(--terra); white-space:nowrap; }
+  .zone-custom { font-size:.72rem; color:#94a3b8; text-align:right; }
+  .delivery-fee-row { display:flex; justify-content:space-between; padding:6px 0; font-size:.88rem; color:var(--forest); font-weight:600; }
+
 .cart-summary {
   background:var(--white); border-radius:var(--r-lg); padding:16px;
   margin-bottom:16px; box-shadow:var(--shadow-sm);
@@ -457,17 +476,93 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
     </div>
   </div>
   <div class="form-section">
-    <div class="form-section-title">🛵 Courier</div>
-    <div class="form-group">
-      <label class="form-label">Which courier will you use?</label>
-      <select class="form-input form-select" id="courierType">
-        <option value="LALAMOVE">Lalamove</option>
-        <option value="GRAB_EXPRESS">Grab Express</option>
-        <option value="OTHER">Other</option>
-      </select>
+    <div class="form-section-title">🚚 Delivery Option</div>
+
+    <div class="delivery-type-row">
+      <button class="delivery-type-btn selected" id="deliveryTypeYani" onclick="selectDeliveryType('YANI')">
+        🛵 YANI Direct Delivery
+      </button>
+      <button class="delivery-type-btn" id="deliveryTypeOwn" onclick="selectDeliveryType('OWN')">
+        📦 I'll Arrange My Own Courier
+      </button>
     </div>
-    <div class="info-box">
-      <strong>📦 Pickup address:</strong> Yani Garden Cafe, Purok 8 Daang Malinaw, Loma, Amadeo, Cavite. Our team will prepare your order and have it ready for your courier to pick up.
+
+    <!-- YANI zones -->
+    <div id="yaniZoneSection">
+      <div class="form-label" style="margin-bottom:8px">Select your delivery zone:</div>
+      <div class="zone-grid">
+        <div class="zone-card" id="zone1" onclick="selectZone(1,60)">
+          <div class="zone-card-left">
+            <div class="zone-dot" style="background:#22c55e"></div>
+            <div>
+              <div class="zone-name">Zone 1 — Near (0–3 km)</div>
+              <div class="zone-areas">Amadeo proper, Barangay Loma, nearby subdivisions</div>
+            </div>
+          </div>
+          <div class="zone-fee">₱60</div>
+        </div>
+        <div class="zone-card" id="zone2" onclick="selectZone(2,100)">
+          <div class="zone-card-left">
+            <div class="zone-dot" style="background:#eab308"></div>
+            <div>
+              <div class="zone-name">Zone 2 — Mid (4–6 km)</div>
+              <div class="zone-areas">Mendez crossings, Tagaytay boundary, deeper Amadeo</div>
+            </div>
+          </div>
+          <div class="zone-fee">₱100</div>
+        </div>
+        <div class="zone-card" id="zone3" onclick="selectZone(3,150)">
+          <div class="zone-card-left">
+            <div class="zone-dot" style="background:#ef4444"></div>
+            <div>
+              <div class="zone-name">Zone 3 — Far (7–10 km)</div>
+              <div class="zone-areas">Tagaytay proper, Indang, Alfonso edge</div>
+            </div>
+          </div>
+          <div class="zone-fee">₱150</div>
+        </div>
+        <div class="zone-card" id="zone4" onclick="selectZone(4,0)">
+          <div class="zone-card-left">
+            <div class="zone-dot" style="background:#64748b"></div>
+            <div>
+              <div class="zone-name">Zone 4 — Extended (10 km+)</div>
+              <div class="zone-areas">Beyond Tagaytay, custom quote</div>
+            </div>
+          </div>
+          <div style="text-align:right">
+            <div class="zone-fee" style="color:#64748b">Custom</div>
+            <div class="zone-custom">Staff will confirm fee</div>
+          </div>
+        </div>
+      </div>
+      <div class="info-box" style="margin-top:10px">
+        🎁 <strong>Free delivery</strong> for orders ₱500+ (Zone 1 & 2 only)
+      </div>
+    </div>
+
+    <!-- Own courier section -->
+    <div id="ownCourierSection" style="display:none">
+      <div class="form-group">
+        <label class="form-label">Which courier will you use?</label>
+        <select class="form-input form-select" id="courierType">
+          <option value="LALAMOVE">Lalamove</option>
+          <option value="GRAB_EXPRESS">Grab Express</option>
+          <option value="OTHER">Other</option>
+        </select>
+      </div>
+      <div class="info-box">
+        <strong>📦 Pickup address:</strong> Yani Garden Cafe, Purok 8 Daang Malinaw, Loma, Amadeo, Cavite. Our team will have your order ready for pickup.
+      </div>
+      <div style="margin-top:10px;background:#fff7ed;border:2px solid #fed7aa;border-radius:12px;padding:14px 16px">
+        <div style="font-weight:800;font-size:.88rem;color:#9a3412;margin-bottom:6px">📍 Coordinate your pickup:</div>
+        <div style="font-size:.82rem;color:#7c2d12;line-height:1.7">
+          <div>🌿 <strong>YANI Garden Cafe</strong></div>
+          <div>📞 <strong>0967-4000-040</strong></div>
+          <div style="margin-top:6px;font-size:.78rem;color:#92400e">
+            Please provide your <strong>Order Reference</strong> and <strong>Name</strong> when you contact us.
+          </div>
+        </div>
+      </div>
     </div>
   </div>
   <button class="btn-primary" onclick="proceedToPayment()">Proceed to Payment →</button>
@@ -622,6 +717,9 @@ const UPLOAD_API = '/api/upload-proof';
 var menuData = [];
 var addonsData = [];
 var cart = [];
+var selectedDeliveryType = 'YANI'; // 'YANI' or 'OWN'
+var selectedZone = null;           // 1, 2, 3, or 4
+var selectedDeliveryFee = 0;
 var currentStep = 1;
 var currentCat = 'ALL';
 var selectedPayMethod = 'GCASH';
@@ -786,6 +884,64 @@ function onCardClick(itemJson) {
 
 function getCartQty(code) {
   return cart.filter(function(c) { return c.code === code; }).reduce(function(s,c) { return s + c.quantity; }, 0);
+}
+
+// ══════════════════════════════════════════════════════════════
+// DELIVERY TYPE & ZONE LOGIC
+// ══════════════════════════════════════════════════════════════
+function selectDeliveryType(type) {
+  selectedDeliveryType = type;
+  document.getElementById('deliveryTypeYani').classList.toggle('selected', type === 'YANI');
+  document.getElementById('deliveryTypeOwn').classList.toggle('selected', type === 'OWN');
+  document.getElementById('yaniZoneSection').style.display = type === 'YANI' ? '' : 'none';
+  document.getElementById('ownCourierSection').style.display = type === 'OWN' ? '' : 'none';
+  if (type === 'OWN') {
+    selectedZone = null;
+    selectedDeliveryFee = 0;
+  }
+  updateCartSummaryFee();
+}
+
+function selectZone(zone, fee) {
+  selectedZone = zone;
+  // Free delivery for Zone 1 & 2 if subtotal >= 500
+  var cartSubtotal = cart.reduce(function(s,c){ return s + (c.unitPrice * c.quantity); }, 0);
+  if ((zone === 1 || zone === 2) && cartSubtotal >= 500) {
+    selectedDeliveryFee = 0;
+  } else {
+    selectedDeliveryFee = fee;
+  }
+  // Highlight selected zone
+  [1,2,3,4].forEach(function(z) {
+    var el = document.getElementById('zone' + z);
+    if (el) el.classList.toggle('selected', z === zone);
+  });
+  updateCartSummaryFee();
+}
+
+function updateCartSummaryFee() {
+  // Update the fee row in cart summary if visible
+  var feeRow = document.getElementById('cartDeliveryFeeRow');
+  if (!feeRow) return;
+  if (selectedDeliveryType === 'YANI' && selectedZone) {
+    var label = selectedDeliveryFee === 0 ? '🎁 Delivery (FREE!)' : '🚚 Delivery (Zone ' + selectedZone + ')';
+    var feeText = selectedDeliveryFee === 0 ? '₱0' : '₱' + selectedDeliveryFee;
+    if (selectedZone === 4) { label = '🚚 Delivery (Zone 4)'; feeText = 'Custom'; }
+    feeRow.innerHTML = '<span>' + label + '</span><span style="color:var(--forest);font-weight:700">' + feeText + '</span>';
+    feeRow.style.display = 'flex';
+    // Update total
+    var subtotal = cart.reduce(function(s,c){ return s + (c.unitPrice * c.quantity); }, 0);
+    var totalEl = document.getElementById('cartTotalAmt');
+    if (totalEl) {
+      var total = selectedZone === 4 ? subtotal : subtotal + selectedDeliveryFee;
+      totalEl.textContent = '₱' + total.toFixed(2) + (selectedZone === 4 ? ' + delivery' : '');
+    }
+  } else {
+    feeRow.style.display = 'none';
+    var subtotal = cart.reduce(function(s,c){ return s + (c.unitPrice * c.quantity); }, 0);
+    var totalEl = document.getElementById('cartTotalAmt');
+    if (totalEl) totalEl.textContent = '₱' + subtotal.toFixed(2);
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1242,7 +1398,13 @@ function proceedToPayment() {
   if (!name) errors.push('custName');
   if (!phone || !/^(09|\+639)\d{9}$/.test(phone.replace(/\s/g,''))) errors.push('custPhone');
   if (!address || address.length < 10) errors.push('custAddress');
-  
+  // Require zone selection if YANI delivery
+  if (selectedDeliveryType === 'YANI' && !selectedZone) {
+    showToast('Please select a delivery zone 🚚', 'error');
+    document.getElementById('yaniZoneSection').scrollIntoView({behavior:'smooth',block:'center'});
+    return;
+  }
+
   document.querySelectorAll('.form-input').forEach(function(i) { i.classList.remove('error') });
   errors.forEach(function(id) { var el = document.getElementById(id); if (el) el.classList.add('error') });
   
@@ -1280,12 +1442,17 @@ async function submitOrder() {
         customerEmail: document.getElementById('custEmail').value.trim(),
         deliveryAddress: document.getElementById('custAddress').value.trim(),
         deliveryNotes: document.getElementById('custNotes').value.trim(),
-        courierType: document.getElementById('courierType').value,
+        courierType: selectedDeliveryType === 'YANI' ? 'YANI_DELIVERY' : (document.getElementById('courierType') ? document.getElementById('courierType').value : 'OTHER'),
+        deliveryZone: selectedDeliveryType === 'YANI' ? selectedZone : null,
+        deliveryFee: selectedDeliveryType === 'YANI' && selectedZone && selectedZone !== 4 ? selectedDeliveryFee : 0,
+        isCustomDelivery: selectedDeliveryType === 'YANI' && selectedZone === 4,
         paymentMethod: selectedPayMethod,
         items: cart.map(function(c) {
           var sizeLabel = [c.size, c.sugar].filter(Boolean).join(' · ');
           return { code: c.code, name: c.name, size: sizeLabel, unitPrice: c.unitPrice, quantity: c.quantity, addons: c.addons || [] };
-        })
+        }),
+        subtotal: getCartTotal(),
+        total: getCartTotal() + (selectedDeliveryType === 'YANI' && selectedZone && selectedZone !== 4 ? selectedDeliveryFee : 0)
       })
     });
     

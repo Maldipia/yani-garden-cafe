@@ -4207,7 +4207,16 @@ function renderOnlineOrders() {
     html += '<div style="font-weight:700">👤 ' + esc(o.customer_name || '') + '</div>';
     html += '<div style="color:var(--timber);margin-top:2px">📱 ' + esc(o.customer_phone || '') + '</div>';
     if (o.delivery_address) html += '<div style="color:var(--timber);margin-top:2px">📍 ' + esc(o.delivery_address) + '</div>';
-    if (o.courier_type) html += '<div style="color:var(--timber);margin-top:2px">🛵 Courier: ' + esc(o.courier_type) + '</div>';
+    if (o.courier_type === 'YANI_DELIVERY') {
+      var zoneLabel = o.delivery_zone ? 'Zone ' + o.delivery_zone : '';
+      var feeLabel = o.delivery_fee > 0 ? '₱' + parseFloat(o.delivery_fee).toFixed(0) : (o.delivery_zone == 4 ? 'Custom quote' : 'FREE');
+      html += '<div style="margin-top:6px;background:#dcfce7;border:1.5px solid #86efac;border-radius:8px;padding:5px 10px;font-size:.78rem;font-weight:700;color:#14532d;display:inline-flex;gap:8px;align-items:center">'
+        + '🛵 YANI Delivery · ' + zoneLabel + ' · ' + feeLabel
+        + (o.delivery_zone == 4 ? ' ⚠️ <span style="color:#b45309">Confirm fee w/ customer</span>' : '')
+        + '</div>';
+    } else if (o.courier_type) {
+      html += '<div style="color:var(--timber);margin-top:2px">📦 Own courier: ' + esc(o.courier_type) + '</div>';
+    }
     html += '</div>';
     // Items
     if (o.items && o.items.length) {

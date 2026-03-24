@@ -375,6 +375,8 @@ export default async function handler(req, res) {
         delivery_address: deliveryAddress?.trim() || null,
         courier_type: courierType?.trim() || 'PICKUP',
         delivery_notes: deliveryNotes?.trim() || null,
+        delivery_fee: parseFloat(payload.deliveryFee || 0),
+        delivery_zone: payload.deliveryZone ? String(payload.deliveryZone) : null,
         subtotal: subtotal,
         total_amount: parseFloat(total || subtotal),
         payment_method: (paymentMethod || 'gcash').toUpperCase(),

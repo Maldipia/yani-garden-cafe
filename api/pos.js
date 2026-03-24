@@ -1785,6 +1785,8 @@ export default async function handler(req, res) {
         orderStatus:         o.status,
         specialInstructions: o.special_instructions || '',
         adminNotes:          o.admin_notes || '',
+        deliveryFee:         parseFloat(o.delivery_fee || 0),
+        deliveryZone:        o.delivery_zone || null,
         lastUpdated:         o.updated_at,
       }));
       return res.status(200).json({ success: true, orders });
