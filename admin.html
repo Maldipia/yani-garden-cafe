@@ -31,7 +31,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 .login-overlay {
   position:fixed; inset:0; background:var(--forest-deep);
   display:flex; align-items:center; justify-content:center;
-  z-index:999;
+  z-index:2000;
 }
 .login-overlay.hidden { display:none }
 .login-box {
@@ -352,8 +352,9 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 .pm-overlay {
   position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:800;
   display:none; align-items:flex-end; justify-content:center;
+  pointer-events:none;
 }
-.pm-overlay.open { display:flex; }
+.pm-overlay.open { display:flex; pointer-events:all; }
 .co-disc-btn { padding:7px 14px;border:1.5px solid var(--mist);border-radius:8px;background:var(--bg);font-size:.82rem;cursor:pointer;color:var(--forest-deep);transition:all .15s }
 .co-disc-btn.selected { background:var(--forest);color:#fff;border-color:var(--forest) }
 .pm-modal {
