@@ -384,24 +384,34 @@ async function checkAdminAuth() {
 // ══════════════════════════════════════════════════════════════════════
 // JWT AUTH LAYER — jsonwebtoken (CJS-compatible, ^9.0.2)
 import jwt from 'jsonwebtoken';
-const JWT_SECRET = process.env.JWT_SECRET;
-const JWT_EXPIRY  = '12h';
+const JWT_EXPIRY = '12h';
+
+// JWT_SECRET: env var takes priority; falls back to settings table (no redeploy needed).
+let _jwtSecret = process.env.JWT_SECRET || null;
+async function getJwtSecret() {
+  if (_jwtSecret) return _jwtSecret;
+  try { _jwtSecret = await getSetting('JWT_SECRET'); } catch (_) {}
+  return _jwtSecret;
+}
 
 async function signToken(userId, role, displayName) {
-  if (!JWT_SECRET) return null;
+  const secret = await getJwtSecret();
+  if (!secret) return null;
   try {
     return jwt.sign(
       { sub: userId, role, displayName: displayName || '' },
-      JWT_SECRET,
+      secret,
       { expiresIn: JWT_EXPIRY }
     );
   } catch { return null; }
 }
 
 async function verifyToken(token) {
-  if (!token || !JWT_SECRET) return null;
+  if (!token) return null;
+  const secret = await getJwtSecret();
+  if (!secret) return null;
   try {
-    const payload = jwt.verify(token, JWT_SECRET);
+    const payload = jwt.verify(token, secret);
     return { userId: payload.sub, role: payload.role, displayName: payload.displayName || '' };
   } catch { return null; }  // expired / invalid / tampered → fall through to legacy DB auth
 }
