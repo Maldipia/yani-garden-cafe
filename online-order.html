@@ -3,723 +3,837 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Yani Garden Cafe — Online Order</title>
-<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
+<title>Yani Garden Cafe — Order Online</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
-  --forest: #314C47;
-  --forest-deep: #1E3530;
-  --forest-light: #3D5E57;
-  --terra: #C4704B;
-  --terra-light: #D4916F;
-  --gold: #B8973A;
-  --timber: #6B7B6E;
-  --mist: #D2D5CD;
-  --mist-light: #EEF0EB;
-  --cream: #FAF8F4;
-  --white: #FFFFFF;
-  --font-soul: 'Crimson Pro', Georgia, serif;
-  --font-body: 'Quicksand', sans-serif;
-  --r-sm: 6px; --r-md: 10px; --r-lg: 14px; --r-xl: 20px;
-  --shadow-sm: 0 1px 4px rgba(0,0,0,.06);
-  --shadow-md: 0 4px 16px rgba(0,0,0,.1);
+  --g1: #1a2e1c;   /* deep forest */
+  --g2: #2d4a30;   /* forest */
+  --g3: #3d6142;   /* forest mid */
+  --g4: #5a7d5f;   /* forest light */
+  --g5: #8aab8e;   /* sage */
+  --g6: #c2d4c4;   /* mist */
+  --g7: #e8f0e9;   /* pale sage */
+  --g8: #f4f8f4;   /* near white */
+  --amber: #c87941; /* warm accent */
+  --amber2: #e09060;
+  --cream: #faf7f2;
+  --ink: #1a2018;
+  --muted: #6b7c6d;
+  --border: #d4e0d5;
+  --white: #ffffff;
+  --r: 16px;
+  --r-sm: 10px;
+  --sh: 0 4px 24px rgba(26,46,28,.10);
+  --sh-md: 0 8px 40px rgba(26,46,28,.14);
+  --font-d: 'Playfair Display', Georgia, serif;
+  --font-b: 'DM Sans', sans-serif;
 }
-* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent }
-body { font-family:var(--font-body); background:var(--cream); color:var(--forest-deep); min-height:100dvh }
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{scroll-behavior:smooth}
+body{font-family:var(--font-b);background:var(--cream);color:var(--ink);min-height:100dvh;overflow-x:hidden}
 
-/* ── Header ── */
-.header {
-  background:linear-gradient(160deg, var(--forest-deep) 0%, var(--forest) 60%, var(--forest-light) 100%);
-  color:var(--white); padding:16px 20px 20px;
-  text-align:center; position:sticky; top:0; z-index:100;
-  box-shadow:0 2px 16px rgba(0,0,0,.15);
+/* ═══ HEADER ═══ */
+.hdr{
+  background:var(--g1);
+  padding:0 20px;
+  position:sticky;top:0;z-index:200;
+  border-bottom:1px solid rgba(255,255,255,.07);
 }
-.header::after {
-  content:''; position:absolute; bottom:-4px; left:0; right:0; height:4px;
-  background:linear-gradient(to right, var(--gold), var(--terra), var(--gold)); opacity:.6;
+.hdr-inner{
+  max-width:600px;margin:0 auto;
+  display:flex;align-items:center;justify-content:space-between;
+  height:58px;gap:12px;
 }
-.header-logo { width:52px; height:52px; border-radius:50%; object-fit:cover; margin-bottom:8px; box-shadow:var(--shadow-md) }
-.header-title { font-family:var(--font-soul); font-size:1.5rem; font-weight:700; margin-bottom:2px }
-.header-sub { font-size:.75rem; opacity:.75; margin-bottom:8px }
-.header-badge {
-  display:inline-flex; align-items:center; gap:6px;
-  background:rgba(255,255,255,.15); border-radius:20px; padding:4px 12px;
-  font-size:.7rem; font-weight:600;
-}
-.header-dot { width:7px; height:7px; border-radius:50%; background:#4ADE80; animation:pulse 2s infinite }
-@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+.hdr-brand{display:flex;align-items:center;gap:10px}
+.hdr-logo{width:36px;height:36px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,.15)}
+.hdr-name{font-family:var(--font-d);font-size:1.05rem;font-weight:700;color:var(--white);letter-spacing:.01em}
+.hdr-tag{font-size:.62rem;color:var(--g5);font-weight:500;margin-top:1px}
+.hdr-live{display:flex;align-items:center;gap:5px;background:rgba(90,125,95,.25);border:1px solid rgba(90,125,95,.4);border-radius:20px;padding:4px 10px;font-size:.65rem;font-weight:600;color:#7dcc84}
+.hdr-dot{width:6px;height:6px;border-radius:50%;background:#4ade80;animation:blink 1.8s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
 
-/* ── Step Indicator ── */
-.steps {
-  display:flex; justify-content:center; gap:0; padding:16px 20px 0;
-  background:var(--white); border-bottom:1px solid var(--mist);
-  position:sticky; top:0; z-index:95;
+/* ═══ STEP BAR ═══ */
+.steps{
+  background:var(--white);
+  border-bottom:1px solid var(--border);
+  padding:0 20px;
+  position:sticky;z-index:190;
 }
-.step-item {
-  flex:1; max-width:120px; text-align:center; padding:10px 4px;
-  position:relative; cursor:pointer;
+.steps-inner{
+  max-width:600px;margin:0 auto;
+  display:flex;align-items:center;justify-content:center;
+  gap:0;padding:12px 0;
 }
-.step-item::after {
-  content:''; position:absolute; bottom:0; left:0; right:0; height:3px;
-  background:transparent; transition:background .2s;
+.step{display:flex;align-items:center;gap:6px;cursor:pointer;padding:0 4px}
+.step-num{
+  width:26px;height:26px;border-radius:50%;
+  font-size:.72rem;font-weight:700;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--g7);color:var(--g4);
+  border:2px solid var(--g6);
+  transition:all .2s;flex-shrink:0;
 }
-.step-item.active::after { background:var(--terra) }
-.step-num {
-  width:28px; height:28px; border-radius:50%; margin:0 auto 4px;
-  display:flex; align-items:center; justify-content:center;
-  font-size:.75rem; font-weight:700;
-  background:var(--mist-light); color:var(--timber); transition:all .2s;
-}
-.step-item.active .step-num { background:var(--terra); color:var(--white) }
-.step-item.done .step-num { background:var(--forest); color:var(--white) }
-.step-label { font-size:.65rem; font-weight:600; color:var(--timber) }
-.step-item.active .step-label { color:var(--terra) }
+.step-label{font-size:.68rem;font-weight:600;color:var(--muted);white-space:nowrap}
+.step.active .step-num{background:var(--g2);color:var(--white);border-color:var(--g2)}
+.step.active .step-label{color:var(--g2)}
+.step.done .step-num{background:var(--g4);color:var(--white);border-color:var(--g4)}
+.step.done .step-num::before{content:'✓'}
+.step.done .step-num span{display:none}
+.step-line{width:28px;height:2px;background:var(--g7);border-radius:2px;flex-shrink:0}
+.step.done + .step-line, .step.active + .step-line{background:var(--g5)}
 
-/* ── Views ── */
-.view { display:none; padding:16px; max-width:600px; margin:0 auto; padding-bottom:120px }
-.view.active { display:block }
+/* ═══ CAT TABS ═══ */
+.cat-wrap{
+  background:var(--white);
+  border-bottom:1px solid var(--border);
+  position:sticky;z-index:180;
+  overflow-x:auto;scrollbar-width:none;
+}
+.cat-wrap::-webkit-scrollbar{display:none}
+.cat-inner{
+  max-width:600px;margin:0 auto;
+  display:flex;gap:4px;padding:10px 16px;
+  min-width:max-content;
+}
+.cat-btn{
+  padding:6px 14px;border-radius:20px;
+  font-size:.75rem;font-weight:600;
+  border:1.5px solid var(--border);
+  background:transparent;color:var(--muted);
+  cursor:pointer;white-space:nowrap;
+  transition:all .18s;font-family:var(--font-b);
+}
+.cat-btn.active{background:var(--g2);color:var(--white);border-color:var(--g2)}
 
-/* ── Category Tabs ── */
-.cat-tabs-sticky {
-  position:sticky;
-  top:0; /* updated dynamically by JS via updateStickyOffsets() */
-  z-index:90;
+/* ═══ MAIN CONTENT ═══ */
+.main{max-width:600px;margin:0 auto;padding:16px 16px 120px}
+
+/* ═══ VIEWS ═══ */
+.view{display:none}
+.view.active{display:block}
+
+/* ═══ MENU GRID ═══ */
+.menu-grid{
+  display:grid;
+  grid-template-columns:repeat(2,1fr);
+  gap:12px;margin-top:4px;
+}
+.menu-card{
+  background:var(--white);
+  border-radius:var(--r);
+  overflow:hidden;
+  border:1.5px solid var(--border);
+  cursor:pointer;
+  transition:all .18s;
+  position:relative;
+}
+.menu-card:active{transform:scale(.97)}
+.menu-card.in-cart{border-color:var(--g3);}
+.menu-card.in-cart::after{
+  content:'';position:absolute;top:0;left:0;right:0;height:3px;
+  background:linear-gradient(to right,var(--g3),var(--g4));
+}
+.card-img-wrap{width:100%;aspect-ratio:1;overflow:hidden;background:var(--g8);position:relative}
+.card-img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .3s}
+.menu-card:active .card-img{transform:scale(1.04)}
+.card-body{padding:10px 10px 12px}
+.card-name{font-size:.82rem;font-weight:700;color:var(--ink);line-height:1.35;margin-bottom:4px}
+.card-price{font-size:.88rem;font-weight:700;color:var(--amber)}
+.card-price-note{font-size:.65rem;color:var(--muted);font-weight:500}
+.card-add{
+  position:absolute;bottom:10px;right:10px;
+  width:28px;height:28px;border-radius:50%;
+  background:var(--g2);color:var(--white);
+  font-size:1.1rem;line-height:1;
+  display:flex;align-items:center;justify-content:center;
+  border:none;cursor:pointer;
+  box-shadow:0 2px 8px rgba(45,74,48,.3);
+}
+.qty-badge{
+  position:absolute;top:8px;left:8px;
+  background:var(--g2);color:var(--white);
+  border-radius:20px;padding:2px 8px;
+  font-size:.68rem;font-weight:700;
+}
+.section-hdr{
+  font-family:var(--font-d);
+  font-size:1rem;font-weight:700;color:var(--g2);
+  margin:20px 0 10px;letter-spacing:.01em;
+  display:flex;align-items:center;gap:8px;
+}
+.section-hdr::after{content:'';flex:1;height:1px;background:var(--border)}
+
+/* ═══ CART VIEW ═══ */
+.cart-empty{text-align:center;padding:60px 20px;color:var(--muted)}
+.cart-empty-icon{font-size:3rem;margin-bottom:12px}
+.cart-empty-text{font-size:.9rem;margin-bottom:20px}
+
+.cart-item{
+  background:var(--white);
+  border-radius:var(--r-sm);
+  border:1.5px solid var(--border);
+  padding:12px;
+  display:flex;gap:10px;
+  align-items:flex-start;
+  margin-bottom:8px;
+}
+.ci-img{width:56px;height:56px;border-radius:8px;object-fit:cover;flex-shrink:0;background:var(--g8)}
+.ci-info{flex:1;min-width:0}
+.ci-name{font-size:.84rem;font-weight:700;margin-bottom:2px}
+.ci-meta{font-size:.7rem;color:var(--muted);margin-bottom:4px}
+.ci-addons{font-size:.68rem;color:var(--g3);font-weight:600;margin-bottom:4px}
+.ci-price{font-size:.88rem;font-weight:700;color:var(--amber)}
+.ci-ctrl{display:flex;align-items:center;gap:8px;margin-top:6px}
+.ci-btn{
+  width:26px;height:26px;border-radius:50%;
+  border:1.5px solid var(--border);
+  background:var(--white);
+  font-size:.9rem;font-weight:700;color:var(--g2);
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;
+}
+.ci-qty{font-size:.84rem;font-weight:700;min-width:20px;text-align:center}
+.ci-remove{font-size:.68rem;color:var(--amber);font-weight:600;cursor:pointer;margin-left:4px;border:none;background:none;font-family:var(--font-b)}
+
+.receipt{
+  background:var(--white);
+  border-radius:var(--r);
+  border:1.5px solid var(--border);
+  padding:16px;
+  margin:16px 0;
+}
+.receipt-row{
+  display:flex;justify-content:space-between;
+  align-items:center;
+  padding:5px 0;
+  font-size:.84rem;
+  border-bottom:1px dashed var(--border);
+}
+.receipt-row:last-child{border-bottom:none}
+.receipt-row.total{
+  padding-top:10px;margin-top:4px;
+  font-size:1rem;font-weight:700;
+  border-top:2px solid var(--g2);
+  border-bottom:none;color:var(--g1);
+}
+.receipt-row.delivery{color:var(--g3);font-weight:600}
+
+/* ═══ FORM ═══ */
+.form-card{
+  background:var(--white);
+  border-radius:var(--r);
+  border:1.5px solid var(--border);
+  padding:18px;
+  margin-bottom:12px;
+}
+.form-card-title{
+  font-size:.78rem;font-weight:700;
+  color:var(--g4);text-transform:uppercase;
+  letter-spacing:.08em;margin-bottom:14px;
+}
+.form-group{margin-bottom:12px}
+.form-group:last-child{margin-bottom:0}
+.form-label{font-size:.75rem;font-weight:600;color:var(--muted);margin-bottom:5px;display:block}
+.form-input{
+  width:100%;padding:11px 14px;
+  border:1.5px solid var(--border);
+  border-radius:var(--r-sm);
+  font-family:var(--font-b);font-size:.88rem;
+  background:var(--cream);color:var(--ink);
+  outline:none;transition:border .18s;
+  -webkit-appearance:none;
+}
+.form-input:focus{border-color:var(--g3);background:var(--white)}
+.form-input.error{border-color:#e04444}
+textarea.form-input{resize:none;min-height:72px}
+.form-select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b7c6d' fill='none' stroke-width='1.5'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;padding-right:36px}
+
+/* ═══ DELIVERY TYPE ═══ */
+.del-toggle{display:flex;gap:8px;margin-bottom:14px}
+.del-btn{
+  flex:1;padding:12px 8px;border-radius:var(--r-sm);
+  border:2px solid var(--border);
   background:var(--cream);
-  padding:10px 16px 8px;
-  box-shadow:0 2px 8px rgba(0,0,0,.07);
-  border-bottom:1px solid var(--mist);
+  font-family:var(--font-b);font-size:.8rem;font-weight:600;
+  color:var(--muted);cursor:pointer;
+  text-align:center;line-height:1.4;
+  transition:all .18s;
 }
-.cat-tabs {
-  display:flex; gap:8px; overflow-x:auto; padding:0;
-  scrollbar-width:none; max-width:600px; margin:0 auto;
+.del-btn.active{border-color:var(--g2);background:var(--g8);color:var(--g1)}
+.zone-list{display:flex;flex-direction:column;gap:8px}
+.zone-row{
+  display:flex;align-items:center;gap:12px;
+  padding:12px 14px;border-radius:var(--r-sm);
+  border:2px solid var(--border);background:var(--cream);
+  cursor:pointer;transition:all .18s;
 }
-.cat-tabs::-webkit-scrollbar { display:none }
-.cat-tab {
-  flex-shrink:0; padding:7px 16px; border-radius:20px; font-size:.78rem;
-  font-weight:700; font-family:var(--font-body); cursor:pointer; border:none;
-  background:var(--mist-light); color:var(--timber); transition:all .15s;
+.zone-row.active{border-color:var(--g2);background:var(--g8)}
+.zone-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.zone-info{flex:1}
+.zone-name{font-size:.82rem;font-weight:700;color:var(--ink)}
+.zone-area{font-size:.68rem;color:var(--muted);margin-top:1px}
+.zone-fee{font-size:.9rem;font-weight:800;color:var(--amber);white-space:nowrap}
+.pickup-info{
+  background:var(--g8);
+  border:1.5px solid var(--g6);
+  border-radius:var(--r-sm);
+  padding:14px;margin-top:10px;
 }
-.cat-tab.active { background:var(--forest); color:var(--white) }
+.pickup-info-title{font-size:.75rem;font-weight:700;color:var(--g2);margin-bottom:8px}
+.pickup-info-row{font-size:.82rem;color:var(--ink);margin-bottom:4px;font-weight:500}
+.pickup-info-note{font-size:.7rem;color:var(--muted);margin-top:6px;line-height:1.5}
 
-/* ── Menu Grid ── */
-.menu-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px }
-.menu-card {
-  background:var(--white); border-radius:var(--r-lg); overflow:hidden;
-  box-shadow:var(--shadow-sm); cursor:pointer; transition:transform .15s, box-shadow .15s;
-  border:2px solid transparent;
+/* ═══ PAYMENT ═══ */
+.pay-methods{display:flex;gap:8px;flex-wrap:wrap}
+.pay-btn{
+  flex:1;min-width:80px;
+  padding:10px 6px;border-radius:var(--r-sm);
+  border:2px solid var(--border);background:var(--cream);
+  font-family:var(--font-b);font-size:.72rem;font-weight:600;
+  color:var(--muted);cursor:pointer;text-align:center;
+  transition:all .18s;
 }
-.menu-card:active { transform:scale(.97) }
-.menu-card.in-cart { border-color:var(--forest) }
-.menu-card-img {
-  width:100%; aspect-ratio:4/3; object-fit:cover; background:var(--mist-light);
-  display:block;
+.pay-btn.active{border-color:var(--g2);background:var(--g8);color:var(--g1)}
+.pay-icon{font-size:1.3rem;display:block;margin-bottom:3px}
+.qr-card{
+  background:var(--white);
+  border-radius:var(--r);
+  border:1.5px solid var(--border);
+  padding:20px;text-align:center;
+  margin-bottom:12px;
 }
-.menu-card-img.no-img {
-  display:flex; align-items:center; justify-content:center;
-  font-size:2rem; background:var(--mist-light);
-}
-.menu-card-body { padding:10px }
-.menu-card-name { font-weight:700; font-size:.85rem; margin-bottom:4px; line-height:1.3 }
-.menu-card-price-row {
-  display:flex; align-items:center; justify-content:space-between; margin-top:2px;
-}
-.menu-card-price { color:var(--terra); font-weight:700; font-size:.9rem }
-.menu-card-badge {
-  display:inline-block; background:var(--mist-light); color:var(--timber);
-  font-size:.6rem; font-weight:700; padding:2px 6px; border-radius:10px; margin-top:4px;
-}
-/* ── Card Add Button (visible + on every card) ── */
-.card-add-btn {
-  width:30px; height:30px; border-radius:50%; border:none; cursor:pointer;
-  background:var(--forest); color:#fff; font-size:1.3rem; font-weight:700;
-  display:flex; align-items:center; justify-content:center;
-  flex-shrink:0; transition:transform .15s, background .15s;
-  line-height:1;
-}
-.card-add-btn:active { transform:scale(.88) }
-.qty-control {
-  display:flex; align-items:center; gap:8px; margin-top:8px;
-}
-.qty-btn {
-  width:28px; height:28px; border-radius:50%; border:none; cursor:pointer;
-  font-size:1.1rem; font-weight:700; font-family:var(--font-body);
-  display:flex; align-items:center; justify-content:center;
-  transition:all .15s;
-}
-.qty-btn.minus { background:var(--mist-light); color:var(--timber) }
-.qty-btn.plus { background:var(--forest); color:var(--white) }
-.qty-num { font-weight:700; font-size:.9rem; min-width:20px; text-align:center }
-
-/* ── Size Modal ── */
-.size-overlay {
-  position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:200;
-  display:flex; align-items:flex-end; justify-content:center;
-}
-.size-overlay.hidden { display:none }
-.size-sheet {
-  background:var(--white); border-radius:var(--r-xl) var(--r-xl) 0 0;
-  padding:24px 20px 40px; width:100%; max-width:500px;
-}
-.size-title { font-family:var(--font-soul); font-size:1.2rem; font-weight:700; margin-bottom:4px }
-.size-sub { font-size:.78rem; color:var(--timber); margin-bottom:20px }
-.size-options { display:flex; flex-direction:column; gap:10px; margin-bottom:20px }
-.size-opt {
-  display:flex; align-items:center; justify-content:space-between;
-  padding:14px 16px; border-radius:var(--r-md); border:2px solid var(--mist);
-  cursor:pointer; transition:all .15s;
-}
-.size-opt.selected { border-color:var(--forest); background:var(--mist-light) }
-.size-opt-name { font-weight:700; font-size:.9rem }
-.size-opt-price { font-weight:700; color:var(--terra) }
-.size-add-btn {
-  width:100%; padding:14px; background:var(--forest); color:var(--white);
-  border:none; border-radius:var(--r-md); font-size:.95rem; font-weight:700;
-  font-family:var(--font-body); cursor:pointer;
-}
-
-/* ── Cart Bar ── */
-.cart-bar {
-  position:fixed; bottom:0; left:0; right:0; z-index:150;
-  background:var(--forest-deep); color:var(--white);
-  padding:14px 20px; display:flex; align-items:center; gap:12px;
-  box-shadow:0 -4px 20px rgba(0,0,0,.2);
-  transform:translateY(100%); transition:transform .3s;
-}
-.cart-bar.visible { transform:translateY(0) }
-.cart-bar-info { flex:1 }
-.cart-bar-count { font-size:.72rem; opacity:.75 }
-.cart-bar-total { font-size:1.1rem; font-weight:700 }
-.cart-bar-btn {
-  padding:12px 24px; background:var(--terra); color:var(--white);
-  border:none; border-radius:var(--r-md); font-size:.9rem; font-weight:700;
-  font-family:var(--font-body); cursor:pointer;
-}
-
-/* ── Cart View ── */
-.cart-item {
-  background:var(--white); border-radius:var(--r-lg); padding:14px;
-  display:flex; gap:12px; align-items:center; margin-bottom:10px;
-  box-shadow:var(--shadow-sm);
-}
-.cart-item-img {
-  width:56px; height:56px; border-radius:var(--r-md); object-fit:cover;
-  background:var(--mist-light); flex-shrink:0;
-}
-.cart-item-info { flex:1 }
-.cart-item-name { font-weight:700; font-size:.88rem; margin-bottom:2px }
-.cart-item-size { font-size:.72rem; color:var(--timber) }
-.cart-item-price { font-weight:700; color:var(--terra); font-size:.9rem }
-.cart-item-controls { display:flex; align-items:center; gap:8px; margin-top:6px }
-.cart-remove { background:none; border:none; color:var(--terra); font-size:.72rem; cursor:pointer; font-family:var(--font-body); font-weight:600 }
-
-  /* ── Delivery zone cards ── */
-  .delivery-type-row { display:flex; gap:10px; margin-bottom:14px; }
-  .delivery-type-btn { flex:1; border:2px solid var(--mist); border-radius:12px; padding:12px 10px; background:#fff;
-    cursor:pointer; font-family:var(--font-body); font-size:.82rem; font-weight:600; text-align:center;
-    transition:all .18s; color:var(--timber); }
-  .delivery-type-btn.selected { border-color:var(--forest); background:#f0fdf4; color:var(--forest); }
-  .zone-grid { display:flex; flex-direction:column; gap:8px; margin-top:4px; }
-  .zone-card { border:2px solid var(--mist); border-radius:12px; padding:12px 14px; cursor:pointer;
-    background:#fff; display:flex; align-items:center; justify-content:space-between;
-    transition:all .18s; }
-  .zone-card.selected { border-color:var(--forest); background:#f0fdf4; }
-  .zone-card-left { display:flex; align-items:center; gap:10px; }
-  .zone-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
-  .zone-name { font-weight:700; font-size:.82rem; color:var(--timber); }
-  .zone-areas { font-size:.72rem; color:#94a3b8; margin-top:1px; }
-  .zone-fee { font-weight:800; font-size:.9rem; color:var(--terra); white-space:nowrap; }
-  .zone-custom { font-size:.72rem; color:#94a3b8; text-align:right; }
-  .delivery-fee-row { display:flex; justify-content:space-between; padding:6px 0; font-size:.88rem; color:var(--forest); font-weight:600; }
-
-.cart-summary {
-  background:var(--white); border-radius:var(--r-lg); padding:16px;
-  margin-bottom:16px; box-shadow:var(--shadow-sm);
-}
-.cart-summary-row { display:flex; justify-content:space-between; padding:6px 0; font-size:.88rem }
-.cart-summary-row.total { font-weight:700; font-size:1rem; border-top:1px solid var(--mist); margin-top:6px; padding-top:12px }
-
-/* ── Checkout Form ── */
-.form-section { margin-bottom:20px }
-.form-section-title {
-  font-weight:800; font-size:.8rem; color:var(--timber); text-transform:uppercase;
-  letter-spacing:.5px; margin-bottom:10px; display:flex; align-items:center; gap:6px;
-}
-.form-group { margin-bottom:12px }
-.form-label { font-size:.75rem; font-weight:700; color:var(--timber); display:block; margin-bottom:4px }
-.form-input {
-  width:100%; padding:12px 14px; border:1.5px solid var(--mist); border-radius:var(--r-md);
-  font-size:.9rem; font-family:var(--font-body); outline:none; transition:border-color .2s;
+.qr-img{
+  width:180px;height:180px;object-fit:contain;
+  border-radius:12px;border:1px solid var(--border);
+  margin:0 auto 14px;display:block;
   background:var(--white);
 }
-.form-input:focus { border-color:var(--forest) }
-.form-input.error { border-color:var(--terra) }
-.form-textarea { resize:vertical; min-height:80px }
-.form-select { appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236B7B6E' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 12px center }
+.qr-acct-name{font-size:.72rem;color:var(--muted);margin-bottom:2px}
+.qr-name{font-size:1rem;font-weight:700;color:var(--g1);margin-bottom:10px}
+.qr-lbl{font-size:.72rem;color:var(--muted);margin-bottom:2px}
+.qr-num{font-size:.95rem;font-weight:700;color:var(--ink);letter-spacing:.05em}
+.pay-total{
+  background:var(--g1);color:var(--white);
+  border-radius:var(--r-sm);padding:14px 18px;
+  display:flex;justify-content:space-between;align-items:center;
+  margin-bottom:12px;
+}
+.pay-total-label{font-size:.8rem;opacity:.75}
+.pay-total-amt{font-size:1.3rem;font-weight:800;font-family:var(--font-d)}
 
-/* ── Payment Section ── */
-.payment-methods { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px }
-.pay-method-btn {
-  flex:1 1 calc(20% - 8px); min-width:60px; padding:10px 6px; border:2px solid var(--mist); border-radius:var(--r-md);
-  background:var(--white); cursor:pointer; text-align:center; transition:all .15s;
-  font-family:var(--font-body);
+.proof-area{
+  border:2px dashed var(--g5);
+  border-radius:var(--r);
+  padding:28px 20px;text-align:center;
+  cursor:pointer;background:var(--g8);
+  transition:all .18s;
 }
-.pay-method-btn.active { border-color:var(--forest); background:var(--mist-light) }
-.pay-method-icon { font-size:1.3rem; margin-bottom:3px }
-.pay-method-name { font-size:.68rem; font-weight:700; color:var(--forest-deep) }
+.proof-area:active,.proof-area.dragover{background:var(--g7);border-color:var(--g3)}
+.proof-icon{font-size:2.2rem;margin-bottom:8px}
+.proof-text{font-size:.82rem;font-weight:600;color:var(--g3)}
+.proof-sub{font-size:.68rem;color:var(--muted);margin-top:3px}
+.proof-preview{width:100%;max-height:200px;object-fit:contain;border-radius:8px;display:none;margin-top:10px}
 
-.qr-box {
-  background:var(--mist-light); border-radius:var(--r-lg); padding:20px;
-  text-align:center; margin-bottom:16px;
+/* ═══ SUCCESS ═══ */
+.success-card{
+  text-align:center;padding:32px 20px;
 }
-.qr-placeholder {
-  width:140px; height:140px; background:var(--white); border-radius:var(--r-md);
-  margin:0 auto 12px; display:flex; align-items:center; justify-content:center;
-  font-size:3rem; box-shadow:var(--shadow-sm);
+.success-icon{font-size:4rem;margin-bottom:16px;display:block;animation:pop .4s cubic-bezier(.34,1.56,.64,1)}
+@keyframes pop{0%{transform:scale(0)}100%{transform:scale(1)}}
+.success-title{font-family:var(--font-d);font-size:1.8rem;font-weight:800;color:var(--g1);margin-bottom:6px}
+.success-sub{font-size:.84rem;color:var(--muted);margin-bottom:20px}
+.success-ref{
+  background:var(--g1);color:var(--white);
+  border-radius:var(--r-sm);padding:14px 20px;
+  font-family:var(--font-d);font-size:1.4rem;font-weight:700;
+  letter-spacing:.05em;margin-bottom:6px;display:inline-block;
 }
-.qr-label { font-size:.78rem; color:var(--timber); font-weight:600 }
-.qr-number { font-size:1.1rem; font-weight:700; color:var(--forest-deep); margin-top:4px }
+.success-ref-note{font-size:.7rem;color:var(--muted);margin-bottom:24px}
+.success-steps{background:var(--white);border:1.5px solid var(--border);border-radius:var(--r);padding:16px;text-align:left;margin-bottom:16px}
+.ss-row{display:flex;gap:12px;align-items:flex-start;padding:8px 0;border-bottom:1px dashed var(--border)}
+.ss-row:last-child{border-bottom:none;padding-bottom:0}
+.ss-num{width:24px;height:24px;border-radius:50%;background:var(--g2);color:var(--white);font-size:.7rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.ss-text{font-size:.8rem;color:var(--ink);line-height:1.5}
+.ss-text strong{color:var(--g2)}
+.contact-box{
+  background:var(--g8);border:1.5px solid var(--g6);
+  border-radius:var(--r-sm);padding:14px;
+  font-size:.8rem;color:var(--ink);text-align:left;
+  margin-bottom:20px;
+}
+.contact-box a{color:var(--g2);font-weight:700}
 
-.proof-upload-area {
-  border:2px dashed var(--mist); border-radius:var(--r-lg); padding:24px;
-  text-align:center; cursor:pointer; transition:all .2s; background:var(--white);
+/* ═══ BUTTONS ═══ */
+.btn{
+  width:100%;padding:14px;border-radius:var(--r-sm);
+  font-family:var(--font-b);font-size:.92rem;font-weight:700;
+  border:none;cursor:pointer;transition:all .18s;
+  display:flex;align-items:center;justify-content:center;gap:8px;
 }
-.proof-upload-area:hover, .proof-upload-area.dragover { border-color:var(--forest); background:var(--mist-light) }
-.proof-upload-icon { font-size:2.5rem; margin-bottom:8px }
-.proof-upload-text { font-size:.82rem; color:var(--timber); font-weight:600 }
-.proof-preview { width:100%; max-height:200px; object-fit:contain; border-radius:var(--r-md); margin-top:12px }
+.btn-primary{background:var(--g2);color:var(--white)}
+.btn-primary:active{background:var(--g1)}
+.btn-primary:disabled{background:var(--g6);color:var(--muted);cursor:not-allowed}
+.btn-secondary{background:transparent;color:var(--g3);border:1.5px solid var(--g5);margin-top:8px}
+.btn-stack{display:flex;flex-direction:column;gap:0;margin-top:16px}
 
-/* ── Buttons ── */
-.btn-primary {
-  width:100%; padding:16px; background:var(--forest); color:var(--white);
-  border:none; border-radius:var(--r-md); font-size:1rem; font-weight:700;
-  font-family:var(--font-body); cursor:pointer; transition:background .15s;
+/* ═══ CART BAR ═══ */
+.cart-bar{
+  position:fixed;bottom:-80px;left:0;right:0;z-index:150;
+  padding:0 16px 16px;
+  transition:bottom .25s cubic-bezier(.34,1.2,.64,1);
 }
-.btn-primary:active { background:var(--forest-light) }
-.btn-primary:disabled { background:var(--mist); color:var(--timber); cursor:not-allowed }
-.btn-secondary {
-  width:100%; padding:14px; background:var(--mist-light); color:var(--forest-deep);
-  border:none; border-radius:var(--r-md); font-size:.9rem; font-weight:700;
-  font-family:var(--font-body); cursor:pointer; margin-top:10px;
+.cart-bar.visible{bottom:0}
+.cart-bar-inner{
+  max-width:600px;margin:0 auto;
+  background:var(--g1);border-radius:var(--r);
+  padding:12px 16px;
+  display:flex;align-items:center;gap:12px;
+  box-shadow:var(--sh-md);
+}
+.cb-icon{position:relative}
+.cb-badge{
+  position:absolute;top:-6px;right:-8px;
+  background:var(--amber);color:var(--white);
+  border-radius:50%;width:18px;height:18px;
+  font-size:.6rem;font-weight:800;
+  display:flex;align-items:center;justify-content:center;
+}
+.cb-info{flex:1}
+.cb-count{font-size:.68rem;color:var(--g5)}
+.cb-total{font-size:1rem;font-weight:800;color:var(--white)}
+.cb-btn{
+  background:var(--amber);color:var(--white);
+  border:none;border-radius:var(--r-sm);
+  padding:8px 16px;font-family:var(--font-b);
+  font-size:.8rem;font-weight:700;cursor:pointer;
+  white-space:nowrap;
 }
 
-/* ── Success View ── */
-.success-card {
-  background:var(--white); border-radius:var(--r-xl); padding:32px 24px;
-  text-align:center; box-shadow:var(--shadow-md); margin:20px 0;
+/* ═══ MODAL (size/sugar/addon) ═══ */
+.modal-overlay{
+  position:fixed;inset:0;z-index:300;
+  background:rgba(26,46,28,.6);backdrop-filter:blur(4px);
+  display:flex;align-items:flex-end;justify-content:center;
 }
-.success-icon { font-size:4rem; margin-bottom:16px }
-.success-title { font-family:var(--font-soul); font-size:1.6rem; font-weight:700; margin-bottom:8px }
-.success-ref {
-  background:var(--mist-light); border-radius:var(--r-md); padding:12px 20px;
-  font-size:1.1rem; font-weight:700; color:var(--forest); margin:16px 0;
-  font-family:monospace; letter-spacing:2px;
+.modal-overlay.hidden{display:none}
+.modal-sheet{
+  background:var(--white);
+  width:100%;max-width:600px;
+  border-radius:20px 20px 0 0;
+  padding:20px 20px 40px;
+  max-height:85dvh;overflow-y:auto;
+  animation:slideup .22s cubic-bezier(.34,1.2,.64,1);
 }
-.success-steps { text-align:left; margin:20px 0 }
-.success-step {
-  display:flex; gap:12px; padding:10px 0; border-bottom:1px solid var(--mist-light);
+@keyframes slideup{0%{transform:translateY(100%)}100%{transform:translateY(0)}}
+.modal-handle{width:36px;height:4px;background:var(--g6);border-radius:2px;margin:0 auto 16px}
+.modal-title{font-family:var(--font-d);font-size:1.1rem;font-weight:700;color:var(--g1);margin-bottom:2px}
+.modal-sub{font-size:.78rem;color:var(--muted);margin-bottom:16px}
+.opt-list{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
+.opt-row{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 14px;border-radius:var(--r-sm);
+  border:2px solid var(--border);
+  cursor:pointer;transition:all .15s;
 }
-.success-step:last-child { border-bottom:none }
-.success-step-num {
-  width:28px; height:28px; border-radius:50%; background:var(--forest);
-  color:var(--white); font-size:.75rem; font-weight:700;
-  display:flex; align-items:center; justify-content:center; flex-shrink:0;
+.opt-row.active{border-color:var(--g2);background:var(--g8)}
+.opt-row-left{display:flex;align-items:center;gap:10px}
+.opt-radio{
+  width:18px;height:18px;border-radius:50%;
+  border:2px solid var(--g5);flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  transition:all .15s;
 }
-.success-step-text { font-size:.82rem; color:var(--timber) }
-.success-step-text strong { color:var(--forest-deep) }
+.opt-row.active .opt-radio{border-color:var(--g2);background:var(--g2)}
+.opt-row.active .opt-radio::after{content:'';width:6px;height:6px;border-radius:50%;background:var(--white)}
+.opt-checkbox{border-radius:4px}
+.opt-row.active .opt-checkbox{background:var(--g2);border-color:var(--g2)}
+.opt-row.active .opt-checkbox::after{content:'✓';color:var(--white);font-size:.6rem}
+.opt-name{font-size:.88rem;font-weight:600;color:var(--ink)}
+.opt-sub{font-size:.7rem;color:var(--muted);margin-top:1px}
+.opt-price{font-size:.88rem;font-weight:700;color:var(--amber)}
 
-/* ── Info Box ── */
-.info-box {
-  background:var(--mist-light); border-radius:var(--r-md); padding:14px 16px;
-  margin-bottom:16px; font-size:.8rem; color:var(--timber); line-height:1.6;
+/* ═══ LOADING ═══ */
+.loading-overlay{
+  position:fixed;inset:0;z-index:500;
+  background:rgba(26,46,28,.7);backdrop-filter:blur(4px);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;
 }
-.info-box strong { color:var(--forest-deep) }
-.info-box.warning { background:#FEF3C7; color:#92400E }
-.info-box.success { background:#D1FAE5; color:#065F46 }
+.loading-overlay.hidden{display:none}
+.spinner{
+  width:42px;height:42px;border-radius:50%;
+  border:3px solid rgba(255,255,255,.2);
+  border-top-color:var(--white);
+  animation:spin .7s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{color:var(--white);font-size:.85rem;font-weight:600}
 
-/* ── Loading ── */
-.loading-overlay {
-  position:fixed; inset:0; background:rgba(255,255,255,.9); z-index:300;
-  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px;
+/* ═══ TOAST ═══ */
+.toast{
+  position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);
+  background:var(--g1);color:var(--white);
+  padding:10px 18px;border-radius:20px;
+  font-size:.82rem;font-weight:600;
+  z-index:400;opacity:0;transition:all .25s;
+  white-space:nowrap;pointer-events:none;max-width:90vw;
 }
-.loading-overlay.hidden { display:none }
-.spinner {
-  width:40px; height:40px; border:4px solid var(--mist);
-  border-top-color:var(--forest); border-radius:50%;
-  animation:spin .8s linear infinite;
-}
-@keyframes spin { to { transform:rotate(360deg) } }
-.loading-text { font-weight:600; color:var(--timber) }
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.error{background:#c0392b}
+.toast.success{background:var(--g2)}
 
-/* ── Toast ── */
-.toast {
-  position:fixed; bottom:80px; left:50%; transform:translateX(-50%) translateY(20px);
-  background:var(--forest-deep); color:var(--white); padding:12px 20px;
-  border-radius:var(--r-md); font-size:.82rem; font-weight:600; z-index:400;
-  opacity:0; transition:all .3s; pointer-events:none; white-space:nowrap;
+/* ═══ INFO BOX ═══ */
+.info-box{
+  background:var(--g8);border:1.5px solid var(--g6);
+  border-radius:var(--r-sm);padding:12px 14px;
+  font-size:.78rem;color:var(--g2);line-height:1.6;
+  margin-bottom:12px;
 }
-.toast.show { opacity:1; transform:translateX(-50%) translateY(0) }
-.toast.error { background:var(--terra) }
-.toast.success { background:#065F46 }
+.info-box.warning{background:#fff8f0;border-color:#f4c38a;color:#7a4a10}
 
-/* ── Responsive ── */
-@media (max-width:360px) {
-  .menu-grid { grid-template-columns:1fr }
+/* ═══ MISC ═══ */
+.tag-green{
+  display:inline-block;
+  background:#dcfce7;color:#166534;
+  border:1px solid #86efac;border-radius:6px;
+  padding:2px 7px;font-size:.68rem;font-weight:700;
+  margin-right:3px;
 }
 </style>
 </head>
 <body>
 
-<!-- Loading Overlay -->
-<div class="loading-overlay" id="loadingOverlay">
-  <div class="spinner"></div>
-  <div class="loading-text" id="loadingText">Loading menu...</div>
-</div>
-
-<!-- Toast -->
-<div class="toast" id="toast"></div>
-
-<!-- Header -->
-<div class="header">
-  <img class="header-logo" src="/images/logo.png" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2250%22 fill=%22%23314C47%22/><text y=%22.9em%22 font-size=%2260%22 x=%2250%22 text-anchor=%22middle%22 fill=%22white%22>🌿</text></svg>'" alt="Yani Garden Cafe">
-  <div class="header-title">Yani Garden Cafe</div>
-  <div class="header-sub">Online Order · Delivery</div>
-  <div class="header-badge">
-    <span class="header-dot"></span>
-    <span>Order Online · Book Your Own Courier</span>
+<!-- ═══ HEADER ═══ -->
+<header class="hdr">
+  <div class="hdr-inner">
+    <div class="hdr-brand">
+      <img class="hdr-logo" src="/images/logo.png" alt="YANI" onerror="this.style.display='none'">
+      <div>
+        <div class="hdr-name">YANI Garden Cafe</div>
+        <div class="hdr-tag">Amadeo, Cavite</div>
+      </div>
+    </div>
+    <div class="hdr-live"><span class="hdr-dot"></span>Open</div>
   </div>
-</div>
+</header>
 
-<!-- Step Indicator -->
+<!-- ═══ STEP BAR ═══ -->
 <div class="steps" id="stepBar">
-  <div class="step-item active" id="step1" onclick="goToStep(1)">
-    <div class="step-num">1</div>
-    <div class="step-label">Menu</div>
-  </div>
-  <div class="step-item" id="step2" onclick="goToStep(2)">
-    <div class="step-num">2</div>
-    <div class="step-label">Cart</div>
-  </div>
-  <div class="step-item" id="step3" onclick="goToStep(3)">
-    <div class="step-num">3</div>
-    <div class="step-label">Details</div>
-  </div>
-  <div class="step-item" id="step4" onclick="goToStep(4)">
-    <div class="step-num">4</div>
-    <div class="step-label">Payment</div>
+  <div class="steps-inner">
+    <div class="step active" id="step1"><div class="step-num"><span>1</span></div><div class="step-label">Menu</div></div>
+    <div class="step-line"></div>
+    <div class="step" id="step2"><div class="step-num"><span>2</span></div><div class="step-label">Cart</div></div>
+    <div class="step-line"></div>
+    <div class="step" id="step3"><div class="step-num"><span>3</span></div><div class="step-label">Details</div></div>
+    <div class="step-line"></div>
+    <div class="step" id="step4"><div class="step-num"><span>4</span></div><div class="step-label">Payment</div></div>
   </div>
 </div>
 
-<!-- ═══ STICKY CATEGORY BAR ═══ -->
-<div class="cat-tabs-sticky" id="catTabsWrapper">
-  <div class="cat-tabs" id="catTabs"></div>
-</div>
-<!-- ═══ VIEW 1: MENU ═══ -->
-<div class="view active" id="view1">
-  <div class="info-box" style="margin-top:16px">
-    <strong>📋 How it works:</strong> Browse our menu → add items to cart → enter your name, phone &amp; pickup time → pay via GCash, PayMaya, or Cash → upload your payment proof → we prepare your order! 🎉
-  </div>
-  <div class="menu-grid" id="menuGrid">
-    <div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--timber)">Loading menu...</div>
-  </div>
+<!-- ═══ CATEGORY TABS ═══ -->
+<div class="cat-wrap" id="catTabsWrapper">
+  <div class="cat-inner" id="catTabs"></div>
 </div>
 
-<!-- ═══ VIEW 2: CART ═══ -->
-<div class="view" id="view2">
-  <div id="cartItems"></div>
-  <div class="cart-summary" id="cartSummary" style="display:none">
-    <div class="cart-summary-row">
-      <span>Subtotal</span>
-      <span id="cartSubtotal">₱0</span>
-    </div>
-    <div class="cart-summary-row" style="font-size:.78rem;color:var(--timber)">
-      <span>Delivery fee</span>
-      <span>Paid to courier</span>
-    </div>
-    <div class="cart-summary-row total">
-      <span>Order Total</span>
-      <span id="cartTotal">₱0</span>
-    </div>
-  </div>
-  <div class="info-box warning">
-    <strong>⚠️ Note:</strong> Delivery fee is paid directly to your courier (Lalamove/Grab Express). We only charge for the food items.
-  </div>
-  <button class="btn-primary" id="cartProceedBtn" onclick="goToStep(3)" disabled>Proceed to Details →</button>
-  <button class="btn-secondary" onclick="goToStep(1)">← Continue Shopping</button>
-</div>
+<div class="main">
 
-<!-- ═══ VIEW 3: CUSTOMER DETAILS ═══ -->
-<div class="view" id="view3">
-  <div class="form-section">
-    <div class="form-section-title">👤 Your Details</div>
-    <div class="form-group">
-      <label class="form-label">Full Name *</label>
-      <input class="form-input" id="custName" type="text" placeholder="Juan dela Cruz" autocomplete="name">
-    </div>
-    <div class="form-group">
-      <label class="form-label">Mobile Number *</label>
-      <input class="form-input" id="custPhone" type="tel" placeholder="09XX XXX XXXX" autocomplete="tel">
-    </div>
-    <div class="form-group">
-      <label class="form-label">Email (optional)</label>
-      <input class="form-input" id="custEmail" type="email" placeholder="juan@email.com" autocomplete="email">
+  <!-- ══ VIEW 1: MENU ══ -->
+  <div class="view active" id="view1">
+    <div class="menu-grid" id="menuGrid">
+      <div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:var(--muted)">
+        <div style="font-size:2rem;margin-bottom:8px">🌿</div>
+        Loading menu...
+      </div>
     </div>
   </div>
-  <div class="form-section">
-    <div class="form-section-title">📍 Delivery Address</div>
-    <div class="form-group">
-      <label class="form-label">Complete Address *</label>
-      <textarea class="form-input form-textarea" id="custAddress" placeholder="House/Unit No., Street, Barangay, City, Province"></textarea>
+
+  <!-- ══ VIEW 2: CART ══ -->
+  <div class="view" id="view2">
+    <div id="cartItems"></div>
+    <div id="cartSummary" style="display:none">
+      <div class="receipt" id="cartReceipt">
+        <div class="receipt-row">
+          <span>Subtotal</span>
+          <span id="cartSubtotal">₱0</span>
+        </div>
+        <div class="receipt-row delivery" id="cartDeliveryFeeRow" style="display:none">
+          <span>🚚 Delivery</span>
+          <span id="cartDeliveryAmt">₱0</span>
+        </div>
+        <div class="receipt-row total">
+          <span>Total</span>
+          <span id="cartTotal">₱0</span>
+        </div>
+      </div>
+      <div class="btn-stack">
+        <button class="btn btn-primary" id="cartProceedBtn" onclick="goToStep(3)" disabled>Continue to Details →</button>
+        <button class="btn btn-secondary" onclick="goToStep(1)">← Add More Items</button>
+      </div>
     </div>
-    <div class="form-group">
-      <label class="form-label">Delivery Notes (optional)</label>
-      <input class="form-input" id="custNotes" type="text" placeholder="Landmark, gate code, etc.">
+    <div id="cartEmptyMsg" style="display:none">
+      <div class="cart-empty">
+        <div class="cart-empty-icon">🛒</div>
+        <div class="cart-empty-text">Your cart is empty</div>
+        <button class="btn btn-primary" onclick="goToStep(1)" style="width:auto;padding:10px 24px">Browse Menu</button>
+      </div>
     </div>
   </div>
-  <div class="form-section">
-    <div class="form-section-title">🚚 Delivery Option</div>
 
-    <div class="delivery-type-row">
-      <button class="delivery-type-btn selected" id="deliveryTypeYani" onclick="selectDeliveryType('YANI')">
-        🛵 YANI Direct Delivery
-      </button>
-      <button class="delivery-type-btn" id="deliveryTypeOwn" onclick="selectDeliveryType('OWN')">
-        📦 I'll Arrange My Own Courier
-      </button>
-    </div>
+  <!-- ══ VIEW 3: DETAILS ══ -->
+  <div class="view" id="view3">
 
-    <!-- YANI zones -->
-    <div id="yaniZoneSection">
-      <div class="form-label" style="margin-bottom:8px">Select your delivery zone:</div>
-      <div class="zone-grid">
-        <div class="zone-card" id="zone1" onclick="selectZone(1,60)">
-          <div class="zone-card-left">
+    <!-- Delivery -->
+    <div class="form-card">
+      <div class="form-card-title">🚚 Delivery</div>
+      <div class="del-toggle">
+        <button class="del-btn active" id="deliveryTypeYani" onclick="selectDeliveryType('YANI')">🛵 YANI Delivery</button>
+        <button class="del-btn" id="deliveryTypeOwn" onclick="selectDeliveryType('OWN')">📦 Own Courier</button>
+      </div>
+
+      <!-- YANI zone picker -->
+      <div id="yaniZoneSection">
+        <div style="font-size:.72rem;font-weight:600;color:var(--muted);margin-bottom:8px">SELECT YOUR ZONE:</div>
+        <div class="zone-list">
+          <div class="zone-row" id="zone1" onclick="selectZone(1,60)">
             <div class="zone-dot" style="background:#22c55e"></div>
-            <div>
+            <div class="zone-info">
               <div class="zone-name">Zone 1 — Near (0–3 km)</div>
-              <div class="zone-areas">Amadeo proper, Barangay Loma, nearby subdivisions</div>
+              <div class="zone-area">Amadeo proper, Barangay Loma, nearby subdivisions</div>
             </div>
+            <div class="zone-fee">₱60</div>
           </div>
-          <div class="zone-fee">₱60</div>
-        </div>
-        <div class="zone-card" id="zone2" onclick="selectZone(2,100)">
-          <div class="zone-card-left">
+          <div class="zone-row" id="zone2" onclick="selectZone(2,100)">
             <div class="zone-dot" style="background:#eab308"></div>
-            <div>
+            <div class="zone-info">
               <div class="zone-name">Zone 2 — Mid (4–6 km)</div>
-              <div class="zone-areas">Mendez crossings, Tagaytay boundary, deeper Amadeo</div>
+              <div class="zone-area">Mendez, Tagaytay boundary, deeper Amadeo</div>
             </div>
+            <div class="zone-fee">₱100</div>
           </div>
-          <div class="zone-fee">₱100</div>
-        </div>
-        <div class="zone-card" id="zone3" onclick="selectZone(3,150)">
-          <div class="zone-card-left">
+          <div class="zone-row" id="zone3" onclick="selectZone(3,150)">
             <div class="zone-dot" style="background:#ef4444"></div>
-            <div>
+            <div class="zone-info">
               <div class="zone-name">Zone 3 — Far (7–10 km)</div>
-              <div class="zone-areas">Tagaytay proper, Indang, Alfonso edge</div>
+              <div class="zone-area">Tagaytay proper, Indang, Alfonso</div>
             </div>
+            <div class="zone-fee">₱150</div>
           </div>
-          <div class="zone-fee">₱150</div>
-        </div>
-        <div class="zone-card" id="zone4" onclick="selectZone(4,0)">
-          <div class="zone-card-left">
-            <div class="zone-dot" style="background:#64748b"></div>
-            <div>
+          <div class="zone-row" id="zone4" onclick="selectZone(4,0)">
+            <div class="zone-dot" style="background:#94a3b8"></div>
+            <div class="zone-info">
               <div class="zone-name">Zone 4 — Extended (10 km+)</div>
-              <div class="zone-areas">Beyond Tagaytay, custom quote</div>
+              <div class="zone-area">Beyond Tagaytay — staff will confirm fee</div>
             </div>
-          </div>
-          <div style="text-align:right">
-            <div class="zone-fee" style="color:#64748b">Custom</div>
-            <div class="zone-custom">Staff will confirm fee</div>
+            <div class="zone-fee" style="color:var(--muted);font-size:.78rem">Custom</div>
           </div>
         </div>
       </div>
-      <div class="info-box" style="margin-top:10px">
-        
+
+      <!-- Own courier -->
+      <div id="ownCourierSection" style="display:none">
+        <div class="form-group">
+          <label class="form-label">Which courier?</label>
+          <select class="form-input form-select" id="courierType">
+            <option value="LALAMOVE">Lalamove</option>
+            <option value="GRAB_EXPRESS">Grab Express</option>
+            <option value="OTHER">Other</option>
+          </select>
+        </div>
+        <div class="pickup-info">
+          <div class="pickup-info-title">📍 Pickup Details</div>
+          <div class="pickup-info-row">🌿 YANI Garden Cafe</div>
+          <div class="pickup-info-row">📞 <strong>0967-4000-040</strong></div>
+          <div class="pickup-info-note">Please provide your <strong>Order Reference</strong> and <strong>Name</strong> when coordinating pickup.</div>
+        </div>
       </div>
     </div>
 
-    <!-- Own courier section -->
-    <div id="ownCourierSection" style="display:none">
+    <!-- Customer Info -->
+    <div class="form-card">
+      <div class="form-card-title">👤 Your Info</div>
       <div class="form-group">
-        <label class="form-label">Which courier will you use?</label>
-        <select class="form-input form-select" id="courierType">
-          <option value="LALAMOVE">Lalamove</option>
-          <option value="GRAB_EXPRESS">Grab Express</option>
-          <option value="OTHER">Other</option>
-        </select>
+        <label class="form-label">Full Name *</label>
+        <input class="form-input" id="custName" type="text" placeholder="Juan dela Cruz" autocomplete="name">
       </div>
-      <div class="info-box">
-        <strong>📦 Pickup address:</strong> Yani Garden Cafe, Purok 8 Daang Malinaw, Loma, Amadeo, Cavite. Our team will have your order ready for pickup.
+      <div class="form-group">
+        <label class="form-label">Mobile Number *</label>
+        <input class="form-input" id="custPhone" type="tel" placeholder="09XX XXX XXXX" autocomplete="tel">
       </div>
-      <div style="margin-top:10px;background:#fff7ed;border:2px solid #fed7aa;border-radius:12px;padding:14px 16px">
-        <div style="font-weight:800;font-size:.88rem;color:#9a3412;margin-bottom:6px">📍 Coordinate your pickup:</div>
-        <div style="font-size:.82rem;color:#7c2d12;line-height:1.7">
-          <div>🌿 <strong>YANI Garden Cafe</strong></div>
-          <div>📞 <strong>0967-4000-040</strong></div>
-          <div style="margin-top:6px;font-size:.78rem;color:#92400e">
-            Please provide your <strong>Order Reference</strong> and <strong>Name</strong> when you contact us.
-          </div>
+      <div class="form-group">
+        <label class="form-label">Email <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+        <input class="form-input" id="custEmail" type="email" placeholder="juan@email.com" autocomplete="email">
+      </div>
+    </div>
+
+    <!-- Address -->
+    <div class="form-card">
+      <div class="form-card-title">📍 Delivery Address</div>
+      <div class="form-group">
+        <label class="form-label">Complete Address *</label>
+        <textarea class="form-input" id="custAddress" placeholder="House/Unit No., Street, Barangay, City"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Landmark / Notes <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+        <input class="form-input" id="custNotes" placeholder="Gate code, landmark, etc.">
+      </div>
+    </div>
+
+    <div class="btn-stack">
+      <button class="btn btn-primary" onclick="proceedToPayment()">Continue to Payment →</button>
+      <button class="btn btn-secondary" onclick="goToStep(2)">← Back to Cart</button>
+    </div>
+  </div>
+
+  <!-- ══ VIEW 4: PAYMENT ══ -->
+  <div class="view" id="view4">
+
+    <div class="info-box">💳 <strong>Online payment only</strong> — No cash on delivery. Send the exact amount then upload your proof below.</div>
+
+    <!-- Pay methods -->
+    <div class="form-card">
+      <div class="form-card-title">Choose Payment Method</div>
+      <div class="pay-methods">
+        <button class="pay-btn active" id="payGcash" onclick="selectPayMethod('GCASH')">
+          <span class="pay-icon">💚</span>GCash
+        </button>
+        <button class="pay-btn" id="payInstapay" onclick="selectPayMethod('INSTAPAY')">
+          <span class="pay-icon">🏦</span>InstaPay
+        </button>
+        <button class="pay-btn" id="payBdo" onclick="selectPayMethod('BDO')">
+          <span class="pay-icon">🔵</span>BDO
+        </button>
+        <button class="pay-btn" id="payBpi" onclick="selectPayMethod('BPI')">
+          <span class="pay-icon">🔴</span>BPI
+        </button>
+        <button class="pay-btn" id="payUnionbank" onclick="selectPayMethod('UNIONBANK')">
+          <span class="pay-icon">🟠</span>UnionBank
+        </button>
+      </div>
+    </div>
+
+    <!-- QR + amount -->
+    <div class="qr-card">
+      <img class="qr-img" id="qrCodeImg" src="/images/pay-gcash.jpg" alt="QR Code">
+      <div class="qr-acct-name">Account Name</div>
+      <div class="qr-name" id="paymentName">LEGERYN PIA</div>
+      <div class="qr-lbl" id="paymentNumLabel">Scan QR to pay</div>
+      <div class="qr-num" id="paymentNumber">—</div>
+    </div>
+
+    <div class="pay-total">
+      <div class="pay-total-label">Amount to Pay</div>
+      <div class="pay-total-amt" id="payAmount">₱0</div>
+    </div>
+
+    <!-- Upload proof -->
+    <div class="form-card">
+      <div class="form-card-title">📸 Payment Proof</div>
+      <div class="proof-area" id="proofUploadArea"
+        onclick="document.getElementById('proofFileInput').click()"
+        ondragover="onDragOver(event)" ondrop="onDrop(event)">
+        <div class="proof-icon" id="proofIcon">📷</div>
+        <div class="proof-text" id="proofText">Tap to upload screenshot</div>
+        <div class="proof-sub">JPG, PNG · Max 5MB</div>
+        <img class="proof-preview" id="proofPreview" alt="Proof">
+      </div>
+      <input type="file" id="proofFileInput" accept="image/*" style="display:none" onchange="onProofFileChange(this)">
+    </div>
+
+    <div class="btn-stack">
+      <button class="btn btn-primary" id="submitOrderBtn" onclick="submitOrder()">Place Order →</button>
+      <button class="btn btn-secondary" onclick="goToStep(3)">← Back to Details</button>
+    </div>
+  </div>
+
+  <!-- ══ VIEW 5: SUCCESS ══ -->
+  <div class="view" id="view5">
+    <div class="success-card">
+      <span class="success-icon">🎉</span>
+      <div class="success-title">Order Placed!</div>
+      <div class="success-sub">Your order reference is:</div>
+      <div class="success-ref" id="successRef">YANI-OL-000</div>
+      <div class="success-ref-note">Screenshot this — you'll need it to track your order</div>
+
+      <div class="success-steps">
+        <div class="ss-row">
+          <div class="ss-num">1</div>
+          <div class="ss-text"><strong>Payment Verification</strong> — We'll verify your payment within 30 minutes.</div>
+        </div>
+        <div class="ss-row">
+          <div class="ss-num">2</div>
+          <div class="ss-text"><strong>Preparation</strong> — Once verified, we start making your order.</div>
+        </div>
+        <div class="ss-row">
+          <div class="ss-num">3</div>
+          <div class="ss-text"><strong>SMS Update</strong> — You'll get a text when your order is ready.</div>
+        </div>
+        <div class="ss-row">
+          <div class="ss-num">4</div>
+          <div class="ss-text" id="successDeliveryNote"><strong>Delivery / Pickup</strong> — We'll get it to you!</div>
         </div>
       </div>
-    </div>
-  </div>
-  <button class="btn-primary" onclick="proceedToPayment()">Proceed to Payment →</button>
-  <button class="btn-secondary" onclick="goToStep(2)">← Back to Cart</button>
-</div>
 
-<!-- ═══ VIEW 4: PAYMENT ═══ -->
-<div class="view" id="view4">
-  <div class="info-box">
-    <strong>💳 Online Payment Only</strong> — We do not accept Cash on Delivery. Please choose a payment method below, send the exact amount, and upload your proof of payment.
-  </div>
-  
-  <div class="form-section">
-    <div class="form-section-title">💳 Payment Method</div>
-    <div class="payment-methods">
-      <button class="pay-method-btn active" id="payGcash" onclick="selectPayMethod('GCASH')">
-        <div class="pay-method-icon">💚</div>
-        <div class="pay-method-name">GCash</div>
-      </button>
-      <button class="pay-method-btn" id="payInstapay" onclick="selectPayMethod('INSTAPAY')">
-        <div class="pay-method-icon">🏦</div>
-        <div class="pay-method-name">InstaPay</div>
-      </button>
-      <button class="pay-method-btn" id="payBdo" onclick="selectPayMethod('BDO')">
-        <div class="pay-method-icon">🔵</div>
-        <div class="pay-method-name">BDO</div>
-      </button>
-      <button class="pay-method-btn" id="payBpi" onclick="selectPayMethod('BPI')">
-        <div class="pay-method-icon">🔴</div>
-        <div class="pay-method-name">BPI</div>
-      </button>
-      <button class="pay-method-btn" id="payUnionbank" onclick="selectPayMethod('UNIONBANK')">
-        <div class="pay-method-icon">🟠</div>
-        <div class="pay-method-name">UnionBank</div>
-      </button>
-    </div>
-  </div>
-
-  <div class="form-section">
-    <div class="form-section-title">📱 Payment Details</div>
-    <div class="qr-box">
-      <img id="qrCodeImg" src="/images/pay-gcash.jpg" alt="Payment QR Code"
-        style="width:180px;height:180px;object-fit:contain;border-radius:8px;margin:0 auto 12px;display:block;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.1);"
-        onerror="this.style.display='none';document.getElementById('qrFallback').style.display='flex'">
-      <div id="qrFallback" style="width:140px;height:140px;background:#fff;border-radius:8px;margin:0 auto 12px;display:none;align-items:center;justify-content:center;font-size:3rem;box-shadow:0 2px 8px rgba(0,0,0,.1);">📱</div>
-      <div class="qr-label">Account Name:</div>
-      <div class="qr-number" id="paymentName" style="font-size:.95rem">LEGERYN PIA</div>
-      <div class="qr-label" style="margin-top:8px" id="paymentNumLabel">Account No.:</div>
-      <div class="qr-number" id="paymentNumber" style="font-size:1rem;letter-spacing:.05em">—</div>
-    </div>
-    <div class="cart-summary">
-      <div class="cart-summary-row total">
-        <span>Amount to Pay</span>
-        <span id="payAmount" style="color:var(--terra)">₱0</span>
+      <div class="contact-box">
+        📞 Questions? Call/text <a href="tel:09674000040">0967-4000-040</a> · Message us on <a href="https://facebook.com/YANIgardencafe" target="_blank">Facebook</a>
       </div>
+
+      <button class="btn btn-primary" onclick="startNewOrder()">Place Another Order</button>
     </div>
   </div>
 
-  <div class="form-section">
-    <div class="form-section-title">📸 Upload Proof of Payment</div>
-    <div class="proof-upload-area" id="proofUploadArea" onclick="document.getElementById('proofFileInput').click()" ondragover="onDragOver(event)" ondrop="onDrop(event)">
-      <div class="proof-upload-icon">📷</div>
-      <div class="proof-upload-text">Tap to upload screenshot or photo</div>
-      <div style="font-size:.7rem;color:var(--timber);margin-top:4px">JPG, PNG, or GIF · Max 5MB</div>
-      <img id="proofPreview" class="proof-preview" style="display:none" alt="Payment proof">
-    </div>
-    <input type="file" id="proofFileInput" accept="image/*" style="display:none" onchange="onProofFileChange(this)">
-  </div>
-
-  <button class="btn-primary" id="submitOrderBtn" onclick="submitOrder()">Place Order & Submit Payment →</button>
-  <button class="btn-secondary" onclick="goToStep(3)">← Back to Details</button>
-</div>
-
-<!-- ═══ VIEW 5: SUCCESS ═══ -->
-<div class="view" id="view5">
-  <div class="success-card">
-    <div class="success-icon">🎉</div>
-    <div class="success-title">Order Placed!</div>
-    <div style="font-size:.85rem;color:var(--timber);margin-bottom:8px">Your order reference number is:</div>
-    <div class="success-ref" id="successRef">YANI-OL-001</div>
-    <div style="font-size:.78rem;color:var(--timber)">Save this number to track your order</div>
-    
-    <div class="success-steps">
-      <div class="success-step">
-        <div class="success-step-num">1</div>
-        <div class="success-step-text"><strong>Payment Verification</strong><br>Our team will verify your payment within 30 minutes.</div>
-      </div>
-      <div class="success-step">
-        <div class="success-step-num">2</div>
-        <div class="success-step-text"><strong>Order Preparation</strong><br>Once verified, we'll start preparing your order.</div>
-      </div>
-      <div class="success-step">
-        <div class="success-step-num">3</div>
-        <div class="success-step-text"><strong>SMS Notification</strong><br>You'll receive an SMS when your order is ready for pickup by your courier.</div>
-      </div>
-      <div class="success-step">
-        <div class="success-step-num">4</div>
-        <div class="success-step-text"><strong>Book Your Courier</strong><br>Book Lalamove or Grab Express to pick up from Yani Garden Cafe.</div>
-      </div>
-    </div>
-    
-    <div class="info-box success" style="text-align:left">
-      <strong>📞 Questions?</strong> Call or text us at <a href="tel:09674000040" style="color:var(--forest);font-weight:700">0967-400-0040</a> or message us on <a href="https://facebook.com/YANIgardencafe" target="_blank" style="color:var(--forest);font-weight:700">Facebook</a>.
-    </div>
-    
-    <button class="btn-primary" onclick="startNewOrder()" style="margin-top:16px">Place Another Order</button>
-  </div>
-</div>
-
-<!-- ═══ SIZE PICKER MODAL ═══ -->
-<div class="size-overlay hidden" id="sizeOverlay" onclick="closeSizeModal(event)">
-  <div class="size-sheet" onclick="event.stopPropagation()">
-    <div class="size-title" id="sizeItemName">Item Name</div>
-    <div class="size-sub" id="sizeSubtitle">Choose your size</div>
-    <!-- SIZE STEP -->
-    <div id="sizeStep">
-      <div class="size-options" id="sizeOptions"></div>
-      <button class="size-add-btn" id="sizeNextBtn" onclick="onSizeNext()" disabled>Next →</button>
-    </div>
-    <!-- SUGAR STEP -->
-    <div id="sugarStep" style="display:none">
-      <div class="size-options" id="sugarOptions"></div>
-      <button class="size-add-btn" id="sugarAddBtn" onclick="onSugarDone()" disabled>Add to Cart</button>
-    </div>
-    <!-- DIRECT ADD (no size, no sugar) -->
-    <div id="directStep" style="display:none">
-      <button class="size-add-btn" onclick="addSizeToCart()">Add to Cart</button>
-    </div>
-  </div>
-</div>
+</div><!-- /main -->
 
 <!-- ═══ CART BAR ═══ -->
 <div class="cart-bar" id="cartBar">
-  <div style="position:relative;display:flex;align-items:center;margin-right:4px">
-    <span style="font-size:1.5rem">🛒</span>
-    <span id="cartBarBadge" style="position:absolute;top:-6px;right:-8px;background:var(--terra);color:#fff;border-radius:50%;width:18px;height:18px;font-size:.65rem;font-weight:700;display:flex;align-items:center;justify-content:center;line-height:1">0</span>
+  <div class="cart-bar-inner">
+    <div class="cb-icon">
+      <span style="font-size:1.4rem">🛒</span>
+      <span class="cb-badge" id="cartBarBadge">0</span>
+    </div>
+    <div class="cb-info">
+      <div class="cb-count" id="cartBarCount">0 items</div>
+      <div class="cb-total" id="cartBarTotal">₱0</div>
+    </div>
+    <button class="cb-btn" onclick="goToStep(2)">View Cart →</button>
   </div>
-  <div class="cart-bar-info">
-    <div class="cart-bar-count" id="cartBarCount">0 items</div>
-    <div class="cart-bar-total" id="cartBarTotal">₱0</div>
-  </div>
-  <button class="cart-bar-btn" onclick="goToStep(2)">View Cart →</button>
 </div>
 
+<!-- ═══ SIZE / SUGAR / ADDON MODAL ═══ -->
+<div class="modal-overlay hidden" id="sizeOverlay" onclick="closeSizeModal(event)">
+  <div class="modal-sheet" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="sizeItemName"></div>
+    <div class="modal-sub" id="sizeSubtitle"></div>
+    <div id="sizeStep">
+      <div class="opt-list" id="sizeOptions"></div>
+      <button class="btn btn-primary" id="sizeNextBtn" onclick="onSizeNext()" disabled>Next →</button>
+    </div>
+    <div id="sugarStep" style="display:none">
+      <div class="opt-list" id="sugarOptions"></div>
+      <button class="btn btn-primary" id="sugarAddBtn" onclick="onSugarDone()" disabled>Add to Cart</button>
+    </div>
+    <div id="directStep" style="display:none">
+      <button class="btn btn-primary" onclick="addSizeToCart()">Add to Cart</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ LOADING ═══ -->
+<div class="loading-overlay hidden" id="loadingOverlay">
+  <div class="spinner"></div>
+  <div class="loading-text" id="loadingText">Loading...</div>
+</div>
+
+<!-- ═══ TOAST ═══ -->
+<div class="toast" id="toast"></div>
+
 <script>
-// ══════════════════════════════════════════════════════════════
-// STATE
-// ══════════════════════════════════════════════════════════════
 const API = '/api/online-order';
 const UPLOAD_API = '/api/upload-proof';
 
 var menuData = [];
 var addonsData = [];
 var cart = [];
-var selectedDeliveryType = 'YANI'; // 'YANI' or 'OWN'
-var selectedZone = null;           // 1, 2, 3, or 4
-var selectedDeliveryFee = 0;
 var currentStep = 1;
 var currentCat = 'ALL';
 var selectedPayMethod = 'GCASH';
@@ -730,821 +844,625 @@ var pendingOrderRef = null;
 var sizeItem = null;
 var selectedSize = null;
 var selectedSugar = null;
+var selectedDeliveryType = 'YANI';
+var selectedZone = null;
+var selectedDeliveryFee = 0;
 
-// Payment details by method
 var PAYMENT_DETAILS = {
-  GCASH:     { number: '',               name: 'LEGERYN PIA', numLabel: 'Scan QR to pay:',    img: '/images/pay-gcash.jpg' },
-  INSTAPAY:  { number: '',               name: 'LEGERYN PIA', numLabel: 'Scan QR to pay:',    img: '/images/pay-instapay.jpg' },
-  BDO:       { number: '0126-000-62617', name: 'LEGERYN PIA', numLabel: 'Account No.:',        img: '/images/pay-bdo.jpg' },
-  BPI:       { number: '1539-235-628',   name: 'LEGERYN PIA', numLabel: 'Account No.:',        img: '/images/pay-bpi.png' },
-  UNIONBANK: { number: '1093-2100-0528', name: 'LEGERYN PIA', numLabel: 'Account No.:',        img: '/images/pay-unionbank.jpg' }
+  GCASH:     { number: '',               name: 'LEGERYN PIA', numLabel: 'Scan QR to pay:',  img: '/images/pay-gcash.jpg' },
+  INSTAPAY:  { number: '',               name: 'LEGERYN PIA', numLabel: 'Scan QR to pay:',  img: '/images/pay-instapay.jpg' },
+  BDO:       { number: '0126-000-62617', name: 'LEGERYN PIA', numLabel: 'Account No.:',     img: '/images/pay-bdo.jpg' },
+  BPI:       { number: '1539-235-628',   name: 'LEGERYN PIA', numLabel: 'Account No.:',     img: '/images/pay-bpi.png' },
+  UNIONBANK: { number: '1093-2100-0528', name: 'LEGERYN PIA', numLabel: 'Account No.:',     img: '/images/pay-unionbank.jpg' }
 };
 
-// ══════════════════════════════════════════════════════════════
-// INIT
-// ══════════════════════════════════════════════════════════════
-function updateStickyOffsets() {
-  // Calculate the combined height of all sticky elements above the category bar
-  // so each one stacks correctly below the previous
-  var header = document.querySelector('.header');
-  var steps  = document.getElementById('stepBar');
-  var catBar = document.getElementById('catTabsWrapper');
-  if (!header || !steps || !catBar) return;
-  var headerH = header.getBoundingClientRect().height;
-  var stepsH  = steps.getBoundingClientRect().height;
-  // Steps bar sticks just below the header
-  steps.style.top = headerH + 'px';
-  // Category bar sticks just below header + steps
-  catBar.style.top = (headerH + stepsH) + 'px';
-}
+var SUGAR_LEVELS = [
+  { key:'Grounded', label:'Grounded (25%)',         sub:'Light & clean' },
+  { key:'YANI',     label:'YANI (50%)',              sub:'Our signature ✨' },
+  { key:'Comfort',  label:'Comfort (75%)',           sub:'Rich & sweet' },
+  { key:'Full Sweet',label:'Full Sweet (100%)',      sub:'Maximum sweetness' }
+];
 
+// ════ INIT ════
+function updateStickyOffsets() {
+  var hdr   = document.querySelector('.hdr');
+  var steps = document.getElementById('stepBar');
+  var cats  = document.getElementById('catTabsWrapper');
+  if (!hdr || !steps || !cats) return;
+  var hh = hdr.getBoundingClientRect().height;
+  var sh = steps.getBoundingClientRect().height;
+  steps.style.top = hh + 'px';
+  cats.style.top  = (hh + sh) + 'px';
+}
 window.addEventListener('DOMContentLoaded', function() {
   updateStickyOffsets();
   loadMenu();
 });
 window.addEventListener('resize', updateStickyOffsets);
 
+// ════ LOAD MENU ════
 async function loadMenu() {
-  showLoading('Loading menu...');
   try {
-    var resp = await fetch(API, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'getOnlineMenu' })
-    });
+    var resp = await fetch(API, { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ action:'getOnlineMenu' }) });
     var data = await resp.json();
-    if (!data.ok) throw new Error(data.error || 'Failed to load menu');
-    
-    menuData = data.items || [];
+    if (!data.ok) throw new Error(data.error);
+    menuData   = data.items || [];
     addonsData = data.addons || [];
     renderCatTabs(data.categories || []);
     renderMenu('ALL');
-    hideLoading();
-  } catch (e) {
-    hideLoading();
-    document.getElementById('menuGrid').innerHTML = 
-      '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--terra)">⚠️ Failed to load menu. Please refresh.</div>';
-    showToast('Failed to load menu: ' + e.message, 'error');
+  } catch(e) {
+    document.getElementById('menuGrid').innerHTML =
+      '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--amber)">⚠️ Failed to load menu. Please refresh.</div>';
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// MENU RENDERING
-// ══════════════════════════════════════════════════════════════
+// ════ RENDER CATEGORY TABS ════
 function renderCatTabs(categories) {
-  var tabs = [{ name: 'ALL', display_order: 0 }].concat(categories);
-  document.getElementById('catTabs').innerHTML = tabs.map(function(c) {
-    return '<button class="cat-tab' + (c.name === 'ALL' ? ' active' : '') + '" onclick="filterCat(\'' + esc(c.name) + '\')">' +
-      (c.name === 'ALL' ? '🍽️ All' : esc(c.name)) + '</button>';
+  var catOrder = ['ALL','BEST WITH','HOT','ICE AND ICE BLENDED','PASTRY','OTHER','PASTA'];
+  var catNames = ['All','Best With','Hot ☕','Cold & Blended 🧊','Pastry 🥐','Food 🍟','Pasta 🍝'];
+  var tabs = [{ name:'ALL', display:'🍽️ All' }];
+  var seen = { ALL: true };
+  catOrder.forEach(function(c,i) {
+    if (c !== 'ALL') {
+      var exists = categories.some(function(x){return x.name===c;}) ||
+                   menuData.some(function(x){return x.category===c;});
+      if (exists && !seen[c]) { tabs.push({name:c,display:catNames[i]}); seen[c]=true; }
+    }
+  });
+  // Add any others not in our order
+  menuData.forEach(function(i){ if (!seen[i.category]) { tabs.push({name:i.category,display:i.category}); seen[i.category]=true; }});
+  document.getElementById('catTabs').innerHTML = tabs.map(function(t) {
+    return '<button class="cat-btn' + (t.name==='ALL'?' active':'') + '" onclick="filterCat(\''+esc(t.name)+'\')">' + esc(t.display) + '</button>';
   }).join('');
 }
 
-function filterCat(cat) {
+// ════ RENDER MENU ════
+function renderMenu(cat) {
   currentCat = cat;
-  document.querySelectorAll('.cat-tab').forEach(function(b) {
-    b.classList.toggle('active', b.textContent.includes(cat) || (cat === 'ALL' && b.textContent.includes('All')));
+  var filtered = cat === 'ALL' ? menuData : menuData.filter(function(i){return i.category===cat;});
+
+  // Group: Best With section first, then rest
+  var bestWith = filtered.filter(function(i){return i.category==='BEST WITH';});
+  var rest     = filtered.filter(function(i){return i.category!=='BEST WITH';});
+
+  var html = '';
+  if (cat === 'ALL' && bestWith.length) {
+    html += '<div class="section-hdr">✨ Best With</div>';
+    html += '<div class="menu-grid">' + bestWith.map(renderCard).join('') + '</div>';
+    html += '<div class="section-hdr">Full Menu</div>';
+    html += '<div class="menu-grid">' + rest.map(renderCard).join('') + '</div>';
+  } else {
+    html += '<div class="menu-grid">' + filtered.map(renderCard).join('') + '</div>';
+  }
+  document.getElementById('menuGrid').innerHTML = html || '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)">No items in this category.</div>';
+}
+
+function renderCard(item) {
+  var code = item.item_code || item.code;
+  var qty  = getCartQty(code);
+  var priceDisplay = item.hasSizes ? 'from ₱'+item.price : '₱'+item.price;
+  return '<div class="menu-card' + (qty>0?' in-cart':'') + '" id="card-'+code+'" onclick="onCardClick(\''+esc(JSON.stringify(item).replace(/'/g,"&#39;"))+'\')">' +
+    '<div class="card-img-wrap"><img class="card-img" src="'+esc(item.image||'')+ '" alt="'+esc(item.name)+'" loading="lazy" onerror="this.parentElement.innerHTML=\'<div style=&quot;width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:2.5rem;background:var(--g8)&quot;>☕</div>\'"></div>' +
+    (qty>0 ? '<div class="qty-badge">'+qty+'×</div>' : '') +
+    '<div class="card-body">' +
+      '<div class="card-name">'+esc(item.name)+'</div>' +
+      '<div class="card-price">'+priceDisplay+'</div>' +
+    '</div>' +
+    '<button class="card-add" onclick="event.stopPropagation();onCardClick(\''+esc(JSON.stringify(item).replace(/'/g,"&#39;"))+'\')" title="Add">+</button>' +
+  '</div>';
+}
+
+function filterCat(cat) {
+  document.querySelectorAll('.cat-btn').forEach(function(b){
+    b.classList.toggle('active', b.textContent.includes(cat) || (cat==='ALL' && b.textContent.includes('All')));
   });
   renderMenu(cat);
 }
 
-function renderMenu(cat) {
-  var items = cat === 'ALL' ? menuData : menuData.filter(function(i) { return i.category_name === cat || (i.category && i.category === cat); });
-  
-  // Also handle by category_id mapping
-  if (cat !== 'ALL' && items.length === 0) {
-    // Try matching by category name from grouped data
-    items = menuData.filter(function(i) {
-      var catName = i.category_name || '';
-      return catName.toUpperCase() === cat.toUpperCase();
-    });
-  }
-  
-  if (!items.length) {
-    document.getElementById('menuGrid').innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--timber)">No items in this category.</div>';
-    return;
-  }
-  
-  document.getElementById('menuGrid').innerHTML = items.map(function(item) {
-    var cartQty = getCartQty(item.item_code || item.code);
-    var inCart = cartQty > 0;
-    var imgSrc = item.image || '';
-    var price = parseFloat(item.base_price || item.price || 0);
-    var hasSizes = item.hasSizes || item.has_sizes;
-    var hasSugar = item.hasSugar || item.has_sugar_levels;
-    
-    var itemJsonEsc = esc(JSON.stringify(item).replace(/'/g, "\\'"));
-    var code = esc(item.item_code || item.code);
-    // Price row: price on left, + button on right (always visible)
-    // When in cart AND no sizes/sugar: show −/qty/+ inline control instead
-    var priceAndBtn;
-    if (inCart && !hasSizes && !hasSugar) {
-      // Simple item already in cart: show inline qty control
-      priceAndBtn = '<div class="menu-card-price-row">' +
-        '<div class="menu-card-price">\u20b1' + price.toFixed(0) + '</div>' +
-        '<div class="qty-control" style="margin-top:0">' +
-          '<button class="qty-btn minus" onclick="event.stopPropagation();changeQty(\'' + code + '\',-1)">\u2212</button>' +
-          '<span class="qty-num">' + cartQty + '</span>' +
-          '<button class="qty-btn plus" onclick="event.stopPropagation();changeQty(\'' + code + '\',1)">+</button>' +
-        '</div>' +
-      '</div>';
-    } else {
-      // Not in cart, OR has sizes/sugar: show price + green + button
-      priceAndBtn = '<div class="menu-card-price-row">' +
-        '<div>' +
-          '<div class="menu-card-price">\u20b1' + price.toFixed(0) + (hasSizes ? '+' : '') + '</div>' +
-          (hasSizes ? '<span class="menu-card-badge">S / M / L</span>' : '') +
-          (hasSugar && !hasSizes ? '<span class="menu-card-badge" style="background:var(--terra-light,#FFF3E0);color:var(--terra)">Sugar level</span>' : '') +
-        '</div>' +
-        '<button class="card-add-btn" onclick="event.stopPropagation();onCardClick(\'' + itemJsonEsc + '\')" title="Add to cart">+</button>' +
-      '</div>';
-    }
-    return '<div class="menu-card' + (inCart ? ' in-cart' : '') + '" id="card-' + code + '" onclick="onCardClick(\'' + itemJsonEsc + '\')">' +
-      (imgSrc ? '<img class="menu-card-img" src="' + imgSrc + '" alt="' + esc(item.name) + '" onerror="this.style.display=\'none\';var ph=document.createElement(\'div\');ph.className=\'menu-card-img no-img\';ph.textContent=\'\ud83c\udf7d\ufe0f\';this.parentNode.insertBefore(ph,this);">' : '<div class="menu-card-img no-img">\ud83c\udf7d\ufe0f</div>') +
-      '<div class="menu-card-body">' +
-        '<div class="menu-card-name">' + esc(item.name) + '</div>' +
-        priceAndBtn +
-        (inCart && (hasSizes || hasSugar) ? '<div style="margin-top:4px;font-size:.7rem;color:var(--forest);font-weight:600">\u2713 ' + cartQty + ' in cart</div>' : '') +
-      '</div>' +
-    '</div>';
-  }).join('');
+function getCartQty(code) {
+  return cart.filter(function(c){return c.code===code;}).reduce(function(s,c){return s+c.quantity;},0);
 }
 
+function updateCardInPlace(code) {
+  var el = document.getElementById('card-'+code);
+  if (!el) return;
+  var item = menuData.find(function(i){return (i.item_code||i.code)===code;});
+  if (!item) return;
+  el.outerHTML = renderCard(item);
+}
+
+// ════ ITEM CLICK → SIZE/SUGAR/ADDON ════
 function onCardClick(itemJson) {
   var item;
   try { item = JSON.parse(itemJson); } catch(e) { return; }
-  
-  if (item.hasSizes || item.has_sizes) {
-    openSizeModal(item);
-  } else if (item.hasSugar || item.has_sugar_levels) {
-    openSugarOnlyModal(item);
-  } else {
-    addToCart(item.item_code || item.code, item.name, '', '', parseFloat(item.base_price || item.price), item.image || '');
+  if (addonsData.length === 0) {
+    fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'getOnlineMenu'})})
+      .then(function(r){return r.json();})
+      .then(function(d){ if(d.ok) addonsData=d.addons||[]; _openItemFlow(item); });
+    return;
   }
+  _openItemFlow(item);
 }
 
-function getCartQty(code) {
-  return cart.filter(function(c) { return c.code === code; }).reduce(function(s,c) { return s + c.quantity; }, 0);
+function _openItemFlow(item) {
+  if (item.hasSizes || item.has_sizes) { openSizeModal(item); }
+  else if (item.hasSugar || item.has_sugar_levels) { openSugarOnlyModal(item); }
+  else { checkAddons(item, null, '', null, parseFloat(item.base_price||item.price)); }
 }
-
-// ══════════════════════════════════════════════════════════════
-// DELIVERY TYPE & ZONE LOGIC
-// ══════════════════════════════════════════════════════════════
-function selectDeliveryType(type) {
-  selectedDeliveryType = type;
-  document.getElementById('deliveryTypeYani').classList.toggle('selected', type === 'YANI');
-  document.getElementById('deliveryTypeOwn').classList.toggle('selected', type === 'OWN');
-  document.getElementById('yaniZoneSection').style.display = type === 'YANI' ? '' : 'none';
-  document.getElementById('ownCourierSection').style.display = type === 'OWN' ? '' : 'none';
-  if (type === 'OWN') {
-    selectedZone = null;
-    selectedDeliveryFee = 0;
-  }
-  updateCartSummaryFee();
-}
-
-function selectZone(zone, fee) {
-  selectedZone = zone;
-  var cartSubtotal = cart.reduce(function(s,c){ return s + (c.unitPrice * c.quantity); }, 0);
-  if ((zone === 1 || zone === 2) && cartSubtotal >= 500) {
-    selectedDeliveryFee = 0;
-  } else {
-    selectedDeliveryFee = fee;
-  }
-  // Highlight selected zone
-  [1,2,3,4].forEach(function(z) {
-    var el = document.getElementById('zone' + z);
-    if (el) el.classList.toggle('selected', z === zone);
-  });
-  updateCartSummaryFee();
-}
-
-function updateCartSummaryFee() {
-  // Update the fee row in cart summary if visible
-  var feeRow = document.getElementById('cartDeliveryFeeRow');
-  if (!feeRow) return;
-  if (selectedDeliveryType === 'YANI' && selectedZone) {
-    var label = '🚚 Delivery (Zone ' + selectedZone + ')';
-    var feeText = selectedZone === 4 ? 'Custom' : '₱' + selectedDeliveryFee;
-    feeRow.innerHTML = '<span>' + label + '</span><span style="color:var(--forest);font-weight:700">' + feeText + '</span>';
-    feeRow.style.display = 'flex';
-    // Update total
-    var subtotal = cart.reduce(function(s,c){ return s + (c.unitPrice * c.quantity); }, 0);
-    var totalEl = document.getElementById('cartTotalAmt');
-    if (totalEl) {
-      var total = selectedZone === 4 ? subtotal : subtotal + selectedDeliveryFee;
-      totalEl.textContent = '₱' + total.toFixed(2) + (selectedZone === 4 ? ' + delivery' : '');
-    }
-  } else {
-    feeRow.style.display = 'none';
-    var subtotal = cart.reduce(function(s,c){ return s + (c.unitPrice * c.quantity); }, 0);
-    var totalEl = document.getElementById('cartTotalAmt');
-    if (totalEl) totalEl.textContent = '₱' + subtotal.toFixed(2);
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
-// ITEM OPTIONS MODAL (Size → Sugar, matching POS flow)
-// ══════════════════════════════════════════════════════════════
-var SUGAR_LEVELS = [
-  { key: 'Grounded', label: 'Grounded (25%)' },
-  { key: 'YANI',     label: 'YANI (50%) — Signature' },
-  { key: 'Comfort',  label: 'Comfort (75%)' },
-  { key: 'Full Sweet', label: 'Full Sweet (100%)' }
-];
 
 function openSizeModal(item) {
-  sizeItem = item;
-  selectedSize = null;
-  selectedSugar = null;
+  sizeItem = item; selectedSize = null; selectedSugar = null;
   document.getElementById('sizeItemName').textContent = item.name;
   document.getElementById('sizeSubtitle').textContent = 'Choose your size';
-
-  // Build size options
   var sizes = [];
-  if (item.priceShort || item.price_short) sizes.push({ key:'Short',  label:'Short (12oz)',  price: parseFloat(item.priceShort  || item.price_short) });
-  if (item.priceMedium || item.price_medium) sizes.push({ key:'Medium', label:'Medium (16oz)', price: parseFloat(item.priceMedium || item.price_medium) });
-  if (item.priceTall || item.price_tall)   sizes.push({ key:'Tall',   label:'Tall (22oz)',   price: parseFloat(item.priceTall   || item.price_tall) });
-  if (!sizes.length) sizes.push({ key:'Regular', label:'Regular', price: parseFloat(item.price || item.base_price) });
-
+  if (item.priceShort||item.price_short) sizes.push({key:'Short', label:'Short (12oz)', price:parseFloat(item.priceShort||item.price_short)});
+  if (item.priceMedium||item.price_medium) sizes.push({key:'Medium', label:'Medium (16oz)', price:parseFloat(item.priceMedium||item.price_medium)});
+  if (item.priceTall||item.price_tall) sizes.push({key:'Tall', label:'Tall (22oz)', price:parseFloat(item.priceTall||item.price_tall)});
+  if (!sizes.length) sizes.push({key:'Regular', label:'Regular', price:parseFloat(item.price||item.base_price)});
   document.getElementById('sizeOptions').innerHTML = sizes.map(function(s) {
-    return '<div class="size-opt" onclick="selectSize(\'' + s.key + '\', ' + s.price + ', this)">' +
-      '<span class="size-opt-name">' + s.label + '</span>' +
-      '<span class="size-opt-price">₱' + s.price.toFixed(0) + '</span>' +
-    '</div>';
+    return '<div class="opt-row" onclick="selectSize(\''+s.key+'\','+s.price+',this)">' +
+      '<div class="opt-row-left"><div class="opt-radio"></div><div><div class="opt-name">'+s.label+'</div></div></div>' +
+      '<div class="opt-price">₱'+s.price+'</div></div>';
   }).join('');
-
-  // Show size step, hide others
-  document.getElementById('sizeStep').style.display = '';
-  document.getElementById('sugarStep').style.display = 'none';
-  document.getElementById('directStep').style.display = 'none';
-  document.getElementById('sizeNextBtn').disabled = true;
+  document.getElementById('sizeStep').style.display='';
+  document.getElementById('sugarStep').style.display='none';
+  document.getElementById('directStep').style.display='none';
+  document.getElementById('sizeNextBtn').disabled=true;
   document.getElementById('sizeOverlay').classList.remove('hidden');
 }
 
 function openSugarOnlyModal(item) {
-  sizeItem = item;
-  selectedSize = '';
-  selectedSugar = null;
+  sizeItem = item; selectedSize = ''; selectedSugar = null;
   document.getElementById('sizeItemName').textContent = item.name;
-  document.getElementById('sizeSubtitle').textContent = '₱' + parseFloat(item.price || item.base_price).toFixed(0) + ' — Choose sugar level';
-
-  // Hide size step, show sugar step
-  document.getElementById('sizeStep').style.display = 'none';
-  document.getElementById('directStep').style.display = 'none';
-  document.getElementById('sugarStep').style.display = '';
-  document.getElementById('sugarAddBtn').disabled = true;
-  renderSugarOptions('sugarOptions', 'selectSugar');
+  document.getElementById('sizeSubtitle').textContent = '₱'+parseFloat(item.price||item.base_price)+' — Choose sweetness';
+  document.getElementById('sizeStep').style.display='none';
+  document.getElementById('directStep').style.display='none';
+  document.getElementById('sugarStep').style.display='';
+  document.getElementById('sugarAddBtn').disabled=true;
+  renderSugarOptions('sugarOptions','selectSugar');
   document.getElementById('sizeOverlay').classList.remove('hidden');
 }
 
 function renderSugarOptions(containerId, fnName) {
   document.getElementById(containerId).innerHTML = SUGAR_LEVELS.map(function(s) {
-    return '<div class="size-opt" onclick="' + fnName + '(\'' + s.key + '\', this)">' +
-      '<span class="size-opt-name">' + s.label + '</span>' +
-    '</div>';
+    return '<div class="opt-row" onclick="'+fnName+'(\''+s.key+'\',this)">' +
+      '<div class="opt-row-left"><div class="opt-radio"></div><div><div class="opt-name">'+s.label+'</div><div class="opt-sub">'+s.sub+'</div></div></div></div>';
   }).join('');
 }
 
 function selectSize(key, price, el) {
-  document.querySelectorAll('#sizeOptions .size-opt').forEach(function(o) { o.classList.remove('selected') });
-  el.classList.add('selected');
-  selectedSize = key;
-  sizeItem._selectedPrice = price;
+  document.querySelectorAll('#sizeOptions .opt-row').forEach(function(r){r.classList.remove('active')});
+  el.classList.add('active');
+  selectedSize = key; sizeItem._selectedPrice = price;
   document.getElementById('sizeNextBtn').disabled = false;
 }
 
 function onSizeNext() {
-  if (!selectedSize) { showToast('Please select a size', 'error'); return; }
-  var hasSugar = sizeItem.hasSugar || sizeItem.has_sugar_levels;
-  if (hasSugar) {
-    // Proceed to sugar step
-    document.getElementById('sizeStep').style.display = 'none';
-    document.getElementById('sugarStep').style.display = '';
-    document.getElementById('sugarAddBtn').disabled = true;
-    document.getElementById('sizeSubtitle').textContent = '₱' + sizeItem._selectedPrice.toFixed(0) + ' · ' + selectedSize + ' — Choose sugar level';
-    renderSugarOptions('sugarOptions', 'selectSugar');
+  if (!selectedSize) { showToast('Please select a size','error'); return; }
+  if (sizeItem.hasSugar||sizeItem.has_sugar_levels) {
+    document.getElementById('sizeStep').style.display='none';
+    document.getElementById('sugarStep').style.display='';
+    document.getElementById('sugarAddBtn').disabled=true;
+    document.getElementById('sizeSubtitle').textContent = '₱'+sizeItem._selectedPrice+' · '+selectedSize+' — Choose sweetness';
+    renderSugarOptions('sugarOptions','selectSugar');
   } else {
-    // No sugar — add directly
-    finishAddToCart();
+    checkAddons(sizeItem, selectedSize, selectedSize, null, sizeItem._selectedPrice);
   }
 }
 
 function selectSugar(key, el) {
-  document.querySelectorAll('#sugarOptions .size-opt').forEach(function(o) { o.classList.remove('selected') });
-  el.classList.add('selected');
+  document.querySelectorAll('#sugarOptions .opt-row').forEach(function(r){r.classList.remove('active')});
+  el.classList.add('active');
   selectedSugar = key;
-  document.getElementById('sugarAddBtn').disabled = false;
+  document.getElementById('sugarAddBtn').disabled=false;
 }
 
 function onSugarDone() {
-  if (!selectedSugar) { showToast('Please choose a sugar level', 'error'); return; }
-  finishAddToCart();
+  if (!selectedSugar) { showToast('Please choose sweetness','error'); return; }
+  var sugarObj = SUGAR_LEVELS.find(function(s){return s.key===selectedSugar;});
+  var price = sizeItem._selectedPrice || parseFloat(sizeItem.price||sizeItem.base_price);
+  checkAddons(sizeItem, selectedSize||null, selectedSize||'', sugarObj, price);
 }
 
-function finishAddToCart() {
-  var code = sizeItem.item_code || sizeItem.code;
-  var price = sizeItem._selectedPrice || parseFloat(sizeItem.price || sizeItem.base_price);
-  // Check for applicable addons
-  var applicable = addonsData.filter(function(a) {
-    return a.is_active !== false && (a.applies_to_all || (a.applies_to_codes || []).includes(code));
+function addSizeToCart() { finishAddToCart(); }
+
+// ════ ADDON STEP ════
+var _pendingAddonItem = null, _pendingAddonSize = null, _pendingAddonSizeLabel = null,
+    _pendingAddonSugar = null, _pendingAddonPrice = 0;
+var selectedAddons = [];
+
+function checkAddons(item, sizeKey, sizeLabel, sugarObj, price) {
+  var code = item.item_code || item.code;
+  var applicable = addonsData.filter(function(a){
+    return a.is_active !== false && (a.applies_to_all || (a.applies_to_codes||[]).includes(code));
   });
-  if (applicable.length > 0) {
-    showAddonStep(applicable, code, price);
+  if (applicable.length) {
+    _pendingAddonItem = item; _pendingAddonSize = sizeKey;
+    _pendingAddonSizeLabel = sizeLabel; _pendingAddonSugar = sugarObj;
+    _pendingAddonPrice = price; selectedAddons = [];
+    showAddonStep(applicable, sizeLabel, sugarObj, price);
   } else {
-    addToCart(code, sizeItem.name, selectedSize || '', selectedSugar || '', price, sizeItem.image || '');
+    doAddToCart(item, sizeKey, sizeLabel, sugarObj, price, []);
     closeSizeModal();
   }
 }
 
-var selectedAddons = [];
-function showAddonStep(addons, code, basePrice) {
-  selectedAddons = [];
-  var html = '<div style="padding:4px 0 10px"><div style="font-size:.82rem;font-weight:700;color:var(--forest);margin-bottom:10px">Optional Add-ons</div>';
-  addons.forEach(function(a) {
-    html += '<div class="size-opt" id="addon-' + a.addon_code + '" onclick="toggleOnlineAddon(this,\'' + a.addon_code + '\',\'' + esc(a.name) + '\',' + a.price + ')" style="justify-content:space-between">' +
-      '<span style="font-weight:600">' + esc(a.name) + '</span>' +
-      '<span style="color:var(--terra);font-weight:700">+₱' + parseFloat(a.price).toFixed(0) + '</span>' +
-    '</div>';
-  });
-  html += '</div>';
-  document.getElementById('sugarStep').style.display = 'none';
-  document.getElementById('sizeStep').style.display = 'none';
-  // Show addon step in directStep area
-  document.getElementById('directStep').style.display = '';
-  document.getElementById('directStep').innerHTML = html +
-    '<button class="size-add-btn" onclick="confirmOnlineAddons(\'' + code + '\',' + basePrice + ')">Add to Cart</button>';
+function showAddonStep(addons, sizeLabel, sugarObj, price) {
+  var parts = [];
+  if (sizeLabel) parts.push(sizeLabel);
+  if (sugarObj) parts.push(sugarObj.label);
+  parts.push('₱'+price);
+  document.getElementById('sizeSubtitle').textContent = parts.join(' · ');
+  document.getElementById('sizeStep').style.display='none';
+  document.getElementById('sugarStep').style.display='none';
+  document.getElementById('directStep').style.display='';
+  document.getElementById('directStep').innerHTML =
+    '<div style="font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:10px">Add-ons (optional)</div>' +
+    '<div class="opt-list">' + addons.map(function(a){
+      return '<div class="opt-row" id="arow-'+a.addon_code+'" onclick="toggleOnlineAddon(this,\''+esc(a.addon_code)+'\',\''+esc(a.name)+'\','+a.price+')">' +
+        '<div class="opt-row-left"><div class="opt-radio opt-checkbox"></div><div><div class="opt-name">'+esc(a.name)+'</div></div></div>' +
+        '<div class="opt-price">+₱'+parseFloat(a.price).toFixed(0)+'</div></div>';
+    }).join('') + '</div>' +
+    '<button class="btn btn-primary" onclick="confirmOnlineAddons()">Add to Cart</button>';
 }
 
 function toggleOnlineAddon(el, code, name, price) {
-  var idx = selectedAddons.findIndex(function(a){ return a.code === code; });
-  if (idx >= 0) {
-    selectedAddons.splice(idx, 1);
-    el.classList.remove('selected');
-  } else {
-    selectedAddons.push({ code: code, name: name, price: price });
-    el.classList.add('selected');
-  }
+  var idx = selectedAddons.findIndex(function(a){return a.code===code;});
+  if (idx>=0) { selectedAddons.splice(idx,1); el.classList.remove('active'); }
+  else { selectedAddons.push({code:code,name:name,price:price}); el.classList.add('active'); }
 }
 
-function confirmOnlineAddons(itemCode, basePrice) {
-  var addonTotal = selectedAddons.reduce(function(s, a){ return s + a.price; }, 0);
-  addToCart(itemCode, sizeItem.name, selectedSize || '', selectedSugar || '', basePrice + addonTotal, sizeItem.image || '', selectedAddons.slice());
+function confirmOnlineAddons() {
+  var addonTotal = selectedAddons.reduce(function(s,a){return s+a.price;},0);
+  doAddToCart(_pendingAddonItem, _pendingAddonSize, _pendingAddonSizeLabel,
+    _pendingAddonSugar, _pendingAddonPrice + addonTotal, selectedAddons.slice());
   selectedAddons = [];
   closeSizeModal();
 }
 
-// Legacy: called by directStep button (items with neither size nor sugar — shouldn't happen now)
-function addSizeToCart() {
-  finishAddToCart();
+function finishAddToCart() {
+  var price = sizeItem._selectedPrice || parseFloat(sizeItem.price||sizeItem.base_price);
+  doAddToCart(sizeItem, selectedSize||null, selectedSize||'',
+    selectedSugar ? SUGAR_LEVELS.find(function(s){return s.key===selectedSugar;}) : null, price, []);
+  closeSizeModal();
 }
 
 function closeSizeModal(e) {
-  if (!e || e.target === document.getElementById('sizeOverlay')) {
+  if (!e || e.target===document.getElementById('sizeOverlay')) {
     document.getElementById('sizeOverlay').classList.add('hidden');
-    sizeItem = null; selectedSize = null; selectedSugar = null;
+    sizeItem=null; selectedSize=null; selectedSugar=null;
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// CART MANAGEMENT
-// ══════════════════════════════════════════════════════════════
-function addToCart(code, name, size, sugar, price, imagePath, addons) {
+// ════ CART ════
+function doAddToCart(item, sizeKey, sizeLabel, sugarObj, price, addons) {
+  var code = item.item_code || item.code;
   addons = addons || [];
-  var addonKey = addons.map(function(a){ return a.code; }).sort().join(',');
-  var key = code + '_' + (size || '') + '_' + (sugar || '') + '_' + addonKey;
-  var existing = cart.find(function(c) { return c.key === key });
-  if (existing) {
-    existing.quantity++;
-  } else {
-    cart.push({ key: key, code: code, name: name, size: size || '', sugar: sugar || '', unitPrice: price, quantity: 1, imagePath: imagePath, addons: addons });
+  var addonKey = addons.map(function(a){return a.code;}).sort().join(',');
+  var key = code+'_'+(sizeKey||'')+'_'+(sugarObj?sugarObj.key:'')+'_'+addonKey;
+  var existing = cart.find(function(c){return c.key===key;});
+  if (existing) { existing.quantity++; }
+  else {
+    cart.push({key:key, code:code, name:item.name,
+      size: sizeLabel||'', sugar: sugarObj?sugarObj.key:'',
+      unitPrice: price, quantity:1,
+      imagePath: item.image||'', addons:addons});
   }
   updateCartUI();
-  var addonNames = addons.map(function(a){ return '+' + a.name; }).join(', ');
-  showToast(name + (addonNames ? ' ' + addonNames : '') + ' added!', 'success');
-  requestAnimationFrame(function() { updateCardInPlace(code); });
+  var addonNames = addons.map(function(a){return '+'+a.name;}).join(', ');
+  showToast((item.name + (addonNames?' ('+addonNames+')':'') + ' added!'),'success');
+  requestAnimationFrame(function(){ updateCardInPlace(code); });
 }
 
-function changeQty(code, delta) {
-  var items = cart.filter(function(c) { return c.code === code });
-  if (!items.length) return;
-  // If multiple variants (different sizes/sugars), adjusting by code alone is ambiguous
-  // For simple items (one variant), adjust directly
-  if (items.length === 1) {
-    var item = items[0];
-    item.quantity += delta;
-    if (item.quantity <= 0) {
-      cart = cart.filter(function(c) { return c.key !== item.key });
-    }
-  } else {
-    // Multiple variants: adjust the first one (card shows total qty)
-    // User can manage individual variants in the cart view
-    var item = items[0];
-    item.quantity += delta;
-    if (item.quantity <= 0) {
-      cart = cart.filter(function(c) { return c.key !== item.key });
-    }
-  }
-  updateCartUI();
-  requestAnimationFrame(function() { updateCardInPlace(code); });
-}
-
-function removeFromCart(key) {
-  cart = cart.filter(function(c) { return c.key !== key });
+function changeCartQty(key, delta) {
+  var item = cart.find(function(c){return c.key===key;});
+  if (!item) return;
+  item.quantity += delta;
+  if (item.quantity <= 0) cart = cart.filter(function(c){return c.key!==key;});
   updateCartUI();
   renderCartView();
 }
 
-// Targeted single-card update (avoids full renderMenu for INP performance)
-function updateCardInPlace(code) {
-  var cardEl = document.getElementById('card-' + code);
-  if (!cardEl) return; // card not visible (filtered out)
-  var item = menuData.find(function(i) { return (i.item_code || i.code) === code; });
-  if (!item) return;
-  var cartQty = getCartQty(code);
-  var inCart = cartQty > 0;
-  var price = parseFloat(item.base_price || item.price || 0);
-  var hasSizes = item.hasSizes || item.has_sizes;
-  var hasSugar = item.hasSugar || item.has_sugar_levels;
-  var esc = function(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); };
-  var itemJsonEsc = esc(JSON.stringify(item).replace(/'/g, "\\'"));
-  var escapedCode = esc(code);
-  // Update in-cart class
-  cardEl.classList.toggle('in-cart', inCart);
-  // Rebuild price row
-  var priceRow = cardEl.querySelector('.menu-card-price-row');
-  if (!priceRow) return;
-  if (inCart && !hasSizes && !hasSugar) {
-    priceRow.innerHTML = '<div class="menu-card-price">\u20b1' + price.toFixed(0) + '</div>' +
-      '<div class="qty-control" style="margin-top:0">' +
-        '<button class="qty-btn minus" onclick="event.stopPropagation();changeQty(\'' + escapedCode + '\',-1)">\u2212</button>' +
-        '<span class="qty-num">' + cartQty + '</span>' +
-        '<button class="qty-btn plus" onclick="event.stopPropagation();changeQty(\'' + escapedCode + '\',1)">+</button>' +
-      '</div>';
-  } else {
-    priceRow.innerHTML = '<div>' +
-        '<div class="menu-card-price">\u20b1' + price.toFixed(0) + (hasSizes ? '+' : '') + '</div>' +
-        (hasSizes ? '<span class="menu-card-badge">S / M / L</span>' : '') +
-        (hasSugar && !hasSizes ? '<span class="menu-card-badge" style="background:var(--terra-light,#FFF3E0);color:var(--terra)">Sugar level</span>' : '') +
-      '</div>' +
-      '<button class="card-add-btn" onclick="event.stopPropagation();onCardClick(\'' + itemJsonEsc + '\')" title="Add to cart">+</button>';
-  }
-  // Update in-cart badge for sized/sugar items
-  var existingBadge = cardEl.querySelector('.in-cart-badge');
-  if (existingBadge) existingBadge.remove();
-  if (inCart && (hasSizes || hasSugar)) {
-    var badge = document.createElement('div');
-    badge.className = 'in-cart-badge';
-    badge.style.cssText = 'margin-top:4px;font-size:.7rem;color:var(--forest);font-weight:600';
-    badge.textContent = '\u2713 ' + cartQty + ' in cart';
-    cardEl.querySelector('.menu-card-body').appendChild(badge);
-  }
+function removeFromCart(key) {
+  cart = cart.filter(function(c){return c.key!==key;});
+  updateCartUI();
+  renderCartView();
 }
 
 function getCartTotal() {
-  return cart.reduce(function(s, c) { return s + c.unitPrice * c.quantity; }, 0);
+  return cart.reduce(function(s,c){return s+c.unitPrice*c.quantity;},0);
 }
-
 function getCartCount() {
-  return cart.reduce(function(s, c) { return s + c.quantity; }, 0);
+  return cart.reduce(function(s,c){return s+c.quantity;},0);
 }
 
 function updateCartUI() {
   var count = getCartCount();
   var total = getCartTotal();
-  
-  // Cart bar
   var bar = document.getElementById('cartBar');
   var badge = document.getElementById('cartBarBadge');
-  if (count > 0 && currentStep === 1) {
+  if (count>0 && currentStep===1) {
     bar.classList.add('visible');
-    document.getElementById('cartBarCount').textContent = count + ' item' + (count !== 1 ? 's' : '');
-    document.getElementById('cartBarTotal').textContent = '₱' + total.toFixed(0);
-    if (badge) badge.textContent = count > 99 ? '99+' : count;
-  } else {
-    bar.classList.remove('visible');
-    if (badge) badge.textContent = '0';
-  }
-  
-  // Cart proceed button
+    document.getElementById('cartBarCount').textContent = count+' item'+(count!==1?'s':'');
+    document.getElementById('cartBarTotal').textContent = '₱'+total.toFixed(0);
+    if (badge) badge.textContent = count>99?'99+':count;
+  } else { bar.classList.remove('visible'); if(badge) badge.textContent='0'; }
   var btn = document.getElementById('cartProceedBtn');
-  if (btn) btn.disabled = count === 0;
-  
-  // Step 2 badge
-  var s2 = document.getElementById('step2');
-  if (s2) s2.querySelector('.step-num').textContent = count > 0 ? count : '2';
+  if (btn) btn.disabled = count===0;
+  var subtotalEl = document.getElementById('cartSubtotal');
+  if (subtotalEl) subtotalEl.textContent = '₱'+total.toFixed(0);
+  var delFee = (selectedDeliveryType==='YANI'&&selectedZone&&selectedZone!==4)?selectedDeliveryFee:0;
+  var cartTotalEl = document.getElementById('cartTotal');
+  if (cartTotalEl) cartTotalEl.textContent = selectedDeliveryType==='YANI'&&selectedZone===4
+    ? '₱'+total.toFixed(0)+' + delivery' : '₱'+(total+delFee).toFixed(0);
 }
 
 function renderCartView() {
-  var container = document.getElementById('cartItems');
-  var summary = document.getElementById('cartSummary');
-  
-  if (!cart.length) {
-    container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--timber)">Your cart is empty.<br><br><button class="btn-secondary" onclick="goToStep(1)" style="width:auto;padding:10px 24px">Browse Menu</button></div>';
-    summary.style.display = 'none';
+  var summaryEl = document.getElementById('cartSummary');
+  var emptyEl   = document.getElementById('cartEmptyMsg');
+  var itemsEl   = document.getElementById('cartItems');
+  if (cart.length===0) {
+    summaryEl.style.display='none';
+    emptyEl.style.display='block';
+    itemsEl.innerHTML='';
     return;
   }
-  
-  container.innerHTML = cart.map(function(item) {
-    var imgSrc = item.imagePath || '';
+  emptyEl.style.display='none';
+  summaryEl.style.display='block';
+  itemsEl.innerHTML = cart.map(function(item) {
+    var meta = [item.size,item.sugar].filter(Boolean).join(' · ');
+    var addonHtml = item.addons&&item.addons.length
+      ? '<div class="ci-addons">'+item.addons.map(function(a){return '<span class="tag-green">+'+esc(a.name)+'</span>';}).join('')+'</div>' : '';
     return '<div class="cart-item">' +
-      (imgSrc ? '<img class="cart-item-img" src="' + imgSrc + '" alt="' + esc(item.name) + '" onerror="this.style.display=\'none\'">' : '<div class="cart-item-img" style="display:flex;align-items:center;justify-content:center;font-size:1.5rem">🍽️</div>') +
-      '<div class="cart-item-info">' +
-        '<div class="cart-item-name">' + esc(item.name) + '</div>' +
-        ((item.size || item.sugar) ? '<div class="cart-item-size">' + [item.size, item.sugar].filter(Boolean).map(esc).join(' · ') + '</div>' : '') +
-        (item.addons && item.addons.length ? '<div style="font-size:.72rem;color:#065f46;font-weight:700;margin-top:2px">' + item.addons.map(function(a){ return '➕ ' + esc(a.name); }).join(' · ') + '</div>' : '') +
-        '<div class="cart-item-price">₱' + (item.unitPrice * item.quantity).toFixed(0) + '</div>' +
-        '<div class="cart-item-controls">' +
-          '<button class="qty-btn minus" onclick="changeCartQty(\'' + esc(item.key) + '\',-1)">−</button>' +
-          '<span class="qty-num">' + item.quantity + '</span>' +
-          '<button class="qty-btn plus" onclick="changeCartQty(\'' + esc(item.key) + '\',1)">+</button>' +
-          '<button class="cart-remove" onclick="removeFromCart(\'' + esc(item.key) + '\')">Remove</button>' +
+      '<img class="ci-img" src="'+esc(item.imagePath)+'" alt="" onerror="this.style.display=\'none\'">' +
+      '<div class="ci-info">' +
+        '<div class="ci-name">'+esc(item.name)+'</div>' +
+        (meta?'<div class="ci-meta">'+esc(meta)+'</div>':'') +
+        addonHtml +
+        '<div class="ci-price">₱'+item.unitPrice.toFixed(0)+'</div>' +
+        '<div class="ci-ctrl">' +
+          '<button class="ci-btn" onclick="changeCartQty(\''+esc(item.key)+'\',-1)">−</button>' +
+          '<span class="ci-qty">'+item.quantity+'</span>' +
+          '<button class="ci-btn" onclick="changeCartQty(\''+esc(item.key)+'\',1)">+</button>' +
+          '<button class="ci-remove" onclick="removeFromCart(\''+esc(item.key)+'\')">Remove</button>' +
         '</div>' +
       '</div>' +
     '</div>';
   }).join('');
-  
+  // Update receipt
   var total = getCartTotal();
-  document.getElementById('cartSubtotal').textContent = '₱' + total.toFixed(0);
-  document.getElementById('cartTotal').textContent = '₱' + total.toFixed(0);
-  summary.style.display = 'block';
+  document.getElementById('cartSubtotal').textContent = '₱'+total.toFixed(0);
+  var delFeeRow = document.getElementById('cartDeliveryFeeRow');
+  var delAmt    = document.getElementById('cartDeliveryAmt');
+  var delFee    = (selectedDeliveryType==='YANI'&&selectedZone&&selectedZone!==4)?selectedDeliveryFee:0;
+  if (selectedDeliveryType==='YANI'&&selectedZone) {
+    delFeeRow.style.display='flex';
+    delAmt.textContent = selectedZone===4?'Custom':'₱'+delFee;
+  } else { delFeeRow.style.display='none'; }
+  document.getElementById('cartTotal').textContent = selectedDeliveryType==='YANI'&&selectedZone===4
+    ? '₱'+total.toFixed(0)+' + delivery' : '₱'+(total+delFee).toFixed(0);
+  var btn = document.getElementById('cartProceedBtn');
+  if (btn) btn.disabled = false;
 }
 
-function changeCartQty(key, delta) {
-  var item = cart.find(function(c) { return c.key === key });
-  if (!item) return;
-  item.quantity += delta;
-  if (item.quantity <= 0) cart = cart.filter(function(c) { return c.key !== key });
-  updateCartUI();
+// ════ DELIVERY ZONE ════
+function selectDeliveryType(type) {
+  selectedDeliveryType = type;
+  document.getElementById('deliveryTypeYani').classList.toggle('active', type==='YANI');
+  document.getElementById('deliveryTypeOwn').classList.toggle('active', type==='OWN');
+  document.getElementById('yaniZoneSection').style.display  = type==='YANI'?'':'none';
+  document.getElementById('ownCourierSection').style.display = type==='OWN'?'':'none';
+  if (type==='OWN') { selectedZone=null; selectedDeliveryFee=0; }
   renderCartView();
 }
 
-// ══════════════════════════════════════════════════════════════
-// STEP NAVIGATION
-// ══════════════════════════════════════════════════════════════
-function goToStep(step) {
-  if (step === 2 && cart.length === 0) { showToast('Add items to cart first', 'error'); return; }
-  if (step > currentStep + 1 && step !== 5) return; // Can't skip steps forward
-  
-  currentStep = step;
-  
-  // Update views
-  for (var i = 1; i <= 5; i++) {
-    var v = document.getElementById('view' + i);
-    if (v) v.classList.toggle('active', i === step);
-  }
-  
-  // Update step indicators
-  for (var i = 1; i <= 4; i++) {
-    var s = document.getElementById('step' + i);
-    if (s) {
-      s.classList.remove('active', 'done');
-      if (i === step) s.classList.add('active');
-      else if (i < step) s.classList.add('done');
-    }
-  }
-  
-  // Cart bar visibility
-  document.getElementById('cartBar').classList.toggle('visible', step === 1 && cart.length > 0);
-
-  // Category bar — only visible on step 1 (Menu)
-  var catWrapper = document.getElementById('catTabsWrapper');
-  if (catWrapper) catWrapper.style.display = (step === 1) ? '' : 'none';
-  
-  // Render cart when entering step 2
-  if (step === 2) renderCartView();
-  
-  // Update payment amount
-  if (step === 4) {
-    document.getElementById('payAmount').textContent = '₱' + getCartTotal().toFixed(0);
-  }
-  
-  window.scrollTo(0, 0);
+function selectZone(zone, fee) {
+  selectedZone = zone; selectedDeliveryFee = fee;
+  [1,2,3,4].forEach(function(z){
+    var el=document.getElementById('zone'+z);
+    if(el) el.classList.toggle('active',z===zone);
+  });
+  renderCartView();
 }
 
-// ══════════════════════════════════════════════════════════════
-// PAYMENT METHOD
-// ══════════════════════════════════════════════════════════════
+// ════ NAVIGATION ════
+function goToStep(step) {
+  if (step===2&&cart.length===0) { showToast('Add items first','error'); return; }
+  if (step>currentStep+1&&step!==5) return;
+  currentStep = step;
+  for (var i=1;i<=5;i++) {
+    var v=document.getElementById('view'+i);
+    if (v) v.classList.toggle('active', i===step);
+  }
+  for (var i=1;i<=4;i++) {
+    var s=document.getElementById('step'+i);
+    if (s) {
+      s.classList.remove('active','done');
+      if (i===step) s.classList.add('active');
+      else if (i<step) { s.classList.add('done'); }
+    }
+    // Step lines
+    var lines = document.querySelectorAll('.step-line');
+    lines.forEach(function(l,idx){
+      l.style.background = idx < step-1 ? 'var(--g4)' : 'var(--g7)';
+    });
+  }
+  document.getElementById('cartBar').classList.toggle('visible', step===1&&cart.length>0);
+  var catWrapper = document.getElementById('catTabsWrapper');
+  if (catWrapper) catWrapper.style.display = step===1?'':'none';
+  if (step===2) renderCartView();
+  if (step===4) {
+    var total = getCartTotal();
+    var delFee = selectedDeliveryType==='YANI'&&selectedZone&&selectedZone!==4?selectedDeliveryFee:0;
+    document.getElementById('payAmount').textContent =
+      selectedDeliveryType==='YANI'&&selectedZone===4
+        ? '₱'+total.toFixed(0)+' + delivery fee TBD'
+        : '₱'+(total+delFee).toFixed(0);
+  }
+  window.scrollTo(0,0);
+}
+
+// ════ PAYMENT ════
 function selectPayMethod(method) {
   selectedPayMethod = method;
-  ['GCASH','INSTAPAY','BDO','BPI','UNIONBANK'].forEach(function(m) {
-    var idMap = { GCASH:'payGcash', INSTAPAY:'payInstapay', BDO:'payBdo', BPI:'payBpi', UNIONBANK:'payUnionbank' };
-    var btn = document.getElementById(idMap[m]);
-    if (btn) btn.classList.toggle('active', m === method);
+  ['GCASH','INSTAPAY','BDO','BPI','UNIONBANK'].forEach(function(m){
+    var idMap={GCASH:'payGcash',INSTAPAY:'payInstapay',BDO:'payBdo',BPI:'payBpi',UNIONBANK:'payUnionbank'};
+    var btn=document.getElementById(idMap[m]);
+    if(btn) btn.classList.toggle('active',m===method);
   });
-  var details = PAYMENT_DETAILS[method] || PAYMENT_DETAILS.GCASH;
-  // Update QR image
-  var qrImg = document.getElementById('qrCodeImg');
-  var qrFallback = document.getElementById('qrFallback');
-  qrImg.src = details.img;
-  qrImg.style.display = 'block';
-  qrFallback.style.display = 'none';
-  // Update account details
-  document.getElementById('paymentName').textContent = details.name;
-  document.getElementById('paymentNumLabel').textContent = details.numLabel;
-  document.getElementById('paymentNumber').textContent = details.number || '—';
+  var d = PAYMENT_DETAILS[method]||PAYMENT_DETAILS.GCASH;
+  document.getElementById('qrCodeImg').src = d.img;
+  document.getElementById('paymentName').textContent = d.name;
+  document.getElementById('paymentNumLabel').textContent = d.numLabel;
+  document.getElementById('paymentNumber').textContent = d.number||'—';
 }
 
-// ══════════════════════════════════════════════════════════════
-// PROOF UPLOAD
-// ══════════════════════════════════════════════════════════════
+// ════ PROOF UPLOAD ════
 function onProofFileChange(input) {
   var file = input.files[0];
   if (!file) return;
-  if (file.size > 5 * 1024 * 1024) { showToast('File too large (max 5MB)', 'error'); return; }
-  
-  proofFilename = file.name;
-  proofMimeType = file.type;
-  
+  if (file.size>5*1024*1024) { showToast('File too large (max 5MB)','error'); return; }
+  proofFilename = file.name; proofMimeType = file.type;
   var reader = new FileReader();
   reader.onload = function(e) {
     proofImageData = e.target.result;
     var preview = document.getElementById('proofPreview');
     preview.src = proofImageData;
     preview.style.display = 'block';
-    document.querySelector('.proof-upload-text').textContent = file.name;
-    document.querySelector('.proof-upload-icon').textContent = '✅';
+    document.getElementById('proofText').textContent = file.name;
+    document.getElementById('proofIcon').textContent = '✅';
   };
   reader.readAsDataURL(file);
 }
-
 function onDragOver(e) {
   e.preventDefault();
   document.getElementById('proofUploadArea').classList.add('dragover');
 }
-
 function onDrop(e) {
   e.preventDefault();
   document.getElementById('proofUploadArea').classList.remove('dragover');
   var file = e.dataTransfer.files[0];
   if (file) {
-    var dt = new DataTransfer();
-    dt.items.add(file);
-    document.getElementById('proofFileInput').files = dt.files;
+    var dt=new DataTransfer(); dt.items.add(file);
+    document.getElementById('proofFileInput').files=dt.files;
     onProofFileChange(document.getElementById('proofFileInput'));
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// CHECKOUT VALIDATION
-// ══════════════════════════════════════════════════════════════
+// ════ VALIDATION ════
 function proceedToPayment() {
-  var name = document.getElementById('custName').value.trim();
-  var phone = document.getElementById('custPhone').value.trim();
+  var name    = document.getElementById('custName').value.trim();
+  var phone   = document.getElementById('custPhone').value.trim();
   var address = document.getElementById('custAddress').value.trim();
-  
-  var errors = [];
+  var errors  = [];
   if (!name) errors.push('custName');
-  if (!phone || !/^(09|\+639)\d{9}$/.test(phone.replace(/\s/g,''))) errors.push('custPhone');
-  if (!address || address.length < 10) errors.push('custAddress');
-  // Require zone selection if YANI delivery
-  if (selectedDeliveryType === 'YANI' && !selectedZone) {
-    showToast('Please select a delivery zone 🚚', 'error');
+  if (!phone||!/^(09|\+639)\d{9}$/.test(phone.replace(/\s/g,''))) errors.push('custPhone');
+  if (!address||address.length<10) errors.push('custAddress');
+  if (selectedDeliveryType==='YANI'&&!selectedZone) {
+    showToast('Please select a delivery zone 🚚','error');
     document.getElementById('yaniZoneSection').scrollIntoView({behavior:'smooth',block:'center'});
     return;
   }
-
-  document.querySelectorAll('.form-input').forEach(function(i) { i.classList.remove('error') });
-  errors.forEach(function(id) { var el = document.getElementById(id); if (el) el.classList.add('error') });
-  
-  if (errors.length) {
-    showToast('Please fill in all required fields correctly', 'error');
-    return;
-  }
-  
+  document.querySelectorAll('.form-input').forEach(function(i){i.classList.remove('error')});
+  errors.forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('error')});
+  if (errors.length) { showToast('Please fill in all required fields','error'); return; }
   goToStep(4);
 }
 
-// ══════════════════════════════════════════════════════════════
-// SUBMIT ORDER
-// ══════════════════════════════════════════════════════════════
+// ════ SUBMIT ORDER ════
 async function submitOrder() {
-  if (!proofImageData) {
-    showToast('Please upload your payment proof', 'error');
-    return;
-  }
-  
+  if (!proofImageData) { showToast('Please upload your payment proof','error'); return; }
   var btn = document.getElementById('submitOrderBtn');
-  btn.disabled = true;
-  btn.textContent = 'Placing order...';
+  btn.disabled=true; btn.textContent='Placing order...';
   showLoading('Placing your order...');
-  
   try {
-    // 1. Place order
-    var orderResp = await fetch(API, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    var delFee = selectedDeliveryType==='YANI'&&selectedZone&&selectedZone!==4?selectedDeliveryFee:0;
+    var total  = getCartTotal() + delFee;
+    var orderResp = await fetch(API, { method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
         action: 'placeOnlineOrder',
-        customerName: document.getElementById('custName').value.trim(),
-        customerPhone: document.getElementById('custPhone').value.trim(),
-        customerEmail: document.getElementById('custEmail').value.trim(),
+        customerName:    document.getElementById('custName').value.trim(),
+        customerPhone:   document.getElementById('custPhone').value.trim(),
+        customerEmail:   document.getElementById('custEmail').value.trim(),
         deliveryAddress: document.getElementById('custAddress').value.trim(),
-        deliveryNotes: document.getElementById('custNotes').value.trim(),
-        courierType: selectedDeliveryType === 'YANI' ? 'YANI_DELIVERY' : (document.getElementById('courierType') ? document.getElementById('courierType').value : 'OTHER'),
-        deliveryZone: selectedDeliveryType === 'YANI' ? selectedZone : null,
-        deliveryFee: selectedDeliveryType === 'YANI' && selectedZone && selectedZone !== 4 ? selectedDeliveryFee : 0,
-        isCustomDelivery: selectedDeliveryType === 'YANI' && selectedZone === 4,
-        paymentMethod: selectedPayMethod,
-        items: cart.map(function(c) {
-          var sizeLabel = [c.size, c.sugar].filter(Boolean).join(' · ');
-          return { code: c.code, name: c.name, size: sizeLabel, unitPrice: c.unitPrice, quantity: c.quantity, addons: c.addons || [] };
+        deliveryNotes:   document.getElementById('custNotes').value.trim(),
+        courierType:     selectedDeliveryType==='YANI'?'YANI_DELIVERY':(document.getElementById('courierType')?document.getElementById('courierType').value:'OTHER'),
+        deliveryZone:    selectedDeliveryType==='YANI'?selectedZone:null,
+        deliveryFee:     delFee,
+        isCustomDelivery: selectedDeliveryType==='YANI'&&selectedZone===4,
+        paymentMethod:   selectedPayMethod,
+        items: cart.map(function(c){
+          var sizeLabel=[c.size,c.sugar].filter(Boolean).join(' · ');
+          return {code:c.code,name:c.name,size:sizeLabel,unitPrice:c.unitPrice,quantity:c.quantity,addons:c.addons||[]};
         }),
         subtotal: getCartTotal(),
-        total: getCartTotal() + (selectedDeliveryType === 'YANI' && selectedZone && selectedZone !== 4 ? selectedDeliveryFee : 0)
+        total:    total
       })
     });
-    
     var orderData = await orderResp.json();
-    if (!orderData.ok) throw new Error(orderData.error || 'Failed to place order');
-    
+    if (!orderData.ok) throw new Error(orderData.error||'Failed to place order');
     var orderRef = orderData.orderRef;
     pendingOrderRef = orderRef;
-    
-    // 2. Upload proof
     showLoading('Uploading payment proof...');
-    var uploadResp = await fetch(UPLOAD_API, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        orderRef: orderRef,
-        imageData: proofImageData,
-        mimeType: proofMimeType,
-        filename: proofFilename
-      })
+    var uploadResp = await fetch(UPLOAD_API, { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ orderRef:orderRef, imageData:proofImageData, mimeType:proofMimeType, filename:proofFilename })
     });
-    
     var uploadData = await uploadResp.json();
-    if (!uploadData.ok) throw new Error('Payment proof upload failed: ' + uploadData.error);
-    
-    // 3. Submit proof URL
-    await fetch(API, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'submitPaymentProof',
-        orderRef: orderRef,
-        proofUrl: uploadData.url,
-        proofFilename: proofFilename,
-        paymentMethod: selectedPayMethod
-      })
+    if (!uploadData.ok) throw new Error('Proof upload failed: '+uploadData.error);
+    await fetch(API, { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ action:'submitPaymentProof', orderRef:orderRef, proofUrl:uploadData.url, proofFilename:proofFilename, paymentMethod:selectedPayMethod })
     });
-    
     hideLoading();
-    
-    // Show success
     document.getElementById('successRef').textContent = orderRef;
+    // Update success delivery note
+    var note = selectedDeliveryType==='YANI'
+      ? '<strong>Delivery</strong> — Your rider will bring it to you.'
+      : '<strong>Courier Pickup</strong> — Book Lalamove/Grab to pick up from YANI.';
+    document.getElementById('successDeliveryNote').innerHTML = note;
     goToStep(5);
-    
-  } catch (e) {
+  } catch(e) {
     hideLoading();
-    btn.disabled = false;
-    btn.textContent = 'Place Order & Submit Payment →';
-    showToast('Error: ' + e.message, 'error');
+    btn.disabled=false; btn.textContent='Place Order →';
+    showToast('Error: '+e.message,'error');
   }
 }
 
+// ════ RESET ════
 function startNewOrder() {
-  cart = [];
-  proofImageData = null;
-  proofMimeType = null;
-  proofFilename = null;
-  pendingOrderRef = null;
-  document.getElementById('custName').value = '';
-  document.getElementById('custPhone').value = '';
-  document.getElementById('custEmail').value = '';
-  document.getElementById('custAddress').value = '';
-  document.getElementById('custNotes').value = '';
-  document.getElementById('proofPreview').style.display = 'none';
-  document.querySelector('.proof-upload-text').textContent = 'Tap to upload screenshot or photo';
-  document.querySelector('.proof-upload-icon').textContent = '📷';
+  cart=[]; proofImageData=null; proofMimeType=null; proofFilename=null; pendingOrderRef=null;
+  selectedZone=null; selectedDeliveryFee=0; selectedDeliveryType='YANI';
+  ['custName','custPhone','custEmail','custAddress','custNotes'].forEach(function(id){
+    var el=document.getElementById(id); if(el) el.value='';
+  });
+  document.getElementById('proofPreview').style.display='none';
+  document.getElementById('proofText').textContent='Tap to upload screenshot';
+  document.getElementById('proofIcon').textContent='📷';
+  document.getElementById('deliveryTypeYani').classList.add('active');
+  document.getElementById('deliveryTypeOwn').classList.remove('active');
+  document.getElementById('yaniZoneSection').style.display='';
+  document.getElementById('ownCourierSection').style.display='none';
+  [1,2,3,4].forEach(function(z){ var el=document.getElementById('zone'+z); if(el) el.classList.remove('active'); });
   updateCartUI();
   goToStep(1);
 }
 
-// ══════════════════════════════════════════════════════════════
-// UTILITIES
-// ══════════════════════════════════════════════════════════════
+// ════ UTILITIES ════
 function esc(str) {
-  if (typeof str !== 'string') return String(str || '');
+  if (typeof str!=='string') return String(str||'');
   return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
-
 function showLoading(text) {
-  document.getElementById('loadingText').textContent = text || 'Loading...';
+  document.getElementById('loadingText').textContent = text||'Loading...';
   document.getElementById('loadingOverlay').classList.remove('hidden');
 }
-
-function hideLoading() {
-  document.getElementById('loadingOverlay').classList.add('hidden');
-}
-
+function hideLoading() { document.getElementById('loadingOverlay').classList.add('hidden'); }
 var toastTimer;
 function showToast(msg, type) {
-  var t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className = 'toast show' + (type ? ' ' + type : '');
+  var t=document.getElementById('toast');
+  t.textContent=msg; t.className='toast show'+(type?' '+type:'');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(function() { t.className = 'toast' }, 3000);
+  toastTimer=setTimeout(function(){t.className='toast'},3000);
 }
 </script>
 </body>
