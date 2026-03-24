@@ -2010,17 +2010,27 @@ async function selectPayment(method) {
   state.paymentMethod = method;
 
   if (method === 'card' || method === 'cash') {
-    var label = method === 'card' ? 'Card' : 'Cash';
-    // No backend call needed - staff handles at table
+    var isCash = method === 'cash';
+    var label  = method === 'card' ? 'Card' : 'Cash';
 
     var body = document.getElementById('paymentBody');
+    var cashNote = isCash
+      ? '<div style="margin-top:14px;background:#FEF3C7;border:1.5px solid #FCD34D;border-radius:12px;padding:14px 16px;text-align:left">' +
+          '<div style="font-size:.82rem;font-weight:700;color:#92400E;margin-bottom:4px">📋 How Cash Payment Works</div>' +
+          '<div style="font-size:.8rem;color:#78350F;line-height:1.6">' +
+            'Thank you for choosing cash! A friendly member of our team will come to your table shortly to collect your payment. ' +
+            'Once settled, your order will be prepared right away. We appreciate your patience! ☕' +
+          '</div>' +
+        '</div>'
+      : '<div style="margin-top:14px;font-size:.78rem;color:var(--timber);text-align:center">Our team will bring a card terminal to your table shortly.</div>';
+
     body.innerHTML = '<div class="status-card">' +
       '<div class="status-icon">' + (method==='card'?'💳':'💵') + '</div>' +
-      '<div class="status-title">' + label + ' Payment Selected</div>' +
-      '<div class="status-desc">A server will come to your table shortly.</div>' +
-      '<div class="status-order-id">' + esc(state.orderId) + '</div>' +
-      '<div style="margin-top:8px;font-size:1.1rem;font-weight:700;color:var(--terra)">' + peso(state.orderTotal) + '</div></div>' +
-      '<button class="btn-primary mt-16" onclick="closePage(\'payment\');openPage(\'status\');startStatusPolling()">Track Order Status →</button>';
+      '<div class="status-title">' + label + ' Payment</div>' +
+      cashNote +
+      '<div class="status-order-id" style="margin-top:14px">' + esc(state.orderId) + '</div>' +
+      '<div style="font-size:1.1rem;font-weight:700;color:var(--terra);margin-top:4px">' + peso(state.orderTotal) + '</div></div>' +
+      '<button class="btn-primary mt-16" onclick="closePage(\'payment\');openPage(\'status\');startStatusPolling()">Track Your Order →</button>';
   } else {
     showQRPayment();
   }
