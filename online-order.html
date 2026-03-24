@@ -156,6 +156,13 @@ body{font-family:var(--font-b);background:var(--cream);color:var(--ink);min-heig
   border-radius:20px;padding:2px 8px;
   font-size:.68rem;font-weight:700;
 }
+.best-badge{
+  position:absolute;top:8px;right:8px;
+  background:var(--amber);color:var(--white);
+  border-radius:20px;padding:2px 8px;
+  font-size:.62rem;font-weight:800;
+  letter-spacing:.03em;
+}
 .section-hdr{
   font-family:var(--font-d);
   font-size:1rem;font-weight:700;color:var(--g2);
@@ -928,9 +935,9 @@ function renderMenu(cat) {
 
   var html = '';
   if (cat === 'ALL' && bestWith.length) {
-    html += '<div class="section-hdr">✨ Best With</div>';
+    html += '<div class="section-hdr">⭐ Best With</div>';
     html += '<div class="menu-grid">' + bestWith.map(renderCard).join('') + '</div>';
-    html += '<div class="section-hdr">Full Menu</div>';
+    html += '<div class="section-hdr" style="margin-top:24px">🍽️ Full Menu</div>';
     html += '<div class="menu-grid">' + rest.map(renderCard).join('') + '</div>';
   } else {
     html += '<div class="menu-grid">' + filtered.map(renderCard).join('') + '</div>';
@@ -942,9 +949,11 @@ function renderCard(item) {
   var code = item.item_code || item.code;
   var qty  = getCartQty(code);
   var priceDisplay = item.hasSizes ? 'from ₱'+item.price : '₱'+item.price;
+  var isBest = item.category === 'BEST WITH';
   return '<div class="menu-card' + (qty>0?' in-cart':'') + '" id="card-'+code+'" onclick="onCardClick(\''+esc(JSON.stringify(item).replace(/'/g,"&#39;"))+'\')">' +
     '<div class="card-img-wrap"><img class="card-img" src="'+esc(item.image||'')+ '" alt="'+esc(item.name)+'" loading="lazy" onerror="this.parentElement.innerHTML=\'<div style=&quot;width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:2.5rem;background:var(--g8)&quot;>☕</div>\'"></div>' +
     (qty>0 ? '<div class="qty-badge">'+qty+'×</div>' : '') +
+    (isBest ? '<div class="best-badge">⭐ Best With</div>' : '') +
     '<div class="card-body">' +
       '<div class="card-name">'+esc(item.name)+'</div>' +
       '<div class="card-price">'+priceDisplay+'</div>' +

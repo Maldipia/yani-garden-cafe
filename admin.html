@@ -1750,7 +1750,13 @@ function startPolling() {
   loadOrders();
   loadMenuCache(); // pre-load menu for Edit Order modal
   if (pollTimer) clearInterval(pollTimer);
-  pollTimer = setInterval(loadOrders, POLL_INTERVAL);
+  pollTimer = setInterval(function() {
+    loadOrders();
+    // Auto-refresh online orders count if on that tab
+    if (typeof allOnlineOrders !== 'undefined') {
+      loadOnlineOrders().catch(function(){});
+    }
+  }, POLL_INTERVAL);
 }
 
 async function loadOrders() {
