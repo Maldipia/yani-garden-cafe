@@ -382,14 +382,28 @@ async function checkAdminAuth() {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// JWT AUTH LAYER — STUB (jose removed; JWT upgrade pending proper implementation)
-// signToken returns null; verifyToken always returns null → falls back to legacy userId auth.
-// All existing functionality preserved via requireAuth(body) DB lookup.
+// JWT AUTH LAYER — jsonwebtoken (CJS-compatible, ^9.0.2)
+import jwt from 'jsonwebtoken';
+const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_EXPIRY  = '12h';
+
 async function signToken(userId, role, displayName) {
-  return null; // TODO: implement with jsonwebtoken when JWT upgrade is done
+  if (!JWT_SECRET) return null;
+  try {
+    return jwt.sign(
+      { sub: userId, role, displayName: displayName || '' },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRY }
+    );
+  } catch { return null; }
 }
+
 async function verifyToken(token) {
-  return null; // falls through to legacy body.userId auth
+  if (!token || !JWT_SECRET) return null;
+  try {
+    const payload = jwt.verify(token, JWT_SECRET);
+    return { userId: payload.sub, role: payload.role, displayName: payload.displayName || '' };
+  } catch { return null; }  // expired / invalid / tampered → fall through to legacy DB auth
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────
