@@ -973,7 +973,8 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
     <img class="login-logo" src="/images/logo.png" alt="Yani">
     <div class="login-title">Kitchen Dashboard</div>
     <div class="login-sub">Enter staff PIN to continue</div>
-    <input class="pin-input" id="pinInput" type="password" maxlength="8" inputmode="numeric" placeholder="• • • •" autofocus>
+    <input class="pin-input" id="pinInput" type="password" maxlength="8" inputmode="numeric" placeholder="• • • •" autofocus onkeydown="if(event.key==='Enter')login()">
+    <div id="pinErrorMsg" style="display:none;color:#e04444;font-size:.82rem;font-weight:600;margin-top:6px;text-align:center"></div>
     <button class="pin-btn" id="pinBtn" onclick="login()">Enter Dashboard</button>
   </div>
 </div>
@@ -1767,16 +1768,22 @@ async function login() {
         }
       }, 0);
     } else {
-      // Wrong PIN
-      document.getElementById('pinInput').classList.add('error');
-      setTimeout(function(){ document.getElementById('pinInput').classList.remove('error') }, 500);
-      document.getElementById('pinInput').value = '';
-      document.getElementById('pinInput').focus();
-      if (data.message) {
-        // Show lockout message if applicable
-        if (data.message.indexOf('locked') >= 0 || data.message.indexOf('disabled') >= 0) {
-          showToast('⚠️ ' + data.message, 'warn');
-        }
+      // Wrong PIN — show clear visible error
+      var pinEl = document.getElementById('pinInput');
+      var errEl = document.getElementById('pinErrorMsg');
+      pinEl.classList.add('error');
+      setTimeout(function(){ pinEl.classList.remove('error'); }, 800);
+      pinEl.value = '';
+      pinEl.focus();
+      if (errEl) {
+        var msg = (data.message && (data.message.indexOf('locked') >= 0 || data.message.indexOf('disabled') >= 0))
+          ? '🔒 ' + data.message
+          : '❌ Incorrect PIN. Please try again.';
+        errEl.textContent = msg;
+        errEl.style.display = 'block';
+        setTimeout(function(){ errEl.style.display = 'none'; }, 3000);
+      } else if (data.message) {
+        showToast('⚠️ ' + data.message, 'warn');
       }
     }
   } catch(e) {
