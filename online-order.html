@@ -1101,7 +1101,7 @@ function showAddonStep(addons, sizeLabel, sugarObj, price) {
     '<div style="font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:10px">Add-ons (optional)</div>' +
     '<div class="opt-list">' + addons.map(function(a){
       return '<div class="opt-row" id="arow-'+a.addon_code+'" onclick="toggleOnlineAddon(this,\''+esc(a.addon_code)+'\',\''+esc(a.name)+'\','+a.price+')">' +
-        '<div class="opt-row-left"><div class="opt-radio opt-checkbox"></div><div><div class="opt-name">'+esc(a.name)+'</div></div></div>' +
+        '<div class="opt-row-left"><div class="opt-radio opt-checkbox"></div><div><div class="opt-name">'+esc(a.name)+'</div><div class="opt-sub">Optional add-on</div></div></div>' +
         '<div class="opt-price">+₱'+parseFloat(a.price).toFixed(0)+'</div></div>';
     }).join('') + '</div>' +
     '<button class="btn btn-primary" onclick="confirmOnlineAddons()">Add to Cart</button>';
