@@ -2094,32 +2094,62 @@ export default async function handler(req, res) {
       const typeSplit = { 'DINE-IN':0, 'TAKE-OUT':0 };
       orders.forEach(o => { typeSplit[o.order_type] = (typeSplit[o.order_type]||0)+1; });
 
-      // ── Top items ─────────────────────────────────────────────────────
-      const itemsR = await fetch(
-        `${BASE}/dine_in_order_items?select=item_name,qty,line_total,order_id`,
-        { headers: H }
+      // ── Top items — use Supabase Management API raw SQL to avoid 1000-row REST limit ──
+      // The REST API silently truncates at 1000 rows; with 1200+ order items this caused
+      // wrong counts. Raw SQL via JOIN gives the correct aggregated result directly.
+      const topItemsR = await fetch(
+        `https://api.supabase.com/v1/projects/hnynvclpvfxzlfjphefj/database/query`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.SUPABASE_PAT || ''}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ query: `
+            SELECT i.item_name AS name,
+                   SUM(i.qty)::int        AS qty,
+                   SUM(i.line_total)::float AS revenue
+            FROM dine_in_order_items i
+            JOIN dine_in_orders o ON o.order_id = i.order_id
+            WHERE o.status      = 'COMPLETED'
+              AND o.is_test     = false
+              AND o.is_deleted  = false
+              AND o.created_at >= NOW() - INTERVAL '30 days'
+            GROUP BY i.item_name
+            ORDER BY qty DESC
+            LIMIT 10
+          ` })
+        }
       );
-      const rawItems = itemsR.ok ? (await itemsR.json()) : [];
-
-      // Filter items to completed, non-test orders only
-      // dine_in_order_items.order_id matches dine_in_orders.order_id (e.g. "YANI-1063")
-      const ordersWithId = await fetch(
-        `${BASE}/dine_in_orders?status=eq.COMPLETED&is_test=eq.false&is_deleted=eq.false&created_at=gte.${thirtyAgo}&select=order_id`,
-        { headers: H }
-      );
-      const completedIds = new Set((ordersWithId.ok ? await ordersWithId.json() : []).map(o=>o.order_id));
-
-      const itemMap = {};
-      rawItems.forEach(i => {
-        if (!completedIds.has(i.order_id)) return;
-        const name = i.item_name || 'Unknown';
-        if (!itemMap[name]) itemMap[name] = { name, qty:0, revenue:0 };
-        itemMap[name].qty     += parseInt(i.qty || 0);
-        itemMap[name].revenue += parseFloat(i.line_total || 0);
-      });
-      const topItems = Object.values(itemMap)
-        .sort((a,b) => b.qty - a.qty)
-        .slice(0,10);
+      let topItems = [];
+      if (topItemsR.ok) {
+        const topData = await topItemsR.json();
+        topItems = Array.isArray(topData) ? topData.map(r => ({
+          name: r.name, qty: r.qty, revenue: r.revenue
+        })) : [];
+      }
+      // Fallback: if PAT not set, use the old method with higher limit
+      if (topItems.length === 0) {
+        const ordersWithId = await fetch(
+          `${BASE}/dine_in_orders?status=eq.COMPLETED&is_test=eq.false&is_deleted=eq.false&created_at=gte.${thirtyAgo}&select=order_id`,
+          { headers: H }
+        );
+        const completedIds = new Set((ordersWithId.ok ? await ordersWithId.json() : []).map(o=>o.order_id));
+        const rawItemsR = await fetch(
+          `${BASE}/dine_in_order_items?select=item_name,qty,line_total,order_id&limit=5000`,
+          { headers: H }
+        );
+        const rawItems = rawItemsR.ok ? (await rawItemsR.json()) : [];
+        const itemMap = {};
+        rawItems.forEach(i => {
+          if (!completedIds.has(i.order_id)) return;
+          const name = i.item_name || 'Unknown';
+          if (!itemMap[name]) itemMap[name] = { name, qty:0, revenue:0 };
+          itemMap[name].qty     += parseInt(i.qty || 0);
+          itemMap[name].revenue += parseFloat(i.line_total || 0);
+        });
+        topItems = Object.values(itemMap).sort((a,b) => b.qty - a.qty).slice(0,10);
+      }
 
       // ── Cancellation stats ────────────────────────────────────────────
       const cancelR = await fetch(
