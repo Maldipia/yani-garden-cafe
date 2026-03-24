@@ -1746,17 +1746,21 @@ async function api(action, data) {
 // ══════════════════════════════════════════════════════════
 // POLLING
 // ══════════════════════════════════════════════════════════
+var _onlinePollTimer = null;
 function startPolling() {
   loadOrders();
   loadMenuCache(); // pre-load menu for Edit Order modal
   if (pollTimer) clearInterval(pollTimer);
   pollTimer = setInterval(function() {
     loadOrders();
-    // Only refresh online orders when the Online tab is active
+  }, POLL_INTERVAL);
+  // Separate slow timer (30s) for online orders — only fires when on that tab
+  if (_onlinePollTimer) clearInterval(_onlinePollTimer);
+  _onlinePollTimer = setInterval(function() {
     if (currentFilter === 'ONLINE_ORDERS') {
       loadOnlineOrders().catch(function(){});
     }
-  }, POLL_INTERVAL);
+  }, 30000);
 }
 
 async function loadOrders() {
@@ -1931,6 +1935,11 @@ function renderFilters() {
     tabs.push({ key:'SHIFT', label:'📋 Shift', count:'' });
     tabs.push({ key:'LOGS', label:'📜 Logs', count:'' });
   }
+
+  // Only rebuild DOM if tab counts changed — prevents flicker on every 5s poll
+  var newHash = tabs.map(function(t){return t.key+':'+t.count;}).join('|') + '|active:'+currentFilter;
+  if (window._filterHash === newHash) return; // nothing changed, skip DOM rebuild
+  window._filterHash = newHash;
 
   document.getElementById('filterBar').innerHTML = tabs.map(function(t) {
     return '<button class="filter-btn' + (currentFilter===t.key?' active':'') + '" onclick="setFilter(\'' + t.key + '\')">' +
