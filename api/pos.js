@@ -488,8 +488,10 @@ export default async function handler(req, res) {
       const errs = validateMenuPayload(body, false);
       if (errs.length) return res.status(400).json({ ok: false, error: errs.join('; ') });
 
+      // Auto-generate item_code if not provided (format: ITEM_<timestamp>)
+      const autoCode = 'ITEM_' + Date.now();
       const row = {
-        item_code:        body.itemId || null,
+        item_code:        body.itemId || autoCode,
         name:             body.name.trim(),
         category_id:      getCategoryId(body.category),
         base_price:       parseFloat(body.price) || 0,

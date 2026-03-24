@@ -350,15 +350,16 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 .dm-type-remove.selected { background:#EF4444; border-color:#EF4444; color:#fff; }
 /* ── Payment Modal ── */
 .pm-overlay {
-  position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:500;
+  position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:800;
   display:none; align-items:flex-end; justify-content:center;
 }
 .pm-overlay.open { display:flex; }
 .pm-modal {
   background:#fff; width:100%; max-width:480px;
   border-radius:20px 20px 0 0;
-  padding:20px 20px 36px;
+  padding:20px 20px max(36px,env(safe-area-inset-bottom,16px));
   box-shadow:0 -4px 30px rgba(0,0,0,.2);
+  max-height:90dvh; overflow-y:auto;
 }
 .pm-title {
   font-weight:800; font-size:1rem; color:var(--forest-deep);
@@ -5999,19 +6000,19 @@ async function syncToSheets() {
     <div class="pm-title">Set Payment Method</div>
     <div class="pm-sub" id="pmOrderLabel">Order: —</div>
     <div class="pm-grid">
-      <button class="pm-btn" id="pmBtnGCASH" onclick="selectPM('GCASH')">
+      <button class="pm-btn" id="pmBtnGCASH" onclick="selectPM('GCASH',event)">
         <span class="pm-btn-icon">📱</span>
         <span class="pm-btn-label">QR / GCash</span>
         <span class="pm-btn-sub">GCash · Bank · InstaPay</span>
         <span class="pm-split-badge" style="display:none" id="pmBadgeGCASH">1st</span>
       </button>
-      <button class="pm-btn" id="pmBtnCASH" onclick="selectPM('CASH')">
+      <button class="pm-btn" id="pmBtnCASH" onclick="selectPM('CASH',event)">
         <span class="pm-btn-icon">💵</span>
         <span class="pm-btn-label">Cash</span>
         <span class="pm-btn-sub">&nbsp;</span>
         <span class="pm-split-badge" style="display:none" id="pmBadgeCASH">1st</span>
       </button>
-      <button class="pm-btn" id="pmBtnCARD" onclick="selectPM('CARD')">
+      <button class="pm-btn" id="pmBtnCARD" onclick="selectPM('CARD',event)">
         <span class="pm-btn-icon">💳</span>
         <span class="pm-btn-label">Card</span>
         <span class="pm-btn-sub">Terminal · PayMongo</span>
@@ -6127,8 +6128,9 @@ function closePaymentModal() {
 }
 
 // pmKey: 'GCASH' | 'CASH' | 'CARD'  (also the DB method value)
-function selectPM(pmKey) {
-  if (event) event.stopPropagation();
+function selectPM(pmKey, ev) {
+  if (ev) ev.stopPropagation();
+  else if (typeof event !== 'undefined' && event) try { event.stopPropagation(); } catch(e) {}
   var btn   = document.getElementById('pmBtn'   + pmKey);
   var badge = document.getElementById('pmBadge' + pmKey);
 
