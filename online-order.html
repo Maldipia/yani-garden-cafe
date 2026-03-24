@@ -1093,10 +1093,13 @@ function showAddonStep(addons, sizeLabel, sugarObj, price) {
   if (sizeLabel) parts.push(sizeLabel);
   if (sugarObj) parts.push(sugarObj.label);
   parts.push('₱'+price);
+  // Set title and open modal (critical for items with no size/sugar)
+  document.getElementById('sizeItemName').textContent = _pendingAddonItem ? (_pendingAddonItem.name||'') : '';
   document.getElementById('sizeSubtitle').textContent = parts.join(' · ');
   document.getElementById('sizeStep').style.display='none';
   document.getElementById('sugarStep').style.display='none';
   document.getElementById('directStep').style.display='';
+  document.getElementById('sizeOverlay').classList.remove('hidden');
   document.getElementById('directStep').innerHTML =
     '<div style="font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:10px">Add-ons (optional)</div>' +
     '<div class="opt-list">' + addons.map(function(a){
