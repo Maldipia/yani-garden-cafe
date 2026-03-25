@@ -1887,8 +1887,8 @@ function renderReceiptPage() {
 
   if (step === 'ask') {
     html += '<div style="font-family:var(--font-soul);font-size:1.1rem;font-weight:700;margin-bottom:16px;text-align:center">Do you need a receipt?</div>' +
-      '<div class="receipt-option" onclick="state.receiptType=\'\';closePage(\'receipt\');openPage(\'payment\');renderPaymentPage()">' +
-        '<h4>No thanks</h4><p>Go to payment confirmation</p></div>' +
+      '<div class="receipt-option" onclick="state.receiptType=\'\';closePage(\'receipt\');openPage(\'status\');startStatusPolling()">' +
+        '<h4>No thanks</h4><p>Track my order</p></div>' +
       '<div class="receipt-option" onclick="state.receiptType=\'simple\';renderReceiptPage()">' +
         '<h4>📋 Receipt Only</h4><p>No personal details needed</p></div>' +
       '<div class="receipt-option" onclick="state.receiptType=\'bir\';renderReceiptPage()">' +
@@ -1990,8 +1990,9 @@ async function selectReceiptDelivery(method) {
   }
 
   closePage('receipt');
-  openPage('payment');
-  renderPaymentPage();
+  // Payment already done — go straight to order status
+  openPage('status');
+  startStatusPolling();
 }
 
 
