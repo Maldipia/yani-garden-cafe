@@ -1535,6 +1535,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
   <div class="po-popup-box" id="poPopupBox"></div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
 // ══════════════════════════════════════════════════════════
 // CONFIG
@@ -1548,6 +1549,50 @@ document.addEventListener('visibilitychange', function() {
   _pollActive = !document.hidden;
   if (_pollActive && pollTimer) { clearInterval(pollTimer); startPolling(); }
 });
+
+// ── Supabase Realtime ─────────────────────────────────────────────────────
+// Instant push when orders change — no polling needed when Realtime is live
+var _supabaseClient = null;
+var _realtimeChannel = null;
+var _realtimeActive = false;
+
+function initRealtime() {
+  try {
+    _supabaseClient = supabase.createClient(
+      'https://hnynvclpvfxzlfjphefj.supabase.co',
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhueW52Y2xwdmZ4emxmanBoZWZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI0NTg5MTMsImV4cCI6MjA4ODAzNDkxM30.cBIoq9dVUFC0d7Su5B7ubBG83-q-bffheKoOCTRDqXE'
+    );
+    _realtimeChannel = _supabaseClient
+      .channel('order-board')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'dine_in_orders'
+      }, function(payload) {
+        // Order changed — reload immediately instead of waiting for poll
+        loadOrders();
+      })
+      .subscribe(function(status) {
+        _realtimeActive = (status === 'SUBSCRIBED');
+        if (_realtimeActive) {
+          // Realtime connected — slow down polling to 30s fallback only
+          if (pollTimer) { clearInterval(pollTimer); }
+          pollTimer = setInterval(function() {
+            if (!_realtimeActive) loadOrders(); // fallback only
+          }, 30000);
+          console.log('✅ Realtime connected — polling reduced to 30s fallback');
+        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          _realtimeActive = false;
+          // Realtime dropped — restore normal polling
+          if (pollTimer) clearInterval(pollTimer);
+          pollTimer = setInterval(function() { loadOrders(); }, POLL_INTERVAL);
+          console.warn('⚠️ Realtime disconnected — falling back to polling');
+        }
+      });
+  } catch(e) {
+    console.warn('Realtime init failed:', e.message);
+  }
+}
 
 // Known non-PNG extensions for menu images
 var MENU_IMG_EXT = {
@@ -1766,6 +1811,7 @@ async function login() {
         applyRoleUI();
         resetSessionTimer();
         startPolling();
+        initRealtime();
         // Run health check for ADMIN/OWNER after login
         if (data.role === 'ADMIN' || data.role === 'OWNER') {
           setTimeout(runHealthCheck, 2000);
@@ -6789,6 +6835,7 @@ document.addEventListener('DOMContentLoaded', function() {
     applyRoleUI();
     resetSessionTimer();
     startPolling();
+    initRealtime();
     if (currentUser.role === 'ADMIN' || currentUser.role === 'OWNER') {
       setTimeout(runHealthCheck, 2000);
       setTimeout(initQueueMonitor, 1000);
