@@ -1179,6 +1179,7 @@ let state = {
   receiptAddress: '',
   receiptTIN: '',
   paymentMethod: '',
+  checkoutPayMethod: '', // cash | gcash | card — chosen on checkout
   statusInterval: null
 };
 
@@ -1769,7 +1770,20 @@ function renderCheckoutPage() {
     '<div class="form-group"><label class="form-label">Special Instructions (optional)</label>' +
     '<textarea class="form-textarea" id="custNotes" placeholder="e.g. Extra hot, no ice...">' + esc(state.orderNotes) + '</textarea></div>';
 
-  html += '<button class="btn-primary" id="placeOrderBtn" onclick="placeOrder()">Place Order — ' + peso(total) + '</button>';
+  // Payment method — required before placing
+  var pmOpts = [{k:'cash',ico:'💵',lbl:'Cash'},{k:'gcash',ico:'📱',lbl:'GCash/QR'},{k:'card',ico:'💳',lbl:'Card'}];
+  var pmHtml = '<div class="form-group"><label class="form-label" style="font-weight:700;font-size:.88rem">How will you pay? <span style="color:#e04444">*</span></label><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:6px">';
+  pmOpts.forEach(function(pm){
+    var sel = state.checkoutPayMethod === pm.k;
+    pmHtml += '<button onclick="setCheckoutPay(\'' + pm.k + '\')" style="padding:10px 4px;font-size:.8rem;border-radius:10px;border:' + (sel?'2px solid var(--forest);background:var(--forest);color:#fff':'1.5px solid var(--mist);background:var(--white);color:var(--forest-deep)') + ';cursor:pointer;font-family:var(--font-body)">' + pm.ico + '<br>' + pm.lbl + '</button>';
+  });
+  pmHtml += '</div></div>';
+  html += pmHtml;
+
+  var gcash = state.checkoutPayMethod === 'gcash';
+  var btnLabel = gcash ? 'Pay via GCash — ' + peso(total) : 'Place Order — ' + peso(total);
+  var btnDis = !state.checkoutPayMethod ? ' disabled style="opacity:.45;cursor:not-allowed"' : '';
+  html += '<button class="btn-primary" id="placeOrderBtn" onclick="placeOrder()"' + btnDis + '>' + btnLabel + '</button>';
 
   document.getElementById('checkoutBody').innerHTML = html;
 }
@@ -1778,23 +1792,44 @@ function setOrderType(type) {
   state.orderType = type;
   renderCheckoutPage();
 }
+function setCheckoutPay(method) {
+  state.checkoutPayMethod = method;
+  renderCheckoutPage();
+}
 
 // ══════════════════════════════════════════════════════════
 // PLACE ORDER
 // ══════════════════════════════════════════════════════════
 async function placeOrder() {
-  // Duplicate prevention removed — customers can place multiple orders freely
+  if (!state.checkoutPayMethod) { toast('Please select a payment method first'); return; }
 
-  var btn = document.getElementById('placeOrderBtn');
-  btn.disabled = true;
-  btn.textContent = 'Placing Order...';
-
-  state.customerName = document.getElementById('custName').value.trim();
-  state.orderNotes = document.getElementById('custNotes').value.trim();
+  state.customerName = (document.getElementById('custName') || {value:''}).value.trim();
+  state.orderNotes   = (document.getElementById('custNotes') || {value:''}).value.trim();
 
   var subtotal = getCartSubtotal();
   var svc = state.orderType === 'dine-in' ? Math.round(subtotal * SERVICE_CHARGE_RATE * 100) / 100 : 0;
   var total = subtotal + svc;
+
+  // GCash: show QR + upload form FIRST — order only placed after proof submitted
+  if (state.checkoutPayMethod === 'gcash') {
+    state._pendingOrder = {
+      customerName: state.customerName,
+      orderNotes:   state.orderNotes,
+      orderType:    state.orderType,
+      subtotal:     subtotal,
+      svc:          svc,
+      total:        total,
+      items:        state.cart.map(function(c){ return { code:c.code, qty:c.qty, size:c.size||'', sugarLevel:c.sugar||'', addons:c.addons||[] }; })
+    };
+    closePage('checkout');
+    openPage('payment');
+    state.paymentMethod = 'qr';
+    renderPaymentPage();
+    return;
+  }
+
+  var btn = document.getElementById('placeOrderBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Placing Order...'; }
 
   var items = state.cart.map(function(c) {
     return {
@@ -1819,18 +1854,13 @@ async function placeOrder() {
     state.orderId = result.orderId || result.ORDER_ID || 'YANI-???';
     state.orderTotal = result.total || total;
     state.orderStatus = 'NEW';
-    // Store for duplicate prevention
-    try {
-      sessionStorage.setItem('lastOrder_T' + (state.tableNo || '1'),
-        JSON.stringify({ orderId: state.orderId, ts: Date.now() }));
-    } catch(e) {}
+    state.paymentMethod = state.checkoutPayMethod || '';
     closePage('checkout');
-    openPage('receipt'); // Go to receipt question first
+    openPage('receipt');
     renderReceiptPage();
   } else {
     toast('Order failed: ' + (result.error || 'Please try again'));
-    btn.disabled = false;
-    btn.textContent = 'Place Order — ' + peso(total);
+    if (btn) { btn.disabled = false; btn.textContent = 'Place Order — ' + peso(total); }
   }
 }
 
@@ -2031,6 +2061,16 @@ function showQRPayment() {
   var body = document.getElementById('paymentBody');
   var activeTab = 'methods'; // 'methods' or 'upload'
 
+  // Show "pay first" banner when in GCash pre-order mode
+  if (state._pendingOrder) {
+    var total = state._pendingOrder.total;
+    body.innerHTML = '<div style="background:#FFFBEB;border:1.5px solid #F59E0B;border-radius:14px;padding:14px;margin-bottom:14px;text-align:center">' +
+      '<div style="font-size:.88rem;font-weight:700;color:#92400E">Pay first — order goes to kitchen after</div>' +
+      '<div style="font-size:.82rem;color:#78350F;margin-top:4px">Scan, pay <strong>' + peso(total) + '</strong>, screenshot, then upload below.</div>' +
+    '</div>';
+    var existingContent = body.innerHTML;
+    body.innerHTML = existingContent; // placeholder — renderPayCenter appends below
+  }
   function renderPayCenter(tab) {
     activeTab = tab;
     var html = '';
@@ -2173,7 +2213,7 @@ function showQRPayment() {
     '</div>';
 
     // Submit button
-    h += '<button class="btn-primary mt-16" id="paySubmitBtn" style="width:100%" onclick="submitPaymentProof()"' + (!uploadedFile ? ' disabled style="width:100%;opacity:.5;pointer-events:none"' : '') + '>✅ Submit Payment Proof</button>';
+    h += '<button class="btn-primary mt-16" id="paySubmitBtn" style="width:100%" onclick="submitPaymentProof()"' + (!uploadedFile ? ' disabled style="width:100%;opacity:.5;pointer-events:none"' : '') + '>' + (state._pendingOrder ? 'Confirm & Place Order' : 'Submit Payment Proof') + '</button>';
 
     // Security note
     h += '<div class="pay-security">🔒 <span>Your payment details are sent directly to Yani Garden Cafe\'s secure system.</span></div>';
@@ -2262,45 +2302,71 @@ function togglePayAccord(id) {
 }
 
 async function submitPaymentProof() {
-  var nameEl = document.getElementById('payName');
+  var nameEl   = document.getElementById('payName');
   var amountEl = document.getElementById('payAmount');
-  var notesEl = document.getElementById('payNotes');
+  var notesEl  = document.getElementById('payNotes');
 
-  if (!nameEl.value.trim()) { toast('Please enter your name'); nameEl.focus(); return }
-  if (!amountEl.value || parseFloat(amountEl.value) <= 0) { toast('Please enter amount paid'); amountEl.focus(); return }
-  if (!uploadedFile) { toast('Please upload a payment screenshot'); return }
+  if (!nameEl.value.trim())                             { toast('Please enter your name'); nameEl.focus(); return; }
+  if (!amountEl.value || parseFloat(amountEl.value)<=0) { toast('Please enter amount paid'); amountEl.focus(); return; }
+  if (!uploadedFile)                                    { toast('Please upload a payment screenshot'); return; }
 
   payNotes = notesEl ? notesEl.value : '';
 
   var btn = document.getElementById('paySubmitBtn');
   btn.disabled = true;
-  btn.textContent = 'Uploading...';
+  btn.textContent = 'Processing...';
   btn.style.opacity = '.6';
 
   var reader = new FileReader();
   reader.onload = async function(e) {
-    var dataUrl = e.target.result; // full data URL including prefix
-    var ts = new Date().toISOString().replace(/[-:T]/g,'').slice(0,15);
-    var fname = state.orderId + '_T' + state.tableNo + '_' + ts + '.jpg';
+    var dataUrl = e.target.result;
 
+    // ── GCash pre-order: place order first, then attach proof ──────────────
+    var pending = state._pendingOrder;
+    if (pending) {
+      btn.textContent = 'Placing order...';
+      var orderResult = await api('placeOrder', {
+        tableNo:      state.tableNo,
+        token:        state.tableToken,
+        customerName: pending.customerName,
+        orderNotes:   pending.orderNotes,
+        orderType:    pending.orderType,
+        subtotal:     pending.subtotal,
+        serviceCharge:pending.svc,
+        total:        pending.total,
+        items:        pending.items,
+        paymentMethod:'GCASH'
+      });
+      if (!orderResult.ok) {
+        toast('Order failed: ' + (orderResult.error || 'Please try again'));
+        btn.disabled=false; btn.textContent='Confirm & Place Order'; btn.style.opacity='1';
+        return;
+      }
+      state.orderId      = orderResult.orderId;
+      state.orderTotal   = orderResult.total || pending.total;
+      state.orderStatus  = 'NEW';
+      state.paymentMethod= 'gcash';
+      state._pendingOrder= null;
+      btn.textContent = 'Uploading proof...';
+    }
+    // ── Upload proof ────────────────────────────────────────────────────────
+    var ts    = new Date().toISOString().replace(/[^0-9]/g,'').slice(0,15);
+    var fname = (state.orderId||'YANI') + '_T' + state.tableNo + '_' + ts + '.jpg';
     var result = await api('uploadPayment', {
-      orderId: state.orderId,
-      tableNo: state.tableNo,
+      orderId:      state.orderId,
+      tableNo:      state.tableNo,
       customerName: nameEl.value.trim(),
-      amount: parseFloat(amountEl.value),
-      notes: payNotes,
-      imageData: dataUrl,
-      filename: fname
+      amount:       parseFloat(amountEl.value),
+      notes:        payNotes,
+      imageData:    dataUrl,
+      filename:     fname
     });
-
     if (result.ok) {
       uploadStep = 3;
       showPaySuccess(result.paymentId || ('PAY-' + Date.now()));
     } else {
       toast('Upload failed: ' + (result.error || 'Please try again'));
-      btn.disabled = false;
-      btn.textContent = '✅ Submit Payment Proof';
-      btn.style.opacity = '1';
+      btn.disabled=false; btn.textContent='Submit Payment Proof'; btn.style.opacity='1';
     }
   };
   reader.readAsDataURL(uploadedFile);
@@ -2397,7 +2463,7 @@ function resetOrder() {
   state.orderId = '';
   state.orderStatus = '';
   state.orderTotal = 0;
-  state.paymentMethod = '';
+  state.paymentMethod = ''; state.checkoutPayMethod = ''; state._pendingOrder = null;
   state.receiptType = '';
   state.receiptDelivery = '';
   state.receiptEmail = '';
