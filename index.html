@@ -1888,7 +1888,7 @@ function renderReceiptPage() {
   if (step === 'ask') {
     html += '<div style="font-family:var(--font-soul);font-size:1.1rem;font-weight:700;margin-bottom:16px;text-align:center">Do you need a receipt?</div>' +
       '<div class="receipt-option" onclick="state.receiptType=\'\';closePage(\'receipt\');openPage(\'payment\');renderPaymentPage()">' +
-        '<h4>No thanks</h4><p>Skip straight to payment</p></div>' +
+        '<h4>No thanks</h4><p>Go to payment confirmation</p></div>' +
       '<div class="receipt-option" onclick="state.receiptType=\'simple\';renderReceiptPage()">' +
         '<h4>📋 Receipt Only</h4><p>No personal details needed</p></div>' +
       '<div class="receipt-option" onclick="state.receiptType=\'bir\';renderReceiptPage()">' +
@@ -2375,24 +2375,16 @@ async function submitPaymentProof() {
 }
 
 function showPaySuccess(refId) {
-  var body = document.getElementById('paymentBody');
-  body.innerHTML = '<div class="pay-success">' +
-    '<div class="pay-success-icon">✅</div>' +
-    '<div class="pay-success-title">Payment Submitted!</div>' +
-    '<div class="pay-success-desc">Your payment proof has been received.<br>We\'ll verify it and update your order status shortly.</div>' +
-    '<div class="pay-success-ref">REF: ' + esc(refId) + '</div>' +
-    '<div class="pay-success-detail">Order: ' + esc(state.orderId) + '</div>' +
-    '<div class="pay-success-detail">Table: ' + esc(state.tableNo) + '</div>' +
-    '<div class="pay-success-detail">Amount: ' + peso(state.orderTotal) + '</div>' +
-    '<div style="font-size:.78rem;color:var(--timber);margin-top:16px">Your payment will be verified by our staff.</div>' +
-  '</div>' +
-  '<button class="btn-primary mt-16" style="width:100%" onclick="closePage(\'payment\');openPage(\'status\');startStatusPolling()">Track Order Status →</button>';
-
   // Reset upload state
   uploadedFile = null;
   uploadPreviewSrc = '';
   payNotes = '';
   uploadStep = 1;
+
+  // Go to receipt question — same as cash/card flow
+  closePage('payment');
+  openPage('receipt');
+  renderReceiptPage();
 }
 
 // ══════════════════════════════════════════════════════════
