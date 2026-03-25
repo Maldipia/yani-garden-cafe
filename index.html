@@ -2172,14 +2172,14 @@ function showQRPayment() {
 
     // Form fields
     h += '<div class="pay-form-group">' +
-      '<label class="pay-form-label">Customer Name <span class="req">*</span></label>' +
-      '<input class="pay-form-input" id="payName" type="text" value="' + esc(state.customerName || '') + '" placeholder="Your name">' +
+      '<label class="pay-form-label">Your Name <span style="font-size:.72rem;color:var(--timber);font-weight:400">(optional)</span></label>' +
+      '<input class="pay-form-input" id="payName" type="text" value="' + esc(state.customerName || '') + '" placeholder="e.g. Juan">' +
     '</div>';
 
+    var displayOrderId = state.orderId || (state._pendingOrder ? 'Will be assigned after payment' : '—');
     h += '<div class="pay-form-group">' +
-      '<label class="pay-form-label">Order ID <span class="req">*</span></label>' +
-      '<input class="pay-form-input" id="payOrderId" type="text" value="' + esc(state.orderId) + '" readonly>' +
-      '<div class="pay-form-hint">Auto-filled from your order</div>' +
+      '<label class="pay-form-label">Order ID</label>' +
+      '<input class="pay-form-input" id="payOrderId" type="text" value="' + esc(displayOrderId) + '" readonly style="color:var(--timber);font-size:.82rem">' +
     '</div>';
 
     h += '<div style="display:flex;gap:10px">' +
@@ -2189,7 +2189,7 @@ function showQRPayment() {
       '</div>' +
       '<div class="pay-form-group" style="flex:2">' +
         '<label class="pay-form-label">Amount Paid (₱) <span class="req">*</span></label>' +
-        '<input class="pay-form-input" id="payAmount" type="number" value="' + state.orderTotal + '" step="0.01">' +
+        '<input class="pay-form-input" id="payAmount" type="number" value="' + (state.orderTotal || (state._pendingOrder && state._pendingOrder.total) || '') + '" step="0.01" readonly style="background:var(--mist-light)">' +
       '</div>' +
     '</div>';
 
@@ -2312,9 +2312,9 @@ async function submitPaymentProof() {
   var amountEl = document.getElementById('payAmount');
   var notesEl  = document.getElementById('payNotes');
 
-  if (!nameEl.value.trim())                             { toast('Please enter your name'); nameEl.focus(); return; }
+  // Name is optional — no validation
   if (!amountEl.value || parseFloat(amountEl.value)<=0) { toast('Please enter amount paid'); amountEl.focus(); return; }
-  if (!uploadedFile)                                    { toast('Please upload a payment screenshot'); return; }
+  if (!uploadedFile)                                    { toast('Please upload your GCash screenshot'); return; }
 
   payNotes = notesEl ? notesEl.value : '';
 
