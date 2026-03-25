@@ -1542,6 +1542,12 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 var API_URL = '/api/pos';
 var UPLOAD_URL = '/api/upload-image';
 var POLL_INTERVAL = 5000;
+// Adaptive polling — faster when active orders exist, slower when tab hidden
+var _pollActive = true;
+document.addEventListener('visibilitychange', function() {
+  _pollActive = !document.hidden;
+  if (_pollActive && pollTimer) { clearInterval(pollTimer); startPolling(); }
+});
 
 // Known non-PNG extensions for menu images
 var MENU_IMG_EXT = {
@@ -1829,8 +1835,20 @@ function startPolling() {
   loadMenuCache(); // pre-load menu for Edit Order modal
   if (pollTimer) clearInterval(pollTimer);
   pollTimer = setInterval(function() {
+    if (document.hidden) return; // skip when tab not visible — saves API calls
+    var hasActive = allOrders && allOrders.some(function(o){
+      return o.status === 'NEW' || o.status === 'PREPARING' || o.status === 'READY';
+    });
+    // 3s when active orders exist, 5s otherwise
+    var targetInterval = hasActive ? 3000 : 5000;
+    if (pollTimer._interval !== targetInterval) {
+      clearInterval(pollTimer);
+      pollTimer = setInterval(arguments.callee, targetInterval);
+      pollTimer._interval = targetInterval;
+    }
     loadOrders();
   }, POLL_INTERVAL);
+  pollTimer._interval = POLL_INTERVAL;
   // Separate slow timer (30s) for online orders
   if (_onlinePollTimer) clearInterval(_onlinePollTimer);
   _onlinePollTimer = setInterval(function() {

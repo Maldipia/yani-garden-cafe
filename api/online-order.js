@@ -74,20 +74,8 @@ function isItemsValid(items) {
   });
 }
 
-// ── Log to sheets_sync_log for Sheets mirror (fire-and-forget) ──────────────
-function logSync(tableName, recordId, action) {
-  fetch(`${SUPABASE_URL}/rest/v1/sheets_sync_log`, {
-    method: 'POST',
-    headers: {
-      'apikey': SUPABASE_KEY,
-      'Authorization': `Bearer ${SUPABASE_KEY}`,
-      'Content-Type': 'application/json',
-      'Prefer': 'return=minimal',
-    },
-    body: JSON.stringify({ table_name: tableName, record_id: String(recordId), action, synced: false }),
-  }).catch(() => {});
-}
-// callGAS removed — replaced by logSync for Sheets mirror
+// GAS/Sheets sync fully removed — logSync is a no-op
+function logSync() {}
 
 // ── Enqueue order for GAS processing (queue-based, non-blocking) ─────────────
 // Writes to order_queue table; the queue-worker processes it sequentially.

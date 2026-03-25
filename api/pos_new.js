@@ -464,9 +464,9 @@ export default async function handler(req, res) {
     }
     async function checkAdminAuth() { return checkAuth(['ADMIN', 'OWNER']); }
 
-    // ═════════════════════════════════════════════════════════
-
-const handle_menu = require('./_handlers/menu');
+    // ══════════════════════════════════════════════════════════════════════
+    // MENU ACTIONS
+    // ══════════════════════════════════════════════════════════════════════const handle_menu = require('./_handlers/menu');
 const handle_orders = require('./_handlers/orders');
 const handle_payments = require('./_handlers/payments');
 const handle_auth = require('./_handlers/auth');
@@ -476,41 +476,48 @@ const handle_settings = require('./_handlers/settings');
 const handle_inventory = require('./_handlers/inventory');
 const handle_cash = require('./_handlers/cash');
 
+  // ── Route to handler module ──────────────────────────────────────
+  const ctx = { supa, supaFetch, checkAuth, checkAdminAuth, auditLog,
+    pushToSheets, logSync, invalidateMenuCache, getSetting, menuCache,
+    SUPABASE_URL, SUPABASE_KEY, ORDER_PREFIX, SERVICE_CHARGE_RATE,
+    isNonEmptyString, isValidPrice, isValidItemCode, isValidOrderId,
+    isNonEmptyArray, isValidPhone };
 
-  // ── Route to handler modules ─────────────────────────────────────────
-  const ctx = {
-    supa, supaFetch, checkAuth, checkAdminAuth, auditLog, pushToSheets, logSync,
-    invalidateMenuCache, getSetting, menuCache, SUPABASE_URL, SUPABASE_KEY,
-    ORDER_PREFIX, SERVICE_CHARGE_RATE, isNonEmptyString, isValidPrice,
-    isValidItemCode, isValidOrderId, isNonEmptyArray, isValidPhone
-  };
-
-  if (['getMenu', 'getMenuAdmin', 'addMenuItem', 'updateMenuItem', 'deleteMenuItem', 'upsertToSupabase', 'getAddons', 'getAddonsAdmin', 'saveAddon', 'deleteAddon'].includes(action))
+  if (['getMenu', 'getMenuAdmin', 'addMenuItem', 'updateMenuItem', 'deleteMenuItem', 'upsertToSupabase', 'getAddons', 'getAddonsAdmin', 'saveAddon', 'deleteAddon'].includes(action)) {
     return handle_menu(action, body, req, res, ctx);
+  }
 
-  if (['placeOrder', 'getOrders', 'updateOrderStatus', 'deleteOrder', 'toggleItemPrepared', 'editOrderItems', 'placePlatformOrder', 'requestReceipt', 'resendReceipt', 'getOnlineOrders'].includes(action))
+  if (['placeOrder', 'getOrders', 'updateOrderStatus', 'deleteOrder', 'toggleItemPrepared', 'editOrderItems', 'placePlatformOrder', 'requestReceipt', 'resendReceipt', 'getOnlineOrders'].includes(action)) {
     return handle_orders(action, body, req, res, ctx);
+  }
 
-  if (['setPaymentMethod', 'applyDiscount', 'uploadPayment', 'listPayments', 'getPaymentProof', 'migrateProofs', 'verifyPayment', 'rejectPayment', 'processRefund', 'getRefunds'].includes(action))
+  if (['setPaymentMethod', 'applyDiscount', 'uploadPayment', 'listPayments', 'getPaymentProof', 'migrateProofs', 'verifyPayment', 'rejectPayment', 'processRefund', 'getRefunds'].includes(action)) {
     return handle_payments(action, body, req, res, ctx);
+  }
 
-  if (['verifyUserPin', 'changePin', 'getStaff'].includes(action))
+  if (['verifyUserPin', 'changePin', 'getStaff'].includes(action)) {
     return handle_auth(action, body, req, res, ctx);
+  }
 
-  if (['getShiftSummary', 'getAnalytics', 'getAuditLogs', 'getCustomers'].includes(action))
+  if (['getShiftSummary', 'getAnalytics', 'getAuditLogs', 'getCustomers'].includes(action)) {
     return handle_analytics(action, body, req, res, ctx);
+  }
 
-  if (['getTables', 'updateTable', 'deleteTable', 'addTable', 'getTableStatus', 'setTableStatus', 'getReservations', 'createReservation', 'updateReservation', 'linkReservationTable', 'seatReservation'].includes(action))
+  if (['getTables', 'updateTable', 'deleteTable', 'addTable', 'getTableStatus', 'setTableStatus', 'getReservations', 'createReservation', 'updateReservation', 'linkReservationTable', 'seatReservation'].includes(action)) {
     return handle_tables(action, body, req, res, ctx);
+  }
 
-  if (['getSettings', 'updateSetting', 'syncToSheets', 'getPendingSync', 'markSynced'].includes(action))
+  if (['getSettings', 'updateSetting', 'syncToSheets', 'getPendingSync', 'markSynced'].includes(action)) {
     return handle_settings(action, body, req, res, ctx);
+  }
 
-  if (['getInventory', 'uploadInventoryPhoto', 'upsertInventory', 'adjustInventory', 'getInventoryLog'].includes(action))
+  if (['getInventory', 'uploadInventoryPhoto', 'upsertInventory', 'adjustInventory', 'getInventoryLog'].includes(action)) {
     return handle_inventory(action, body, req, res, ctx);
+  }
 
-  if (['openCashSession', 'closeCashSession', 'getCashSessions', 'getOpenCashSession'].includes(action))
+  if (['openCashSession', 'closeCashSession', 'getCashSessions', 'getOpenCashSession'].includes(action)) {
     return handle_cash(action, body, req, res, ctx);
+  }
 
   return res.status(400).json({ ok: false, error: `Unknown action: ${action}` });
 }
