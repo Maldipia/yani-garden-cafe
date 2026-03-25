@@ -1772,7 +1772,7 @@ function renderCheckoutPage() {
 
   // Payment method — required before placing
   var pmOpts = [{k:'cash',ico:'💵',lbl:'Cash'},{k:'gcash',ico:'📱',lbl:'GCash/QR'},{k:'card',ico:'💳',lbl:'Card'}];
-  var pmHtml = '<div class="form-group"><label class="form-label" style="font-weight:700;font-size:.88rem">How will you pay? <span style="color:#e04444">*</span></label><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:6px">';
+  var pmHtml = '<div class="form-group"><label class="form-label" style="font-weight:700;font-size:.88rem">Mode of Payment <span style="color:#e04444">*</span></label><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:6px">';
   pmOpts.forEach(function(pm){
     var sel = state.checkoutPayMethod === pm.k;
     pmHtml += '<button onclick="setCheckoutPay(\'' + pm.k + '\')" style="padding:10px 4px;font-size:.8rem;border-radius:10px;border:' + (sel?'2px solid var(--forest);background:var(--forest);color:#fff':'1.5px solid var(--mist);background:var(--white);color:var(--forest-deep)') + ';cursor:pointer;font-family:var(--font-body)">' + pm.ico + '<br>' + pm.lbl + '</button>';
