@@ -2176,11 +2176,7 @@ function showQRPayment() {
       '<input class="pay-form-input" id="payName" type="text" value="' + esc(state.customerName || '') + '" placeholder="e.g. Juan">' +
     '</div>';
 
-    var displayOrderId = state.orderId || (state._pendingOrder ? 'Will be assigned after payment' : '—');
-    h += '<div class="pay-form-group">' +
-      '<label class="pay-form-label">Order ID</label>' +
-      '<input class="pay-form-input" id="payOrderId" type="text" value="' + esc(displayOrderId) + '" readonly style="color:var(--timber);font-size:.82rem">' +
-    '</div>';
+
 
     h += '<div style="display:flex;gap:10px">' +
       '<div class="pay-form-group" style="flex:1">' +
