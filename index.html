@@ -1783,21 +1783,7 @@ function setOrderType(type) {
 // PLACE ORDER
 // ══════════════════════════════════════════════════════════
 async function placeOrder() {
-  // ── Duplicate order prevention ──────────────────────────
-  var _dupKey = 'lastOrder_T' + (state.tableNo || '1');
-  var _dupRaw = sessionStorage.getItem(_dupKey);
-  if (_dupRaw) {
-    try {
-      var _dup = JSON.parse(_dupRaw);
-      var _age = Date.now() - _dup.ts;
-      if (_age < 2 * 60 * 1000) { // 2 minutes
-        var _mins = Math.ceil((2 * 60 * 1000 - _age) / 1000);
-        toast('⚠️ You already placed an order (' + _dup.orderId + '). Please wait ' + _mins + 's or scroll down to track it.');
-        return;
-      }
-    } catch(e) {}
-  }
-  // ── End duplicate prevention ─────────────────────────────
+  // Duplicate prevention removed — customers can place multiple orders freely
 
   var btn = document.getElementById('placeOrderBtn');
   btn.disabled = true;
