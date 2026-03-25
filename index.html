@@ -2001,8 +2001,14 @@ async function selectReceiptDelivery(method) {
 function renderPaymentPage() {
   var body = document.getElementById('paymentBody');
 
+  // If payment method already chosen on checkout, show confirmation directly
+  if (state.paymentMethod) {
+    selectPayment(state.paymentMethod);
+    return;
+  }
+
   if (!state.paymentMethod) {
-    // Show payment method selector
+    // Show payment method selector (fallback — shouldn't normally reach here)
     var html = '<div class="status-card mb-16">' +
       '<div style="font-size:.82rem;color:var(--timber)">Order</div>' +
       '<div style="font-size:1.1rem;font-weight:700">' + esc(state.orderId) + '</div>' +
