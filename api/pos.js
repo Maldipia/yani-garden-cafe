@@ -466,15 +466,15 @@ export default async function handler(req, res) {
 
     // ═════════════════════════════════════════════════════════
 
-const handle_menu = require('./_handlers/menu');
-const handle_orders = require('./_handlers/orders');
-const handle_payments = require('./_handlers/payments');
-const handle_auth = require('./_handlers/auth');
-const handle_analytics = require('./_handlers/analytics');
-const handle_tables = require('./_handlers/tables');
-const handle_settings = require('./_handlers/settings');
-const handle_inventory = require('./_handlers/inventory');
-const handle_cash = require('./_handlers/cash');
+const handle_menu = require('../lib/handlers/menu');
+const handle_orders = require('../lib/handlers/orders');
+const handle_payments = require('../lib/handlers/payments');
+const handle_auth = require('../lib/handlers/auth');
+const handle_analytics = require('../lib/handlers/analytics');
+const handle_tables = require('../lib/handlers/tables');
+const handle_settings = require('../lib/handlers/settings');
+const handle_inventory = require('../lib/handlers/inventory');
+const handle_cash = require('../lib/handlers/cash');
 
 
   // ── Route to handler modules ─────────────────────────────────────────
