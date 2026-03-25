@@ -2411,6 +2411,23 @@ function renderStatusPage() {
     (state.tableNo ? '<div style="margin-top:4px;font-size:.82rem;color:var(--timber)">Table ' + esc(state.tableNo) + '</div>' : '') +
   '</div>';
 
+  // Show payment-specific message on status page
+  if (state.checkoutPayMethod === 'cash') {
+    html += '<div style="background:#FFFBEB;border:1.5px solid #F59E0B;border-radius:14px;padding:16px;margin-bottom:14px;text-align:center">' +
+      '<div style="font-size:1.5rem;margin-bottom:6px">☕</div>' +
+      '<div style="font-size:.9rem;font-weight:700;color:#92400E;margin-bottom:4px">Sit back and relax!</div>' +
+      '<div style="font-size:.82rem;color:#78350F;line-height:1.7">' +
+        'One of our crew will be right over to your table to collect your cash payment. ' +
+        'Your order will be lovingly prepared as soon as we\'ve got you sorted. ' +
+        'We\'re grateful you\'re here — good things are coming your way! 🌿' +
+      '</div>' +
+    '</div>';
+  } else if (state.checkoutPayMethod === 'card') {
+    html += '<div style="background:#F0FDF4;border:1.5px solid #86EFAC;border-radius:14px;padding:14px;margin-bottom:14px;text-align:center;font-size:.82rem;color:#166534;line-height:1.6">' +
+      '💳 Our team will bring a card terminal to your table in just a moment.<br>Sit tight — we\'ll have you sorted in no time!' +
+    '</div>';
+  }
+
   if (s === 'CANCELLED') {
     html += '<div class="status-card"><div class="status-icon">❌</div><div class="status-title">Order Cancelled</div><div class="status-desc">Please speak with a staff member.</div></div>';
   } else {
