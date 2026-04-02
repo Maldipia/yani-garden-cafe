@@ -1879,7 +1879,7 @@ async function placeOrder() {
       subtotal:     subtotal,
       svc:          svc,
       total:        total,
-      items:        state.cart.map(function(c){ return { code:c.code, qty:c.qty, size:c.size||'', sugarLevel:c.sugar||'', addons:c.addons||[] }; })
+      items:        state.cart.map(function(c){ return { code:c.code, qty:c.qty, price:c.price, size:c.size||'', sugarLevel:c.sugar||'', addons:c.addons||[] }; })
     };
     closePage('checkout');
     openPage('payment');
