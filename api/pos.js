@@ -1651,7 +1651,7 @@ export default async function handler(req, res) {
       }, { order_id: `eq.${orderId}` });
 
       logSync('payments', paymentId, 'INSERT');
-      return res.status(200).json({ ok: true, paymentId });
+      return res.status(200).json({ ok: true, paymentId, proofUrl, filename: storedFilename });
     }
 
     // ── listPayments ───────────────────────────────────────────────────────
