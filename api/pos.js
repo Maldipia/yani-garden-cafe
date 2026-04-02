@@ -413,6 +413,51 @@ async function verifyToken(token) {
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────
+// ── Google Drive upload helper ─────────────────────────────────────────────
+async function uploadToGoogleDrive(imageBuffer, mimeType, filename, folderId) {
+  try {
+    const sa = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON || '{}');
+    if (!sa.private_key || !sa.client_email) return null;
+    const header  = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url');
+    const now     = Math.floor(Date.now() / 1000);
+    const payload = Buffer.from(JSON.stringify({
+      iss: sa.client_email,
+      scope: 'https://www.googleapis.com/auth/drive.file',
+      aud: 'https://oauth2.googleapis.com/token',
+      exp: now + 3600, iat: now,
+    })).toString('base64url');
+    const crypto = require('crypto');
+    const sign   = crypto.createSign('RSA-SHA256');
+    sign.update(`${header}.${payload}`);
+    const sig = sign.sign(sa.private_key, 'base64url');
+    const jwt = `${header}.${payload}.${sig}`;
+    const tokenResp = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${jwt}`,
+    });
+    const tokenData = await tokenResp.json();
+    if (!tokenData.access_token) return null;
+    const boundary = '----YaniPOS';
+    const meta = JSON.stringify({ name: filename, parents: [folderId] });
+    const body = Buffer.concat([
+      Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n`),
+      Buffer.from(`--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`),
+      imageBuffer,
+      Buffer.from(`\r\n--${boundary}--`),
+    ]);
+    const uploadResp = await fetch(
+      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink',
+      { method: 'POST', headers: {
+          'Authorization': `Bearer ${tokenData.access_token}`,
+          'Content-Type': `multipart/related; boundary=${boundary}`,
+        }, body }
+    );
+    const d = await uploadResp.json();
+    return d.webViewLink || (d.id ? `https://drive.google.com/file/d/${d.id}/view` : null);
+  } catch(e) { console.error('Drive upload error:', e.message); return null; }
+}
+
 export default async function handler(req, res) {
   // Restrict CORS to known domains only
   const origin = req.headers.origin || '';
@@ -1573,6 +1618,12 @@ export default async function handler(req, res) {
             if (uploadResp.ok) {
               proofUrl = `${SUPABASE_URL}/storage/v1/object/public/payment-proofs/${storageFilename}`;
               storedFilename = storageFilename;
+              // Mirror to Google Drive (fire-and-forget, non-fatal)
+              if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+                uploadToGoogleDrive(imgBuffer, mimeType, storedFilename, '1hDQlljGpRUwT9q33xHukbXvz_M8tk5lR')
+                  .then(url => { if (url) console.log('GDrive upload ok:', url); })
+                  .catch(() => {});
+              }
             }
             // else fall back to base64 already set
           }
