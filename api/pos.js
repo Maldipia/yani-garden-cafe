@@ -727,19 +727,35 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '*').split(',').map(s =>
         const menuR = await supaFetch(
           `${SUPABASE_URL}/rest/v1/menu_items?is_active=eq.true&select=item_code,base_price,price_short,price_medium,price_tall`
         );
+        // Also fetch addon prices to allow item + addon total
+        const addonR = await supaFetch(
+          `${SUPABASE_URL}/rest/v1/menu_addons?is_active=eq.true&select=addon_code,price`
+        );
         if (menuR.ok && menuR.data && menuR.data.length) {
           const menuMap = {};
           menuR.data.forEach(m => { menuMap[m.item_code] = m; });
+          const addonMap = {};
+          if (addonR.ok && addonR.data) {
+            addonR.data.forEach(a => { addonMap[a.addon_code] = parseFloat(a.price) || 0; });
+          }
           for (const item of items) {
             const dbItem = menuMap[item.code];
             if (!dbItem) continue; // unknown code — let DB handle
             const sentPrice = parseFloat(item.price) || 0;
             const size = (item.size || '').toLowerCase();
-            // Determine valid price based on size
-            let validPrice = parseFloat(dbItem.base_price) || 0;
-            if (size === 'short'  && dbItem.price_short)  validPrice = parseFloat(dbItem.price_short);
-            if (size === 'medium' && dbItem.price_medium) validPrice = parseFloat(dbItem.price_medium);
-            if (size === 'tall'   && dbItem.price_tall)   validPrice = parseFloat(dbItem.price_tall);
+            // Determine valid base price based on size
+            let validBase = parseFloat(dbItem.base_price) || 0;
+            if (size === 'short'  && dbItem.price_short)  validBase = parseFloat(dbItem.price_short);
+            if (size === 'medium' && dbItem.price_medium) validBase = parseFloat(dbItem.price_medium);
+            if (size === 'tall'   && dbItem.price_tall)   validBase = parseFloat(dbItem.price_tall);
+            // Add addon prices to valid total
+            const addons = Array.isArray(item.addons) ? item.addons : [];
+            let addonTotal = 0;
+            for (const addon of addons) {
+              const addonCode = addon.code || addon.addon_code || '';
+              addonTotal += addonMap[addonCode] || parseFloat(addon.price) || 0;
+            }
+            const validPrice = validBase + addonTotal;
             // Allow 1 peso tolerance for floating point
             if (Math.abs(sentPrice - validPrice) > 1.01) {
               return res.status(400).json({
