@@ -116,7 +116,7 @@ async function buildReport() {
   const peakHour = Object.entries(hourly).sort((a,b) => b[1].count - a[1].count)[0];
 
   return {
-    dateLabel, startISO, endISO,
+    dateLabel, startISO, endISO, businessName, businessAddress,
     totalOrders: orders.length,
     completedOrders: completed.length,
     cancelledOrders: cancelled.length,
@@ -261,7 +261,7 @@ function buildEmailHTML(r) {
 }
 
 // ── Send via Resend ───────────────────────────────────────────────────────
-async function sendEmail(html, dateLabel) {
+async function sendEmail(html, dateLabel, businessName) {
   if (!RESEND_KEY) throw new Error('RESEND_API_KEY not set');
   const r = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -320,7 +320,7 @@ export default async function handler(req, res) {
   try {
     const report  = await buildReport();
     const html    = buildEmailHTML(report);
-    const emailId = await sendEmail(html, report.dateLabel);
+    const emailId = await sendEmail(html, report.dateLabel, report.businessName || 'My Cafe');
 
     return res.status(200).json({
       ok: true,
