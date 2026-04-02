@@ -831,7 +831,13 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '*').split(',').map(s =>
           { method: 'POST', body: '{}' }
         );
         orderNo = seqR.ok ? (seqR.data || 1001) : Date.now() % 9000 + 1000;
-        orderId = `${ORDER_PREFIX}-${orderNo}`;
+        // Read ORDER_PREFIX from DB settings (tenant-specific)
+        let tenantPrefix = ORDER_PREFIX;
+        try {
+          const pfxR = await supaFetch(`${SUPABASE_URL}/rest/v1/settings?key=eq.ORDER_PREFIX&select=value`);
+          if (pfxR.ok && pfxR.data && pfxR.data[0]) tenantPrefix = pfxR.data[0].value || ORDER_PREFIX;
+        } catch(_) {}
+        orderId = `${tenantPrefix}-${orderNo}`;
 
         const orderRow = {
           order_id:       orderId,
