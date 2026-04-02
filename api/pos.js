@@ -483,10 +483,10 @@ export default async function handler(req, res) {
   // Restrict CORS to known domains only
   const origin = req.headers.origin || '';
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '*').split(',').map(s => s.trim());
-  if (allowedOrigins.includes(origin)) {
+  if (ALLOWED_ORIGINS.includes(origin) || ALLOWED_ORIGINS.includes('*')) {
     res.setHeader('Access-Control-Allow-Origin', origin);
   } else if (!origin) {
-    res.setHeader('Access-Control-Allow-Origin', (process.env.ALLOWED_ORIGINS || 'https://yanigardencafe.com'));
+    res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGINS[0] || '*');
   }
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
