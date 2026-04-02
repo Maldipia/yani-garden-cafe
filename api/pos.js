@@ -870,7 +870,38 @@ export default async function handler(req, res) {
         sugar: it.sugar_choice, notes: it.item_notes,
       }))});
 
-      return res.status(200).json({
+      // ── Auto-deduct inventory for tracked items (fire-and-forget) ──────────
+      try {
+        const invR = await supaFetch(
+          `${SUPABASE_URL}/rest/v1/inventory?select=item_code,stock_qty,auto_disable,low_stock_threshold`
+        );
+        if (invR.ok && invR.data && invR.data.length) {
+          const invMap = {};
+          invR.data.forEach(inv => { invMap[inv.item_code] = inv; });
+          for (const it of orderItems) {
+            const inv = invMap[it.code];
+            if (!inv) continue; // not tracked
+            const newQty = Math.max(0, parseFloat(inv.stock_qty) - it.qty);
+            // Deduct stock
+            await supa('PATCH', 'inventory', { stock_qty: newQty }, { item_code: `eq.${it.code}` });
+            // Log adjustment
+            await supa('POST', 'inventory_log', {
+              item_code: it.code, change_type: 'SALE', qty_change: -it.qty,
+              qty_after: newQty, reason: `Order ${orderId}`, created_by: 'system'
+            });
+            // Auto-disable menu item if stock hits 0 and auto_disable is true
+            if (inv.auto_disable && newQty <= 0) {
+              await supa('PATCH', 'menu_items', { is_active: false }, { item_code: `eq.${it.code}` });
+              invalidateMenuCache();
+            }
+          }
+        }
+      } catch(invErr) {
+        // Non-fatal — order still completes even if inventory update fails
+        console.error('Inventory deduction error:', invErr.message);
+      }
+
+            return res.status(200).json({
         ok: true,
         orderId,
         ORDER_ID: orderId,

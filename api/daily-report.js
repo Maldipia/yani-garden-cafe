@@ -283,7 +283,17 @@ export default async function handler(req, res) {
   const effectiveSecret = REPORT_SECRET || process.env.CRON_SECRET || '';
   const manualOk = effectiveSecret && bodySecret === effectiveSecret;
 
-  if (!cronOk && !manualOk) {
+  // Also allow: admin JWT token in Authorization header (for admin dashboard trigger)
+  let jwtAdminOk = false;
+  if (!cronOk && !manualOk && cronAuth && cronAuth.startsWith('Bearer ') && cronAuth !== `Bearer ${process.env.CRON_SECRET || ''}`) {
+    try {
+      const jwt = require('jsonwebtoken');
+      const decoded = jwt.verify(cronAuth.replace('Bearer ', ''), process.env.JWT_SECRET || '');
+      if (decoded && (decoded.role === 'OWNER' || decoded.role === 'ADMIN')) jwtAdminOk = true;
+    } catch(e) {}
+  }
+
+  if (!cronOk && !manualOk && !jwtAdminOk) {
     return res.status(401).json({ ok: false, error: 'Unauthorized' });
   }
 

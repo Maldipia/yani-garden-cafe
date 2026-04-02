@@ -1847,6 +1847,10 @@ async function login() {
           // Initialize queue monitor panel
           setTimeout(initQueueMonitor, 1000);
         }
+        // Cash session check — alert if no open session (OWNER/CASHIER/ADMIN)
+        if (data.role === 'OWNER' || data.role === 'ADMIN' || data.role === 'CASHIER') {
+          setTimeout(checkCashSessionOnLogin, 3000);
+        }
       }, 0);
     } else {
       // Wrong PIN — show clear visible error
@@ -6881,6 +6885,9 @@ document.addEventListener('DOMContentLoaded', function() {
       setTimeout(runHealthCheck, 2000);
       setTimeout(initQueueMonitor, 1000);
     }
+    if (currentUser.role === 'OWNER' || currentUser.role === 'ADMIN' || currentUser.role === 'CASHIER') {
+      setTimeout(checkCashSessionOnLogin, 3000);
+    }
   }
   ['dmTotalPax','dmQualPax','dmPromoPct','dmCustomAmt'].forEach(function(id) {
     var el = document.getElementById(id);
@@ -7160,8 +7167,41 @@ async function loadShiftSummary() {
       + '<div style="font-size:.68rem;color:#9CA3AF">Take-Out</div></div>'
     + '</div>';
   html += '</div>';
+
+  // Manual daily report button (OWNER/ADMIN only)
+  if (currentUser && (currentUser.role === 'OWNER' || currentUser.role === 'ADMIN')) {
+    html += '<div style="margin-top:16px;padding:0 4px">' +
+      '<button onclick="triggerManualDailyReport(this)" ' +
+        'style="width:100%;background:var(--forest-deep);color:#fff;border:none;border-radius:12px;padding:12px;font-size:.88rem;font-weight:700;cursor:pointer">' +
+        '📧 Send Daily Report Now</button>' +
+      '<div style="font-size:.7rem;color:var(--timber);text-align:center;margin-top:6px">Sends today\'s sales summary email</div>' +
+    '</div>';
+  }
+
   view.innerHTML = html;
 }
+
+async function triggerManualDailyReport(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+  try {
+    var token = (currentUser && currentUser.token) || '';
+    var resp = await fetch('/api/daily-report', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ manual: true })
+    });
+    var d = await resp.json();
+    if (d.ok || d.sent) {
+      showToast('✅ Daily report sent!');
+    } else {
+      showToast('⚠️ ' + (d.error || 'Report may not have sent — check email'), 'warn');
+    }
+  } catch(e) {
+    showToast('❌ ' + e.message, 'error');
+  }
+  if (btn) { btn.disabled = false; btn.textContent = '📧 Send Daily Report Now'; }
+}
+
 function statCard(label, value, color, bg) {
   return '<div style="background:' + bg + ';border-radius:12px;padding:12px;text-align:center">'
     + '<div style="font-size:.68rem;color:' + color + ';font-weight:700;margin-bottom:4px">' + label + '</div>'
@@ -7842,6 +7882,69 @@ async function submitRefund() {
 // ══════════════════════════════════════════════════════════
 var _openCashSession = null;
 var _cashSessions = [];
+
+// ── Cash session automation ─────────────────────────────────────────────────
+async function checkCashSessionOnLogin() {
+  if (!currentUser) return;
+  var r = await api('getOpenCashSession');
+  if (!r.ok) return;
+
+  var session = r.session;
+
+  if (!session) {
+    // No open session — show banner prompting to open one
+    showCashSessionBanner('no_session');
+  } else {
+    // Session is open — check if it's been open too long (>10h = end-of-day prompt)
+    var openedAt = new Date(session.opened_at);
+    var hoursOpen = (Date.now() - openedAt.getTime()) / (1000 * 60 * 60);
+    if (hoursOpen >= 10) {
+      showCashSessionBanner('close_prompt', session, hoursOpen);
+    }
+    _openCashSession = session;
+  }
+}
+
+function showCashSessionBanner(type, session, hours) {
+  // Remove any existing banner
+  var existing = document.getElementById('cashSessionBanner');
+  if (existing) existing.remove();
+
+  var banner = document.createElement('div');
+  banner.id = 'cashSessionBanner';
+  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;font-size:.82rem;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.15)';
+
+  if (type === 'no_session') {
+    banner.style.background = '#FEF3C7';
+    banner.style.color = '#92400E';
+    banner.style.borderBottom = '2px solid #F59E0B';
+    banner.innerHTML =
+      '<span>⚠️ No cash session open. Open one before taking orders.</span>' +
+      '<div style="display:flex;gap:8px">' +
+        '<button onclick="setFilter(\'CASH\');document.getElementById(\'cashSessionBanner\').remove()" ' +
+          'style="background:#F59E0B;color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-weight:700;font-size:.78rem">Open Session</button>' +
+        '<button onclick="document.getElementById(\'cashSessionBanner\').remove()" ' +
+          'style="background:transparent;border:1px solid #F59E0B;border-radius:6px;padding:5px 10px;cursor:pointer;color:#92400E;font-size:.78rem">Dismiss</button>' +
+      '</div>';
+  } else if (type === 'close_prompt') {
+    var h = Math.floor(hours || 0);
+    banner.style.background = '#FEE2E2';
+    banner.style.color = '#991B1B';
+    banner.style.borderBottom = '2px solid #EF4444';
+    banner.innerHTML =
+      '<span>🔔 Cash session has been open ' + h + ' hours. End of shift — time to close and reconcile.</span>' +
+      '<div style="display:flex;gap:8px">' +
+        '<button onclick="setFilter(\'CASH\');document.getElementById(\'cashSessionBanner\').remove()" ' +
+          'style="background:#EF4444;color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-weight:700;font-size:.78rem">Close Session</button>' +
+        '<button onclick="document.getElementById(\'cashSessionBanner\').remove()" ' +
+          'style="background:transparent;border:1px solid #EF4444;border-radius:6px;padding:5px 10px;cursor:pointer;color:#991B1B;font-size:.78rem">Dismiss</button>' +
+      '</div>';
+  }
+
+  document.body.insertBefore(banner, document.body.firstChild);
+  // Auto-dismiss after 30 seconds
+  setTimeout(function() { if (banner.parentNode) banner.remove(); }, 30000);
+}
 
 async function loadCashView() {
   var el = document.getElementById('cashView');
