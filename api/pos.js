@@ -416,7 +416,19 @@ async function verifyToken(token) {
 // ── Google Drive upload helper ─────────────────────────────────────────────
 async function uploadToGoogleDrive(imageBuffer, mimeType, filename, folderId) {
   try {
-    const sa = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON || '{}');
+    // Read SA from Supabase settings (fallback to env var)
+    let saJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON || '';
+    if (!saJson) {
+      try {
+        const saR = await fetch(
+          `${SUPABASE_URL}/rest/v1/settings?key=eq.GOOGLE_SA_JSON&select=value`,
+          { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
+        );
+        const saData = await saR.json();
+        saJson = (saData && saData[0]) ? saData[0].value : '';
+      } catch(_) {}
+    }
+    const sa = JSON.parse(saJson || '{}');
     if (!sa.private_key || !sa.client_email) return null;
     const header  = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url');
     const now     = Math.floor(Date.now() / 1000);
@@ -1903,8 +1915,17 @@ export default async function handler(req, res) {
       const tinyPng = Buffer.from(
         'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==','base64');
       const driveResult = await uploadToGoogleDrive(tinyPng,'image/png',`TEST_${Date.now()}.png`,'1hDQlljGpRUwT9q33xHukbXvz_M8tk5lR');
-      const saSet = !!(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-      const saEmail = saSet ? JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON).client_email : 'NOT SET';
+      let testSaJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON || '';
+      if (!testSaJson) {
+        try {
+          const testSaR = await fetch(`${SUPABASE_URL}/rest/v1/settings?key=eq.GOOGLE_SA_JSON&select=value`,
+            { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } });
+          const testSaData = await testSaR.json();
+          testSaJson = (testSaData && testSaData[0]) ? testSaData[0].value : '';
+        } catch(_) {}
+      }
+      const saSet = !!(testSaJson);
+      const saEmail = saSet ? JSON.parse(testSaJson).client_email : 'NOT SET';
       return res.status(200).json({ ok: !!driveResult, driveUrl: driveResult, saEmail, saSet });
     }
 
