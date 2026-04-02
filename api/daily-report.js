@@ -287,7 +287,7 @@ export default async function handler(req, res) {
   let jwtAdminOk = false;
   if (!cronOk && !manualOk && cronAuth && cronAuth.startsWith('Bearer ') && cronAuth !== `Bearer ${process.env.CRON_SECRET || ''}`) {
     try {
-      const jwt = require('jsonwebtoken');
+      const { default: jwt } = await import('jsonwebtoken');
       const decoded = jwt.verify(cronAuth.replace('Bearer ', ''), process.env.JWT_SECRET || '');
       if (decoded && (decoded.role === 'OWNER' || decoded.role === 'ADMIN')) jwtAdminOk = true;
     } catch(e) {}
