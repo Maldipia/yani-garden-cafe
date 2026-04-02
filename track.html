@@ -187,6 +187,28 @@ body{font-family:var(--font-b);background:var(--cream);color:var(--ink);min-heig
 </div>
 
 <script>
+// ── CONFIG ────────────────────────────────────────────────────────────────
+var APP_CONFIG = {};
+(async function loadAppConfig() {
+  try {
+    var r = await fetch('/api/config');
+    var d = await r.json();
+    if (!d.ok) return;
+    APP_CONFIG = d.config;
+    var bn = d.config.BUSINESS_NAME || 'My Cafe';
+    document.title = bn + ' — Track Order';
+    document.querySelectorAll('.brand-name').forEach(function(el){ el.textContent = bn; });
+    if (d.config.PRIMARY_COLOR) {
+      document.documentElement.style.setProperty('--forest', d.config.PRIMARY_COLOR);
+      document.documentElement.style.setProperty('--forest-deep', d.config.PRIMARY_COLOR);
+    }
+    if (d.config.SECONDARY_COLOR)
+      document.documentElement.style.setProperty('--terra', d.config.SECONDARY_COLOR);
+    if (d.config.LOGO_URL)
+      document.querySelectorAll('.brand-logo').forEach(function(el){ el.src = d.config.LOGO_URL; });
+  } catch(e) {}
+})();
+
 const API = '/api/online-order';
 var pollTimer = null;
 var currentRef = '';

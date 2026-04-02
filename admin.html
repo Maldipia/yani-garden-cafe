@@ -1562,6 +1562,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
     }
     if (cfg.LOGO_URL) document.querySelectorAll('.brand-logo').forEach(function(el){ el.src = cfg.LOGO_URL; });
     if (cfg.ORDER_PREFIX) window.ORDER_PREFIX = cfg.ORDER_PREFIX;
+    if (cfg.SESSION_KEY) POS_SESSION_KEY = cfg.SESSION_KEY;
     if (cfg.SESSION_KEY) window.POS_SESSION_KEY = cfg.SESSION_KEY;
     if (cfg.SERVICE_CHARGE) window.SERVICE_CHARGE_RATE = parseFloat(cfg.SERVICE_CHARGE);
   }
@@ -1588,8 +1589,8 @@ var _realtimeActive = false;
 function initRealtime() {
   try {
     _supabaseClient = supabase.createClient(
-      (window.SUPABASE_URL || 'https://hnynvclpvfxzlfjphefj.supabase.co'),
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhueW52Y2xwdmZ4emxmanBoZWZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI0NTg5MTMsImV4cCI6MjA4ODAzNDkxM30.cBIoq9dVUFC0d7Su5B7ubBG83-q-bffheKoOCTRDqXE'
+      (window.SUPABASE_URL || (APP_CONFIG && APP_CONFIG.SUPABASE_URL) || 'https://hnynvclpvfxzlfjphefj.supabase.co'),
+      (APP_CONFIG && APP_CONFIG.SUPABASE_ANON_KEY) || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhueW52Y2xwdmZ4emxmanBoZWZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI0NTg5MTMsImV4cCI6MjA4ODAzNDkxM30.cBIoq9dVUFC0d7Su5B7ubBG83-q-bffheKoOCTRDqXE'
     );
     _realtimeChannel = _supabaseClient
       .channel('order-board')
@@ -1678,7 +1679,7 @@ var currentUser = {
   token:       null,   // JWT issued by server on login
   expiresAt:   null,   // epoch ms when token expires
 };
-var YANI_TOKEN_KEY = (window.POS_SESSION_KEY || 'pos_session_token'); // localStorage key
+var POS_SESSION_KEY = (window.POS_SESSION_KEY || 'pos_session_token'); // localStorage key
 
 var STATUS_CONFIG = {
   NEW:       { icon:'🔔', label:'New',       badge:'new',       actions:['start','cancel'] },
@@ -1712,7 +1713,7 @@ function resetSessionTimer() {
 function logout() {
   if (sessionTimer) clearTimeout(sessionTimer);
   currentUser = { userId: null, username: null, role: null, token: null, expiresAt: null };
-  try { localStorage.removeItem(YANI_TOKEN_KEY); } catch(_) {}
+  try { localStorage.removeItem(POS_SESSION_KEY); } catch(_) {}
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
   document.getElementById('dashboard').style.display = 'none';
   document.getElementById('loginOverlay').classList.remove('hidden');
@@ -1726,19 +1727,19 @@ function logout() {
 // the page doesn't force staff to re-enter PIN every time.
 function tryRestoreSession() {
   try {
-    var stored = localStorage.getItem(YANI_TOKEN_KEY);
+    var stored = localStorage.getItem(POS_SESSION_KEY);
     if (!stored) return false;
     var s = JSON.parse(stored);
     if (!s.userId || !s.role) return false;
     // KITCHEN sessions are never auto-restored — kitchen staff re-enters PIN each time
     // This prevents kitchen session from blocking admin login on shared devices
     if (s.role === 'KITCHEN') {
-      localStorage.removeItem(YANI_TOKEN_KEY);
+      localStorage.removeItem(POS_SESSION_KEY);
       return false;
     }
     // If we have a token, check it's not expired
     if (s.expiresAt && Date.now() > s.expiresAt - 5 * 60 * 1000) {
-      localStorage.removeItem(YANI_TOKEN_KEY);
+      localStorage.removeItem(POS_SESSION_KEY);
       return false;
     }
     // No token (JWT not yet active) — still allow session restore via userId
@@ -1818,7 +1819,7 @@ async function login() {
       // Store session — but NOT for KITCHEN (they never get auto-restored)
       if (data.role !== 'KITCHEN') {
         try {
-          localStorage.setItem(YANI_TOKEN_KEY, JSON.stringify({
+          localStorage.setItem(POS_SESSION_KEY, JSON.stringify({
             token:     data.token || null,
             userId:    data.userId,
             username:  data.username,
@@ -1828,7 +1829,7 @@ async function login() {
         } catch(_) {}
       } else {
         // Clear any previous session so admin isn't stuck on kitchen
-        try { localStorage.removeItem(YANI_TOKEN_KEY); } catch(_) {}
+        try { localStorage.removeItem(POS_SESSION_KEY); } catch(_) {}
       }
       
       console.log('✅ Logged in as', data.username, '(' + data.role + ')');

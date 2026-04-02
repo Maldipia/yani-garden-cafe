@@ -44,6 +44,19 @@ async function buildReport() {
     timeZone: 'Asia/Manila',
   });
 
+  // Fetch business name from settings
+  let businessName = 'My Cafe';
+  let businessAddress = 'Philippines';
+  try {
+    const settR = await supaFetch(`settings?key=in.("BUSINESS_NAME","ADDRESS")&select=key,value`);
+    if (settR.ok && settR.data) {
+      settR.data.forEach(s => {
+        if (s.key === 'BUSINESS_NAME') businessName = s.value || businessName;
+        if (s.key === 'ADDRESS') businessAddress = s.value || businessAddress;
+      });
+    }
+  } catch(_) {}
+
   // ── Orders for yesterday ──────────────────────────────────────────────
   const ordersR = await supaFetch(
     `dine_in_orders?created_at=gte.${startISO}&created_at=lt.${endISO}&is_deleted=eq.false&is_test=eq.false&select=order_id,status,total,discounted_total,discount_type,discount_amount,order_type,payment_method,created_at`
@@ -258,7 +271,7 @@ async function sendEmail(html, dateLabel) {
     body: JSON.stringify({
       from:    FROM_EMAIL,
       to:      [REPORT_EMAIL],
-      subject: `☕ YANI Daily Report — ${dateLabel}`,
+      subject: `☕ ${businessName} Daily Report — ${dateLabel}`,
       html,
     }),
   });

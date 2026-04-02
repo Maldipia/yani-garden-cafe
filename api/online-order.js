@@ -18,13 +18,7 @@
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || 'https://hnynvclpvfxzlfjphefj.supabase.co');
 
-const ALLOWED_ORIGINS = [
-  (process.env.ALLOWED_ORIGINS || 'https://yanigardencafe.com'),
-  'https://pos.yanigardencafe.com',
-  'https://admin.yanigardencafe.com',
-  'https://yani-garden-cafe.vercel.app',
-  'https://yani-cafe.vercel.app',
-];
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '*').split(',').map(s => s.trim());
 
 function setCorsHeaders(req, res) {
   const origin = req.headers.origin || '';

@@ -18,7 +18,7 @@ const SUPABASE_KEY = (() => {
 })();
 
 const SERVICE_CHARGE_RATE = 0.10;
-const ORDER_PREFIX = 'YANI';
+const ORDER_PREFIX = 'ORD';
 
 // ── Fetch a single setting value from DB ───────────────────────────────────
 async function getSetting(key) {
@@ -482,7 +482,7 @@ async function uploadToGoogleDrive(imageBuffer, mimeType, filename, folderId) {
 export default async function handler(req, res) {
   // Restrict CORS to known domains only
   const origin = req.headers.origin || '';
-  const allowedOrigins = [(process.env.ALLOWED_ORIGINS || 'https://yanigardencafe.com'), 'https://pos.yanigardencafe.com', 'https://admin.yanigardencafe.com'];
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '*').split(',').map(s => s.trim());
   if (allowedOrigins.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
   } else if (!origin) {

@@ -1912,7 +1912,7 @@ async function placeOrder() {
   });
 
   if (result.ok) {
-    state.orderId = result.orderId || result.ORDER_ID || 'YANI-???';
+    state.orderId = result.orderId || result.ORDER_ID || (window.ORDER_PREFIX||'ORD') + '-???';
     state.orderTotal = result.total || total;
     state.orderStatus = 'NEW';
     state.paymentMethod = state.checkoutPayMethod || '';
@@ -2414,7 +2414,7 @@ async function submitPaymentProof() {
     }
     // ── Upload proof ────────────────────────────────────────────────────────
     var ts    = new Date().toISOString().replace(/[^0-9]/g,'').slice(0,15);
-    var fname = (state.orderId||'YANI') + '_T' + state.tableNo + '_' + ts + '.jpg';
+    var fname = (state.orderId||(window.ORDER_PREFIX||'ORD')) + '_T' + state.tableNo + '_' + ts + '.jpg';
     var result = await api('uploadPayment', {
       orderId:      state.orderId,
       tableNo:      state.tableNo,

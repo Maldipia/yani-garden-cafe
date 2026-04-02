@@ -852,6 +852,21 @@ textarea.form-input{resize:none;min-height:72px}
         if (d.config.PRIMARY_COLOR)
           document.documentElement.style.setProperty('--primary', d.config.PRIMARY_COLOR);
         if (d.config.ORDER_PREFIX) window.ORDER_PREFIX = d.config.ORDER_PREFIX;
+        if (d.config.SESSION_KEY) window.POS_SESSION_KEY = d.config.SESSION_KEY;
+        if (d.config.ACCOUNT_NAME) window.ACCOUNT_NAME = d.config.ACCOUNT_NAME;
+        if (d.config.GCASH_QR_URL) window.GCASH_QR_URL = d.config.GCASH_QR_URL;
+        if (d.config.INSTAPAY_QR_URL) window.INSTAPAY_QR_URL = d.config.INSTAPAY_QR_URL;
+        if (d.config.BDO_QR_URL) window.BDO_QR_URL = d.config.BDO_QR_URL;
+        if (d.config.BPI_QR_URL) window.BPI_QR_URL = d.config.BPI_QR_URL;
+        if (d.config.UNIONBANK_QR_URL) window.UNIONBANK_QR_URL = d.config.UNIONBANK_QR_URL;
+        if (d.config.BDO_ACCOUNT) window.BDO_ACCOUNT = d.config.BDO_ACCOUNT;
+        if (d.config.BPI_ACCOUNT) window.BPI_ACCOUNT = d.config.BPI_ACCOUNT;
+        if (d.config.UNIONBANK_ACCOUNT) window.UNIONBANK_ACCOUNT = d.config.UNIONBANK_ACCOUNT;
+        if (d.config.SECONDARY_COLOR)
+          document.documentElement.style.setProperty('--terra', d.config.SECONDARY_COLOR);
+        if (d.config.LOGO_URL)
+          document.querySelectorAll('.brand-logo').forEach(function(el){ el.src = d.config.LOGO_URL; });
+        if (d.config.ADDRESS) window.BUSINESS_ADDRESS = d.config.ADDRESS;
       }
     } catch(e) {}
   }
