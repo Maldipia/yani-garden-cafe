@@ -426,8 +426,8 @@ async function uploadToGoogleDrive(imageBuffer, mimeType, filename, folderId) {
       aud: 'https://oauth2.googleapis.com/token',
       exp: now + 3600, iat: now,
     })).toString('base64url');
-    const crypto = require('crypto');
-    const sign   = crypto.createSign('RSA-SHA256');
+    const { createSign } = await import('node:crypto');
+    const sign   = createSign('RSA-SHA256');
     sign.update(`${header}.${payload}`);
     const sig = sign.sign(sa.private_key, 'base64url');
     const jwt = `${header}.${payload}.${sig}`;
@@ -1618,11 +1618,15 @@ export default async function handler(req, res) {
             if (uploadResp.ok) {
               proofUrl = `${SUPABASE_URL}/storage/v1/object/public/payment-proofs/${storageFilename}`;
               storedFilename = storageFilename;
-              // Mirror to Google Drive (fire-and-forget, non-fatal)
+              // Mirror to Google Drive — await so Vercel doesn't kill before completion
               if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
-                uploadToGoogleDrive(imgBuffer, mimeType, storedFilename, '1hDQlljGpRUwT9q33xHukbXvz_M8tk5lR')
-                  .then(url => { if (url) console.log('GDrive upload ok:', url); })
-                  .catch(() => {});
+                try {
+                  const driveUrl = await uploadToGoogleDrive(imgBuffer, mimeType, storedFilename, '1hDQlljGpRUwT9q33xHukbXvz_M8tk5lR');
+                  if (driveUrl) console.log('GDrive upload ok:', driveUrl);
+                  else console.log('GDrive upload: no URL returned');
+                } catch(driveErr) {
+                  console.error('GDrive upload failed:', driveErr.message);
+                }
               }
             }
             // else fall back to base64 already set
