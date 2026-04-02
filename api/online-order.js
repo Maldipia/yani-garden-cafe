@@ -244,7 +244,7 @@ export default async function handler(req, res) {
       const items = await supabase('GET', 'menu_items', null, {
         'is_active': 'eq.true',
         'order': 'name.asc',
-        'select': 'id,item_code,name,category_id,base_price,price_short,price_medium,price_tall,has_sizes,has_sugar_levels,image_path'
+        'select': 'id,item_code,name,category_id,base_price,price_short,price_medium,price_tall,has_sizes,has_sugar_levels,image_path,is_signature'
       });
       
       const catMap = {};
@@ -284,6 +284,7 @@ export default async function handler(req, res) {
           priceTall: item.price_tall ? parseFloat(item.price_tall) : null,
           hasSizes: item.has_sizes,
           hasSugar: item.has_sugar_levels,
+          isSignature: item.is_signature || false,
           image: item.image_path
             ? (function(p) {
                 // Convert Google Drive view URL to direct image URL

@@ -659,7 +659,7 @@ export default async function handler(req, res) {
       // Server-side price validation — fetch menu from DB and verify each item price
       if (!isStaffOrder) {
         const menuR = await supaFetch(
-          `${SUPABASE_URL}/rest/v1/menu_items?is_active=eq.true&select=item_code,price,price_short,price_medium,price_tall`
+          `${SUPABASE_URL}/rest/v1/menu_items?is_active=eq.true&select=item_code,base_price,price_short,price_medium,price_tall`
         );
         if (menuR.ok && menuR.data && menuR.data.length) {
           const menuMap = {};
@@ -670,7 +670,7 @@ export default async function handler(req, res) {
             const sentPrice = parseFloat(item.price) || 0;
             const size = (item.size || '').toLowerCase();
             // Determine valid price based on size
-            let validPrice = parseFloat(dbItem.price) || 0;
+            let validPrice = parseFloat(dbItem.base_price) || 0;
             if (size === 'short'  && dbItem.price_short)  validPrice = parseFloat(dbItem.price_short);
             if (size === 'medium' && dbItem.price_medium) validPrice = parseFloat(dbItem.price_medium);
             if (size === 'tall'   && dbItem.price_tall)   validPrice = parseFloat(dbItem.price_tall);
@@ -1457,7 +1457,7 @@ export default async function handler(req, res) {
       }
 
       // 3. Printed delivery → just saved the info, staff will handle at counter
-      return res.status(200).json({ ok: true, sent: false, message: 'Receipt details saved. Print at counter.' });
+      return res.status(200).json({ ok: true, sent: false, message: 'Receipt details saved. Print at counter.', orNumber: orNumber || null });
     }
 
     // ── resendReceipt ──────────────────────────────────────────────────────
