@@ -1767,8 +1767,8 @@ function applyRoleUI() {
   var switchHint = document.getElementById('switchUserHint');
   if (switchHint) switchHint.style.display = (role === 'KITCHEN') ? '' : 'none';
   
-  // Edit order button: ADMIN and OWNER only
-  var canEditOrders = (role === 'ADMIN' || role === 'OWNER');
+  // Edit order button: ADMIN, OWNER, CASHIER
+  var canEditOrders = (role === 'ADMIN' || role === 'OWNER' || role === 'CASHIER');
   window._canEditOrders = canEditOrders;
   
   // FAB (New Platform Order): SERVER, ADMIN, OWNER
@@ -2459,8 +2459,8 @@ function renderOrders() {
         + 'onclick="openResendReceiptModal(\'' + o.orderId + '\',\'' + esc(o.receiptEmail||'') + '\')">📧 Email Receipt</button>';
     }
 
-    // Edit Order button (ADMIN/OWNER only, for non-completed/non-cancelled orders)
-    var canEdit = (currentUser.role === 'ADMIN' || currentUser.role === 'OWNER');
+    // Edit Order button (ADMIN/OWNER/CASHIER, for non-completed/non-cancelled orders)
+    var canEdit = (currentUser.role === 'ADMIN' || currentUser.role === 'OWNER' || currentUser.role === 'CASHIER');
     if (canEdit && o.status !== 'COMPLETED' && o.status !== 'CANCELLED') {
       html += '<button class="oc-btn" style="background:var(--gold);color:#fff;margin-top:6px;width:100%" onclick="openEditOrder(\'' + o.orderId + '\')">✏️ Edit Order</button>';
     }
@@ -2878,8 +2878,9 @@ function printReceipt(orderId) {
   var discountAmount = (o.discountAmount && typeof o.discountAmount === 'number') ? o.discountAmount : 0;
   var discountType   = o.discountType || '';
   // Use discountedTotal if available (discount was applied), otherwise subtotal + serviceCharge
-  var grandTotal = (o.discountedTotal && typeof o.discountedTotal === 'number')
-    ? o.discountedTotal
+  var _discounted = o.discountedTotal !== null && o.discountedTotal !== undefined ? parseFloat(o.discountedTotal) : NaN;
+  var grandTotal = (!isNaN(_discounted) && _discounted > 0)
+    ? _discounted
     : (subtotal + serviceCharge);
 
   // Calculate service charge percentage dynamically
@@ -6679,8 +6680,16 @@ async function confirmCheckout() {
       allOrders.forEach(function(o){ if (o.orderId === completedOrderId) { o.status = 'COMPLETED'; o.paymentMethod = completedPayMethod; } });
       renderStats(); renderFilters(); renderOrders();
       showToast(completedOrderId + ' — Completed' + (hasDisc && coDiscType ? ' · Discount applied' : '') + ' · ' + completedPayMethod, 2200);
-      // Auto-print receipt
-      setTimeout(function() { printReceipt(completedOrderId); }, 400);
+      // Show tap-to-print button (auto-print via setTimeout is blocked on mobile — needs user gesture)
+      var _pid = completedOrderId;
+      setTimeout(function() {
+        var toastEl = document.createElement('div');
+        toastEl.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#2D5016;color:#fff;padding:12px 24px;border-radius:12px;font-size:15px;cursor:pointer;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.3);white-space:nowrap;';
+        toastEl.innerHTML = '🖨️ Tap to print receipt — ' + _pid;
+        toastEl.onclick = function() { printReceipt(_pid); document.body.removeChild(toastEl); };
+        document.body.appendChild(toastEl);
+        setTimeout(function() { if (document.body.contains(toastEl)) document.body.removeChild(toastEl); }, 8000);
+      }, 400);
     } else {
       throw new Error(completeResult && completeResult.error || 'Failed to complete');
     }
