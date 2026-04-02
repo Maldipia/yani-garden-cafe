@@ -970,7 +970,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 <!-- ═══════════════════ LOGIN ═══════════════════ -->
 <div class="login-overlay" id="loginOverlay">
   <div class="login-box">
-    <img class="login-logo" src="/images/logo.png" alt="Yani">
+    <img class="login-logo" src="/images/logo.png" alt="Logo">
     <div class="login-title">Kitchen Dashboard</div>
     <div class="login-sub">Enter staff PIN to continue</div>
     <input class="pin-input" id="pinInput" type="password" maxlength="8" inputmode="numeric" placeholder="• • • •" autofocus onkeydown="if(event.key==='Enter')login()">
@@ -983,7 +983,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 <div id="dashboard" style="display:none">
 
   <div class="topbar">
-    <img class="topbar-logo" src="/images/logo.png" alt="Yani">
+    <img class="topbar-logo" src="/images/logo.png" alt="Logo">
     <div class="topbar-title">Order Board</div>
     <div class="topbar-live"><div class="topbar-dot"></div> LIVE</div>
     <div class="topbar-user" id="topbarUser" style="display:none">
@@ -3026,7 +3026,7 @@ function printReceipt(orderId) {
     '<div class="footer">' +
     '<p><b>Happy to serve. Visit us again soon.</b></p>' +
     '<p class="tagline">' + esc((APP_CONFIG&&APP_CONFIG.TAGLINE)||'Hold on a cup of blessing') + '</p>' +
-    '<p style="margin-top:3px;font-size:9px;">FB: facebook.com/YANIgardencafe</p>' +
+    '<p style="margin-top:3px;font-size:9px;">FB: facebook.com/yourcafe</p>' +
     '<p style="font-size:9px;">IG: @yanigardencafe</p>' +
     '<div class="legal">' +
     (isBIRReceipt ? 
@@ -7835,7 +7835,7 @@ function openRefundForm(prefillOrderId) {
   showModal('Process Refund / Void',
     '<div style="display:flex;flex-direction:column;gap:10px">'
     + '<label style="font-size:.8rem;font-weight:600">Order ID<br>'
-    + '<input id="rfOrderId" value="' + (prefillOrderId||'') + '" placeholder="YANI-XXXX" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
+    + '<input id="rfOrderId" value="' + (prefillOrderId||'') + '" placeholder="ORD-XXXX" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px"></label>'
     + '<label style="font-size:.8rem;font-weight:600">Type<br>'
     + '<select id="rfType" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;margin-top:3px">'
     + '<option value="FULL">Full Refund</option><option value="PARTIAL">Partial Refund</option><option value="VOID">Void (Cancel Order)</option>'

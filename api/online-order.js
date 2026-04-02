@@ -494,7 +494,7 @@ export default async function handler(req, res) {
           });
           if (orders?.length) {
             const order = orders[0];
-            const message = `Hi ${order.customer_name}! Your Yani Garden Cafe order (${orderRef}) is now READY for pickup. Thank you for ordering!`;
+            const message = `Hi ${order.customer_name}! Your ${businessName || "cafe"} order (${orderRef}) is now READY for pickup. Thank you for ordering!`;
             const smsResult = await sendSMS(order.customer_phone, message);
             smsSent = smsResult.ok;
             smsNote = smsResult.ok ? `SMS sent to ${order.customer_phone}` : `SMS failed: ${smsResult.error}`;
@@ -572,7 +572,7 @@ export default async function handler(req, res) {
       }
       
       const order = orders[0];
-      const message = `Hi ${order.customer_name}! Your Yani Garden Cafe order (${orderRef}) is now READY for pickup. Thank you!`;
+      const message = `Hi ${order.customer_name}! Your ${businessName || "cafe"} order (${orderRef}) is now READY for pickup. Thank you!`;
       
       const smsResult = await sendSMS(order.customer_phone, message);
       

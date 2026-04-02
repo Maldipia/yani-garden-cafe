@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Track Your Order — YANI Garden Cafe</title>
+<title>My Cafe — Track Order</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -150,9 +150,9 @@ body{font-family:var(--font-b);background:var(--cream);color:var(--ink);min-heig
 
 <div class="hdr">
   <div class="hdr-inner">
-    <img class="hdr-logo" src="/images/logo.png" alt="YANI" onerror="this.style.display='none'">
+    <img class="hdr-logo" src="/images/logo.png" alt="Logo" onerror="this.style.display='none'">
     <div>
-      <div class="hdr-name">YANI Garden Cafe</div>
+      <div class="hdr-name brand-name">My Cafe</div>
       <div class="hdr-tag">Order Tracker</div>
     </div>
   </div>
@@ -164,7 +164,7 @@ body{font-family:var(--font-b);background:var(--cream);color:var(--ink);min-heig
     <div class="search-title">Track Your Order</div>
     <div class="search-sub">Enter your order reference number to see the current status.</div>
     <div class="search-row">
-      <input class="search-input" id="refInput" type="text" placeholder="e.g. YANI-OL-001"
+      <input class="search-input" id="refInput" type="text" placeholder="e.g. ORD-OL-001"
         maxlength="20" autocomplete="off" autocapitalize="characters"
         onkeydown="if(event.key==='Enter')searchOrder()">
       <button class="search-btn" id="searchBtn" onclick="searchOrder()">Track</button>
@@ -226,7 +226,7 @@ var currentRef = '';
 async function searchOrder() {
   var raw = document.getElementById('refInput').value.trim().toUpperCase();
   if (!raw) { showError('Please enter your order reference number.'); return; }
-  if (!raw.startsWith('YANI-OL-')) {
+  if (!raw.startsWith('YANI-OL-') && !raw.startsWith(((window.ORDER_PREFIX||'ORD')+'-OL-'))) {
     if (/^\d+$/.test(raw)) raw = 'YANI-OL-' + raw;
     else { showError('Reference should look like YANI-OL-001. Check your confirmation.'); return; }
   }
