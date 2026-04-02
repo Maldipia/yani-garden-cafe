@@ -125,6 +125,7 @@ async function buildReport() {
     payBreakdown, topItems,
     peakHour: peakHour ? { hour: peakHour[0], count: peakHour[1].count } : null,
     hourly,
+    businessName, businessAddress,
   };
 }
 

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>YANI · Kitchen Dashboard</title>
+<title>POS · Kitchen Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -2915,11 +2915,11 @@ function printReceipt(orderId) {
   var receiptHTML = '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
     '<title>Receipt - ' + esc(orderId) + '</title>' +
     '<!--' +
-    '\n  YANI POS RECEIPT - AUDIT TRAIL' +
+    '\n  POS RECEIPT - AUDIT TRAIL' +
     '\n  Generated: ' + printDate +
     '\n  Order ID: ' + esc(orderId) +
     '\n  ' +
-    '\n  DATA SOURCE: Google Sheets "YANI CAFE" > ORDERS Tab' +
+    '\n  DATA SOURCE: POS System > ORDERS' +
     '\n  Column Mapping:' +
     '\n  - Order Info: A (ORDER_ID), D (TABLE_NO), E (CUSTOMER_NAME), F (STATUS)' +
     '\n  - Amounts: G (SUBTOTAL), H (SERVICE_CHARGE), I (TOTAL)' +
@@ -2975,9 +2975,9 @@ function printReceipt(orderId) {
 
     // Header
     '<div class="header">' +
-    '<h1>YANI GARDEN CAFE</h1>' +
-    '<p class="subtitle">YANI-CAFE FOOD AND BEVERAGE HOUSE</p>' +
-    '<p>Purok 8 Daang Malinaw, Loma 4119</p>' +
+    '<h1>' + esc((APP_CONFIG&&APP_CONFIG.BUSINESS_NAME)||'My Cafe') + '</h1>' +
+    '<p class="subtitle">' + esc((APP_CONFIG&&APP_CONFIG.TAGLINE)||'') + '</p>' +
+    '<p>' + esc((APP_CONFIG&&APP_CONFIG.ADDRESS)||'Purok 8 Daang Malinaw, Loma 4119') + '</p>' +
     '<p>Amadeo, Cavite, Philippines</p>' +
     '<p>TIN: 501-401-857-00005</p>' +
     '<p>Tel: 0967-400-0040</p>' +
@@ -3025,7 +3025,7 @@ function printReceipt(orderId) {
     // Footer
     '<div class="footer">' +
     '<p><b>Happy to serve. Visit us again soon.</b></p>' +
-    '<p class="tagline">Hold on a cup of blessing - YANI</p>' +
+    '<p class="tagline">' + esc((APP_CONFIG&&APP_CONFIG.TAGLINE)||'Hold on a cup of blessing') + '</p>' +
     '<p style="margin-top:3px;font-size:9px;">FB: facebook.com/YANIgardencafe</p>' +
     '<p style="font-size:9px;">IG: @yanigardencafe</p>' +
     '<div class="legal">' +
@@ -4682,8 +4682,8 @@ function printOnlineReceipt(orderRef) {
   var receiptHTML = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Receipt - ' + esc(orderRef) + '</title>' +
     '<style>* { margin:0; padding:0; box-sizing:border-box; } body { font-family:Arial,Helvetica,sans-serif; width:80mm; max-width:80mm; margin:0 auto; padding:0 2mm 0.5mm 2mm; font-size:11pt; color:#000; line-height:1.35; } .header { text-align:center; margin-bottom:0; } .header h1 { font-size:18pt; font-weight:bold; margin-bottom:1px; } .header p { font-size:10pt; color:#000; margin:0; line-height:1.3; } .divider { border-top:1px dashed #000; margin:1px 0; } .divider-thick { border-top:2px solid #000; margin:1px 0; } .info-row { display:flex; justify-content:space-between; font-size:11pt; margin:0; } .info-row .label { font-weight:bold; } table { width:100%; border-collapse:collapse; font-size:10pt; margin:0; } th { text-align:left; padding:4px 0 3px 0; border-bottom:1px solid #000; font-size:9pt; font-weight:bold; } th:nth-child(2),td:nth-child(2) { text-align:center; width:8%; } th:nth-child(3),td:nth-child(3) { text-align:right; width:15%; } th:nth-child(4),td:nth-child(4) { text-align:right; width:17%; } th,td { padding-left:6px; padding-right:6px; } th:first-child,td:first-child { padding-left:0; padding-right:20px; } th:last-child,td:last-child { padding-right:0; } td { padding:3px 0; vertical-align:top; } .total-row { display:flex; justify-content:space-between; margin:0; font-size:12pt; } .total-row.grand { font-size:18pt; font-weight:bold; } .footer { text-align:center; margin-top:0; } @media print { body { width:80mm; } }</style>' +
     '</head><body>' +
-    '<div class="header"><h1>YANI GARDEN CAFE</h1>' +
-    '<p>Purok 8 Daang Malinaw, Loma 4119</p>' +
+    '<div class="header"><h1>' + esc((APP_CONFIG&&APP_CONFIG.BUSINESS_NAME)||'My Cafe') + '</h1>' +
+    '<p>' + esc((APP_CONFIG&&APP_CONFIG.ADDRESS)||'Purok 8 Daang Malinaw, Loma 4119') + '</p>' +
     '<p>TIN: 501-401-857-00005</p>' +'<p>Tel: 0967-400-0040</p>' +'<p>Amadeo, Cavite, Philippines</p>' +'<p>Non-VAT Registered</p></div>' +
     '<div class="divider-thick"></div>' +
     '<div class="info-row"><span class="label">Order:</span><span><b>' + esc(orderRef) + '</b></span></div>' +

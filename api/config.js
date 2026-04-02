@@ -55,6 +55,7 @@ module.exports = async function handler(req, res) {
     config.LOGO_URL         = config.LOGO_URL         || '/images/logo.png';
     config.CURRENCY         = config.CURRENCY         || 'PHP';
     config.SESSION_KEY      = config.SESSION_KEY      || 'pos_session_token';
+    config.SUPABASE_ANON_KEY = config.SUPABASE_ANON_KEY || '';
 
     _cache = config;
     _cacheAt = Date.now();
