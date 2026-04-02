@@ -449,7 +449,10 @@ async function uploadToGoogleDrive(imageBuffer, mimeType, filename, folderId) {
       body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${jwt}`,
     });
     const tokenData = await tokenResp.json();
-    if (!tokenData.access_token) return null;
+    if (!tokenData.access_token) {
+      console.error('Drive token failed:', JSON.stringify(tokenData).substring(0,200));
+      return { error: `Token failed: ${tokenData.error_description || tokenData.error || 'no access_token'}` };
+    }
     const boundary = '----YaniPOS';
     const meta = JSON.stringify({ name: filename, parents: [folderId] });
     const body = Buffer.concat([
@@ -466,6 +469,12 @@ async function uploadToGoogleDrive(imageBuffer, mimeType, filename, folderId) {
         }, body }
     );
     const d = await uploadResp.json();
+    if (!uploadResp.ok) {
+      // Return error details for debugging
+      const errMsg = d.error ? `Drive API ${uploadResp.status}: ${d.error.message || JSON.stringify(d.error)}` : `Drive API ${uploadResp.status}`;
+      console.error('Drive upload failed:', errMsg);
+      return { error: errMsg };
+    }
     return d.webViewLink || (d.id ? `https://drive.google.com/file/d/${d.id}/view` : null);
   } catch(e) { console.error('Drive upload error:', e.message); return { error: e.message }; }
 }
