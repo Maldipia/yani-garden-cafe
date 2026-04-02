@@ -2870,7 +2870,12 @@ function printReceipt(orderId) {
   var serviceCharge = (o.serviceCharge && typeof o.serviceCharge === 'number') ? o.serviceCharge : 0;
   var vatAmount = (o.vatAmount && typeof o.vatAmount === 'number') ? o.vatAmount : 0;
   var vatEnabled = vatAmount > 0;
-  var grandTotal = subtotal + serviceCharge;
+  var discountAmount = (o.discountAmount && typeof o.discountAmount === 'number') ? o.discountAmount : 0;
+  var discountType   = o.discountType || '';
+  // Use discountedTotal if available (discount was applied), otherwise subtotal + serviceCharge
+  var grandTotal = (o.discountedTotal && typeof o.discountedTotal === 'number')
+    ? o.discountedTotal
+    : (subtotal + serviceCharge);
 
   // Calculate service charge percentage dynamically
   var scPct = subtotal > 0 ? ((serviceCharge / subtotal) * 100) : 0;
@@ -3000,6 +3005,8 @@ function printReceipt(orderId) {
     '<div class="total-row"><span>Subtotal:</span><span>P ' + subtotal.toFixed(2) + '</span></div>' +
     (serviceCharge > 0 ? '<div class="total-row"><span>Service Charge (' + scPct.toFixed(1) + '%):</span><span>P ' + serviceCharge.toFixed(2) + '</span></div>' : '') +
     (vatEnabled ? '<div class="total-row"><span>VAT (12%, incl.):</span><span>P ' + vatAmount.toFixed(2) + '</span></div>' : '') +
+    '<div class="divider-thick"></div>' +
+    (discountAmount > 0 ? '<div class="total-row" style="color:#B45309"><span>Discount (' + esc(discountType) + '):</span><span>-P ' + discountAmount.toFixed(2) + '</span></div>' : '') +
     '<div class="divider-thick"></div>' +
     '<div class="total-row grand"><span>TOTAL:</span><span>P ' + grandTotal.toFixed(2) + '</span></div>' +
     '</div>' +
@@ -6664,6 +6671,8 @@ async function confirmCheckout() {
       allOrders.forEach(function(o){ if (o.orderId === coOrderId) { o.status = 'COMPLETED'; o.paymentMethod = coPayMethod; } });
       renderStats(); renderFilters(); renderOrders();
       showToast(coOrderId + ' — Completed' + (hasDisc && coDiscType ? ' · Discount applied' : '') + ' · ' + coPayMethod, 2200);
+      // Auto-print receipt
+      setTimeout(function() { printReceipt(coOrderId); }, 400);
     } else {
       throw new Error(completeResult && completeResult.error || 'Failed to complete');
     }
