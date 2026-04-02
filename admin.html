@@ -2337,8 +2337,8 @@ function renderOrders() {
         orderTotal += lineTotal;
         var prepIcon = it.prepared ? '✅' : '⬜';
         var prepStyle = it.prepared ? 'opacity:.5;text-decoration:line-through;' : '';
-        html += '<div class="oc-item" style="' + prepStyle + '">' +
-          '<span style="font-size:.8rem;margin-right:4px;">' + prepIcon + '</span>' +
+        html += '<div class="oc-item" data-item-id="' + (it.id||'') + '" style="' + prepStyle + 'cursor:pointer;user-select:none;" title="' + (it.prepared ? 'Tap to unmark' : 'Tap to mark prepared') + '" onclick="adminTogglePrep(this,\'' + esc(o.orderId) + '\',' + (it.id||0) + ',' + (it.prepared ? 1 : 0) + ')">' +
+          '<span style="font-size:1.3rem;margin-right:6px;flex-shrink:0;line-height:1;">' + prepIcon + '</span>' +
           '<div class="oc-item-qty">' + (it.qty || 1) + '×</div>' +
           '<div class="oc-item-info">' +
             '<div class="oc-item-name">' + esc(it.name) + '</div>' +
@@ -2486,7 +2486,7 @@ async function adminTogglePrep(rowEl, orderId, itemId, currentPrepared) {
   rowEl.style.opacity = newPrepared ? '.5' : '1';
   rowEl.style.textDecoration = newPrepared ? 'line-through' : '';
   rowEl.setAttribute('onclick', 'adminTogglePrep(this,\'' + orderId + '\',' + itemId + ',' + newPrepared + ')');
-  rowEl.title = newPrepared ? 'Mark as NOT prepared' : 'Mark as PREPARED';
+  rowEl.title = newPrepared ? 'Tap to unmark' : 'Tap to mark prepared';
   // Update prep bar counts
   var card = rowEl.closest('.order-card') || rowEl.parentElement;
   while (card && !card.querySelector('.prep-bar-label')) { card = card.parentElement; }
