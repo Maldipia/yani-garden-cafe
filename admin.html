@@ -1537,6 +1537,35 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
+
+  // ═══════════════════════════════════════════════════════
+  // WHITE-LABEL CONFIG
+  // ═══════════════════════════════════════════════════════
+  var APP_CONFIG = {};
+  async function loadAppConfig() {
+    try {
+      var r = await fetch('/api/config');
+      var d = await r.json();
+      if (d.ok) {
+        APP_CONFIG = d.config;
+        applyAdminConfig(d.config);
+      }
+    } catch(e) {}
+  }
+  function applyAdminConfig(cfg) {
+    var bn = cfg.BUSINESS_NAME || 'My Cafe';
+    document.title = bn + ' — Admin';
+    document.querySelectorAll('.brand-name').forEach(function(el){ el.textContent = bn; });
+    if (cfg.PRIMARY_COLOR) {
+      document.documentElement.style.setProperty('--forest', cfg.PRIMARY_COLOR);
+      document.documentElement.style.setProperty('--forest-deep', cfg.PRIMARY_COLOR);
+    }
+    if (cfg.LOGO_URL) document.querySelectorAll('.brand-logo').forEach(function(el){ el.src = cfg.LOGO_URL; });
+    if (cfg.ORDER_PREFIX) window.ORDER_PREFIX = cfg.ORDER_PREFIX;
+    if (cfg.SESSION_KEY) window.POS_SESSION_KEY = cfg.SESSION_KEY;
+    if (cfg.SERVICE_CHARGE) window.SERVICE_CHARGE_RATE = parseFloat(cfg.SERVICE_CHARGE);
+  }
+  loadAppConfig();
 // ══════════════════════════════════════════════════════════
 // CONFIG
 // ══════════════════════════════════════════════════════════
@@ -1559,7 +1588,7 @@ var _realtimeActive = false;
 function initRealtime() {
   try {
     _supabaseClient = supabase.createClient(
-      'https://hnynvclpvfxzlfjphefj.supabase.co',
+      (window.SUPABASE_URL || 'https://hnynvclpvfxzlfjphefj.supabase.co'),
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhueW52Y2xwdmZ4emxmanBoZWZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI0NTg5MTMsImV4cCI6MjA4ODAzNDkxM30.cBIoq9dVUFC0d7Su5B7ubBG83-q-bffheKoOCTRDqXE'
     );
     _realtimeChannel = _supabaseClient
@@ -1649,7 +1678,7 @@ var currentUser = {
   token:       null,   // JWT issued by server on login
   expiresAt:   null,   // epoch ms when token expires
 };
-var YANI_TOKEN_KEY = 'yani_pos_token'; // localStorage key
+var YANI_TOKEN_KEY = (window.POS_SESSION_KEY || 'pos_session_token'); // localStorage key
 
 var STATUS_CONFIG = {
   NEW:       { icon:'🔔', label:'New',       badge:'new',       actions:['start','cancel'] },

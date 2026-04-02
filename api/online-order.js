@@ -16,10 +16,10 @@
 //     rejection_reason, created_at, updated_at
 // ══════════════════════════════════════════════════════════════
 
-const SUPABASE_URL = 'https://hnynvclpvfxzlfjphefj.supabase.co';
+const SUPABASE_URL = (process.env.SUPABASE_URL || 'https://hnynvclpvfxzlfjphefj.supabase.co');
 
 const ALLOWED_ORIGINS = [
-  'https://yanigardencafe.com',
+  (process.env.ALLOWED_ORIGINS || 'https://yanigardencafe.com'),
   'https://pos.yanigardencafe.com',
   'https://admin.yanigardencafe.com',
   'https://yani-garden-cafe.vercel.app',

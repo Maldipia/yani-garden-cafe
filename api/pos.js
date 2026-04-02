@@ -6,10 +6,10 @@
 // ══════════════════════════════════════════════════════════════════════
 
 import bcrypt from 'bcryptjs';
-const SUPABASE_URL  = 'https://hnynvclpvfxzlfjphefj.supabase.co';
+const SUPABASE_URL  = (process.env.SUPABASE_URL || 'https://hnynvclpvfxzlfjphefj.supabase.co');
 const RESEND_KEY    = process.env.RESEND_API_KEY || '';
 const FROM_EMAIL    = 'onboarding@resend.dev';  // upgrade to branded domain when DNS ready
-const BUSINESS_NAME = 'Yani Garden Cafe';
+const BUSINESS_NAME = (process.env.BUSINESS_NAME || 'Yani Garden Cafe');
 // Service role key — loaded from env only. No hardcoded fallback.
 const SUPABASE_KEY = (() => {
   const k = process.env.SUPABASE_SECRET_KEY;
@@ -416,11 +416,11 @@ async function verifyToken(token) {
 export default async function handler(req, res) {
   // Restrict CORS to known domains only
   const origin = req.headers.origin || '';
-  const allowedOrigins = ['https://yanigardencafe.com', 'https://pos.yanigardencafe.com', 'https://admin.yanigardencafe.com'];
+  const allowedOrigins = [(process.env.ALLOWED_ORIGINS || 'https://yanigardencafe.com'), 'https://pos.yanigardencafe.com', 'https://admin.yanigardencafe.com'];
   if (allowedOrigins.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
   } else if (!origin) {
-    res.setHeader('Access-Control-Allow-Origin', 'https://yanigardencafe.com');
+    res.setHeader('Access-Control-Allow-Origin', (process.env.ALLOWED_ORIGINS || 'https://yanigardencafe.com'));
   }
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');

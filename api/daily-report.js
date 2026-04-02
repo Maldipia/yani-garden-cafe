@@ -2,7 +2,7 @@
 // Called by Vercel cron daily at 11 PM PHT (15:00 UTC)
 // Also callable manually: POST { action:'sendDailyReport', secret:'...' }
 
-const SUPABASE_URL = 'https://hnynvclpvfxzlfjphefj.supabase.co';
+const SUPABASE_URL = (process.env.SUPABASE_URL || 'https://hnynvclpvfxzlfjphefj.supabase.co');
 const SUPABASE_KEY = (() => {
   const k = process.env.SUPABASE_SECRET_KEY;
   if (!k) throw new Error('SUPABASE_SECRET_KEY not set');

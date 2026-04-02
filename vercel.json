@@ -32,6 +32,9 @@
     },
     "api/payment-proof.js": {
       "maxDuration": 30
+    },
+    "api/config.js": {
+      "maxDuration": 10
     }
   },
   "rewrites": [

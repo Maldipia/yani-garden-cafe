@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Yani Garden Cafe — Order Online</title>
+<title><span class="brand-name">Yani Garden Cafe</span> — Order Online</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -838,6 +838,24 @@ textarea.form-input{resize:none;min-height:72px}
 <div class="toast" id="toast"></div>
 
 <script>
+
+  var APP_CONFIG = {};
+  async function loadAppConfig() {
+    try {
+      var r = await fetch('/api/config');
+      var d = await r.json();
+      if (d.ok) {
+        APP_CONFIG = d.config;
+        var bn = d.config.BUSINESS_NAME || 'My Cafe';
+        document.title = bn + ' — Online Order';
+        document.querySelectorAll('.brand-name').forEach(function(el){ el.textContent = bn; });
+        if (d.config.PRIMARY_COLOR)
+          document.documentElement.style.setProperty('--primary', d.config.PRIMARY_COLOR);
+        if (d.config.ORDER_PREFIX) window.ORDER_PREFIX = d.config.ORDER_PREFIX;
+      }
+    } catch(e) {}
+  }
+  loadAppConfig();
 const API = '/api/online-order';
 const UPLOAD_API = '/api/upload-proof';
 
@@ -859,11 +877,11 @@ var selectedZone = null;
 var selectedDeliveryFee = 0;
 
 var PAYMENT_DETAILS = {
-  GCASH:     { number: '',               name: 'LEGERYN PIA', numLabel: 'Scan QR to pay:',  img: '/images/pay-gcash.jpg' },
-  INSTAPAY:  { number: '',               name: 'LEGERYN PIA', numLabel: 'Scan QR to pay:',  img: '/images/pay-instapay.jpg' },
-  BDO:       { number: '0126-000-62617', name: 'LEGERYN PIA', numLabel: 'Account No.:',     img: '/images/pay-bdo.jpg' },
-  BPI:       { number: '1539-235-628',   name: 'LEGERYN PIA', numLabel: 'Account No.:',     img: '/images/pay-bpi.png' },
-  UNIONBANK: { number: '1093-2100-0528', name: 'LEGERYN PIA', numLabel: 'Account No.:',     img: '/images/pay-unionbank.jpg' }
+  GCASH:     { number: '',               name: (APP_CONFIG.ACCOUNT_NAME||'LEGERYN PIA'), numLabel: 'Scan QR to pay:',  img: '/images/pay-gcash.jpg' },
+  INSTAPAY:  { number: '',               name: (APP_CONFIG.ACCOUNT_NAME||'LEGERYN PIA'), numLabel: 'Scan QR to pay:',  img: '/images/pay-instapay.jpg' },
+  BDO:       { number: (APP_CONFIG.BDO_ACCOUNT||'0126-000-62617'), name: (APP_CONFIG.ACCOUNT_NAME||'LEGERYN PIA'), numLabel: 'Account No.:',     img: '/images/pay-bdo.jpg' },
+  BPI:       { number: (APP_CONFIG.BPI_ACCOUNT||'1539-235-628'),   name: (APP_CONFIG.ACCOUNT_NAME||'LEGERYN PIA'), numLabel: 'Account No.:',     img: '/images/pay-bpi.png' },
+  UNIONBANK: { number: (APP_CONFIG.UNIONBANK_ACCOUNT||'1093-2100-0528'), name: (APP_CONFIG.ACCOUNT_NAME||'LEGERYN PIA'), numLabel: 'Account No.:',     img: '/images/pay-unionbank.jpg' }
 };
 
 var SUGAR_LEVELS = [

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#2B3F3A">
-<title>Yani Garden Cafe</title>
+<title><span class="brand-name">Yani Garden Cafe</span></title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;500;600;700&family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -934,7 +934,7 @@ a { color: var(--terra); text-decoration: none }
 <body>
 <!-- ═══════════════════ HEADER ═══════════════════ -->
 <div class="header">
-  <div class="header-brand"><img class="header-logo" src="/images/logo.png" alt="Yani Garden Cafe"></div>
+  <div class="header-brand"><img class="header-logo" src="/images/logo.png" alt="<span class="brand-name">Yani Garden Cafe</span>"></div>
   <div class="header-sub">Highland Sanctuary • Amadeo</div>
   <div class="header-table" id="headerTable">Table —</div>
 </div>
@@ -1020,6 +1020,66 @@ a { color: var(--terra); text-decoration: none }
 </div>
 
 <script>
+
+  // ═══════════════════════════════════════════════════════
+  // WHITE-LABEL CONFIG — loaded from /api/config on startup
+  // ═══════════════════════════════════════════════════════
+  var APP_CONFIG = {};
+
+  async function loadAppConfig() {
+    try {
+      var r = await fetch('/api/config');
+      var d = await r.json();
+      if (d.ok) {
+        APP_CONFIG = d.config;
+        applyConfig(APP_CONFIG);
+      }
+    } catch(e) { console.warn('Config load failed, using defaults'); }
+  }
+
+  function applyConfig(cfg) {
+    // Business name
+    var bn = cfg.BUSINESS_NAME || '<span class="brand-name">Yani Garden Cafe</span>';
+    document.title = bn + ' — Order';
+    document.querySelectorAll('.brand-name').forEach(function(el) { el.textContent = bn; });
+
+    // Colors
+    if (cfg.PRIMARY_COLOR) {
+      document.documentElement.style.setProperty('--forest', cfg.PRIMARY_COLOR);
+      document.documentElement.style.setProperty('--forest-deep', cfg.PRIMARY_COLOR);
+    }
+    if (cfg.SECONDARY_COLOR) {
+      document.documentElement.style.setProperty('--terra', cfg.SECONDARY_COLOR);
+    }
+
+    // Logo
+    if (cfg.LOGO_URL) {
+      document.querySelectorAll('.brand-logo').forEach(function(el) { el.src = cfg.LOGO_URL; });
+    }
+
+    // Order prefix
+    if (cfg.ORDER_PREFIX) window.ORDER_PREFIX = cfg.ORDER_PREFIX;
+
+    // Session key
+    if (cfg.SESSION_KEY) window.POS_SESSION_KEY = cfg.SESSION_KEY;
+
+    // Service charge
+    if (cfg.SERVICE_CHARGE) window.SERVICE_CHARGE_RATE = parseFloat(cfg.SERVICE_CHARGE);
+
+    // Payment QR codes — update rendered QR images if already shown
+    if (cfg.GCASH_QR_URL) window.GCASH_QR_URL = cfg.GCASH_QR_URL;
+    if (cfg.INSTAPAY_QR_URL) window.INSTAPAY_QR_URL = cfg.INSTAPAY_QR_URL;
+    if (cfg.BDO_QR_URL) window.BDO_QR_URL = cfg.BDO_QR_URL;
+    if (cfg.BPI_QR_URL) window.BPI_QR_URL = cfg.BPI_QR_URL;
+    if (cfg.UNIONBANK_QR_URL) window.UNIONBANK_QR_URL = cfg.UNIONBANK_QR_URL;
+    if (cfg.ACCOUNT_NAME) window.ACCOUNT_NAME = cfg.ACCOUNT_NAME;
+    if (cfg.BDO_ACCOUNT) window.BDO_ACCOUNT = cfg.BDO_ACCOUNT;
+    if (cfg.BPI_ACCOUNT) window.BPI_ACCOUNT = cfg.BPI_ACCOUNT;
+    if (cfg.UNIONBANK_ACCOUNT) window.UNIONBANK_ACCOUNT = cfg.UNIONBANK_ACCOUNT;
+  }
+
+  // Load config immediately
+  loadAppConfig();
 /* ══════════════════════════════════════════════════════════
    YANI POS — CUSTOMER ORDERING ENGINE
    Hybrid: Embedded Menu + Apps Script API via Vercel Proxy
@@ -1039,11 +1099,11 @@ const TABLE_TOKENS = {
 
 // ── PAYMENT QR CODES ────────────────────────────────────
 const PAYMENT_METHODS = [
-  { id:'gcash', name:'GCash', icon:'💚', acctName:'LEGERYN PIA', acctNum:'', img:'/images/pay-gcash.jpg' },
-  { id:'instapay', name:'InstaPay', icon:'🏦', acctName:'LEGERYN PIA', acctNum:'', img:'/images/pay-instapay.jpg' },
-  { id:'bdo', name:'BDO', icon:'🔵', acctName:'LEGERYN PIA', acctNum:'0126-000-62617', img:'/images/pay-bdo.jpg' },
-  { id:'bpi', name:'BPI', icon:'🔴', acctName:'LEGERYN PIA', acctNum:'1539-235-628', img:'/images/pay-bpi.png' },
-  { id:'unionbank', name:'UnionBank', icon:'🟠', acctName:'LEGERYN PIA', acctNum:'1093-2100-0528', img:'/images/pay-unionbank.jpg' }
+  { id:'gcash', name:'GCash', icon:'💚', acctName:(window.ACCOUNT_NAME||(window.ACCOUNT_NAME||'LEGERYN PIA')), acctNum:'', img:'/images/pay-gcash.jpg' },
+  { id:'instapay', name:'InstaPay', icon:'🏦', acctName:(window.ACCOUNT_NAME||(window.ACCOUNT_NAME||'LEGERYN PIA')), acctNum:'', img:'/images/pay-instapay.jpg' },
+  { id:'bdo', name:'BDO', icon:'🔵', acctName:(window.ACCOUNT_NAME||(window.ACCOUNT_NAME||'LEGERYN PIA')), acctNum:(window.BDO_ACCOUNT||'0126-000-62617'), img:'/images/pay-bdo.jpg' },
+  { id:'bpi', name:'BPI', icon:'🔴', acctName:(window.ACCOUNT_NAME||(window.ACCOUNT_NAME||'LEGERYN PIA')), acctNum:(window.BPI_ACCOUNT||'1539-235-628'), img:'/images/pay-bpi.png' },
+  { id:'unionbank', name:'UnionBank', icon:'🟠', acctName:(window.ACCOUNT_NAME||(window.ACCOUNT_NAME||'LEGERYN PIA')), acctNum:(window.UNIONBANK_ACCOUNT||'1093-2100-0528'), img:'/images/pay-unionbank.jpg' }
 ];
 
 // ── SUGAR LEVELS ────────────────────────────────────────
@@ -2218,7 +2278,7 @@ function showQRPayment() {
     h += '<button class="btn-primary mt-16" id="paySubmitBtn" style="width:100%" onclick="submitPaymentProof()"' + (!uploadedFile ? ' disabled style="width:100%;opacity:.5;pointer-events:none"' : '') + '>' + (state._pendingOrder ? 'Confirm & Place Order' : 'Submit Payment Proof') + '</button>';
 
     // Security note
-    h += '<div class="pay-security">🔒 <span>Your payment details are sent directly to Yani Garden Cafe\'s secure system.</span></div>';
+    h += '<div class="pay-security">🔒 <span>Your payment details are sent directly to <span class="brand-name">Yani Garden Cafe</span>\'s secure system.</span></div>';
 
     return h;
   }
@@ -2398,7 +2458,7 @@ function renderStatusPage() {
     { key:'NEW', icon:'🔔', label:'Order Received', desc:'Your order has been sent to the kitchen' },
     { key:'PREPARING', icon:'👨‍🍳', label:'Preparing', desc:'Your barista is making your order' },
     { key:'READY', icon:'✨', label:'Ready', desc:state.orderType==='dine-in'?'Server is bringing your order':'Please pick up at the counter' },
-    { key:'COMPLETED', icon:'🎉', label:'Completed', desc:'Thank you for visiting Yani Garden Cafe!' }
+    { key:'COMPLETED', icon:'🎉', label:'Completed', desc:'Thank you for visiting <span class="brand-name">Yani Garden Cafe</span>!' }
   ];
 
   var currentIdx = steps.findIndex(function(st) { return st.key === s });
