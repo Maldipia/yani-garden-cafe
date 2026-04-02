@@ -422,7 +422,7 @@ async function uploadToGoogleDrive(imageBuffer, mimeType, filename, folderId) {
     const now     = Math.floor(Date.now() / 1000);
     const payload = Buffer.from(JSON.stringify({
       iss: sa.client_email,
-      scope: 'https://www.googleapis.com/auth/drive.file',
+      scope: 'https://www.googleapis.com/auth/drive',
       aud: 'https://oauth2.googleapis.com/token',
       exp: now + 3600, iat: now,
     })).toString('base64url');
