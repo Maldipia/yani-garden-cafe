@@ -2,7 +2,7 @@
 // Returns safe tenant settings (no secrets, no JWT keys).
 // Called on page load by all frontend pages to replace hardcoded values.
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://hnynvclpvfxzlfjphefj.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SECRET_KEY;
 const ALLOWED = process.env.ALLOWED_ORIGINS || 'https://yanigardencafe.com';
 
