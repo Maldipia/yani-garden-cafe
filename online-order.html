@@ -972,7 +972,8 @@ function renderCard(item) {
   var priceDisplay = item.hasSizes ? 'from ₱'+item.price : '₱'+item.price;
   var isBest = item.category === 'BEST WITH';
   return '<div class="menu-card' + (qty>0?' in-cart':'') + '" id="card-'+code+'" onclick="onCardClick(\''+esc(JSON.stringify(item).replace(/'/g,"&#39;"))+'\')">' +
-    '<div class="card-img-wrap">' + (item.image ? '<img class="card-img" src="'+esc(item.image)+'" alt="'+esc(item.name)+'" loading="lazy" onerror="this.style.display=\'none\'">' : '') + '</div>' +
+    '<div class="card-img-wrap">' + (item.image ? '<img class="card-img" src="'+esc(item.image)+'" alt="'+esc(item.name)+'" loading="lazy" onerror="this.style.display=\'none\'">' : '') +
+    (item.isSignature ? '<div style="position:absolute;top:6px;left:6px;background:#2D5016;color:#fff;border-radius:20px;padding:2px 8px;font-size:.65rem;font-weight:700;letter-spacing:.04em">★ Signature</div>' : '') + '</div>' +
     (qty>0 ? '<div class="qty-badge">'+qty+'×</div>' : '') +
     (isBest ? '<div class="best-badge">⭐ Best With</div>' : '') +
     '<div class="card-body">' +

@@ -656,6 +656,35 @@ export default async function handler(req, res) {
         return res.status(400).json({ ok: false, error: 'Item prices cannot be negative' });
       }
 
+      // Server-side price validation — fetch menu from DB and verify each item price
+      if (!isStaffOrder) {
+        const menuR = await supaFetch(
+          `${SUPABASE_URL}/rest/v1/menu_items?is_active=eq.true&select=item_code,price,price_short,price_medium,price_tall`
+        );
+        if (menuR.ok && menuR.data && menuR.data.length) {
+          const menuMap = {};
+          menuR.data.forEach(m => { menuMap[m.item_code] = m; });
+          for (const item of items) {
+            const dbItem = menuMap[item.code];
+            if (!dbItem) continue; // unknown code — let DB handle
+            const sentPrice = parseFloat(item.price) || 0;
+            const size = (item.size || '').toLowerCase();
+            // Determine valid price based on size
+            let validPrice = parseFloat(dbItem.price) || 0;
+            if (size === 'short'  && dbItem.price_short)  validPrice = parseFloat(dbItem.price_short);
+            if (size === 'medium' && dbItem.price_medium) validPrice = parseFloat(dbItem.price_medium);
+            if (size === 'tall'   && dbItem.price_tall)   validPrice = parseFloat(dbItem.price_tall);
+            // Allow 1 peso tolerance for floating point
+            if (Math.abs(sentPrice - validPrice) > 1.01) {
+              return res.status(400).json({
+                ok: false,
+                error: `Invalid price for ${item.code}: sent ₱${sentPrice}, expected ₱${validPrice}`
+              });
+            }
+          }
+        }
+      }
+
       // Validate table token against DB — mandatory for customer (non-staff) dine-in orders
       if (!isStaffOrder && tableNo !== '0') {
         if (!tableToken) {
@@ -919,6 +948,7 @@ export default async function handler(req, res) {
         receiptName:     o.receipt_name     || '',
         receiptAddress:  o.receipt_address  || '',
         receiptTIN:      o.receipt_tin      || '',
+        orNumber:      o.or_number        || null,
         source:        o.source || 'QR',
         platform:      o.platform || '',
         platformRef:   o.platform_ref || '',
@@ -1368,7 +1398,18 @@ export default async function handler(req, res) {
 
       if (!orderId) return res.status(400).json({ ok: false, error: 'orderId is required' });
 
-      // 1. Save receipt details to order record
+      // 1. Assign OR number for BIR receipts
+      let orNumber = null;
+      if (receiptType === 'bir') {
+        // Atomically increment OR_NUMBER_CURRENT
+        const curR = await supaFetch(`${SUPABASE_URL}/rest/v1/settings?key=eq.OR_NUMBER_CURRENT&select=value`);
+        if (curR.ok && curR.data.length) {
+          orNumber = parseInt(curR.data[0].value || '1001', 10);
+          await supa('PATCH', 'settings', { value: String(orNumber + 1) }, { key: 'eq.OR_NUMBER_CURRENT' });
+        }
+      }
+
+      // 2. Save receipt details to order record
       const updates = {
         receipt_type:     receiptType,
         receipt_delivery: deliveryMethod,
@@ -1376,6 +1417,7 @@ export default async function handler(req, res) {
         receipt_name:     name,
         receipt_address:  address,
         receipt_tin:      tin,
+        ...(orNumber ? { or_number: orNumber } : {}),
       };
       await supa('PATCH', 'dine_in_orders', updates, { order_id: `eq.${orderId}` });
 

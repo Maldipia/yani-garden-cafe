@@ -2983,6 +2983,7 @@ function printReceipt(orderId) {
 
     // Order Info
     '<div class="info-row"><span class="label">Order:</span><span><b>' + esc(orderId) + '</b></span></div>' +
+    (o.orNumber ? '<div class="info-row"><span class="label">OR No.:</span><span><b>' + o.orNumber + '</b></span></div>' : '') +
     '<div class="info-row"><span class="label">Date:</span><span>' + esc(printDate) + '</span></div>' +
     '<div class="info-row"><span class="label">' + esc(orderType) + '</span><span>Table: <b>' + esc(String(tableNo)) + '</b></span></div>' +
     (customerName ? '<div class="info-row"><span class="label">Customer:</span><span>' + esc(customerName) + '</span></div>' : '') +
