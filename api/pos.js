@@ -1897,6 +1897,25 @@ export default async function handler(req, res) {
     }
 
     // ── verifyUserPin ──────────────────────────────────────────────────────
+    if (action === 'testDriveUpload') {
+      const authTD = req.headers['authorization'];
+      if (!authTD) return res.status(401).json({ ok: false, error: 'Auth required' });
+      try {
+        const jwtLib = require('jsonwebtoken');
+        const dec = jwtLib.verify(authTD.replace('Bearer ',''), process.env.JWT_SECRET||'');
+        if (!dec || (dec.role !== 'OWNER' && dec.role !== 'ADMIN'))
+          return res.status(403).json({ ok: false, error: 'Owner/Admin only' });
+      } catch(e) {
+        return res.status(401).json({ ok: false, error: 'Invalid token' });
+      }
+      const tinyPng = Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==','base64');
+      const driveResult = await uploadToGoogleDrive(tinyPng,'image/png',`TEST_${Date.now()}.png`,'1hDQlljGpRUwT9q33xHukbXvz_M8tk5lR');
+      const saSet = !!(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+      const saEmail = saSet ? JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON).client_email : 'NOT SET';
+      return res.status(200).json({ ok: !!driveResult, driveUrl: driveResult, saEmail, saSet });
+    }
+
     if (action === 'verifyUserPin') {
       const pin = String(body.pin || '').trim();
       if (!pin || pin.length < 4) return res.status(400).json({ ok: false, error: 'PIN is required' });
