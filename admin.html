@@ -6290,7 +6290,7 @@ async function syncToSheets() {
 </div>
 
 <!-- ── Checkout Modal (Payment + Discount + Complete) ──── -->
-<div class="pm-overlay" id="checkoutOverlay" onclick="if(event.target===this)closeCheckoutModal()" style="z-index:1050">
+<div class="pm-overlay" id="checkoutOverlay" style="z-index:1050">
   <div class="pm-modal" style="max-width:400px;max-height:90vh;overflow-y:auto">
     <div class="pm-title">🧾 Complete Order</div>
     <div class="pm-sub" id="coOrderLabel">Order: —</div>
@@ -6660,19 +6660,21 @@ async function confirmCheckout() {
     }
 
     // 3. Complete the order
+    var completedOrderId = coOrderId; // capture before closeCheckoutModal nulls it
+    var completedPayMethod = coPayMethod;
     closeCheckoutModal();
     var completeResult = await api('updateOrderStatus', {
-      orderId: coOrderId,
+      orderId: completedOrderId,
       status: 'COMPLETED',
       userId: currentUser && currentUser.userId
     });
     if (completeResult && completeResult.ok) {
-      _statusOverrides[coOrderId] = { status: 'COMPLETED', ts: Date.now() };
-      allOrders.forEach(function(o){ if (o.orderId === coOrderId) { o.status = 'COMPLETED'; o.paymentMethod = coPayMethod; } });
+      _statusOverrides[completedOrderId] = { status: 'COMPLETED', ts: Date.now() };
+      allOrders.forEach(function(o){ if (o.orderId === completedOrderId) { o.status = 'COMPLETED'; o.paymentMethod = completedPayMethod; } });
       renderStats(); renderFilters(); renderOrders();
-      showToast(coOrderId + ' — Completed' + (hasDisc && coDiscType ? ' · Discount applied' : '') + ' · ' + coPayMethod, 2200);
+      showToast(completedOrderId + ' — Completed' + (hasDisc && coDiscType ? ' · Discount applied' : '') + ' · ' + completedPayMethod, 2200);
       // Auto-print receipt
-      setTimeout(function() { printReceipt(coOrderId); }, 400);
+      setTimeout(function() { printReceipt(completedOrderId); }, 400);
     } else {
       throw new Error(completeResult && completeResult.error || 'Failed to complete');
     }
