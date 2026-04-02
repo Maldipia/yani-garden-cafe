@@ -467,7 +467,7 @@ async function uploadToGoogleDrive(imageBuffer, mimeType, filename, folderId) {
     );
     const d = await uploadResp.json();
     return d.webViewLink || (d.id ? `https://drive.google.com/file/d/${d.id}/view` : null);
-  } catch(e) { console.error('Drive upload error:', e.message); return null; }
+  } catch(e) { console.error('Drive upload error:', e.message); return { error: e.message }; }
 }
 
 export default async function handler(req, res) {
@@ -1633,8 +1633,9 @@ export default async function handler(req, res) {
               // Mirror to Google Drive — await so Vercel doesn't kill before completion
               if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
                 try {
-                  const driveUrl = await uploadToGoogleDrive(imgBuffer, mimeType, storedFilename, '1hDQlljGpRUwT9q33xHukbXvz_M8tk5lR');
-                  if (driveUrl) console.log('GDrive upload ok:', driveUrl);
+                  const driveRes = await uploadToGoogleDrive(imgBuffer, mimeType, storedFilename, '1hDQlljGpRUwT9q33xHukbXvz_M8tk5lR');
+                  if (typeof driveRes === 'string') console.log('GDrive upload ok:', driveRes);
+                  else if (driveRes && driveRes.error) console.error('GDrive upload failed:', driveRes.error);
                   else console.log('GDrive upload: no URL returned');
                 } catch(driveErr) {
                   console.error('GDrive upload failed:', driveErr.message);
@@ -1926,7 +1927,9 @@ export default async function handler(req, res) {
       }
       const saSet = !!(testSaJson);
       const saEmail = saSet ? JSON.parse(testSaJson).client_email : 'NOT SET';
-      return res.status(200).json({ ok: !!driveResult, driveUrl: driveResult, saEmail, saSet });
+      const driveError = (driveResult && typeof driveResult === 'object' && driveResult.error) ? driveResult.error : null;
+      const driveUrl   = (driveResult && typeof driveResult === 'string') ? driveResult : null;
+      return res.status(200).json({ ok: !!driveUrl, driveUrl, driveError, saEmail, saSet });
     }
 
     if (action === 'verifyUserPin') {

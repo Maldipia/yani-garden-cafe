@@ -287,10 +287,16 @@ export default async function handler(req, res) {
   let jwtAdminOk = false;
   if (!cronOk && !manualOk && cronAuth && cronAuth.startsWith('Bearer ') && cronAuth !== `Bearer ${process.env.CRON_SECRET || ''}`) {
     try {
-      const { default: jwt } = await import('jsonwebtoken');
-      const decoded = jwt.verify(cronAuth.replace('Bearer ', ''), process.env.JWT_SECRET || '');
+      // Verify JWT using same approach as pos.js (jsonwebtoken is CJS)
+      const jwtMod = await import('jsonwebtoken');
+      const jwtLib = jwtMod.default || jwtMod;
+      const decoded = jwtLib.verify(cronAuth.replace('Bearer ', ''), process.env.JWT_SECRET || '');
       if (decoded && (decoded.role === 'OWNER' || decoded.role === 'ADMIN')) jwtAdminOk = true;
-    } catch(e) {}
+    } catch(e) { /* invalid token */ }
+  }
+  // Also allow: body.secret === REPORT_SECRET for dashboard button
+  if (!cronOk && !manualOk && !jwtAdminOk && body && body.secret && REPORT_SECRET && body.secret === REPORT_SECRET) {
+    jwtAdminOk = true;
   }
 
   if (!cronOk && !manualOk && !jwtAdminOk) {
