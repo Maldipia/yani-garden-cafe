@@ -1973,12 +1973,22 @@ async function loadOrders() {
     return true;
   });
 
-  // ── Kitchen audio alert for new orders ──────────────────────────────────
+  // ── Kitchen audio alert + auto-print 2 copies for new orders ───────────
   if (window._knownOrderIds) {
     var newArrivals = freshOrders.filter(function(o) {
       return o.status === 'NEW' && !window._knownOrderIds[o.orderId];
     });
-    if (newArrivals.length > 0) playNewOrderAlert();
+    if (newArrivals.length > 0) {
+      playNewOrderAlert();
+      // Auto-print 2 copies for each brand-new order (fires once per order)
+      if (!window._autoPrintedOrders) window._autoPrintedOrders = {};
+      newArrivals.forEach(function(o, idx) {
+        if (window._autoPrintedOrders[o.orderId]) return;
+        window._autoPrintedOrders[o.orderId] = true;
+        // Stagger if multiple orders arrive simultaneously
+        setTimeout(function() { printReceipt(o.orderId, 2); }, idx * 1800);
+      });
+    }
   }
   window._knownOrderIds = {};
   freshOrders.forEach(function(o) { window._knownOrderIds[o.orderId] = true; });
@@ -2846,7 +2856,8 @@ async function submitResendReceipt(orderId) {
 }
 
 
-function printReceipt(orderId) {
+function printReceipt(orderId, copies) {
+  copies = copies || 1;
   var o = allOrders.find(function(x) { return x.orderId === orderId; });
   if (!o) { showToast('Order not found', 'error'); return; }
 
@@ -3044,6 +3055,25 @@ function printReceipt(orderId) {
 
     // Auto-print
     '</body></html>';
+
+  // Duplicate receipt for 2 copies in one print job
+  if (copies >= 2) {
+    // Insert a second copy after the first with a page break
+    var copyLabel = '<div style="page-break-before:always;"></div>';
+    // Add COPY label to each copy
+    var copy1HTML = receiptHTML.replace('</body></html>',
+      '<div style="text-align:center;font-size:9px;margin-top:4px;border-top:1px dashed #aaa;padding-top:4px;">--- COPY 1 ---</div></body></html>');
+    var copy2 = receiptHTML
+      .replace('<html>', '<html data-copy="2">')
+      .replace('</body></html>',
+        '<div style="text-align:center;font-size:9px;margin-top:4px;border-top:1px dashed #aaa;padding-top:4px;">--- COPY 2 ---</div></body></html>');
+    // Extract body content of copy 2 and append after copy 1
+    var bodyMatch = copy2.match(/<body[^>]*>([\s\S]*)<\/body>/);
+    if (bodyMatch) {
+      receiptHTML = copy1HTML.replace('</body></html>',
+        copyLabel + bodyMatch[1] + '</body></html>');
+    }
+  }
 
   // Use hidden iframe — bypasses popup blockers, works on mobile
   var existingFrame = document.getElementById('receiptPrintFrame');
