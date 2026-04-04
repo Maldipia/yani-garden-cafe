@@ -1146,6 +1146,24 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       return res.status(200).json({ ok: true, orderId, status: newStatus });
     }
 
+    // ── updateOrderTotals ──────────────────────────────────────────────────
+    // Allows OWNER/ADMIN to waive or restore service charge on active orders
+    if (action === 'updateOrderTotals') {
+      const authT = await checkAuth(['OWNER','ADMIN']);
+      if (!authT.ok) return res.status(403).json({ ok: false, error: authT.error });
+      const { orderId, serviceCharge, total } = body;
+      if (!orderId) return res.status(400).json({ ok: false, error: 'orderId required' });
+      const svc   = parseFloat(serviceCharge);
+      const tot   = parseFloat(total);
+      if (isNaN(svc) || isNaN(tot) || tot < 0)
+        return res.status(400).json({ ok: false, error: 'Invalid amounts' });
+      const patch = { service_charge: svc, total: tot, updated_at: new Date().toISOString() };
+      const r = await supa('PATCH', 'dine_in_orders', patch, { order_id: `eq.${orderId}` });
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to update order totals' });
+      auditLog({ orderId, action: 'SERVICE_CHARGE_WAIVED', details: { serviceCharge: svc, total: tot, by: authT.userId } });
+      return res.status(200).json({ ok: true, serviceCharge: svc, total: tot });
+    }
+
     // ── deleteOrder ────────────────────────────────────────────────────────
     if (action === 'deleteOrder') {
       const authDO = await checkAdminAuth();

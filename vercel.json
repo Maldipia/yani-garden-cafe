@@ -96,6 +96,14 @@
     {
       "source": "/api/weekly-report",
       "destination": "/api/weekly-report"
+    },
+    {
+      "source": "/reserve",
+      "destination": "/reserve.html"
+    },
+    {
+      "source": "/saas",
+      "destination": "/saas.html"
     }
   ],
   "headers": [

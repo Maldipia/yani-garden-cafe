@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TYG POS — Smart POS for Philippine Cafes & Restaurants</title>
+<meta name="description" content="QR ordering, kitchen screen, auto reports, and GCash payments — built for Philippine F&B. Starting at ₱499/month.">
+<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=Quicksand:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --forest:#314C47;--forest-d:#1E3530;--forest-l:#3D5E57;
+  --terra:#C4704B;--gold:#B8973A;--timber:#6B7B6E;
+  --mist:#D2D5CD;--mist-l:#EEF0EB;--cream:#FAF8F4;
+  --font-soul:'Crimson Pro',Georgia,serif;--font-body:'Quicksand',sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--font-body);background:#fff;color:var(--forest-d)}
+a{text-decoration:none;color:inherit}
+
+/* ── Nav ── */
+nav{position:sticky;top:0;z-index:100;background:#fff;border-bottom:1px solid var(--mist-l);
+  padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:60px}
+.nav-brand{font-family:var(--font-soul);font-size:1.3rem;font-weight:700;color:var(--forest)}
+.nav-brand span{color:var(--terra)}
+.nav-cta{background:var(--forest);color:#fff;padding:9px 20px;border-radius:8px;
+  font-weight:700;font-size:.85rem;transition:.2s}
+.nav-cta:hover{background:var(--forest-d)}
+
+/* ── Hero ── */
+.hero{background:linear-gradient(135deg,var(--forest-d) 0%,var(--forest) 60%,var(--forest-l) 100%);
+  padding:72px 24px 80px;text-align:center;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;inset:0;
+  background:url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")}
+.hero-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(184,151,58,.2);
+  color:var(--gold);border:1px solid rgba(184,151,58,.4);border-radius:20px;
+  padding:5px 14px;font-size:.78rem;font-weight:700;margin-bottom:20px}
+.hero h1{font-family:var(--font-soul);font-size:clamp(2rem,5vw,3.2rem);font-weight:700;
+  color:#fff;line-height:1.15;margin-bottom:16px;max-width:680px;margin-inline:auto}
+.hero h1 em{color:var(--gold);font-style:normal}
+.hero-sub{font-size:1.05rem;color:rgba(255,255,255,.75);max-width:520px;margin:0 auto 32px;line-height:1.6}
+.hero-btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.btn-primary{background:var(--terra);color:#fff;padding:14px 28px;border-radius:12px;
+  font-weight:700;font-size:.95rem;transition:.2s;display:inline-block}
+.btn-primary:hover{background:#a85a38}
+.btn-outline{background:rgba(255,255,255,.12);color:#fff;padding:14px 28px;border-radius:12px;
+  font-weight:700;font-size:.95rem;border:1.5px solid rgba(255,255,255,.3);transition:.2s;display:inline-block}
+.btn-outline:hover{background:rgba(255,255,255,.2)}
+.hero-note{margin-top:16px;font-size:.78rem;color:rgba(255,255,255,.5)}
+
+/* ── Section basics ── */
+.section{padding:72px 24px}
+.section-inner{max-width:1080px;margin:0 auto}
+.section-label{font-size:.72rem;font-weight:700;color:var(--terra);text-transform:uppercase;
+  letter-spacing:.12em;margin-bottom:10px}
+.section-title{font-family:var(--font-soul);font-size:clamp(1.6rem,3vw,2.2rem);font-weight:700;
+  color:var(--forest-d);margin-bottom:14px;line-height:1.2}
+.section-sub{font-size:.95rem;color:var(--timber);max-width:560px;line-height:1.7}
+
+/* ── Social proof strip ── */
+.proof-strip{background:var(--mist-l);padding:18px 24px;text-align:center}
+.proof-strip p{font-size:.85rem;color:var(--timber);font-weight:600}
+.proof-strip strong{color:var(--forest)}
+
+/* ── Features grid ── */
+.features-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px;margin-top:48px}
+.feat-card{background:var(--cream);border-radius:16px;padding:28px 24px;border:1.5px solid var(--mist-l)}
+.feat-icon{font-size:2rem;margin-bottom:12px}
+.feat-title{font-weight:700;font-size:1rem;color:var(--forest-d);margin-bottom:6px}
+.feat-desc{font-size:.85rem;color:var(--timber);line-height:1.6}
+
+/* ── How it works ── */
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:32px;margin-top:48px}
+.step{text-align:center}
+.step-num{width:44px;height:44px;border-radius:50%;background:var(--forest);color:#fff;
+  font-weight:800;font-size:1.1rem;display:flex;align-items:center;justify-content:center;
+  margin:0 auto 16px}
+.step-title{font-weight:700;color:var(--forest-d);margin-bottom:6px}
+.step-desc{font-size:.83rem;color:var(--timber);line-height:1.6}
+
+/* ── Pricing ── */
+.pricing-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px;margin-top:48px}
+.plan{border-radius:16px;padding:28px 24px;border:1.5px solid var(--mist);position:relative;background:#fff}
+.plan.popular{border-color:var(--forest);box-shadow:0 4px 24px rgba(49,76,71,.15)}
+.plan-badge{position:absolute;top:-12px;left:50%;transform:translateX(-50%);
+  background:var(--forest);color:#fff;font-size:.7rem;font-weight:700;padding:4px 14px;
+  border-radius:20px;white-space:nowrap}
+.plan-name{font-weight:800;font-size:1rem;color:var(--timber);text-transform:uppercase;
+  letter-spacing:.06em;margin-bottom:8px}
+.plan-price{font-family:var(--font-soul);font-size:2.4rem;font-weight:700;color:var(--forest-d);line-height:1}
+.plan-period{font-size:.78rem;color:var(--timber);margin-bottom:16px}
+.plan-divider{height:1px;background:var(--mist-l);margin:16px 0}
+.plan-feature{font-size:.82rem;color:var(--timber);padding:5px 0;display:flex;align-items:flex-start;gap:8px}
+.plan-feature::before{content:'✓';color:var(--forest);font-weight:700;flex-shrink:0}
+.plan-feature.no::before{content:'✗';color:var(--mist)}
+.plan-feature.no{color:var(--mist)}
+.plan-cta{display:block;width:100%;margin-top:20px;padding:12px;border-radius:10px;
+  font-weight:700;font-size:.9rem;text-align:center;transition:.2s}
+.plan-cta.primary{background:var(--forest);color:#fff}
+.plan-cta.primary:hover{background:var(--forest-d)}
+.plan-cta.outline{border:1.5px solid var(--mist);color:var(--forest);background:#fff}
+.plan-cta.outline:hover{border-color:var(--forest);background:var(--mist-l)}
+
+/* ── Comparison ── */
+.compare-table{width:100%;border-collapse:collapse;margin-top:32px;font-size:.85rem}
+.compare-table th{background:var(--forest);color:#fff;padding:12px 16px;text-align:left;font-weight:700}
+.compare-table th:first-child{border-radius:10px 0 0 0}
+.compare-table th:last-child{border-radius:0 10px 0 0}
+.compare-table td{padding:11px 16px;border-bottom:1px solid var(--mist-l)}
+.compare-table tr:nth-child(even) td{background:var(--cream)}
+.compare-table .chk{color:var(--forest);font-weight:700;font-size:1.1rem}
+.compare-table .x{color:var(--mist);font-size:1.1rem}
+
+/* ── CTA section ── */
+.cta-section{background:var(--forest);padding:72px 24px;text-align:center}
+.cta-section h2{font-family:var(--font-soul);font-size:clamp(1.6rem,3vw,2.4rem);color:#fff;margin-bottom:12px}
+.cta-section p{color:rgba(255,255,255,.7);max-width:480px;margin:0 auto 28px;line-height:1.6}
+
+/* ── Form embed ── */
+.form-section{background:var(--cream);padding:72px 24px}
+.form-card{background:#fff;border-radius:20px;padding:40px 32px;max-width:640px;margin:0 auto;
+  box-shadow:0 4px 32px rgba(49,76,71,.08)}
+.form-card h3{font-family:var(--font-soul);font-size:1.6rem;color:var(--forest-d);margin-bottom:8px}
+.form-card p{font-size:.88rem;color:var(--timber);margin-bottom:28px;line-height:1.6}
+.f-row{margin-bottom:16px}
+.f-row label{display:block;font-size:.75rem;font-weight:700;color:var(--timber);margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em}
+.f-row input,.f-row select,.f-row textarea{
+  width:100%;padding:12px 14px;border:1.5px solid var(--mist);border-radius:10px;
+  font-size:.9rem;font-family:var(--font-body);color:var(--forest-d);background:#fff;outline:none;transition:.15s
+}
+.f-row input:focus,.f-row select:focus,.f-row textarea:focus{border-color:var(--forest)}
+.f-row textarea{height:90px;resize:none}
+.f-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.f-submit{width:100%;padding:15px;background:var(--terra);color:#fff;border:none;border-radius:12px;
+  font-weight:700;font-size:1rem;font-family:var(--font-body);cursor:pointer;margin-top:8px;transition:.2s}
+.f-submit:hover{background:#a85a38}
+.f-submit:disabled{background:var(--timber);cursor:not-allowed}
+.f-success{background:#F0FDF4;border:1.5px solid #86EFAC;border-radius:12px;padding:20px;
+  text-align:center;display:none;margin-top:16px}
+.f-success-icon{font-size:2rem;margin-bottom:8px}
+.f-success h4{font-weight:700;color:var(--forest);margin-bottom:4px}
+.f-success p{font-size:.85rem;color:var(--timber)}
+
+/* ── Footer ── */
+footer{background:var(--forest-d);padding:40px 24px;text-align:center}
+footer p{color:rgba(255,255,255,.5);font-size:.8rem;line-height:1.8}
+footer strong{color:rgba(255,255,255,.8)}
+
+@media(max-width:600px){
+  .hero h1{font-size:1.9rem}
+  .hero-btns{flex-direction:column;align-items:center}
+  .f-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- Nav -->
+<nav>
+  <div class="nav-brand">TYG<span>POS</span></div>
+  <a href="#contact" class="nav-cta">Get Started Free</a>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="hero-badge">☕ Built for Philippine F&B</div>
+  <h1>The <em>smartest POS</em> for your cafe, restaurant, or food park</h1>
+  <p class="hero-sub">QR ordering, kitchen screen, GCash payments, and auto reports — all in one system. No hardware needed. Live in 30 minutes.</p>
+  <div class="hero-btns">
+    <a href="#contact" class="btn-primary">🚀 Start Free Trial</a>
+    <a href="#features" class="btn-outline">See Features</a>
+  </div>
+  <p class="hero-note">₱0 setup · No contract · Cancel anytime</p>
+</section>
+
+<!-- Proof strip -->
+<div class="proof-strip">
+  <p>⭐ Trusted by <strong>YANI Garden Cafe</strong> (Amadeo, Cavite) · Processes real orders every day · Built and maintained by a Filipino developer</p>
+</div>
+
+<!-- Features -->
+<section class="section" id="features">
+  <div class="section-inner">
+    <div class="section-label">What You Get</div>
+    <div class="section-title">Everything your cafe needs, nothing it doesn't</div>
+    <p class="section-sub">No bloated POS with 200 features you'll never use. Just the essentials — done right.</p>
+
+    <div class="features-grid">
+      <div class="feat-card">
+        <div class="feat-icon">📱</div>
+        <div class="feat-title">QR Table Ordering</div>
+        <div class="feat-desc">Customers scan QR code, browse your menu, and order — no app download needed. Works on any phone.</div>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon">👨‍🍳</div>
+        <div class="feat-title">Live Kitchen Screen</div>
+        <div class="feat-desc">Orders appear instantly on kitchen tablet. Staff taps ☕ START → ✨ READY → 🙏 COMPLETE. No more lost paper tickets.</div>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon">📱</div>
+        <div class="feat-title">GCash & Bank QR Payments</div>
+        <div class="feat-desc">GCash, InstaPay, BDO, BPI, UnionBank — all in one payment screen. Customer uploads screenshot as proof.</div>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon">📊</div>
+        <div class="feat-title">Daily + Weekly Reports</div>
+        <div class="feat-desc">Auto email every morning with formatted Excel report attached. Sales by payment method, top items, hourly breakdown.</div>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon">🖨️</div>
+        <div class="feat-title">Auto Receipt Printing</div>
+        <div class="feat-desc">Prints 2 copies automatically when an order arrives. BIR-ready receipts with customer details and TIN support.</div>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon">🏷️</div>
+        <div class="feat-title">PWD / Senior Discounts</div>
+        <div class="feat-desc">Built-in discount calculator for PWD and Senior Citizens. Enter pax count, qualifying persons — system computes the exact deduction.</div>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon">📦</div>
+        <div class="feat-title">Inventory Auto-Disable</div>
+        <div class="feat-desc">Set stock counts per item. When stock hits zero, the item automatically disappears from the customer menu.</div>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon">📅</div>
+        <div class="feat-title">Table Reservations</div>
+        <div class="feat-desc">Customer-facing reservation page with date, time, pax, and occasion. Staff sees all bookings in the admin dashboard.</div>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon">🛵</div>
+        <div class="feat-title">Online Orders</div>
+        <div class="feat-desc">Separate online ordering page for pickup orders. Customer pays via GCash, uploads proof, tracks order status live.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- How it works -->
+<section class="section" style="background:var(--cream)">
+  <div class="section-inner">
+    <div class="section-label">How It Works</div>
+    <div class="section-title">Live in 30 minutes, seriously</div>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-title">Sign Up</div>
+        <div class="step-desc">Fill out the form below. We set up your account and send you login details within the hour.</div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-title">Add Your Menu</div>
+        <div class="step-desc">Upload menu items directly from the admin panel — photos, prices, sizes, sugar levels. No GitHub required.</div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-title">Print QR Codes</div>
+        <div class="step-desc">We generate your table QR codes as a print-ready PDF. Laminate and place on tables.</div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-title">Go Live</div>
+        <div class="step-desc">Open your kitchen dashboard on a tablet. Your first QR order arrives — you're in business.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Pricing -->
+<section class="section" id="pricing">
+  <div class="section-inner">
+    <div class="section-label">Simple Pricing</div>
+    <div class="section-title">One flat monthly fee. No surprises.</div>
+
+    <div class="pricing-grid">
+
+      <div class="plan">
+        <div class="plan-name">Starter</div>
+        <div class="plan-price">₱499</div>
+        <div class="plan-period">/month</div>
+        <div class="plan-divider"></div>
+        <div class="plan-feature">Up to 3 staff accounts</div>
+        <div class="plan-feature">Up to 50 menu items</div>
+        <div class="plan-feature">QR table ordering</div>
+        <div class="plan-feature">Kitchen screen</div>
+        <div class="plan-feature">GCash / bank payments</div>
+        <div class="plan-feature">Daily email report</div>
+        <div class="plan-feature no">Weekly / monthly reports</div>
+        <div class="plan-feature no">Analytics dashboard</div>
+        <a href="#contact" class="plan-cta outline">Get Started</a>
+      </div>
+
+      <div class="plan popular">
+        <div class="plan-badge">🔥 Most Popular</div>
+        <div class="plan-name">Business</div>
+        <div class="plan-price">₱999</div>
+        <div class="plan-period">/month</div>
+        <div class="plan-divider"></div>
+        <div class="plan-feature">Up to 10 staff accounts</div>
+        <div class="plan-feature">Up to 100 menu items</div>
+        <div class="plan-feature">Everything in Starter</div>
+        <div class="plan-feature">Weekly + monthly reports</div>
+        <div class="plan-feature">Analytics dashboard</div>
+        <div class="plan-feature">Inventory management</div>
+        <div class="plan-feature">Table reservations</div>
+        <div class="plan-feature">Online ordering page</div>
+        <a href="#contact" class="plan-cta primary">Get Started</a>
+      </div>
+
+      <div class="plan">
+        <div class="plan-name">Pro</div>
+        <div class="plan-price">₱1,999</div>
+        <div class="plan-period">/month</div>
+        <div class="plan-divider"></div>
+        <div class="plan-feature">Unlimited staff accounts</div>
+        <div class="plan-feature">Unlimited menu items</div>
+        <div class="plan-feature">Everything in Business</div>
+        <div class="plan-feature">Multiple branches</div>
+        <div class="plan-feature">Custom domain (yourname.com)</div>
+        <div class="plan-feature">Priority support</div>
+        <div class="plan-feature">Custom branding / white-label</div>
+        <a href="#contact" class="plan-cta outline">Get Started</a>
+      </div>
+
+    </div>
+
+    <!-- Comparison vs traditional POS -->
+    <div style="margin-top:48px">
+      <div class="section-label">Why TYG POS?</div>
+      <div class="section-title" style="margin-bottom:0">vs Traditional POS Systems</div>
+      <div style="overflow-x:auto">
+        <table class="compare-table">
+          <thead>
+            <tr>
+              <th>Feature</th>
+              <th>TYG POS</th>
+              <th>Traditional POS</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Setup cost</td><td><span class="chk">✓</span> ₱0</td><td><span class="x">✗</span> ₱15,000–₱50,000+</td></tr>
+            <tr><td>Hardware required</td><td><span class="chk">✓</span> None (use any device)</td><td><span class="x">✗</span> Dedicated terminal required</td></tr>
+            <tr><td>QR table ordering</td><td><span class="chk">✓</span> Built-in</td><td><span class="x">✗</span> Add-on / extra cost</td></tr>
+            <tr><td>GCash / bank QR</td><td><span class="chk">✓</span> Built-in</td><td><span class="x">✗</span> Usually not included</td></tr>
+            <tr><td>Auto daily reports</td><td><span class="chk">✓</span> Email + Excel</td><td><span class="x">✗</span> Manual export needed</td></tr>
+            <tr><td>PWD/Senior discount</td><td><span class="chk">✓</span> Calculator built-in</td><td><span class="x">✗</span> Manual computation</td></tr>
+            <tr><td>Customer order tracking</td><td><span class="chk">✓</span> Real-time via QR</td><td><span class="x">✗</span> Not available</td></tr>
+            <tr><td>Monthly cost</td><td><span class="chk">✓</span> ₱499–₱1,999</td><td><span class="x">✗</span> ₱2,000–₱8,000+</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section">
+  <h2>Ready to modernize your cafe?</h2>
+  <p>Join YANI Garden Cafe and other F&B businesses already running on TYG POS. Get set up today — no credit card required for your first 14 days.</p>
+  <a href="#contact" class="btn-primary" style="font-size:1rem;padding:16px 36px">🚀 Start Free — 14 Days on Us</a>
+</section>
+
+<!-- Contact / Lead Capture Form -->
+<section class="form-section" id="contact">
+  <div class="section-inner" style="text-align:center;margin-bottom:40px">
+    <div class="section-label">Get Started</div>
+    <div class="section-title">Tell us about your business</div>
+    <p class="section-sub" style="margin:0 auto">We'll set up your account and reach out within 24 hours. No credit card needed to start.</p>
+  </div>
+
+  <div class="form-card">
+    <h3>Request Your Free Setup</h3>
+    <p>Fill in the details below and we'll contact you on Messenger or SMS to get you live.</p>
+
+    <div id="leadForm">
+      <div class="f-grid">
+        <div class="f-row">
+          <label>Business Name *</label>
+          <input type="text" id="bizName" placeholder="e.g. Café de Juan" maxlength="80">
+        </div>
+        <div class="f-row">
+          <label>Type of Business *</label>
+          <select id="bizType">
+            <option value="">Select...</option>
+            <option>Cafe / Coffee Shop</option>
+            <option>Restaurant</option>
+            <option>Food Park / Stall</option>
+            <option>Bar / Resto-bar</option>
+            <option>Bakery / Pastry Shop</option>
+            <option>Other F&B</option>
+          </select>
+        </div>
+      </div>
+      <div class="f-grid">
+        <div class="f-row">
+          <label>Your Name *</label>
+          <input type="text" id="ownerName" placeholder="Your full name" maxlength="80">
+        </div>
+        <div class="f-row">
+          <label>Phone / Messenger *</label>
+          <input type="tel" id="ownerPhone" placeholder="09XXXXXXXXX" maxlength="13">
+        </div>
+      </div>
+      <div class="f-row">
+        <label>Location (City / Province)</label>
+        <input type="text" id="bizLocation" placeholder="e.g. Tagaytay, Cavite" maxlength="80">
+      </div>
+      <div class="f-row">
+        <label>Plan You're Interested In</label>
+        <select id="planInterest">
+          <option value="Business">Business — ₱999/month (Most popular)</option>
+          <option value="Starter">Starter — ₱499/month</option>
+          <option value="Pro">Pro — ₱1,999/month</option>
+          <option value="Not sure">Not sure yet — help me choose</option>
+        </select>
+      </div>
+      <div class="f-row">
+        <label>Anything you want to tell us?</label>
+        <textarea id="bizNotes" placeholder="e.g. Number of tables, special requirements, current POS you're using..."></textarea>
+      </div>
+      <div id="leadErr" style="color:#B91C1C;font-size:.8rem;margin-top:4px;display:none"></div>
+      <button class="f-submit" onclick="submitLead()">🚀 Request Free Setup</button>
+    </div>
+
+    <div class="f-success" id="leadSuccess">
+      <div class="f-success-icon">🎉</div>
+      <h4>Request received!</h4>
+      <p>We'll reach out via SMS or Messenger within 24 hours to get your setup started. Check your phone!</p>
+      <p style="margin-top:8px;font-weight:600;color:var(--forest)">Follow us: <a href="https://facebook.com/yanigardencafe" style="color:var(--terra)">facebook.com/yanigardencafe</a></p>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <p><strong>TYG POS</strong> — Built by YANI Garden Cafe · Amadeo, Cavite</p>
+  <p style="margin-top:6px">A product of <strong>Legeryn Pia</strong> · tygfsb@gmail.com</p>
+  <p style="margin-top:6px">© 2026 TYG POS · All rights reserved</p>
+</footer>
+
+<script>
+// Smooth scroll
+document.querySelectorAll('a[href^="#"]').forEach(function(a){
+  a.addEventListener('click', function(e){
+    e.preventDefault();
+    var target = document.querySelector(this.getAttribute('href'));
+    if(target) target.scrollIntoView({behavior:'smooth', block:'start'});
+  });
+});
+
+// Lead form submission → sends to Supabase leads table + shows success
+async function submitLead() {
+  var bizName  = document.getElementById('bizName').value.trim();
+  var bizType  = document.getElementById('bizType').value;
+  var ownerName= document.getElementById('ownerName').value.trim();
+  var phone    = document.getElementById('ownerPhone').value.trim();
+  var location = document.getElementById('bizLocation').value.trim();
+  var plan     = document.getElementById('planInterest').value;
+  var notes    = document.getElementById('bizNotes').value.trim();
+  var errEl    = document.getElementById('leadErr');
+
+  errEl.style.display = 'none';
+  if (!bizName)  { errEl.textContent='Business name is required.'; errEl.style.display='block'; return; }
+  if (!bizType)  { errEl.textContent='Please select business type.'; errEl.style.display='block'; return; }
+  if (!ownerName){ errEl.textContent='Your name is required.'; errEl.style.display='block'; return; }
+  if (!phone.match(/^(09|\+639)\d{9}$/)) { errEl.textContent='Please enter a valid PH phone number.'; errEl.style.display='block'; return; }
+
+  var btn = document.querySelector('.f-submit');
+  btn.disabled = true; btn.textContent = 'Sending...';
+
+  try {
+    // Save to Supabase saas_leads table
+    var SUPABASE_URL = 'https://hnynvclpvfxzlfjphefj.supabase.co';
+    var ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhueW52Y2xwdmZ4emxmanBoZWZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI0NTg5MTMsImV4cCI6MjA4ODAzNDkxM30.cBIoq9dVUFC0d7Su5B7ubBG83-q-bffheKoOCTRDqXE';
+
+    await fetch(SUPABASE_URL + '/rest/v1/saas_leads', {
+      method: 'POST',
+      headers: {
+        'apikey': ANON_KEY,
+        'Authorization': 'Bearer ' + ANON_KEY,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify({
+        business_name: bizName,
+        business_type: bizType,
+        owner_name:    ownerName,
+        phone:         phone,
+        location:      location || null,
+        plan_interest: plan,
+        notes:         notes || null,
+        source:        'saas_landing'
+      })
+    });
+  } catch(e) { /* non-fatal — show success anyway */ }
+
+  document.getElementById('leadForm').style.display = 'none';
+  document.getElementById('leadSuccess').style.display = 'block';
+  window.scrollTo({top: document.getElementById('contact').offsetTop, behavior:'smooth'});
+}
+</script>
+
+</body>
+</html>

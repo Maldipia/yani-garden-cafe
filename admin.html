@@ -2493,6 +2493,18 @@ function renderOrders() {
     if (canDelete && (o.status === 'COMPLETED' || o.status === 'CANCELLED')) {
       html += '<button class="oc-btn oc-btn-delete" onclick="deleteOrder(\'' + o.orderId + '\')">🗑️ Delete</button>';
     }
+    // Service charge waiver (OWNER/ADMIN, active orders with service charge)
+    if ((currentUser.role === 'OWNER' || currentUser.role === 'ADMIN') &&
+        o.status !== 'COMPLETED' && o.status !== 'CANCELLED' &&
+        o.orderType === 'DINE-IN') {
+      var hasSvc = o.serviceCharge && parseFloat(o.serviceCharge) > 0;
+      html += '<button class="oc-btn" style="background:' + (hasSvc ? '#FEF9C3' : '#F0FDF4') + ';color:' +
+        (hasSvc ? '#92400E' : '#166534') + ';border:1px solid ' + (hasSvc ? '#FDE68A' : '#86EFAC') +
+        ';margin-top:4px;width:calc(100% - 32px);margin-left:16px;font-size:.75rem;" ' +
+        'onclick="toggleServiceCharge(\'' + o.orderId + '\', ' + (hasSvc ? 'true' : 'false') + ')" ' +
+        'title="' + (hasSvc ? 'Waive service charge for this order' : 'Restore service charge') + '">' +
+        (hasSvc ? '🚫 Waive Service Charge' : '✅ Restore Service Charge') + '</button>';
+    }
 
     html += '</div>';
     return html;
@@ -2502,6 +2514,35 @@ function renderOrders() {
 // ══════════════════════════════════════════════════════════
 // STATUS UPDATE
 // ══════════════════════════════════════════════════════════
+// ── Service Charge Waiver ──────────────────────────────────────────────────
+async function toggleServiceCharge(orderId, hasSvc) {
+  var order = allOrders.find(function(o){ return o.orderId === orderId; });
+  if (!order) return;
+  var subtotal = parseFloat(order.subtotal) || 0;
+  var newSvc = hasSvc ? 0 : Math.round(subtotal * 0.10 * 100) / 100;
+  var newTotal = Math.round((subtotal + newSvc) * 100) / 100;
+  var action = hasSvc ? 'Waive' : 'Restore';
+  var svcMsg = action + ' service charge for ' + orderId + '? ' +
+      (hasSvc ? 'New total: P' + newTotal.toFixed(2) + ' (no service charge)' :
+                'Service charge +P' + newSvc.toFixed(2) + ' = Total P' + newTotal.toFixed(2));
+  if (!confirm(svcMsg)) return;
+  var result = await api('updateOrderTotals', {
+    orderId: orderId,
+    serviceCharge: newSvc,
+    total: newTotal,
+    userId: currentUser && currentUser.userId
+  });
+  if (result.ok) {
+    showToast((hasSvc ? '🚫 Service charge waived' : '✅ Service charge restored') + ' for ' + orderId, 'success');
+    // Update local order immediately
+    order.serviceCharge = newSvc;
+    order.total = newTotal;
+    renderOrders();
+  } else {
+    showToast('❌ ' + (result.error || 'Failed to update'), 'error');
+  }
+}
+
 async function adminTogglePrep(rowEl, orderId, itemId, currentPrepared) {
   if (!itemId) return;
   var newPrepared = currentPrepared ? 0 : 1;
@@ -6921,8 +6962,27 @@ function updateDmPreview() {
     discount = parseFloat(document.getElementById('dmCustomAmt').value) || 0;
   }
   var finalTotal = Math.max(0, Math.round((total - discount) * 100) / 100);
-  document.getElementById('dmPreviewText').innerHTML =
-    '₱' + total.toFixed(2) + ' − ₱' + discount.toFixed(2) + ' = <strong>₱' + finalTotal.toFixed(2) + '</strong>';
+  var breakdownHtml = '';
+  if (dmSelectedType === 'PWD' || dmSelectedType === 'SENIOR' || dmSelectedType === 'BOTH') {
+    var perPax = total / Math.max(tp, 1);
+    var typeLabel = dmSelectedType === 'BOTH' ? 'PWD+Senior' : dmSelectedType;
+    breakdownHtml =
+      '<div style="font-size:.78rem;color:#166534;line-height:1.7;font-family:monospace">' +
+      '₱' + total.toFixed(2) + ' ÷ ' + tp + ' pax = ₱' + perPax.toFixed(2) + '/person<br>' +
+      '₱' + perPax.toFixed(2) + ' × 20% × ' + qp + ' ' + typeLabel + ' = <strong style="color:#DC2626">−₱' + discount.toFixed(2) + '</strong><br>' +
+      '<span style="border-top:1px solid #86EFAC;display:block;margin-top:4px;padding-top:4px">' +
+      'New total: <strong style="font-size:.95rem">₱' + finalTotal.toFixed(2) + '</strong></span>' +
+      '</div>';
+  } else if (dmSelectedType === 'PROMO') {
+    breakdownHtml =
+      '<div style="font-size:.78rem;color:#166534;font-family:monospace">' +
+      '₱' + total.toFixed(2) + ' × ' + pct.toFixed(0) + '% = <strong style="color:#DC2626">−₱' + discount.toFixed(2) + '</strong><br>' +
+      'New total: <strong style="font-size:.95rem">₱' + finalTotal.toFixed(2) + '</strong>' +
+      '</div>';
+  } else {
+    breakdownHtml = '₱' + total.toFixed(2) + ' − ₱' + discount.toFixed(2) + ' = <strong>₱' + finalTotal.toFixed(2) + '</strong>';
+  }
+  document.getElementById('dmPreviewText').innerHTML = breakdownHtml;
   document.getElementById('dmPreview').style.display = 'block';
 }
 // Wire preview on input change
