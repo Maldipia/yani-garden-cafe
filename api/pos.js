@@ -1347,7 +1347,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '*').split(',').map(s =>
 
       return res.status(200).json({
         ok: true,
-        date: `${y}-${m}-${d}`,
+        date: bdayStart.toISOString().slice(0,10),
         totalOrders: completed.length,
         cancelledOrders: cancelled.length,
         totalRevenue: Math.round(totalRevenue * 100) / 100,
