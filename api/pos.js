@@ -1304,11 +1304,19 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '*').split(',').map(s =>
       // Get timezone from settings (default Asia/Manila)
       const tz = await getSetting('TIMEZONE') || 'Asia/Manila';
 
-      // Today's date in PH time
-      const nowPH  = new Date(new Date().toLocaleString('en-US', { timeZone: tz }));
-      const y = nowPH.getFullYear(), m = String(nowPH.getMonth()+1).padStart(2,'0'), d = String(nowPH.getDate()).padStart(2,'0');
-      const todayStart = `${y}-${m}-${d}T00:00:00+08:00`;
-      const todayEnd   = `${y}-${m}-${d}T23:59:59+08:00`;
+      // Business day = 6 AM PHT to 6 AM PHT
+      // If current PHT time is before 6 AM, business day started yesterday at 6 AM
+      const nowUTC = new Date();
+      const phtOff = 8 * 3600000;
+      const nowPHT = new Date(nowUTC.getTime() + phtOff);
+      const phtHour = nowPHT.getUTCHours();
+      // Start of current business day (6 AM PHT)
+      const bdayStart = new Date(nowPHT);
+      bdayStart.setUTCHours(6, 0, 0, 0);
+      if (phtHour < 6) bdayStart.setTime(bdayStart.getTime() - 86400000); // before 6 AM → prev day
+      const bdayEnd = new Date(bdayStart.getTime() + 86400000); // +24h
+      const todayStart = new Date(bdayStart.getTime() - phtOff).toISOString();
+      const todayEnd   = new Date(bdayEnd.getTime()   - phtOff).toISOString();
 
       const ordersR = await supaFetch(
         `${SUPABASE_URL}/rest/v1/dine_in_orders?created_at=gte.${encodeURIComponent(todayStart)}&created_at=lte.${encodeURIComponent(todayEnd)}&is_test=eq.false&select=status,total,discounted_total,payment_method,payment_status,discount_type,discount_amount,order_type,created_at&order=created_at.asc`
@@ -2257,9 +2265,30 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '*').split(',').map(s =>
         .map(([day,v]) => ({ day, revenue: Math.round(v.revenue*100)/100, count: v.count }))
         .sort((a,b) => a.day.localeCompare(b.day));
 
-      // Today vs yesterday — use Philippines time (UTC+8)
-      const todayStr     = new Date(Date.now() + phOffset).toISOString().slice(0,10);
-      const yesterdayStr = new Date(Date.now() + phOffset - 86400000).toISOString().slice(0,10);
+      // Business day grouping: order belongs to business day based on 6 AM cutoff
+      // e.g. order at 12:30 AM on Apr 4 belongs to Apr 3 business day
+      function getBusinessDay(isoStr) {
+        const phDate = new Date(new Date(isoStr).getTime() + phOffset);
+        const h = phDate.getUTCHours();
+        if (h < 6) phDate.setTime(phDate.getTime() - 86400000); // before 6 AM → prev biz day
+        return phDate.toISOString().slice(0,10);
+      }
+      // Rebuild dailyMap with business day grouping
+      const dailyMapBiz = {};
+      orders.forEach(o => {
+        const day = getBusinessDay(o.created_at);
+        if (!dailyMapBiz[day]) dailyMapBiz[day] = { revenue:0, count:0 };
+        dailyMapBiz[day].revenue += parseFloat(o.discounted_total || o.total || 0);
+        dailyMapBiz[day].count   += 1;
+      });
+      Object.assign(dailyMap, dailyMapBiz); // replace with business-day version
+
+      // Today vs yesterday — use business day logic
+      const nowPHT2 = new Date(Date.now() + phOffset);
+      const curH    = nowPHT2.getUTCHours();
+      if (curH < 6) nowPHT2.setTime(nowPHT2.getTime() - 86400000);
+      const todayStr     = nowPHT2.toISOString().slice(0,10);
+      const yesterdayStr = new Date(nowPHT2.getTime() - 86400000).toISOString().slice(0,10);
       const todayData     = dailyMap[todayStr]     || { revenue:0, count:0 };
       const yesterdayData = dailyMap[yesterdayStr] || { revenue:0, count:0 };
 

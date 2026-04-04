@@ -29,17 +29,27 @@ async function supaFetch(path, opts = {}) {
 
 // ── Build report data ─────────────────────────────────────────────────────
 async function buildReport() {
-  // PHT = UTC+8; "yesterday" in PHT
+  // Business day = 6 AM PHT to 6 AM PHT (YANI opens 10 AM, closes 12 MN)
+  // Report covers: yesterday 6:00 AM → today 5:59:59 AM PHT
   const now = new Date();
   const phtOffset = 8 * 60 * 60 * 1000;
-  const todayPHT  = new Date(now.getTime() + phtOffset);
-  todayPHT.setUTCHours(0, 0, 0, 0);
-  const yestStartPHT = new Date(todayPHT.getTime() - 24 * 60 * 60 * 1000);
-  const startISO = new Date(yestStartPHT.getTime() - phtOffset).toISOString();
-  const endISO   = new Date(todayPHT.getTime() - phtOffset).toISOString();
+  const BDAY_START_HOUR = 6; // 6 AM PHT = start of business day
 
-  // Format date label for PHT
-  const dateLabel = yestStartPHT.toLocaleDateString('en-PH', {
+  // Current time in PHT
+  const nowPHT = new Date(now.getTime() + phtOffset);
+
+  // Business day end = today at 6 AM PHT (UTC)
+  const todayBdayEnd = new Date(nowPHT);
+  todayBdayEnd.setUTCHours(BDAY_START_HOUR, 0, 0, 0);
+
+  // Business day start = yesterday at 6 AM PHT (UTC)
+  const yestBdayStart = new Date(todayBdayEnd.getTime() - 24 * 60 * 60 * 1000);
+
+  const startISO = new Date(yestBdayStart.getTime() - phtOffset).toISOString();
+  const endISO   = new Date(todayBdayEnd.getTime()  - phtOffset).toISOString();
+
+  // Date label = the business day date (yesterday in PHT)
+  const dateLabel = yestBdayStart.toLocaleDateString('en-PH', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
     timeZone: 'Asia/Manila',
   });
