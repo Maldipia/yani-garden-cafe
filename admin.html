@@ -2029,19 +2029,27 @@ async function loadMenuCache() {
 // STATS
 // ══════════════════════════════════════════════════════════
 function renderStats() {
-  // Use Manila time (UTC+8) for 'today' — always parse createdAt as UTC then shift to Manila
-  var nowUtc = Date.now();
+  // Business day = 6 AM PHT to 6 AM PHT (YANI opens 10 AM, closes 12 MN)
+  // Orders placed 12 MN–5:59 AM belong to the PREVIOUS business day
   var manilaOffset = 8 * 3600000;
-  var todayStr = new Date(nowUtc + manilaOffset).toISOString().slice(0, 10); // 'YYYY-MM-DD' in Manila
+  var nowPHT = new Date(Date.now() + manilaOffset);
+  var curHour = nowPHT.getUTCHours(); // hour in PHT (0-23)
+  // Business day start = today 6 AM PHT; if before 6 AM, start = yesterday 6 AM PHT
+  var bdayStart = new Date(nowPHT);
+  bdayStart.setUTCHours(6, 0, 0, 0);
+  if (curHour < 6) bdayStart.setTime(bdayStart.getTime() - 86400000);
+  var bdayEnd = new Date(bdayStart.getTime() + 86400000);
+  var todayStr = bdayStart.toISOString().slice(0, 10); // label for "today's" biz day
+
   var todayOrders = allOrders.filter(function(o) {
     try {
       var raw = o.createdAt || '';
-      // Ensure we always parse as UTC: append +00:00 if no tz info present
       if (raw && !raw.endsWith('Z') && !raw.includes('+') && raw.length > 10) raw = raw + '+00:00';
       var d = new Date(raw);
       if (isNaN(d.getTime())) return false;
-      var manilaStr = new Date(d.getTime() + manilaOffset).toISOString().slice(0, 10);
-      return manilaStr === todayStr;
+      // Order is "today" if it falls within the current business day window
+      return d.getTime() >= bdayStart.getTime() - manilaOffset &&
+             d.getTime() <  bdayEnd.getTime()   - manilaOffset;
     } catch(e) { return false }
   });
 
