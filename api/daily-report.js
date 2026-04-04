@@ -127,7 +127,7 @@ async function buildReport() {
   const peakHour = Object.entries(hourly).sort((a,b) => b[1].count - a[1].count)[0];
 
   // ── Attach item text to each order for xlsx ──────────────────────────
-  if ((r.orders||orders).length > 0) {
+  if (orders.length > 0) {
     const allIds = orders.map(o=>o.order_id);
     const itemsR2 = await supaFetch(
       `dine_in_order_items?order_id=in.(${allIds.map(id=>`"${id}"`).join(',')})&select=order_id,item_name,qty,size_choice,sugar_choice`
