@@ -482,7 +482,7 @@ async function uploadToGoogleDrive(imageBuffer, mimeType, filename, folderId) {
 export default async function handler(req, res) {
   // Restrict CORS to known domains only
   const origin = req.headers.origin || '';
-const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '*').split(',').map(s => s.trim());
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardencafe.com,https://yanigardencafe.com,https://admin.yanigardencafe.com').split(',').map(s => s.trim());
   if (ALLOWED_ORIGINS.includes(origin) || ALLOWED_ORIGINS.includes('*')) {
     res.setHeader('Access-Control-Allow-Origin', origin);
   } else if (!origin) {
@@ -1975,6 +1975,17 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '*').split(',').map(s =>
       const pin = String(body.pin || '').trim();
       if (!pin || pin.length < 4) return res.status(400).json({ ok: false, error: 'PIN is required' });
 
+      // ── IP-based brute-force protection ──────────────────────────────
+      // Block IP after 10 failed attempts in 5 minutes (300 seconds)
+      const loginIp = (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim();
+      const loginKey = `pin_fail:${loginIp}`;
+      try {
+        const rlR = await supaFetch(`rpc/upsert_rate_limit`, { p_key: loginKey, p_window: 300, p_limit: 10 }, 'POST');
+        if (rlR.ok && rlR.data === false) {
+          return res.status(429).json({ ok: false, error: 'Too many failed attempts. Try again in 5 minutes.' });
+        }
+      } catch(_) { /* rate limit check non-fatal */ }
+
       // Fetch all active staff — we need to bcrypt.compare against each hash
       // (bcrypt cannot reverse-lookup; we must compare, not query by hash)
       const r = await supaFetch(
@@ -1993,15 +2004,25 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '*').split(',').map(s =>
       }
 
       if (!matchedUser) {
+        // Track failed PIN attempt by IP via api_rate_limits table
+        // Key: pin_fail:{ip} — 10 attempts per 5 minutes → locked
+        const clientIp = (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim();
+        try {
+          await supaFetch(`rpc/upsert_rate_limit`, { p_key: `pin_fail:${clientIp}`, p_window: 300, p_limit: 9999 }, 'POST');
+        } catch(_) {}
         return res.status(200).json({ ok: false, error: 'Invalid PIN' });
       }
 
       // Check if account is locked
       if (matchedUser.locked_until && new Date(matchedUser.locked_until) > new Date()) {
-        return res.status(200).json({ ok: false, error: 'Account locked. Please try again later.' });
+        return res.status(200).json({ ok: false, error: 'Account locked. Try again in 15 minutes.' });
       }
 
-      // PIN correct — reset counters, update last_login
+      // PIN correct — reset rate limit + update last_login
+      try {
+        // Reset IP rate limit on success (delete the key by calling with very high limit)
+        await supaFetch(`rpc/upsert_rate_limit`, { p_key: loginKey, p_window: 1, p_limit: 9999 }, 'POST');
+      } catch(_) {}
       await supa('PATCH', 'staff_users', {
         last_login:      new Date().toISOString(),
         failed_attempts: 0,

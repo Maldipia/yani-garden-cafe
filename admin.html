@@ -1990,6 +1990,12 @@ async function loadOrders() {
       });
     }
   }
+  // Seed _autoPrintedOrders on very first poll so existing NEW orders don't auto-print
+  if (!window._initialPollDone) {
+    window._initialPollDone = true;
+    if (!window._autoPrintedOrders) window._autoPrintedOrders = {};
+    freshOrders.forEach(function(o) { window._autoPrintedOrders[o.orderId] = true; });
+  }
   window._knownOrderIds = {};
   freshOrders.forEach(function(o) { window._knownOrderIds[o.orderId] = true; });
 

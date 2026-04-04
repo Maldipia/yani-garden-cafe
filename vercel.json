@@ -35,6 +35,9 @@
     },
     "api/config.js": {
       "maxDuration": 10
+    },
+    "api/weekly-report.js": {
+      "maxDuration": 60
     }
   },
   "rewrites": [
@@ -89,6 +92,10 @@
     {
       "source": "/track-order",
       "destination": "/track.html"
+    },
+    {
+      "source": "/api/weekly-report",
+      "destination": "/api/weekly-report"
     }
   ],
   "headers": [
@@ -123,6 +130,14 @@
     {
       "path": "/api/daily-report",
       "schedule": "55 15 * * *"
+    },
+    {
+      "path": "/api/weekly-report",
+      "schedule": "0 22 * * 0"
+    },
+    {
+      "path": "/api/weekly-report",
+      "schedule": "0 22 1 * *"
     }
   ]
 }
