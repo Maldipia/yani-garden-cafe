@@ -2387,12 +2387,12 @@ function renderOrders() {
     }
     html += '</div>';
 
-    // Total — prefer subtotal+service from backend, fallback to item sum
-    var displayTotal = orderTotal;
-    if (o.subtotal && typeof o.subtotal === 'number') {
-      displayTotal = o.subtotal + (o.serviceCharge || 0);
-    }
-    var scLine = (o.serviceCharge && typeof o.serviceCharge === 'number' && o.serviceCharge > 0)
+    // Total — use actual total from DB (now correctly parsed as float in getOrders)
+    // Fallback to item sum + service charge if total is missing
+    var displayTotal = o.total && o.total > 0 ? o.total : (orderTotal + (o.serviceCharge || 0));
+    // Apply discounted total if set
+    if (o.discountedTotal && o.discountedTotal > 0) displayTotal = o.discountedTotal;
+    var scLine = (o.serviceCharge && o.serviceCharge > 0)
       ? ' <span style="font-size:.7rem;font-weight:500;color:var(--timber)">(incl. ₱' + o.serviceCharge.toLocaleString() + ' svc)</span>' : '';
     html += '<div class="oc-total">₱' + displayTotal.toLocaleString() + scLine + '</div>';
 
@@ -2773,7 +2773,7 @@ function eoAddItem(code) {
   if (existing) {
     existing.qty += 1;
   } else {
-    eoItems.push({ code: m.code, name: m.name, size: '', sugar: '', qty: 1, price: m.price || 0, notes: '' });
+    eoItems.push({ code: m.code, name: m.name, size: '', sugar: '', qty: 1, price: parseFloat(m.price) || 0, notes: '' });
   }
   eoRenderBody();
 }
@@ -3577,7 +3577,7 @@ function spAddItem(code) {
   var item = spMenuItems.find(function(it){ return it.code === code; });
   if (!item) return;
   spAddingItem = { code:item.code, name:item.name, hasSizes:item.hasSizes, hasSugar:item.hasSugar,
-    price:item.price, priceShort:item.priceShort, priceMedium:item.priceMedium, priceTall:item.priceTall,
+    price:parseFloat(item.price)||0, priceShort:parseFloat(item.priceShort)||0, priceMedium:parseFloat(item.priceMedium)||0, priceTall:parseFloat(item.priceTall)||0,
     size:'', sugarLevel:'', qty:1 };
   // Redirect po-popup callbacks to sp handlers
   _spPopupMode = true;
