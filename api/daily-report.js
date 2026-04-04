@@ -1,6 +1,6 @@
 // api/daily-report.js — Daily Sales Report (email to owner)
 // Called by Vercel cron daily at 11 PM PHT (15:00 UTC)
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 // Also callable manually: POST { action:'sendDailyReport', secret:'...' }
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || 'https://hnynvclpvfxzlfjphefj.supabase.co');
@@ -125,6 +125,23 @@ async function buildReport() {
     hourly[label].revenue += getAmt(o);
   });
   const peakHour = Object.entries(hourly).sort((a,b) => b[1].count - a[1].count)[0];
+
+  // ── Attach item text to each order for xlsx ──────────────────────────
+  if ((r.orders||orders).length > 0) {
+    const allIds = orders.map(o=>o.order_id);
+    const itemsR2 = await supaFetch(
+      `dine_in_order_items?order_id=in.(${allIds.map(id=>`"${id}"`).join(',')})&select=order_id,item_name,qty,size_choice,sugar_choice`
+    );
+    if (itemsR2.ok && itemsR2.data) {
+      const itemsByOrder = {};
+      itemsR2.data.forEach(it => {
+        if (!itemsByOrder[it.order_id]) itemsByOrder[it.order_id] = [];
+        const opts = [it.size_choice, it.sugar_choice].filter(Boolean).join(' | ');
+        itemsByOrder[it.order_id].push(`${it.item_name} x${it.qty}${opts?' ('+opts+')':''}`);
+      });
+      orders.forEach(o => { o.items_text = (itemsByOrder[o.order_id]||[]).join(' | '); });
+    }
+  }
 
   return {
     dateLabel, startISO, endISO, businessName, businessAddress,
@@ -272,110 +289,303 @@ function buildEmailHTML(r) {
 </body></html>`;
 }
 
-// ── Build Excel attachment ───────────────────────────────────────────────────
-function buildXlsx(r) {
-  const fmt = n => parseFloat(n || 0).toFixed(2);
-  const phtLabel = iso => {
+// ── Build Excel attachment (fully formatted, same layout as manual report) ───
+async function buildXlsx(r) {
+  const phtTime = iso => {
     try {
       const d = new Date(new Date(iso).getTime() + 8*3600000);
-      return d.toISOString().slice(11,16); // HH:MM
+      const h = d.getUTCHours(), m = String(d.getUTCMinutes()).padStart(2,'0');
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      return `${String(h%12||12).padStart(2,'0')}:${m} ${ampm}`;
     } catch(_) { return ''; }
   };
 
-  const completed = (r.orders || []).filter(o => o.status === 'COMPLETED');
-  const cancelled = (r.orders || []).filter(o => o.status === 'CANCELLED');
+  const completed = (r.orders||[]).filter(o => o.status==='COMPLETED');
+  const cancelled = (r.orders||[]).filter(o => o.status==='CANCELLED');
+  const getAmt = o => parseFloat(o.discounted_total||o.total||0);
 
-  const wb = XLSX.utils.book_new();
+  const cashAmt  = completed.filter(o=>o.payment_method==='CASH').reduce((s,o)=>s+getAmt(o),0);
+  const gcashAmt = completed.filter(o=>o.payment_method==='GCASH').reduce((s,o)=>s+getAmt(o),0);
+  const cardAmt  = completed.filter(o=>o.payment_method==='CARD').reduce((s,o)=>s+getAmt(o),0);
+  const cashCnt  = completed.filter(o=>o.payment_method==='CASH').length;
+  const gcashCnt = completed.filter(o=>o.payment_method==='GCASH').length;
+  const cardCnt  = completed.filter(o=>o.payment_method==='CARD').length;
+  const totalSales    = parseFloat(r.totalSales||0);
+  const totalSubtotal = completed.reduce((s,o)=>s+parseFloat(o.subtotal||0),0);
+  const totalSvc      = completed.reduce((s,o)=>s+parseFloat(o.service_charge||0),0);
+  const totalDiscount = parseFloat(r.totalDiscount||0);
 
-  // ── Sheet 1: Summary ───────────────────────────────────────────────────
-  const cashAmt  = completed.filter(o=>o.payment_method==='CASH').reduce((s,o)=>s+parseFloat(o.discounted_total||o.total||0),0);
-  const gcashAmt = completed.filter(o=>o.payment_method==='GCASH').reduce((s,o)=>s+parseFloat(o.discounted_total||o.total||0),0);
-  const cardAmt  = completed.filter(o=>o.payment_method==='CARD').reduce((s,o)=>s+parseFloat(o.discounted_total||o.total||0),0);
+  // ── Colors ─────────────────────────────────────────────────────────────
+  const FOREST  = '314C47';
+  const FOREST2 = '3D5E57';
+  const GOLD    = 'B8973A';
+  const CREAM   = 'FAF8F4';
+  const WHITE   = 'FFFFFFFF';
+  const GREEN_F = 'E8F5E9';
+  const RED_F   = 'FDECEA';
+  const GREY    = 'F5F5F5';
 
-  const summaryData = [
-    ['YANI GARDEN CAFE — Daily Sales Report', '', ''],
-    [r.dateLabel, '', ''],
-    ['Business Day: 6:00 AM → 6:00 AM PHT', '', ''],
-    ['', '', ''],
-    ['METRIC', 'VALUE', ''],
-    ['Total Sales', parseFloat(r.totalSales||0), ''],
-    ['Completed Orders', r.completedOrders || 0, ''],
-    ['Cancelled Orders', r.cancelledOrders || 0, ''],
-    ['Average Order Value', parseFloat(r.avgOrder||0), ''],
-    ['Total Discounts', parseFloat(r.totalDiscount||0), ''],
-    ['', '', ''],
-    ['PAYMENT BREAKDOWN', 'AMOUNT', 'ORDERS'],
-    ['Cash', cashAmt, completed.filter(o=>o.payment_method==='CASH').length],
-    ['GCash / QR', gcashAmt, completed.filter(o=>o.payment_method==='GCASH').length],
-    ['Card', cardAmt, completed.filter(o=>o.payment_method==='CARD').length],
-    ['TOTAL', parseFloat(r.totalSales||0), r.completedOrders||0],
-    ['', '', ''],
-    ['TOP ITEMS', 'QTY', 'REVENUE'],
-    ...(r.topItems||[]).map(it => [it.name, it.qty, parseFloat(it.revenue||0)]),
+  const hdrFont  = { name:'Arial', size:10, bold:true,  color:{argb:'FFFFFFFF'} };
+  const bodyFont = { name:'Arial', size:9,  bold:false, color:{argb:'FF1E3530'} };
+  const boldFont = { name:'Arial', size:9,  bold:true,  color:{argb:'FF1E3530'} };
+  const whtFont  = { name:'Arial', size:10, bold:true,  color:{argb:'FFFFFFFF'} };
+  const thinBorder = {
+    top:{style:'thin',color:{argb:'FFCCCCCC'}}, bottom:{style:'thin',color:{argb:'FFCCCCCC'}},
+    left:{style:'thin',color:{argb:'FFCCCCCC'}}, right:{style:'thin',color:{argb:'FFCCCCCC'}},
+  };
+  const fill = hex => ({ type:'pattern', pattern:'solid', fgColor:{argb:'FF'+hex} });
+  const numFmt = '#,##0.00';
+  const center = { horizontal:'center', vertical:'middle' };
+  const right  = { horizontal:'right',  vertical:'middle' };
+  const left   = { horizontal:'left',   vertical:'middle', indent:1 };
+
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'YANI POS';
+
+  // ════════════════════════════════════════════════════════════════════════
+  // SHEET 1 — SUMMARY
+  // ════════════════════════════════════════════════════════════════════════
+  const ws1 = wb.addWorksheet('Summary');
+  ws1.views = [{ showGridLines: false }];
+  ws1.columns = [
+    {width:24},{width:18},{width:18},{width:30},{width:18},{width:18}
   ];
-  const ws1 = XLSX.utils.aoa_to_sheet(summaryData);
-  ws1['!cols'] = [{wch:40},{wch:16},{wch:12}];
-  XLSX.utils.book_append_sheet(wb, ws1, 'Summary');
 
-  // ── Sheet 2: All Orders ────────────────────────────────────────────────
-  const orderHeaders = ['Order ID','Time','Customer','Table','Type','Status','Payment','Subtotal','Svc Charge','Discount','Total'];
-  const orderRows = (r.orders||[]).map(o => [
-    o.order_id,
-    phtLabel(o.created_at),
-    o.customer_name || 'Guest',
-    o.table_no || '',
-    o.order_type || '',
-    o.status,
-    o.payment_method || '—',
-    parseFloat(o.subtotal||0),
-    parseFloat(o.service_charge||0),
-    parseFloat(o.discount_amount||0),
-    parseFloat(o.discounted_total||o.total||0),
-  ]);
-  const ws2 = XLSX.utils.aoa_to_sheet([orderHeaders, ...orderRows]);
-  ws2['!cols'] = [{wch:14},{wch:8},{wch:20},{wch:7},{wch:10},{wch:13},{wch:10},{wch:12},{wch:12},{wch:12},{wch:12}];
-  XLSX.utils.book_append_sheet(wb, ws2, 'All Orders');
+  // Title
+  ws1.mergeCells('A1:F1');
+  const t1 = ws1.getCell('A1');
+  t1.value = 'YANI GARDEN CAFE';
+  t1.font = { name:'Arial', size:18, bold:true, color:{argb:'FFFFFFFF'} };
+  t1.fill = fill(FOREST); t1.alignment = center;
+  ws1.getRow(1).height = 36;
 
-  // ── Sheet 3: Completed Orders ──────────────────────────────────────────
-  const compHeaders = ['Order ID','Time','Customer','Table','Payment','Subtotal','Svc Charge','Discount','Total'];
-  const compRows = completed.map(o => [
-    o.order_id,
-    phtLabel(o.created_at),
-    o.customer_name || 'Guest',
-    o.table_no || '',
-    o.payment_method || '',
-    parseFloat(o.subtotal||0),
-    parseFloat(o.service_charge||0),
-    parseFloat(o.discount_amount||0),
-    parseFloat(o.discounted_total||o.total||0),
-  ]);
+  ws1.mergeCells('A2:F2');
+  const t2 = ws1.getCell('A2');
+  t2.value = `Daily Sales Report — ${r.dateLabel}  (Business Day: 6:00 AM → 6:00 AM PHT)`;
+  t2.font = { name:'Arial', size:11, color:{argb:'FFFFFFFF'} };
+  t2.fill = fill(FOREST2); t2.alignment = center;
+  ws1.getRow(2).height = 22;
+
+  ws1.getRow(3).height = 8;
+
+  // Stat cards
+  const statLabels = ['TOTAL SALES','COMPLETED ORDERS','CANCELLED ORDERS','CASH SALES','GCASH SALES','CARD SALES'];
+  const statValues = [totalSales, completed.length, cancelled.length, cashAmt, gcashAmt, cardAmt];
+  const statSubs   = ['','','', cashCnt+' orders', gcashCnt+' orders', cardCnt+' orders'];
+  const cols = ['A','B','C','D','E','F'];
+  ws1.getRow(4).height = 14;
+  ws1.getRow(5).height = 30;
+  ws1.getRow(6).height = 18;
+  cols.forEach((col,i) => {
+    const lc = ws1.getCell(`${col}4`);
+    lc.value = statLabels[i]; lc.font = {name:'Arial',size:8,bold:true,color:{argb:'FF888888'}};
+    lc.fill = fill(GREY.replace('#','')||'F5F5F5'); lc.alignment = center;
+
+    const vc = ws1.getCell(`${col}5`);
+    vc.value = (i===0||i>=3) ? totalSales===0&&i===0 ? '₱0.00' : statValues[i] : statValues[i];
+    if (i===0||i>=3) { vc.numFmt = '"₱"#,##0.00'; }
+    vc.font = { name:'Arial', size:14, bold:true, color:{argb: i===0?'FF'+FOREST:'FF1E3530'} };
+    vc.fill = fill('FFFFFF'); vc.alignment = center;
+
+    const sc = ws1.getCell(`${col}6`);
+    sc.value = statSubs[i]; sc.font = {name:'Arial',size:8,color:{argb:'FF666666'}};
+    sc.fill = fill('FFFFFF'); sc.alignment = center;
+  });
+
+  ws1.getRow(7).height = 8;
+  ws1.getRow(8).height = 20;
+
+  // Payment section header
+  ws1.mergeCells('A8:C8');
+  const ph = ws1.getCell('A8');
+  ph.value='PAYMENT BREAKDOWN'; ph.font=hdrFont; ph.fill=fill(GOLD); ph.alignment=left;
+
+  ws1.mergeCells('D8:F8');
+  const oh = ws1.getCell('D8');
+  oh.value='ORDER TOTALS BREAKDOWN'; oh.font=hdrFont; oh.fill=fill(GOLD); oh.alignment=left;
+
+  const payRows = [
+    ['Cash', cashCnt, cashAmt],
+    ['GCash / QR', gcashCnt, gcashAmt],
+    ['Card', cardCnt, cardAmt],
+    ['TOTAL', completed.length, totalSales],
+  ];
+  const totRows = [
+    ['Subtotal (before svc charge)', totalSubtotal],
+    ['Service Charge (10%)', totalSvc],
+    ['Discounts Applied', -totalDiscount],
+    ['GRAND TOTAL', totalSales],
+  ];
+  payRows.forEach(([lbl,cnt,amt],i) => {
+    const row = 9+i; ws1.getRow(row).height = 18;
+    const isT = lbl==='TOTAL';
+    const f = fill(isT ? FOREST : 'EEF0EB');
+    const fn = isT ? whtFont : boldFont;
+    ['A','B','C'].forEach(c => ws1.getCell(`${c}${row}`).fill=f);
+    const la=ws1.getCell(`A${row}`); la.value=lbl; la.font=fn; la.alignment=left;
+    const ca=ws1.getCell(`B${row}`); ca.value=cnt; ca.font=fn; ca.alignment=center;
+    const aa=ws1.getCell(`C${row}`); aa.value=amt; aa.numFmt='"₱"#,##0.00'; aa.font=fn; aa.alignment=right;
+  });
+  totRows.forEach(([lbl,amt],i) => {
+    const row = 9+i; const isT=lbl==='GRAND TOTAL';
+    const f=fill(isT?FOREST:'EEF0EB'); const fn=isT?whtFont:boldFont;
+    ['D','E','F'].forEach(c=>ws1.getCell(`${c}${row}`).fill=f);
+    ws1.mergeCells(`E${row}:F${row}`);
+    const ld=ws1.getCell(`D${row}`); ld.value=lbl; ld.font=fn; ld.alignment=left;
+    const ad=ws1.getCell(`E${row}`); ad.value=amt; ad.numFmt='"₱"#,##0.00'; ad.font=fn; ad.alignment=right;
+  });
+
+  // Top items
+  ws1.getRow(14).height = 8;
+  ws1.getRow(15).height = 20;
+  ws1.mergeCells('A15:F15');
+  const ti = ws1.getCell('A15');
+  ti.value='TOP 5 ITEMS'; ti.font=hdrFont; ti.fill=fill(FOREST2); ti.alignment=left;
+  ['ITEM','QTY','REVENUE'].forEach((h,i)=>{
+    const c=ws1.getCell(`${['A','B','C'][i]}16`);
+    c.value=h; c.font=hdrFont; c.fill=fill(GOLD); c.alignment=center;
+    ws1.getRow(16).height=18;
+  });
+  (r.topItems||[]).forEach((it,i)=>{
+    const row=17+i; ws1.getRow(row).height=16;
+    const bg = fill(i%2===0?'EEF0EB':'FFFFFF');
+    const ia=ws1.getCell(`A${row}`); ia.value=it.name; ia.font=bodyFont; ia.fill=bg; ia.alignment={horizontal:'left',indent:1};
+    const iq=ws1.getCell(`B${row}`); iq.value=it.qty; iq.font=bodyFont; iq.fill=bg; iq.alignment=center;
+    const ir=ws1.getCell(`C${row}`); ir.value=parseFloat(it.revenue||0); ir.numFmt='"₱"#,##0.00'; ir.font=bodyFont; ir.fill=bg; ir.alignment=right;
+  });
+
+  // ════════════════════════════════════════════════════════════════════════
+  // SHEET 2 — ALL ORDERS
+  // ════════════════════════════════════════════════════════════════════════
+  const ws2 = wb.addWorksheet('All Orders');
+  ws2.views=[{showGridLines:false}];
+  ws2.columns=[
+    {width:14},{width:10},{width:20},{width:7},{width:12},{width:13},{width:10},{width:12},{width:12},{width:12},{width:12}
+  ];
+
+  ws2.mergeCells('A1:K1');
+  const w2t = ws2.getCell('A1');
+  w2t.value=`YANI GARDEN CAFE — All Orders | ${r.dateLabel}`;
+  w2t.font={name:'Arial',size:13,bold:true,color:{argb:'FFFFFFFF'}};
+  w2t.fill=fill(FOREST); w2t.alignment=center; ws2.getRow(1).height=28;
+
+  const oh2=['Order ID','Time','Customer','Table','Type','Status','Payment','Subtotal','Svc Charge','Discount','Total'];
+  const hw2=ws2.addRow(oh2); ws2.getRow(2).height=20;
+  hw2.eachCell(c=>{c.font=hdrFont;c.fill=fill(FOREST2);c.alignment=center;c.border=thinBorder;});
+
+  (r.orders||[]).forEach(o=>{
+    const isDone=o.status==='COMPLETED', isCanc=o.status==='CANCELLED';
+    const rf=fill(isDone?'E8F5E9':isCanc?'FDECEA':'FFFFFF');
+    const fn={name:'Arial',size:9,bold:isDone,color:{argb:isDone?'FF1B5E20':isCanc?'FFB71C1C':'FF1E3530'}};
+    const row=ws2.addRow([
+      o.order_id, phtTime(o.created_at), o.customer_name||'Guest',
+      o.table_no||'', o.order_type||'', o.status,
+      o.payment_method||'—',
+      parseFloat(o.subtotal||0), parseFloat(o.service_charge||0),
+      parseFloat(o.discount_amount||0), getAmt(o),
+    ]);
+    row.height=16;
+    row.eachCell((c,ci)=>{
+      c.font=fn; c.fill=rf; c.border=thinBorder;
+      if(ci>=8){c.numFmt=numFmt;c.alignment=right;}
+      else if(ci===4||ci===6||ci===7){c.alignment=center;}
+      else{c.alignment={horizontal:'left',indent:1};}
+    });
+  });
+
   // Totals row
-  compRows.push(['TOTAL','','','','',
-    completed.reduce((s,o)=>s+parseFloat(o.subtotal||0),0),
-    completed.reduce((s,o)=>s+parseFloat(o.service_charge||0),0),
-    completed.reduce((s,o)=>s+parseFloat(o.discount_amount||0),0),
-    parseFloat(r.totalSales||0),
-  ]);
-  const ws3 = XLSX.utils.aoa_to_sheet([compHeaders, ...compRows]);
-  ws3['!cols'] = [{wch:14},{wch:8},{wch:20},{wch:7},{wch:10},{wch:12},{wch:12},{wch:12},{wch:12}];
-  XLSX.utils.book_append_sheet(wb, ws3, 'Completed Orders');
+  const tr2=ws2.addRow(['COMPLETED TOTALS','','','','','','',totalSubtotal,totalSvc,totalDiscount,totalSales]);
+  tr2.height=20;
+  tr2.eachCell((c,ci)=>{
+    c.font=whtFont; c.fill=fill(FOREST);
+    if(ci>=8){c.numFmt=numFmt;c.alignment=right;}
+    else{c.alignment={horizontal:'right',indent:1};}
+  });
+  ws2.mergeCells(`A${tr2.number}:G${tr2.number}`);
 
-  // ── Sheet 4: Cancelled Orders ──────────────────────────────────────────
-  const cancHeaders = ['Order ID','Time','Customer','Table','Order Total'];
-  const cancRows = cancelled.map(o => [
-    o.order_id,
-    phtLabel(o.created_at),
-    o.customer_name || 'Guest',
-    o.table_no || '',
-    parseFloat(o.total||0),
-  ]);
-  const ws4 = XLSX.utils.aoa_to_sheet([cancHeaders, ...cancRows]);
-  ws4['!cols'] = [{wch:14},{wch:8},{wch:20},{wch:7},{wch:14}];
-  XLSX.utils.book_append_sheet(wb, ws4, 'Cancelled Orders');
+  // ════════════════════════════════════════════════════════════════════════
+  // SHEET 3 — COMPLETED ORDERS
+  // ════════════════════════════════════════════════════════════════════════
+  const ws3=wb.addWorksheet('Completed Orders');
+  ws3.views=[{showGridLines:false}];
+  ws3.columns=[
+    {width:14},{width:10},{width:22},{width:7},{width:10},{width:12},{width:12},{width:12},{width:12},{width:12},{width:55}
+  ];
 
-  // Return as base64 string for email attachment
-  const buf = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
-  return buf;
+  ws3.mergeCells('A1:K1');
+  const w3t=ws3.getCell('A1');
+  w3t.value=`YANI GARDEN CAFE — Completed Orders | ${r.dateLabel}`;
+  w3t.font={name:'Arial',size:13,bold:true,color:{argb:'FFFFFFFF'}};
+  w3t.fill=fill(FOREST); w3t.alignment=center; ws3.getRow(1).height=28;
+
+  const oh3=['Order ID','Time','Customer','Table','Payment','Subtotal','Svc Charge','Discount','Total','Disc. Type','Items'];
+  const hw3=ws3.addRow(oh3); ws3.getRow(2).height=20;
+  hw3.eachCell(c=>{c.font=hdrFont;c.fill=fill(FOREST2);c.alignment=center;c.border=thinBorder;});
+
+  completed.forEach((o,i)=>{
+    const rf=fill(i%2===0?'E8F5E9':'FFFFFF');
+    const row=ws3.addRow([
+      o.order_id, phtTime(o.created_at), o.customer_name||'Guest', o.table_no||'',
+      o.payment_method||'', parseFloat(o.subtotal||0), parseFloat(o.service_charge||0),
+      parseFloat(o.discount_amount||0)||'', getAmt(o),
+      o.discount_type||'', o.items_text||'',
+    ]);
+    row.height=28;
+    row.eachCell((c,ci)=>{
+      c.font=bodyFont; c.fill=rf; c.border=thinBorder;
+      if(ci>=6&&ci<=9){c.numFmt=numFmt;c.alignment=right;}
+      else if(ci===11){c.alignment={horizontal:'left',wrapText:true,indent:1};}
+      else if(ci===4||ci===5||ci===10){c.alignment=center;}
+      else{c.alignment={horizontal:'left',indent:1};}
+      if(ci===8&&parseFloat(o.discount_amount||0)>0){c.font={...bodyFont,color:{argb:'FFB71C1C'}};}
+    });
+  });
+
+  const tr3=ws3.addRow([`TOTAL  (${completed.length} orders)`,'','','','',totalSubtotal,totalSvc,totalDiscount,totalSales,'','']);
+  tr3.height=22;
+  tr3.eachCell((c,ci)=>{
+    c.font=whtFont; c.fill=fill(FOREST);
+    if(ci>=6&&ci<=9){c.numFmt=numFmt;c.alignment=right;}
+    else{c.alignment={horizontal:'right',indent:1};}
+  });
+  ws3.mergeCells(`A${tr3.number}:E${tr3.number}`);
+
+  // ════════════════════════════════════════════════════════════════════════
+  // SHEET 4 — CANCELLED ORDERS
+  // ════════════════════════════════════════════════════════════════════════
+  const ws4=wb.addWorksheet('Cancelled Orders');
+  ws4.views=[{showGridLines:false}];
+  ws4.columns=[{width:14},{width:10},{width:22},{width:7},{width:14},{width:55}];
+
+  ws4.mergeCells('A1:F1');
+  const w4t=ws4.getCell('A1');
+  w4t.value=`YANI GARDEN CAFE — Cancelled Orders | ${r.dateLabel}`;
+  w4t.font={name:'Arial',size:13,bold:true,color:{argb:'FFFFFFFF'}};
+  w4t.fill=fill('C0392B'); w4t.alignment=center; ws4.getRow(1).height=28;
+
+  const oh4=['Order ID','Time','Customer','Table','Order Total','Items'];
+  const hw4=ws4.addRow(oh4); ws4.getRow(2).height=20;
+  hw4.eachCell(c=>{c.font=hdrFont;c.fill=fill('C0392B');c.alignment=center;c.border=thinBorder;});
+
+  cancelled.forEach(o=>{
+    const row=ws4.addRow([
+      o.order_id, phtTime(o.created_at), o.customer_name||'Guest',
+      o.table_no||'', parseFloat(o.total||0), o.items_text||'',
+    ]);
+    row.height=28;
+    row.eachCell((c,ci)=>{
+      c.font={name:'Arial',size:9,color:{argb:'FFB71C1C'}};
+      c.fill=fill('FDECEA'); c.border=thinBorder;
+      if(ci===5){c.numFmt=numFmt;c.alignment=right;}
+      else if(ci===6){c.alignment={horizontal:'left',wrapText:true,indent:1};}
+      else if(ci===4){c.alignment=center;}
+      else{c.alignment={horizontal:'left',indent:1};}
+    });
+  });
+
+  // ── Write to buffer → base64 ────────────────────────────────────────────
+  const buf = await wb.xlsx.writeBuffer();
+  return Buffer.from(buf).toString('base64');
 }
 
 // ── Send via Resend ───────────────────────────────────────────────────────
@@ -454,7 +664,7 @@ export default async function handler(req, res) {
     const report  = await buildReport();
     const html    = buildEmailHTML(report);
     let xlsxBase64 = null;
-    try { xlsxBase64 = buildXlsx(report); } catch(xlsxErr) { console.error('xlsx gen failed:', xlsxErr.message); }
+    try { xlsxBase64 = await buildXlsx(report); } catch(xlsxErr) { console.error('xlsx gen failed:', xlsxErr.message); }
     const emailId = await sendEmail(html, report.dateLabel, report.businessName || 'My Cafe', xlsxBase64);
 
     return res.status(200).json({
