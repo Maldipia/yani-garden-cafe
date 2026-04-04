@@ -8,6 +8,7 @@
     "bcryptjs": "^3.0.3",
     "express": "^5.2.1",
     "node-fetch": "^3.3.2",
-    "jsonwebtoken": "^9.0.2"
+    "jsonwebtoken": "^9.0.2",
+    "xlsx": "^0.18.5"
   }
 }
