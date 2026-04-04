@@ -4,8 +4,8 @@
 // Manual trigger: POST { secret, type: 'weekly'|'monthly' }
 import ExcelJS from 'exceljs';
 
-const SUPABASE_URL  = process.env.SUPABASE_URL;
-const SUPABASE_KEY  = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_ANON_KEY;
+const SUPABASE_URL  = process.env.SUPABASE_URL || 'https://hnynvclpvfxzlfjphefj.supabase.co';
+const SUPABASE_KEY  = (() => { const k = process.env.SUPABASE_SECRET_KEY; return k && k.startsWith('ey') ? k : process.env.SUPABASE_ANON_KEY || k; })();
 const RESEND_KEY    = process.env.RESEND_API_KEY;
 const REPORT_EMAIL  = process.env.REPORT_EMAIL  || 'tygfsb@gmail.com';
 const FROM_EMAIL    = process.env.REPORT_FROM   || 'noreply@yanigardencafe.com';

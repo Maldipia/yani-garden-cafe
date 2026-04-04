@@ -1976,15 +1976,19 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       if (!pin || pin.length < 4) return res.status(400).json({ ok: false, error: 'PIN is required' });
 
       // ── IP-based brute-force protection ──────────────────────────────
-      // Block IP after 10 failed attempts in 5 minutes (300 seconds)
+      // 10 wrong PINs per IP in 5 minutes → 429 blocked
       const loginIp = (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim();
-      const loginKey = `pin_fail:${loginIp}`;
+      const loginKey = `pin_brute:${loginIp}`;
       try {
-        const rlR = await supaFetch(`rpc/upsert_rate_limit`, { p_key: loginKey, p_window: 300, p_limit: 10 }, 'POST');
-        if (rlR.ok && rlR.data === false) {
-          return res.status(429).json({ ok: false, error: 'Too many failed attempts. Try again in 5 minutes.' });
+        const pinRlR = await fetch(
+          `${SUPABASE_URL}/rest/v1/rpc/upsert_rate_limit`,
+          { method:'POST', headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json'},
+            body: JSON.stringify({ p_key: loginKey, p_window: 300, p_limit: 10 }) }
+        );
+        if (pinRlR.ok && await pinRlR.json() === false) {
+          return res.status(429).json({ ok:false, error:'Too many failed attempts. Try again in 5 minutes.' });
         }
-      } catch(_) { /* rate limit check non-fatal */ }
+      } catch(rlErr) { console.error('PIN rate limit:', rlErr.message); /* fail open */ }
 
       // Fetch all active staff — we need to bcrypt.compare against each hash
       // (bcrypt cannot reverse-lookup; we must compare, not query by hash)
@@ -2004,12 +2008,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       }
 
       if (!matchedUser) {
-        // Track failed PIN attempt by IP via api_rate_limits table
-        // Key: pin_fail:{ip} — 10 attempts per 5 minutes → locked
-        const clientIp = (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim();
-        try {
-          await supaFetch(`rpc/upsert_rate_limit`, { p_key: `pin_fail:${clientIp}`, p_window: 300, p_limit: 9999 }, 'POST');
-        } catch(_) {}
+        // Rate already tracked per IP above
         return res.status(200).json({ ok: false, error: 'Invalid PIN' });
       }
 
@@ -2020,8 +2019,10 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
 
       // PIN correct — reset rate limit + update last_login
       try {
-        // Reset IP rate limit on success (delete the key by calling with very high limit)
-        await supaFetch(`rpc/upsert_rate_limit`, { p_key: loginKey, p_window: 1, p_limit: 9999 }, 'POST');
+        // Reset PIN brute-force counter on success
+        await fetch(`${SUPABASE_URL}/rest/v1/rpc/upsert_rate_limit`,
+          { method:'POST', headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json'},
+            body: JSON.stringify({ p_key: loginKey, p_window: 1, p_limit: 9999 }) });
       } catch(_) {}
       await supa('PATCH', 'staff_users', {
         last_login:      new Date().toISOString(),
