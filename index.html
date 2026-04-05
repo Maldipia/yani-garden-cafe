@@ -1351,15 +1351,23 @@ async function api(action, data) {
     if (!body.tableNo) body.tableNo = state.tableNo || '1';
     if (!body.token) body.token = state.token || TABLE_TOKENS['1'];
 
+    var controller = new AbortController();
+    var timeoutId = setTimeout(function() { controller.abort(); }, 30000);
+
     var resp = await fetch(API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
     return await resp.json();
   } catch(e) {
-    console.error('API error:', e);
-    return { ok: false, error: e.message || 'Network error' };
+    console.error('API error:', action, e);
+    if (e.name === 'AbortError') {
+      return { ok: false, error: 'Request timed out. If placing an order, check with staff — it may have gone through.', timeout: true };
+    }
+    return { ok: false, error: e.message || 'Network error — please check your connection and try again.' };
   }
 }
 
@@ -1919,6 +1927,9 @@ async function placeOrder() {
     closePage('checkout');
     openPage('receipt');
     renderReceiptPage();
+  } else if (result.timeout) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Place Order — ' + peso(total); }
+    toast('⏱ Taking too long — your order may have gone through. Please show this to staff and they will check.', 6000);
   } else {
     toast('Order failed: ' + (result.error || 'Please try again'));
     if (btn) { btn.disabled = false; btn.textContent = 'Place Order — ' + peso(total); }
@@ -2400,6 +2411,11 @@ async function submitPaymentProof() {
         items:        pending.items,
         paymentMethod:'GCASH'
       });
+      if (orderResult.timeout) {
+        toast('⏱ Taking too long — please show this to staff. They will check if order went through.', 6000);
+        btn.disabled = false; btn.textContent = 'Upload Screenshot';
+        return;
+      }
       if (!orderResult.ok) {
         toast('Order failed: ' + (orderResult.error || 'Please try again'));
         btn.disabled=false; btn.textContent='Confirm & Place Order'; btn.style.opacity='1';
