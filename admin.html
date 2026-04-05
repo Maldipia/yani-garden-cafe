@@ -1334,6 +1334,9 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 <!-- ══ CASH DRAWER VIEW ══ -->
 <div id="cashView" style="display:none;padding:0 0 100px"></div>
 
+<!-- ══ MENU COSTING VIEW (OWNER only) ══ -->
+<div id="costingView" style="display:none;padding:0 0 100px"></div>
+
 <div id="settingsView" style="display:none;padding:16px 16px 100px;max-width:520px;margin:0 auto">
   <div style="font-weight:800;font-size:1.05rem;color:var(--forest-deep);margin-bottom:16px">⚙️ Cafe Settings</div>
 
@@ -2158,6 +2161,7 @@ function renderFilters() {
     tabs.push({ key:'STAFF', label:'👥 Staff', count:'' });
     tabs.push({ key:'SHIFT', label:'📋 Shift', count:'' });
     tabs.push({ key:'LOGS', label:'📜 Logs', count:'' });
+    tabs.push({ key:'COSTING', label:'🧮 Costing', count:'' });
   }
 
   // Only rebuild DOM if tab counts changed — prevents flicker on every 5s poll
@@ -2214,6 +2218,9 @@ function setFilter(f) {
   var cashView = document.getElementById('cashView');
   if (cashView) cashView.style.display = 'none';
 
+  var costingView = document.getElementById('costingView');
+  if (costingView) costingView.style.display = 'none';
+
   if (f === 'PAYMENTS') {
     paymentsView.style.display = 'block';
     loadPayments();
@@ -2262,6 +2269,10 @@ function setFilter(f) {
     var lv = document.getElementById('logsView');
     if (lv) lv.style.display = 'block';
     loadAuditLogs();
+  } else if (f === 'COSTING') {
+    var cv2 = document.getElementById('costingView');
+    if (cv2) cv2.style.display = 'block';
+    loadCostingView();
   } else {
     orderGrid.style.display = '';
     renderOrders();
@@ -7045,6 +7056,563 @@ async function submitDiscount() {
     showToast('❌ Network error');
     btn.disabled = false;
     btn.textContent = '✅ Apply Discount';
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// MENU COSTING VIEW (OWNER only)
+// ══════════════════════════════════════════════════════════
+var _costingTab = 'dashboard';
+var _costingIngredients = [];
+var _costingRecipes = [];
+var _activeRecipeId = null;
+
+async function loadCostingView() {
+  var view = document.getElementById('costingView');
+  if (!view) return;
+  view.innerHTML = '<div style="padding:24px;text-align:center;color:var(--timber)">Loading costing data...</div>';
+  try {
+    var sb = _supabaseClient;
+    var [ingRes, recRes, riRes] = await Promise.all([
+      sb.from('costing_ingredients').select('*').order('category').order('name'),
+      sb.from('costing_recipes').select('*').order('category').order('name'),
+      sb.from('costing_recipe_ingredients').select('*')
+    ]);
+    _costingIngredients = ingRes.data || [];
+    _costingRecipes = (recRes.data || []).map(function(r) {
+      r.ingredients = (riRes.data || []).filter(function(ri) { return ri.recipe_id === r.id; });
+      return r;
+    });
+  } catch(e) {
+    view.innerHTML = '<div style="padding:24px;color:var(--terra)">Error loading costing data: ' + e.message + '</div>';
+    return;
+  }
+  renderCostingShell();
+}
+
+function recipeTotalCost(r) {
+  return (r.ingredients || []).reduce(function(s, ri) {
+    var ing = _costingIngredients.find(function(i) { return i.id === ri.ingredient_id; });
+    return s + (ing ? Number(ing.cost_per_unit) * Number(ri.qty) : 0);
+  }, 0);
+}
+
+function fcPct(cost, price) {
+  if (!price || price === 0) return null;
+  return cost / price * 100;
+}
+
+function fcPill(pct) {
+  if (pct === null) return '<span style="font-size:.72rem;color:var(--timber)">—</span>';
+  var color = pct < 28 ? '#15803d' : pct < 35 ? '#0f766e' : pct < 40 ? '#b45309' : '#dc2626';
+  var bg    = pct < 28 ? '#dcfce7' : pct < 35 ? '#ccfbf1' : pct < 40 ? '#fef3c7' : '#fee2e2';
+  return '<span style="background:' + bg + ';color:' + color + ';padding:2px 8px;border-radius:20px;font-size:.7rem;font-weight:700;font-family:var(--font-body)">' + pct.toFixed(1) + '%</span>';
+}
+
+function fcStatus(pct) {
+  if (pct === null) return '—';
+  if (pct < 28) return '✅ Excellent';
+  if (pct < 35) return '🟢 Good';
+  if (pct < 40) return '🟡 Review';
+  return '🔴 Critical';
+}
+
+function phpFmt(n) {
+  return '₱' + Number(n).toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+function renderCostingShell() {
+  var view = document.getElementById('costingView');
+  var costed = _costingRecipes.filter(function(r) { return recipeTotalCost(r) > 0; });
+  var avgFC = costed.length ? costed.reduce(function(s,r){return s+fcPct(recipeTotalCost(r),r.selling_price);},0)/costed.length : null;
+  var critical = costed.filter(function(r){return fcPct(recipeTotalCost(r),r.selling_price)>=40;}).length;
+  var avgProfit = costed.length ? costed.reduce(function(s,r){return s+(r.selling_price-recipeTotalCost(r));},0)/costed.length : null;
+
+  var fcColor = avgFC===null?'var(--timber)':avgFC<28?'#15803d':avgFC<35?'#0f766e':avgFC<40?'#b45309':'#dc2626';
+
+  var tabs = ['dashboard','inventory','recipe','pricing'];
+  var tabLabels = {'dashboard':'📊 Dashboard','inventory':'🥛 Ingredients','recipe':'📋 Recipe Costing','pricing':'💰 Menu Pricing'};
+
+  var html = '<div style="padding:16px 16px 0">';
+  // Header
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">';
+  html += '<div><div style="font-family:var(--font-soul);font-size:1.3rem;font-weight:700;color:var(--forest-deep)">🧮 Menu Costing</div>';
+  html += '<div style="font-size:.72rem;color:var(--timber);margin-top:2px">Food cost analysis • Ingredient costing • Margin tracking</div></div>';
+  html += '</div>';
+  // Metric cards
+  html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">';
+  html += '<div style="background:var(--white);border-radius:var(--r-md);padding:12px 14px;box-shadow:var(--shadow-sm)">';
+  html += '<div style="font-size:.65rem;color:var(--timber);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Menu Items</div>';
+  html += '<div style="font-family:var(--font-soul);font-size:1.5rem;font-weight:700;color:var(--forest)">' + _costingRecipes.length + '</div></div>';
+  html += '<div style="background:var(--white);border-radius:var(--r-md);padding:12px 14px;box-shadow:var(--shadow-sm)">';
+  html += '<div style="font-size:.65rem;color:var(--timber);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Avg Food Cost</div>';
+  html += '<div style="font-family:var(--font-soul);font-size:1.5rem;font-weight:700;color:' + fcColor + '">' + (avgFC !== null ? avgFC.toFixed(1) + '%' : '—') + '</div></div>';
+  html += '<div style="background:var(--white);border-radius:var(--r-md);padding:12px 14px;box-shadow:var(--shadow-sm)">';
+  html += '<div style="font-size:.65rem;color:var(--timber);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Avg Gross Profit</div>';
+  html += '<div style="font-family:var(--font-soul);font-size:1.5rem;font-weight:700;color:var(--forest)">' + (avgProfit !== null ? phpFmt(avgProfit) : '—') + '</div></div>';
+  html += '<div style="background:var(--white);border-radius:var(--r-md);padding:12px 14px;box-shadow:var(--shadow-sm)">';
+  html += '<div style="font-size:.65rem;color:var(--timber);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Critical Items</div>';
+  html += '<div style="font-family:var(--font-soul);font-size:1.5rem;font-weight:700;color:' + (critical > 0 ? '#dc2626' : '#15803d') + '">' + (costed.length ? critical : '—') + '</div></div>';
+  html += '</div>';
+  // Sub-tabs
+  html += '<div style="display:flex;gap:2px;border-bottom:2px solid var(--mist);margin-bottom:0">';
+  tabs.forEach(function(t) {
+    var active = _costingTab === t;
+    html += '<button onclick="setCostingTab(\'' + t + '\')" style="padding:9px 14px;font-size:.75rem;font-weight:700;font-family:var(--font-body);border:none;cursor:pointer;background:transparent;color:' + (active?'var(--forest)':'var(--timber)') + ';border-bottom:2px solid ' + (active?'var(--forest)':'transparent') + ';margin-bottom:-2px;white-space:nowrap">' + tabLabels[t] + '</button>';
+  });
+  html += '</div></div>';
+  // Panel area
+  html += '<div id="costing-panel" style="padding:16px"></div>';
+  view.innerHTML = html;
+  renderCostingPanel();
+}
+
+function setCostingTab(t) {
+  _costingTab = t;
+  _activeRecipeId = null;
+  renderCostingShell();
+}
+
+function renderCostingPanel() {
+  var panel = document.getElementById('costing-panel');
+  if (!panel) return;
+  if (_costingTab === 'dashboard') renderCostingDashboard(panel);
+  else if (_costingTab === 'inventory') renderCostingInventory(panel);
+  else if (_costingTab === 'recipe') renderCostingRecipe(panel);
+  else if (_costingTab === 'pricing') renderCostingPricing(panel);
+}
+
+function costingCard(content) {
+  return '<div style="background:var(--white);border-radius:var(--r-lg);box-shadow:var(--shadow-sm);padding:16px;margin-bottom:14px">' + content + '</div>';
+}
+
+function costingSectionTitle(t) {
+  return '<div style="font-size:.65rem;font-weight:700;color:var(--timber);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">' + t + '</div>';
+}
+
+function renderCostingDashboard(panel) {
+  var costed = _costingRecipes.filter(function(r) { return recipeTotalCost(r) > 0; });
+  if (!costed.length) { panel.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--timber)">No recipes costed yet. Go to Recipe Costing tab to add ingredients.</div>'; return; }
+
+  var sorted = costed.slice().sort(function(a,b) { return fcPct(recipeTotalCost(a),a.selling_price)-fcPct(recipeTotalCost(b),b.selling_price); });
+  var best = sorted.slice(0,5);
+  var worst = sorted.slice(-5).reverse();
+
+  var html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">';
+  // Best margin
+  html += '<div>' + costingCard(costingSectionTitle('Best margin items') + best.map(function(r) {
+    var pct = fcPct(recipeTotalCost(r),r.selling_price);
+    var barW = Math.min(100, 100 - pct);
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--mist-light)">'
+      + '<div><div style="font-size:.78rem;font-weight:600;color:var(--forest-deep)">' + r.name + '</div>'
+      + '<div style="background:var(--mist);border-radius:4px;height:5px;width:120px;margin-top:3px;overflow:hidden"><div style="height:100%;background:#15803d;width:' + barW + '%"></div></div></div>'
+      + fcPill(pct) + '</div>';
+  }).join('')) + '</div>';
+
+  // Highest FC
+  html += '<div>' + costingCard(costingSectionTitle('Highest food cost — review pricing') + worst.map(function(r) {
+    var pct = fcPct(recipeTotalCost(r),r.selling_price);
+    var barColor = pct >= 40 ? '#dc2626' : pct >= 35 ? '#b45309' : '#0f766e';
+    var barW = Math.min(100, pct * 2);
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--mist-light)">'
+      + '<div><div style="font-size:.78rem;font-weight:600;color:var(--forest-deep)">' + r.name + '</div>'
+      + '<div style="background:var(--mist);border-radius:4px;height:5px;width:120px;margin-top:3px;overflow:hidden"><div style="height:100%;background:' + barColor + ';width:' + barW + '%"></div></div></div>'
+      + fcPill(pct) + '</div>';
+  }).join('')) + '</div>';
+
+  html += '</div>';
+
+  // All items table
+  html += costingCard(costingSectionTitle('All costed items')
+    + '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.78rem">'
+    + '<thead><tr style="border-bottom:2px solid var(--mist)">'
+    + '<th style="text-align:left;padding:6px 8px;color:var(--timber);font-weight:600">Item</th>'
+    + '<th style="text-align:left;padding:6px 8px;color:var(--timber);font-weight:600">Category</th>'
+    + '<th style="text-align:right;padding:6px 8px;color:var(--timber);font-weight:600">Cost</th>'
+    + '<th style="text-align:right;padding:6px 8px;color:var(--timber);font-weight:600">Price</th>'
+    + '<th style="text-align:center;padding:6px 8px;color:var(--timber);font-weight:600">FC%</th>'
+    + '<th style="text-align:right;padding:6px 8px;color:var(--timber);font-weight:600">Profit</th>'
+    + '</tr></thead><tbody>'
+    + costed.map(function(r) {
+        var cost = recipeTotalCost(r);
+        var pct = fcPct(cost, r.selling_price);
+        var profit = r.selling_price - cost;
+        return '<tr style="border-bottom:1px solid var(--mist-light)">'
+          + '<td style="padding:7px 8px;font-weight:600;color:var(--forest-deep)">' + r.name + '</td>'
+          + '<td style="padding:7px 8px"><span style="font-size:.65rem;color:var(--timber);text-transform:uppercase">' + r.category + '</span></td>'
+          + '<td style="padding:7px 8px;text-align:right;font-family:monospace">' + phpFmt(cost) + '</td>'
+          + '<td style="padding:7px 8px;text-align:right;font-family:monospace">' + phpFmt(r.selling_price) + '</td>'
+          + '<td style="padding:7px 8px;text-align:center">' + fcPill(pct) + '</td>'
+          + '<td style="padding:7px 8px;text-align:right;font-family:monospace;color:' + (profit >= 0 ? '#15803d' : '#dc2626') + '">' + phpFmt(profit) + '</td>'
+          + '</tr>';
+      }).join('')
+    + '</tbody></table></div>');
+
+  panel.innerHTML = html;
+}
+
+function renderCostingInventory(panel) {
+  var catGroups = {};
+  _costingIngredients.forEach(function(i) {
+    var c = i.category || 'Other';
+    if (!catGroups[c]) catGroups[c] = [];
+    catGroups[c].push(i);
+  });
+
+  var html = '<div style="display:flex;justify-content:flex-end;margin-bottom:12px">'
+    + '<button onclick="openCostingIngModal()" style="padding:8px 16px;background:var(--forest);color:var(--white);border:none;border-radius:var(--r-md);font-size:.78rem;font-weight:700;font-family:var(--font-body);cursor:pointer">+ Add ingredient</button>'
+    + '</div>';
+
+  Object.keys(catGroups).sort().forEach(function(cat) {
+    html += costingCard(costingSectionTitle(cat)
+      + '<table style="width:100%;border-collapse:collapse;font-size:.78rem">'
+      + '<thead><tr><th style="text-align:left;padding:5px 8px;color:var(--timber);font-weight:600">Ingredient</th>'
+      + '<th style="text-align:center;padding:5px 8px;color:var(--timber);font-weight:600">Unit</th>'
+      + '<th style="text-align:right;padding:5px 8px;color:var(--timber);font-weight:600">Cost / unit</th>'
+      + '<th style="text-align:right;padding:5px 8px"></th></tr></thead><tbody>'
+      + catGroups[cat].map(function(i) {
+          return '<tr style="border-top:1px solid var(--mist-light)">'
+            + '<td style="padding:7px 8px;font-weight:600;color:var(--forest-deep)">' + i.name + '</td>'
+            + '<td style="padding:7px 8px;text-align:center;color:var(--timber)">' + i.unit + '</td>'
+            + '<td style="padding:7px 8px;text-align:right;font-family:monospace">' + phpFmt(i.cost_per_unit) + ' / ' + i.unit + '</td>'
+            + '<td style="padding:7px 8px;text-align:right;white-space:nowrap">'
+            + '<button onclick="openCostingIngModal(' + i.id + ')" style="padding:3px 10px;font-size:.68rem;font-weight:700;font-family:var(--font-body);border:1.5px solid var(--mist);background:transparent;border-radius:var(--r-sm);cursor:pointer;color:var(--timber);margin-right:4px">Edit</button>'
+            + '<button onclick="deleteCostingIng(' + i.id + ')" style="padding:3px 10px;font-size:.68rem;font-weight:700;font-family:var(--font-body);border:1.5px solid #fca5a5;background:transparent;border-radius:var(--r-sm);cursor:pointer;color:#dc2626">Remove</button>'
+            + '</td></tr>';
+        }).join('')
+      + '</tbody></table>');
+  });
+
+  if (!_costingIngredients.length) html += '<div style="padding:2rem;text-align:center;color:var(--timber)">No ingredients yet. Add your first one.</div>';
+
+  // Inline add/edit modal
+  html += '<div id="costing-ing-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;align-items:center;justify-content:center">'
+    + '<div style="background:var(--white);border-radius:var(--r-xl);padding:24px;width:340px;max-width:90vw;box-shadow:var(--shadow-md)">'
+    + '<div id="costing-ing-modal-title" style="font-family:var(--font-soul);font-size:1.1rem;font-weight:700;color:var(--forest-deep);margin-bottom:16px">Add ingredient</div>'
+    + '<input type="hidden" id="cing-id">'
+    + '<div style="margin-bottom:12px"><label style="font-size:.72rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">Ingredient name</label>'
+    + '<input id="cing-name" placeholder="e.g. Espresso beans" style="width:100%;padding:9px 12px;border:1.5px solid var(--mist);border-radius:var(--r-md);font-size:.85rem;font-family:var(--font-body);outline:none"></div>'
+    + '<div style="margin-bottom:12px"><label style="font-size:.72rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">Unit</label>'
+    + '<select id="cing-unit" style="width:100%;padding:9px 12px;border:1.5px solid var(--mist);border-radius:var(--r-md);font-size:.85rem;font-family:var(--font-body)">'
+    + ['g','ml','pc','kg','L','tsp','tbsp','cup','sachet','pack'].map(function(u){return'<option>'+u+'</option>';}).join('')
+    + '</select></div>'
+    + '<div style="margin-bottom:12px"><label style="font-size:.72rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">Cost per unit (₱)</label>'
+    + '<input id="cing-cost" type="number" step="0.001" placeholder="0.00" style="width:100%;padding:9px 12px;border:1.5px solid var(--mist);border-radius:var(--r-md);font-size:.85rem;font-family:var(--font-body);outline:none"></div>'
+    + '<div style="margin-bottom:16px"><label style="font-size:.72rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">Category</label>'
+    + '<select id="cing-cat" style="width:100%;padding:9px 12px;border:1.5px solid var(--mist);border-radius:var(--r-md);font-size:.85rem;font-family:var(--font-body)">'
+    + ['Coffee','Dairy','Syrups & Powder','Bread & Pastry','Packaging','Other'].map(function(c){return'<option>'+c+'</option>';}).join('')
+    + '</select></div>'
+    + '<div style="display:flex;gap:10px;justify-content:flex-end">'
+    + '<button onclick="closeCostingIngModal()" style="padding:9px 18px;border:1.5px solid var(--mist);background:transparent;border-radius:var(--r-md);font-size:.78rem;font-weight:700;font-family:var(--font-body);cursor:pointer;color:var(--timber)">Cancel</button>'
+    + '<button onclick="saveCostingIng()" style="padding:9px 18px;background:var(--forest);color:var(--white);border:none;border-radius:var(--r-md);font-size:.78rem;font-weight:700;font-family:var(--font-body);cursor:pointer">Save</button>'
+    + '</div></div></div>';
+
+  panel.innerHTML = html;
+}
+
+function openCostingIngModal(id) {
+  var modal = document.getElementById('costing-ing-modal');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  if (id) {
+    var ing = _costingIngredients.find(function(i){return i.id===id;});
+    if (ing) {
+      document.getElementById('costing-ing-modal-title').textContent = 'Edit ingredient';
+      document.getElementById('cing-id').value = id;
+      document.getElementById('cing-name').value = ing.name;
+      document.getElementById('cing-unit').value = ing.unit;
+      document.getElementById('cing-cost').value = ing.cost_per_unit;
+      document.getElementById('cing-cat').value = ing.category || 'Other';
+    }
+  } else {
+    document.getElementById('costing-ing-modal-title').textContent = 'Add ingredient';
+    document.getElementById('cing-id').value = '';
+    document.getElementById('cing-name').value = '';
+    document.getElementById('cing-cost').value = '';
+  }
+}
+
+function closeCostingIngModal() {
+  var modal = document.getElementById('costing-ing-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+async function saveCostingIng() {
+  var id = document.getElementById('cing-id').value;
+  var payload = {
+    name: document.getElementById('cing-name').value.trim(),
+    unit: document.getElementById('cing-unit').value,
+    cost_per_unit: parseFloat(document.getElementById('cing-cost').value),
+    category: document.getElementById('cing-cat').value
+  };
+  if (!payload.name || isNaN(payload.cost_per_unit)) { showToast('Name and cost required'); return; }
+  var sb = _supabaseClient;
+  if (id) {
+    await sb.from('costing_ingredients').update(payload).eq('id', parseInt(id));
+  } else {
+    await sb.from('costing_ingredients').insert(payload);
+  }
+  closeCostingIngModal();
+  await loadCostingView();
+  setCostingTab('inventory');
+}
+
+async function deleteCostingIng(id) {
+  if (!confirm('Remove this ingredient? It will be removed from all recipes.')) return;
+  await _supabaseClient.from('costing_ingredients').delete().eq('id', id);
+  await loadCostingView();
+  setCostingTab('inventory');
+}
+
+function renderCostingRecipe(panel) {
+  var catColors = {HOT:'#92400e',COLD:'#1e40af',PASTRY:'#9d174d',MEAL:'#065f46'};
+  var catBg = {HOT:'#fef3c7',COLD:'#dbeafe',PASTRY:'#fce7f3',MEAL:'#d1fae5'};
+
+  var listHtml = _costingRecipes.map(function(r) {
+    var cost = recipeTotalCost(r);
+    var pct = fcPct(cost, r.selling_price);
+    var active = _activeRecipeId === r.id;
+    return '<div onclick="selectCostingRecipe(' + r.id + ')" style="cursor:pointer;padding:10px 12px;border-radius:var(--r-md);border:1.5px solid ' + (active?'var(--forest)':'var(--mist)') + ';background:' + (active?'#f0fdf4':'var(--white)') + ';margin-bottom:8px;transition:all .15s">'
+      + '<div style="display:flex;justify-content:space-between;align-items:flex-start">'
+      + '<div style="font-size:.78rem;font-weight:700;color:var(--forest-deep)">' + r.name + '</div>'
+      + '<span style="background:' + (catBg[r.category]||'#f1f5f9') + ';color:' + (catColors[r.category]||'#475569') + ';font-size:.6rem;font-weight:700;padding:1px 6px;border-radius:20px">' + r.category + '</span>'
+      + '</div>'
+      + '<div style="font-size:.68rem;color:var(--timber);margin-top:2px">'
+      + (cost > 0 ? phpFmt(cost) + ' cost · ' + (pct ? pct.toFixed(1) + '% FC' : '') : 'No ingredients')
+      + '</div></div>';
+  }).join('') || '<div style="color:var(--timber);font-size:.78rem">No menu items yet</div>';
+
+  var editorHtml = '';
+  if (_activeRecipeId) {
+    var rec = _costingRecipes.find(function(r){return r.id===_activeRecipeId;});
+    if (rec) {
+      var cost = recipeTotalCost(rec);
+      var pct = fcPct(cost, rec.selling_price);
+      var profit = rec.selling_price - cost;
+      var suggestedPrice = cost > 0 ? Math.ceil(cost / 0.30 / 5) * 5 : null;
+
+      var ingRows = (rec.ingredients || []).map(function(ri, idx) {
+        var ing = _costingIngredients.find(function(i){return i.id===ri.ingredient_id;});
+        var rowCost = ing ? Number(ing.cost_per_unit) * Number(ri.qty) : 0;
+        var opts = _costingIngredients.map(function(i){return '<option value="'+i.id+'"'+(i.id===ri.ingredient_id?' selected':'')+'>'+i.name+' (₱'+i.cost_per_unit+'/'+i.unit+')</option>';}).join('');
+        return '<div style="display:grid;grid-template-columns:1fr 80px 90px auto;gap:8px;align-items:center;margin-bottom:8px">'
+          + '<select onchange="updateRecipeIng('+rec.id+','+idx+',\'iid\',this.value)" style="padding:6px 8px;font-size:.72rem;border:1.5px solid var(--mist);border-radius:var(--r-sm);font-family:var(--font-body);background:var(--white)">' + opts + '</select>'
+          + '<input type="number" step="0.1" value="'+ri.qty+'" onchange="updateRecipeIng('+rec.id+','+idx+',\'qty\',this.value)" oninput="updateRecipeIng('+rec.id+','+idx+',\'qty\',this.value)" style="padding:6px 8px;font-size:.72rem;border:1.5px solid var(--mist);border-radius:var(--r-sm);text-align:right;width:100%">'
+          + '<div style="font-size:.68rem;color:var(--timber);text-align:right;padding:0 4px">'+(ing?'= '+phpFmt(rowCost):'')+'</div>'
+          + '<button onclick="removeRecipeIng('+rec.id+','+idx+')" style="padding:4px 8px;border:1.5px solid #fca5a5;background:transparent;border-radius:var(--r-sm);font-size:.7rem;cursor:pointer;color:#dc2626;font-family:var(--font-body)">×</button>'
+          + '</div>';
+      }).join('');
+
+      editorHtml = '<div style="background:var(--white);border-radius:var(--r-lg);box-shadow:var(--shadow-sm);padding:16px">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">'
+        + '<div style="font-family:var(--font-soul);font-size:1.05rem;font-weight:700;color:var(--forest-deep)">' + rec.name + '</div>'
+        + '<div style="display:flex;gap:6px"><button onclick="openCostingRecModal('+rec.id+')" style="padding:5px 12px;border:1.5px solid var(--mist);background:transparent;border-radius:var(--r-sm);font-size:.7rem;font-weight:700;font-family:var(--font-body);cursor:pointer;color:var(--timber)">Edit</button>'
+        + '<button onclick="deleteCostingRec('+rec.id+')" style="padding:5px 12px;border:1.5px solid #fca5a5;background:transparent;border-radius:var(--r-sm);font-size:.7rem;font-weight:700;font-family:var(--font-body);cursor:pointer;color:#dc2626">Delete</button></div>'
+        + '</div>'
+        + '<div style="font-size:.72rem;color:var(--timber);margin-bottom:12px">Selling price: <strong style="color:var(--forest-deep)">' + phpFmt(rec.selling_price) + '</strong></div>'
+        + '<div style="font-size:.65rem;font-weight:700;color:var(--timber);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Ingredients</div>'
+        + '<div style="font-size:.65rem;color:var(--timber);display:grid;grid-template-columns:1fr 80px 90px auto;gap:8px;margin-bottom:6px;padding:0 4px">'
+        + '<span>Ingredient</span><span style="text-align:right">Qty</span><span style="text-align:right">Line cost</span><span></span></div>'
+        + ingRows
+        + '<button onclick="addRecipeIng('+rec.id+')" style="margin-top:4px;padding:6px 14px;border:1.5px dashed var(--mist);background:transparent;border-radius:var(--r-sm);font-size:.72rem;font-weight:600;font-family:var(--font-body);cursor:pointer;color:var(--timber)">+ Add ingredient</button>'
+        + '<div style="background:var(--mist-light);border-radius:var(--r-md);padding:12px 14px;margin-top:14px">'
+        + '<div style="display:flex;justify-content:space-between;font-size:.78rem;padding:4px 0;border-bottom:1px solid var(--mist)"><span style="color:var(--timber)">Total recipe cost</span><span style="font-family:monospace;font-weight:700">' + phpFmt(cost) + '</span></div>'
+        + '<div style="display:flex;justify-content:space-between;font-size:.78rem;padding:4px 0;border-bottom:1px solid var(--mist)"><span style="color:var(--timber)">Selling price</span><span style="font-family:monospace;font-weight:700">' + phpFmt(rec.selling_price) + '</span></div>'
+        + '<div style="display:flex;justify-content:space-between;font-size:.82rem;padding:8px 0 4px;font-weight:700"><span>Food cost %</span>' + fcPill(pct) + '</div>'
+        + '<div style="display:flex;justify-content:space-between;font-size:.78rem;padding:4px 0"><span style="color:var(--timber)">Gross profit</span><span style="font-family:monospace;font-weight:700;color:' + (profit>=0?'#15803d':'#dc2626') + '">' + phpFmt(profit) + '</span></div>'
+        + '<div style="display:flex;justify-content:space-between;font-size:.72rem;padding:4px 0;border-top:1px solid var(--mist);margin-top:4px"><span style="color:var(--timber)">Suggested price (30% FC target)</span><span style="font-family:monospace;color:var(--terra);font-weight:700">' + (suggestedPrice ? phpFmt(suggestedPrice) : '—') + '</span></div>'
+        + '</div></div>';
+    }
+  } else {
+    editorHtml = '<div style="padding:3rem;text-align:center;color:var(--timber);font-size:.82rem;background:var(--white);border-radius:var(--r-lg);box-shadow:var(--shadow-sm)">Select a menu item to edit its recipe</div>';
+  }
+
+  panel.innerHTML = '<div style="display:grid;grid-template-columns:240px 1fr;gap:14px">'
+    + '<div>'
+    + '<div style="font-size:.65rem;font-weight:700;color:var(--timber);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Menu Items</div>'
+    + listHtml
+    + '<button onclick="openCostingRecModal()" style="width:100%;margin-top:6px;padding:8px;border:1.5px dashed var(--mist);background:transparent;border-radius:var(--r-md);font-size:.72rem;font-weight:700;font-family:var(--font-body);cursor:pointer;color:var(--timber)">+ Add menu item</button>'
+    + '</div>'
+    + '<div>' + editorHtml + '</div></div>'
+    + renderCostingRecModal();
+}
+
+function renderCostingRecModal() {
+  return '<div id="costing-rec-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;align-items:center;justify-content:center">'
+    + '<div style="background:var(--white);border-radius:var(--r-xl);padding:24px;width:340px;max-width:90vw;box-shadow:var(--shadow-md)">'
+    + '<div id="crm-title" style="font-family:var(--font-soul);font-size:1.1rem;font-weight:700;color:var(--forest-deep);margin-bottom:16px">Add menu item</div>'
+    + '<input type="hidden" id="crm-id">'
+    + '<div style="margin-bottom:12px"><label style="font-size:.72rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">Item name</label>'
+    + '<input id="crm-name" placeholder="e.g. Hot Americano" style="width:100%;padding:9px 12px;border:1.5px solid var(--mist);border-radius:var(--r-md);font-size:.85rem;font-family:var(--font-body);outline:none"></div>'
+    + '<div style="margin-bottom:12px"><label style="font-size:.72rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">Category</label>'
+    + '<select id="crm-cat" style="width:100%;padding:9px 12px;border:1.5px solid var(--mist);border-radius:var(--r-md);font-size:.85rem;font-family:var(--font-body)">'
+    + '<option value="HOT">Hot Beverage</option><option value="COLD">Cold Beverage</option><option value="PASTRY">Pastry</option><option value="MEAL">Meal</option>'
+    + '</select></div>'
+    + '<div style="margin-bottom:16px"><label style="font-size:.72rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">Selling price (₱)</label>'
+    + '<input id="crm-price" type="number" step="0.01" placeholder="0.00" style="width:100%;padding:9px 12px;border:1.5px solid var(--mist);border-radius:var(--r-md);font-size:.85rem;font-family:var(--font-body);outline:none"></div>'
+    + '<div style="display:flex;gap:10px;justify-content:flex-end">'
+    + '<button onclick="closeCostingRecModal()" style="padding:9px 18px;border:1.5px solid var(--mist);background:transparent;border-radius:var(--r-md);font-size:.78rem;font-weight:700;font-family:var(--font-body);cursor:pointer;color:var(--timber)">Cancel</button>'
+    + '<button onclick="saveCostingRec()" style="padding:9px 18px;background:var(--forest);color:var(--white);border:none;border-radius:var(--r-md);font-size:.78rem;font-weight:700;font-family:var(--font-body);cursor:pointer">Save</button>'
+    + '</div></div></div>';
+}
+
+function openCostingRecModal(id) {
+  var modal = document.getElementById('costing-rec-modal');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  var rec = id ? _costingRecipes.find(function(r){return r.id===id;}) : null;
+  document.getElementById('crm-title').textContent = id ? 'Edit menu item' : 'Add menu item';
+  document.getElementById('crm-id').value = id || '';
+  document.getElementById('crm-name').value = rec ? rec.name : '';
+  document.getElementById('crm-cat').value = rec ? rec.category : 'HOT';
+  document.getElementById('crm-price').value = rec ? rec.selling_price : '';
+}
+
+function closeCostingRecModal() {
+  var modal = document.getElementById('costing-rec-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+async function saveCostingRec() {
+  var id = document.getElementById('crm-id').value;
+  var payload = {
+    name: document.getElementById('crm-name').value.trim(),
+    category: document.getElementById('crm-cat').value,
+    selling_price: parseFloat(document.getElementById('crm-price').value)
+  };
+  if (!payload.name || isNaN(payload.selling_price)) { showToast('Name and price required'); return; }
+  var sb = _supabaseClient;
+  var res;
+  if (id) {
+    res = await sb.from('costing_recipes').update(payload).eq('id', parseInt(id)).select();
+  } else {
+    res = await sb.from('costing_recipes').insert(payload).select();
+    if (res.data && res.data[0]) _activeRecipeId = res.data[0].id;
+  }
+  closeCostingRecModal();
+  await loadCostingView();
+  setCostingTab('recipe');
+}
+
+async function deleteCostingRec(id) {
+  if (!confirm('Delete this menu item and its recipe?')) return;
+  await _supabaseClient.from('costing_recipes').delete().eq('id', id);
+  _activeRecipeId = null;
+  await loadCostingView();
+  setCostingTab('recipe');
+}
+
+function selectCostingRecipe(id) {
+  _activeRecipeId = id;
+  renderCostingPanel();
+}
+
+function updateRecipeIng(rid, idx, field, val) {
+  var rec = _costingRecipes.find(function(r){return r.id===rid;});
+  if (!rec || !rec.ingredients[idx]) return;
+  if (field === 'iid') rec.ingredients[idx].ingredient_id = parseInt(val);
+  if (field === 'qty') rec.ingredients[idx].qty = parseFloat(val) || 0;
+  saveRecipeIngsToDB(rid);
+  var panel = document.getElementById('costing-panel');
+  if (panel) renderCostingRecipe(panel);
+}
+
+function addRecipeIng(rid) {
+  var rec = _costingRecipes.find(function(r){return r.id===rid;});
+  if (!rec) return;
+  if (!rec.ingredients) rec.ingredients = [];
+  rec.ingredients.push({ingredient_id: _costingIngredients[0] ? _costingIngredients[0].id : 1, qty: 0, recipe_id: rid, _new: true});
+  var panel = document.getElementById('costing-panel');
+  if (panel) renderCostingRecipe(panel);
+}
+
+function removeRecipeIng(rid, idx) {
+  var rec = _costingRecipes.find(function(r){return r.id===rid;});
+  if (!rec || !rec.ingredients[idx]) return;
+  rec.ingredients.splice(idx, 1);
+  saveRecipeIngsToDB(rid);
+  var panel = document.getElementById('costing-panel');
+  if (panel) renderCostingRecipe(panel);
+}
+
+async function saveRecipeIngsToDB(rid) {
+  var rec = _costingRecipes.find(function(r){return r.id===rid;});
+  if (!rec) return;
+  var sb = _supabaseClient;
+  await sb.from('costing_recipe_ingredients').delete().eq('recipe_id', rid);
+  var toInsert = rec.ingredients.filter(function(ri){return ri.qty > 0;}).map(function(ri){
+    return {recipe_id: rid, ingredient_id: ri.ingredient_id, qty: ri.qty};
+  });
+  if (toInsert.length) await sb.from('costing_recipe_ingredients').insert(toInsert);
+}
+
+function renderCostingPricing(panel) {
+  var cats = ['ALL','HOT','COLD','PASTRY','MEAL'];
+  var activeCat = window._costingPricingCat || 'ALL';
+  var filtered = activeCat === 'ALL' ? _costingRecipes : _costingRecipes.filter(function(r){return r.category===activeCat;});
+
+  var html = '<div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">';
+  cats.forEach(function(c) {
+    html += '<button onclick="setCostingPricingCat(\''+c+'\')" style="padding:6px 14px;font-size:.72rem;font-weight:700;font-family:var(--font-body);border:1.5px solid '+(activeCat===c?'var(--forest)':'var(--mist)')+';background:'+(activeCat===c?'var(--forest)':'transparent')+';color:'+(activeCat===c?'var(--white)':'var(--timber)')+';border-radius:20px;cursor:pointer">'+(c==='ALL'?'All':c)+'</button>';
+  });
+  html += '</div>';
+
+  html += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.78rem;background:var(--white);border-radius:var(--r-lg);box-shadow:var(--shadow-sm);overflow:hidden">'
+    + '<thead><tr style="background:var(--mist-light)">'
+    + '<th style="padding:10px 12px;text-align:left;color:var(--timber);font-weight:700">Menu Item</th>'
+    + '<th style="padding:10px 12px;text-align:left;color:var(--timber);font-weight:700">Cat</th>'
+    + '<th style="padding:10px 12px;text-align:right;color:var(--timber);font-weight:700">Recipe Cost</th>'
+    + '<th style="padding:10px 12px;text-align:right;color:var(--timber);font-weight:700">Selling Price</th>'
+    + '<th style="padding:10px 12px;text-align:center;color:var(--timber);font-weight:700">Food Cost %</th>'
+    + '<th style="padding:10px 12px;text-align:right;color:var(--timber);font-weight:700">Gross Profit</th>'
+    + '<th style="padding:10px 12px;text-align:center;color:var(--timber);font-weight:700">Margin</th>'
+    + '<th style="padding:10px 12px;text-align:center;color:var(--timber);font-weight:700">Status</th>'
+    + '</tr></thead><tbody>'
+    + filtered.map(function(r) {
+        var cost = recipeTotalCost(r);
+        var pct = fcPct(cost, r.selling_price);
+        var profit = r.selling_price - cost;
+        var margin = pct !== null ? (100 - pct) : null;
+        var catColors = {HOT:'#92400e',COLD:'#1e40af',PASTRY:'#9d174d',MEAL:'#065f46'};
+        var catBg = {HOT:'#fef3c7',COLD:'#dbeafe',PASTRY:'#fce7f3',MEAL:'#d1fae5'};
+        return '<tr style="border-top:1px solid var(--mist-light)">'
+          + '<td style="padding:9px 12px;font-weight:700;color:var(--forest-deep)">' + r.name + '</td>'
+          + '<td style="padding:9px 12px"><span style="background:'+(catBg[r.category]||'#f1f5f9')+';color:'+(catColors[r.category]||'#475569')+';font-size:.6rem;font-weight:700;padding:2px 7px;border-radius:20px">' + r.category + '</span></td>'
+          + '<td style="padding:9px 12px;text-align:right;font-family:monospace">' + (cost > 0 ? phpFmt(cost) : '<span style="color:var(--timber)">—</span>') + '</td>'
+          + '<td style="padding:9px 12px;text-align:right">'
+          + '<input type="number" value="'+r.selling_price+'" step="1" onchange="updateCostingPrice('+r.id+',this.value)" style="width:76px;text-align:right;padding:4px 6px;font-size:.75rem;border:1.5px solid var(--mist);border-radius:var(--r-sm);font-family:monospace;background:var(--white)">'
+          + '</td>'
+          + '<td style="padding:9px 12px;text-align:center">' + fcPill(pct) + '</td>'
+          + '<td style="padding:9px 12px;text-align:right;font-family:monospace;font-weight:700;color:' + (profit>=0?'#15803d':'#dc2626') + '">' + (cost>0?phpFmt(profit):'—') + '</td>'
+          + '<td style="padding:9px 12px;text-align:center;font-family:monospace;font-size:.72rem;color:' + (margin===null?'var(--timber)':margin>65?'#15803d':margin>50?'#b45309':'#dc2626') + '">' + (margin!==null?margin.toFixed(1)+'%':'—') + '</td>'
+          + '<td style="padding:9px 12px;text-align:center;font-size:.72rem;font-weight:700">' + fcStatus(pct) + '</td>'
+          + '</tr>';
+      }).join('') + '</tbody></table></div>';
+
+  html += '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
+    + '<span style="font-size:.72rem;color:var(--timber)">Food cost target:</span>'
+    + '<span style="background:#dcfce7;color:#15803d;padding:2px 10px;border-radius:20px;font-size:.68rem;font-weight:700">Excellent &lt;28%</span>'
+    + '<span style="background:#ccfbf1;color:#0f766e;padding:2px 10px;border-radius:20px;font-size:.68rem;font-weight:700">Good 28–35%</span>'
+    + '<span style="background:#fef3c7;color:#b45309;padding:2px 10px;border-radius:20px;font-size:.68rem;font-weight:700">Review 35–40%</span>'
+    + '<span style="background:#fee2e2;color:#dc2626;padding:2px 10px;border-radius:20px;font-size:.68rem;font-weight:700">Critical &gt;40%</span>'
+    + '</div>';
+
+  panel.innerHTML = html;
+}
+
+function setCostingPricingCat(cat) {
+  window._costingPricingCat = cat;
+  var panel = document.getElementById('costing-panel');
+  if (panel) renderCostingPricing(panel);
+}
+
+async function updateCostingPrice(rid, val) {
+  var price = parseFloat(val);
+  if (isNaN(price)) return;
+  var rec = _costingRecipes.find(function(r){return r.id===rid;});
+  if (rec) {
+    rec.selling_price = price;
+    await _supabaseClient.from('costing_recipes').update({selling_price: price}).eq('id', rid);
   }
 }
 
