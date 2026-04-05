@@ -7264,17 +7264,28 @@ function renderCostingInventory(panel) {
     + '</div>';
 
   Object.keys(catGroups).sort().forEach(function(cat) {
+    var isCoffee = cat === 'Coffee';
+    var thead = '<thead><tr>'
+      + '<th style="text-align:left;padding:5px 8px;color:var(--timber);font-weight:600">Ingredient</th>'
+      + '<th style="text-align:center;padding:5px 8px;color:var(--timber);font-weight:600">Unit</th>'
+      + '<th style="text-align:right;padding:5px 8px;color:var(--timber);font-weight:600">Cost / g</th>'
+      + (isCoffee ? '<th style="text-align:right;padding:5px 8px;color:var(--terra);font-weight:600">1 shot (9g)</th><th style="text-align:right;padding:5px 8px;color:var(--forest);font-weight:600">2 shots (18g)</th>' : '')
+      + '<th style="text-align:right;padding:5px 8px"></th></tr></thead>';
+
     html += costingCard(costingSectionTitle(cat)
       + '<table style="width:100%;border-collapse:collapse;font-size:.78rem">'
-      + '<thead><tr><th style="text-align:left;padding:5px 8px;color:var(--timber);font-weight:600">Ingredient</th>'
-      + '<th style="text-align:center;padding:5px 8px;color:var(--timber);font-weight:600">Unit</th>'
-      + '<th style="text-align:right;padding:5px 8px;color:var(--timber);font-weight:600">Cost / unit</th>'
-      + '<th style="text-align:right;padding:5px 8px"></th></tr></thead><tbody>'
+      + thead + '<tbody>'
       + catGroups[cat].map(function(i) {
+          var shot1 = (Number(i.cost_per_unit) * 9).toFixed(2);
+          var shot2 = (Number(i.cost_per_unit) * 18).toFixed(2);
           return '<tr style="border-top:1px solid var(--mist-light)">'
             + '<td style="padding:7px 8px;font-weight:600;color:var(--forest-deep)">' + i.name + '</td>'
             + '<td style="padding:7px 8px;text-align:center;color:var(--timber)">' + i.unit + '</td>'
             + '<td style="padding:7px 8px;text-align:right;font-family:monospace">' + phpFmt(i.cost_per_unit) + ' / ' + i.unit + '</td>'
+            + (isCoffee
+              ? '<td style="padding:7px 8px;text-align:right;font-family:monospace;color:var(--terra);font-weight:600">₱' + shot1 + '</td>'
+              + '<td style="padding:7px 8px;text-align:right;font-family:monospace;color:var(--forest);font-weight:700">₱' + shot2 + '</td>'
+              : '')
             + '<td style="padding:7px 8px;text-align:right;white-space:nowrap">'
             + '<button onclick="openCostingIngModal(' + i.id + ')" style="padding:3px 10px;font-size:.68rem;font-weight:700;font-family:var(--font-body);border:1.5px solid var(--mist);background:transparent;border-radius:var(--r-sm);cursor:pointer;color:var(--timber);margin-right:4px">Edit</button>'
             + '<button onclick="deleteCostingIng(' + i.id + ')" style="padding:3px 10px;font-size:.68rem;font-weight:700;font-family:var(--font-body);border:1.5px solid #fca5a5;background:transparent;border-radius:var(--r-sm);cursor:pointer;color:#dc2626">Remove</button>'
