@@ -7224,14 +7224,14 @@ function renderCostingDashboard(panel) {
 
   // All items table
   html += costingCard(costingSectionTitle('All costed items')
-    + '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.78rem">'
+    + '<div style="overflow-x:auto;max-height:440px;overflow-y:auto"><table style="width:100%;border-collapse:collapse;font-size:.78rem">'
     + '<thead><tr style="border-bottom:2px solid var(--mist)">'
-    + '<th style="text-align:left;padding:6px 8px;color:var(--timber);font-weight:600">Item</th>'
-    + '<th style="text-align:left;padding:6px 8px;color:var(--timber);font-weight:600">Category</th>'
-    + '<th style="text-align:right;padding:6px 8px;color:var(--timber);font-weight:600">Cost</th>'
-    + '<th style="text-align:right;padding:6px 8px;color:var(--timber);font-weight:600">Price</th>'
-    + '<th style="text-align:center;padding:6px 8px;color:var(--timber);font-weight:600">FC%</th>'
-    + '<th style="text-align:right;padding:6px 8px;color:var(--timber);font-weight:600">Profit</th>'
+    + '<th style="text-align:left;padding:6px 8px;color:var(--timber);font-weight:600;position:sticky;top:0;z-index:2;background:var(--white)">Item</th>'
+    + '<th style="text-align:left;padding:6px 8px;color:var(--timber);font-weight:600;position:sticky;top:0;z-index:2;background:var(--white)">Category</th>'
+    + '<th style="text-align:right;padding:6px 8px;color:var(--timber);font-weight:600;position:sticky;top:0;z-index:2;background:var(--white)">Cost</th>'
+    + '<th style="text-align:right;padding:6px 8px;color:var(--timber);font-weight:600;position:sticky;top:0;z-index:2;background:var(--white)">Price</th>'
+    + '<th style="text-align:center;padding:6px 8px;color:var(--timber);font-weight:600;position:sticky;top:0;z-index:2;background:var(--white)">FC%</th>'
+    + '<th style="text-align:right;padding:6px 8px;color:var(--timber);font-weight:600;position:sticky;top:0;z-index:2;background:var(--white)">Profit</th>'
     + '</tr></thead><tbody>'
     + costed.map(function(r) {
         var cost = recipeTotalCost(r);
@@ -7266,14 +7266,14 @@ function renderCostingInventory(panel) {
   Object.keys(catGroups).sort().forEach(function(cat) {
     var isCoffee = cat === 'Coffee';
     var thead = '<thead><tr>'
-      + '<th style="text-align:left;padding:5px 8px;color:var(--timber);font-weight:600">Ingredient</th>'
-      + '<th style="text-align:center;padding:5px 8px;color:var(--timber);font-weight:600">Unit</th>'
-      + '<th style="text-align:right;padding:5px 8px;color:var(--timber);font-weight:600">Cost / g</th>'
-      + (isCoffee ? '<th style="text-align:right;padding:5px 8px;color:var(--terra);font-weight:600">1 shot (9g)</th><th style="text-align:right;padding:5px 8px;color:var(--forest);font-weight:600">2 shots (18g)</th>' : '')
-      + '<th style="text-align:right;padding:5px 8px"></th></tr></thead>';
+      + '<th style="text-align:left;padding:5px 8px;color:var(--timber);font-weight:600;position:sticky;top:0;z-index:2;background:var(--mist-light)">Ingredient</th>'
+      + '<th style="text-align:center;padding:5px 8px;color:var(--timber);font-weight:600;position:sticky;top:0;z-index:2;background:var(--mist-light)">Unit</th>'
+      + '<th style="text-align:right;padding:5px 8px;color:var(--timber);font-weight:600;position:sticky;top:0;z-index:2;background:var(--mist-light)">Cost / g</th>'
+      + (isCoffee ? '<th style="text-align:right;padding:5px 8px;color:var(--terra);font-weight:600;position:sticky;top:0;z-index:2;background:var(--mist-light)">1 shot (9g)</th><th style="text-align:right;padding:5px 8px;color:var(--forest);font-weight:600;position:sticky;top:0;z-index:2;background:var(--mist-light)">2 shots (18g)</th>' : '')
+      + '<th style="text-align:right;padding:5px 8px;position:sticky;top:0;z-index:2;background:var(--mist-light)"></th></tr></thead>';
 
     html += costingCard(costingSectionTitle(cat)
-      + '<table style="width:100%;border-collapse:collapse;font-size:.78rem">'
+      + '<div style="overflow-x:auto;max-height:360px;overflow-y:auto"><table style="width:100%;border-collapse:collapse;font-size:.78rem">'
       + thead + '<tbody>'
       + catGroups[cat].map(function(i) {
           var shot1 = (Number(i.cost_per_unit) * 9).toFixed(2);
@@ -7291,7 +7291,7 @@ function renderCostingInventory(panel) {
             + '<button onclick="deleteCostingIng(' + i.id + ')" style="padding:3px 10px;font-size:.68rem;font-weight:700;font-family:var(--font-body);border:1.5px solid #fca5a5;background:transparent;border-radius:var(--r-sm);cursor:pointer;color:#dc2626">Remove</button>'
             + '</td></tr>';
         }).join('')
-      + '</tbody></table>');
+      + '</tbody></table></div>');
   });
 
   if (!_costingIngredients.length) html += '<div style="padding:2rem;text-align:center;color:var(--timber)">No ingredients yet. Add your first one.</div>';
@@ -7613,16 +7613,16 @@ function renderCostingPricing(panel) {
   });
   html += '</div>';
 
-  html += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.78rem;background:var(--white);border-radius:var(--r-lg);box-shadow:var(--shadow-sm);overflow:hidden">'
+  html += '<div style="overflow-x:auto;max-height:520px;overflow-y:auto;border-radius:var(--r-lg);box-shadow:var(--shadow-sm)"><table style="width:100%;border-collapse:collapse;font-size:.78rem;background:var(--white)">'
     + '<thead><tr style="background:var(--mist-light)">'
-    + '<th style="padding:10px 12px;text-align:left;color:var(--timber);font-weight:700">Menu Item</th>'
-    + '<th style="padding:10px 12px;text-align:left;color:var(--timber);font-weight:700">Cat</th>'
-    + '<th style="padding:10px 12px;text-align:right;color:var(--timber);font-weight:700">Recipe Cost</th>'
-    + '<th style="padding:10px 12px;text-align:right;color:var(--timber);font-weight:700">Selling Price</th>'
-    + '<th style="padding:10px 12px;text-align:center;color:var(--timber);font-weight:700">Food Cost %</th>'
-    + '<th style="padding:10px 12px;text-align:right;color:var(--timber);font-weight:700">Gross Profit</th>'
-    + '<th style="padding:10px 12px;text-align:center;color:var(--timber);font-weight:700">Margin</th>'
-    + '<th style="padding:10px 12px;text-align:center;color:var(--timber);font-weight:700">Status</th>'
+    + '<th style="padding:10px 12px;text-align:left;color:var(--timber);font-weight:700;position:sticky;top:0;z-index:2;background:var(--mist-light)">Menu Item</th>'
+    + '<th style="padding:10px 12px;text-align:left;color:var(--timber);font-weight:700;position:sticky;top:0;z-index:2;background:var(--mist-light)">Cat</th>'
+    + '<th style="padding:10px 12px;text-align:right;color:var(--timber);font-weight:700;position:sticky;top:0;z-index:2;background:var(--mist-light)">Recipe Cost</th>'
+    + '<th style="padding:10px 12px;text-align:right;color:var(--timber);font-weight:700;position:sticky;top:0;z-index:2;background:var(--mist-light)">Selling Price</th>'
+    + '<th style="padding:10px 12px;text-align:center;color:var(--timber);font-weight:700;position:sticky;top:0;z-index:2;background:var(--mist-light)">Food Cost %</th>'
+    + '<th style="padding:10px 12px;text-align:right;color:var(--timber);font-weight:700;position:sticky;top:0;z-index:2;background:var(--mist-light)">Gross Profit</th>'
+    + '<th style="padding:10px 12px;text-align:center;color:var(--timber);font-weight:700;position:sticky;top:0;z-index:2;background:var(--mist-light)">Margin</th>'
+    + '<th style="padding:10px 12px;text-align:center;color:var(--timber);font-weight:700;position:sticky;top:0;z-index:2;background:var(--mist-light)">Status</th>'
     + '</tr></thead><tbody>'
     + filtered.map(function(r) {
         var cost = recipeTotalCost(r);
