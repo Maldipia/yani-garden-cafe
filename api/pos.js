@@ -1405,14 +1405,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
         return res.status(400).json({ ok: false, error: `Cannot edit a ${orderStatus} order` });
       }
 
-      // Block editing if discount is applied — must remove discount first
-      if (parseFloat(discount_amount) > 0 && discounted_total !== null) {
-        return res.status(400).json({
-          ok: false,
-          error: 'Remove the discount first before editing items. This prevents incorrect totals.',
-          hasDiscount: true,
-        });
-      }
+      // Discount is handled below — editOrderItems recalculates discount proportionally
 
       // Recalculate totals
       let subtotal = 0;
