@@ -2498,12 +2498,12 @@ function renderOrders() {
       html += '<button class="oc-btn" style="background:var(--gold);color:#fff;margin-top:6px;width:100%" onclick="openEditOrder(\'' + o.orderId + '\')">✏️ Edit Order</button>';
     }
     // Delete button (ADMIN/OWNER only, for completed/cancelled orders)
-    var canDelete = (currentUser.role === 'OWNER');
+    var canDelete = (currentUser.role === 'OWNER' || currentUser.role === 'ADMIN');
     if (canDelete && (o.status === 'COMPLETED' || o.status === 'CANCELLED')) {
       html += '<button class="oc-btn oc-btn-delete" onclick="deleteOrder(\'' + o.orderId + '\')">🗑️ Delete</button>';
     }
     // Service charge waiver (OWNER/ADMIN, active orders with service charge)
-    if (currentUser.role === 'OWNER' &&
+    if ((currentUser.role === 'OWNER' || currentUser.role === 'ADMIN') &&
         o.status !== 'COMPLETED' && o.status !== 'CANCELLED' &&
         o.orderType === 'DINE-IN') {
       var hasSvc = o.serviceCharge && parseFloat(o.serviceCharge) > 0;

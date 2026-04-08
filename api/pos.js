@@ -1149,7 +1149,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
     // ── updateOrderTotals ──────────────────────────────────────────────────
     // Allows OWNER/ADMIN to waive or restore service charge on active orders
     if (action === 'updateOrderTotals') {
-      const authT = await checkAuth(['OWNER']);
+      const authT = await checkAuth(['OWNER','ADMIN']);
       if (!authT.ok) return res.status(403).json({ ok: false, error: authT.error });
       const { orderId, serviceCharge, total } = body;
       if (!orderId) return res.status(400).json({ ok: false, error: 'orderId required' });
@@ -1166,7 +1166,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
 
     // ── deleteOrder ────────────────────────────────────────────────────────
     if (action === 'deleteOrder') {
-      const authDO = await checkAuth(['OWNER']);
+      const authDO = await checkAuth(['OWNER','ADMIN']);
       if (!authDO.ok) return res.status(403).json({ ok: false, error: authDO.error });
       const orderId = String(body.orderId || '').trim();
       if (!orderId) return res.status(400).json({ ok: false, error: 'orderId is required' });
@@ -1395,10 +1395,24 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
 
       // Get order to check it exists and get order_no/table_no
       const orderR = await supaFetch(
-        `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=order_no,table_no,order_type`
+        `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=order_no,table_no,order_type,discounted_total,discount_amount,status`
       );
       if (!orderR.ok || !orderR.data.length) return res.status(404).json({ ok: false, error: 'Order not found' });
-      const { order_no, table_no, order_type } = orderR.data[0];
+      const { order_no, table_no, order_type, discounted_total, discount_amount, status: orderStatus } = orderR.data[0];
+
+      // Block editing completed or cancelled orders
+      if (['COMPLETED','CANCELLED'].includes(orderStatus)) {
+        return res.status(400).json({ ok: false, error: `Cannot edit a ${orderStatus} order` });
+      }
+
+      // Block editing if discount is applied — must remove discount first
+      if (parseFloat(discount_amount) > 0 && discounted_total !== null) {
+        return res.status(400).json({
+          ok: false,
+          error: 'Remove the discount first before editing items. This prevents incorrect totals.',
+          hasDiscount: true,
+        });
+      }
 
       // Recalculate totals
       let subtotal = 0;
@@ -1432,15 +1446,35 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       if (itemRows.length > 0) await supa('POST', 'dine_in_order_items', itemRows);
 
       // Update order totals
-      // Clear discount when items change — total basis has changed
-      await supa('PATCH', 'dine_in_orders', {
-        subtotal, service_charge: svcCharge, vat_amount: vatAmt2, total,
-        discounted_total: null, discount_amount: 0, discount_type: null,
-      }, { order_id: `eq.${orderId}` });
+      // If order had a discount, recalculate it on the new total
+      const existingR = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=discount_type,discount_amount,discounted_total`
+      );
+      let newDiscountAmt = 0, newDiscountedTotal = null, discountType = null;
+      if (existingR.ok && existingR.data && existingR.data[0]) {
+        const ex = existingR.data[0];
+        discountType = ex.discount_type;
+        if (discountType && parseFloat(ex.discount_amount) > 0) {
+          // Recalculate: apply same discount % to new total
+          const oldPct = parseFloat(ex.discount_amount) / (parseFloat(ex.discounted_total) + parseFloat(ex.discount_amount) || 1);
+          newDiscountAmt = Math.round(total * oldPct * 100) / 100;
+          newDiscountedTotal = Math.round((total - newDiscountAmt) * 100) / 100;
+        }
+      }
+      const patch = { subtotal, service_charge: svcCharge, vat_amount: vatAmt2, total };
+      if (newDiscountedTotal !== null) {
+        patch.discount_amount = newDiscountAmt;
+        patch.discounted_total = newDiscountedTotal;
+      } else {
+        patch.discount_amount = 0;
+        patch.discounted_total = null;
+        patch.discount_type = null;
+      }
+      await supa('PATCH', 'dine_in_orders', patch, { order_id: `eq.${orderId}` });
 
       logSync('dine_in_orders', orderId, 'UPDATE');
-      auditLog({ orderId, action: 'ORDER_EDITED', actor: { userId: body.userId, role: authE.role }, details: { newTotal: total, itemCount: itemRows.length } });
-      return res.status(200).json({ ok: true, orderId, subtotal, serviceCharge: svcCharge, total, discountCleared: true });
+      auditLog({ orderId, action: 'ORDER_EDITED', actor: { userId: body.userId, role: authE.role }, details: { newTotal: total, itemCount: itemRows.length, discountRecalculated: !!newDiscountedTotal } });
+      return res.status(200).json({ ok: true, orderId, subtotal, serviceCharge: svcCharge, total, discountedTotal: newDiscountedTotal, discountAmount: newDiscountAmt });
     }
 
     // ── placePlatformOrder ─────────────────────────────────────────────────
@@ -2467,7 +2501,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
     // ── getStaff ───────────────────────────────────────────────────────────
     // ── getAuditLogs ───────────────────────────────────────────────────────
     if (action === 'getAuditLogs') {
-      const authA = await checkAuth(['OWNER']);
+      const authA = await checkAuth(['OWNER','ADMIN']);
       if (!authA.ok) return res.status(403).json({ ok: false, error: authA.error });
       const orderId = body.orderId ? String(body.orderId).trim() : null;
       const limit   = Math.min(parseInt(body.limit) || 100, 500);
