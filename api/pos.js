@@ -1149,7 +1149,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
     // ── updateOrderTotals ──────────────────────────────────────────────────
     // Allows OWNER/ADMIN to waive or restore service charge on active orders
     if (action === 'updateOrderTotals') {
-      const authT = await checkAuth(['OWNER','ADMIN']);
+      const authT = await checkAuth(['OWNER']);
       if (!authT.ok) return res.status(403).json({ ok: false, error: authT.error });
       const { orderId, serviceCharge, total } = body;
       if (!orderId) return res.status(400).json({ ok: false, error: 'orderId required' });
@@ -1166,7 +1166,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
 
     // ── deleteOrder ────────────────────────────────────────────────────────
     if (action === 'deleteOrder') {
-      const authDO = await checkAdminAuth();
+      const authDO = await checkAuth(['OWNER']);
       if (!authDO.ok) return res.status(403).json({ ok: false, error: authDO.error });
       const orderId = String(body.orderId || '').trim();
       if (!orderId) return res.status(400).json({ ok: false, error: 'orderId is required' });
@@ -2463,7 +2463,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
     // ── getStaff ───────────────────────────────────────────────────────────
     // ── getAuditLogs ───────────────────────────────────────────────────────
     if (action === 'getAuditLogs') {
-      const authA = await checkAdminAuth();
+      const authA = await checkAuth(['OWNER']);
       if (!authA.ok) return res.status(403).json({ ok: false, error: authA.error });
       const orderId = body.orderId ? String(body.orderId).trim() : null;
       const limit   = Math.min(parseInt(body.limit) || 100, 500);
@@ -2494,7 +2494,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
 
     // ── updateSetting ──────────────────────────────────────────────────────
     if (action === 'updateSetting') {
-      const authUS = await checkAdminAuth();
+      const authUS = await checkAuth(['OWNER']);
       if (!authUS.ok) return res.status(403).json({ ok: false, error: authUS.error });
       const { key, value } = body;
       if (!key) return res.status(400).json({ ok: false, error: 'key is required' });
