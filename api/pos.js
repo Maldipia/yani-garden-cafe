@@ -1432,11 +1432,15 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       if (itemRows.length > 0) await supa('POST', 'dine_in_order_items', itemRows);
 
       // Update order totals
-      await supa('PATCH', 'dine_in_orders', { subtotal, service_charge: svcCharge, vat_amount: vatAmt2, total }, { order_id: `eq.${orderId}` });
+      // Clear discount when items change — total basis has changed
+      await supa('PATCH', 'dine_in_orders', {
+        subtotal, service_charge: svcCharge, vat_amount: vatAmt2, total,
+        discounted_total: null, discount_amount: 0, discount_type: null,
+      }, { order_id: `eq.${orderId}` });
 
       logSync('dine_in_orders', orderId, 'UPDATE');
       auditLog({ orderId, action: 'ORDER_EDITED', actor: { userId: body.userId, role: authE.role }, details: { newTotal: total, itemCount: itemRows.length } });
-      return res.status(200).json({ ok: true, orderId, subtotal, serviceCharge: svcCharge, total });
+      return res.status(200).json({ ok: true, orderId, subtotal, serviceCharge: svcCharge, total, discountCleared: true });
     }
 
     // ── placePlatformOrder ─────────────────────────────────────────────────

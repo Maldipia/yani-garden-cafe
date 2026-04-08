@@ -2837,18 +2837,12 @@ async function eoSaveChanges() {
       })
     });
     if (result.ok) {
-      // Update local state
-      allOrders.forEach(function(o) {
-        if (o.orderId === eoOrderId) {
-          o.items = eoItems.slice();
-          o.subtotal = result.subtotal || 0;
-          o.serviceCharge = result.serviceCharge || 0;
-          o.total = result.total || 0;
-        }
-      });
-      renderStats(); renderFilters(); renderOrders();
+      // Close modal immediately so staff sees response
       document.getElementById('eoOverlay').classList.remove('open');
       eoOrderId = null; eoItems = [];
+      // Reload fresh from DB — discount/total may have changed
+      await loadOrders();
+      renderStats(); renderFilters(); renderOrders();
     } else {
       showToast('❌ Save failed: ' + (result.error || 'Unknown error'), 'error');
     }
