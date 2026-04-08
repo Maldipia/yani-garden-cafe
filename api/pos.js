@@ -1447,10 +1447,10 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
 
       // Update order totals
       // If order had a discount, recalculate it proportionally on the new total
-      const existOrder = await supa('GET', 'dine_in_orders',null,{
-        order_id: `eq.${orderId}`,
-        select: 'discount_type,discount_amount,discounted_total,total'
-      });
+      // Use supaFetch with raw URL — supa() encodeURIComponent breaks select with commas
+      const existOrder = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=discount_type,discount_amount,discounted_total,total`
+      );
       let newDiscountAmt = 0, newDiscountedTotal = null, discountType = null;
       const ex = existOrder.ok && existOrder.data && existOrder.data[0];
       if (ex) {
