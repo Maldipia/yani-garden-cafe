@@ -1009,7 +1009,8 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       const limit       = Math.min(parseInt(body.limit) || 200, 500);
       const excludeTest = body.excludeTest === true || body.excludeTest === 'true';
 
-      let url = `${SUPABASE_URL}/rest/v1/dine_in_orders?order=created_at.desc&limit=${limit}&is_deleted=eq.false&select=*`;
+      const includeDeleted = body.includeDeleted === true || body.includeDeleted === 'true';
+      let url = `${SUPABASE_URL}/rest/v1/dine_in_orders?order=created_at.desc&limit=${limit}${includeDeleted ? '' : '&is_deleted=eq.false'}&select=*`;
       if (orderId) url += `&order_id=eq.${encodeURIComponent(orderId)}`;
       else if (status === 'ACTIVE') url += `&status=in.(NEW,PREPARING,READY)`;
       else if (status && status !== 'ALL') url += `&status=eq.${encodeURIComponent(status)}`;
@@ -1050,6 +1051,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       const orders = ordersR.data.map(o => ({
         orderId:       o.order_id,
         orderNo:       o.order_no,
+        isDeleted:     !!o.is_deleted,
         tableNo:       o.table_no,
         customer:      o.customer_name,   // alias used by printReceipt
         customerName:  o.customer_name,
@@ -1162,6 +1164,18 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to update order totals' });
       auditLog({ orderId, action: 'SERVICE_CHARGE_WAIVED', details: { serviceCharge: svc, total: tot, by: authT.userId } });
       return res.status(200).json({ ok: true, serviceCharge: svc, total: tot });
+    }
+
+    // ── restoreOrder ──────────────────────────────────────────────────────
+    if (action === 'restoreOrder') {
+      const authRO = await checkAuth(['OWNER','ADMIN']);
+      if (!authRO.ok) return res.status(403).json({ ok: false, error: authRO.error });
+      const orderId = String(body.orderId || '').trim();
+      if (!orderId || !isValidOrderId(orderId)) return res.status(400).json({ ok: false, error: 'Invalid orderId' });
+      const r = await supa('PATCH', 'dine_in_orders', { is_deleted: false, updated_at: new Date().toISOString() }, { order_id: `eq.${orderId}` });
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to restore order' });
+      auditLog({ orderId, action: 'ORDER_RESTORED', actor: { userId: body.userId, role: authRO.role } });
+      return res.status(200).json({ ok: true, orderId });
     }
 
     // ── deleteOrder ────────────────────────────────────────────────────────

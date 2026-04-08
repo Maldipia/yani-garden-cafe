@@ -2263,6 +2263,8 @@ function setFilter(f) {
     var shv = document.getElementById('shiftView');
     if (shv) shv.style.display = 'block';
     loadShiftSummary();
+  } else if (f === 'HISTORY') {
+    renderHistoryTab();
   } else if (f === 'LOGS') {
     var lv = document.getElementById('logsView');
     if (lv) lv.style.display = 'block';
@@ -7673,6 +7675,91 @@ async function updateCostingPrice(rid, val) {
 
 // ══════════════════════════════════════════════════════════
 // AUDIT LOGS TAB
+// ══════════════════════════════════════════════════════════
+// HISTORY TAB — all orders today including cancelled + deleted
+// ══════════════════════════════════════════════════════════
+async function renderHistoryTab() {
+  var container = document.getElementById('mainContent');
+  if (!container) return;
+  container.innerHTML = '<div style="padding:32px;text-align:center;color:var(--timber);font-size:.9rem">Loading order history...</div>';
+  try {
+    var result = await api('getOrders', { includeDeleted: true, limit: 500 });
+    if (!result.ok) { container.innerHTML = '<div style="padding:32px;color:red">Failed to load history</div>'; return; }
+    var orders = result.orders || [];
+    // Filter to today's business day (6AM PHT)
+    var phtOffset = 8 * 3600000;
+    var nowPHT = new Date(Date.now() + phtOffset);
+    if (nowPHT.getUTCHours() < 6) nowPHT.setUTCDate(nowPHT.getUTCDate() - 1);
+    var bizDayStart = new Date(Date.UTC(nowPHT.getUTCFullYear(), nowPHT.getUTCMonth(), nowPHT.getUTCDate(), 6, 0, 0) - phtOffset);
+    orders = orders.filter(function(o) { return new Date(o.createdAt || o.created_at) >= bizDayStart; });
+
+    if (orders.length === 0) { container.innerHTML = '<div style="padding:32px;text-align:center;color:var(--timber)">No orders today.</div>'; return; }
+
+    var sc = {
+      COMPLETED: { bg:'#F0FDF4', bdr:'#86EFAC', badge:'#16A34A' },
+      CANCELLED: { bg:'#FEF2F2', bdr:'#FECACA', badge:'#DC2626' },
+      READY:     { bg:'#FFFBEB', bdr:'#FDE68A', badge:'#D97706' },
+      PREPARING: { bg:'#EFF6FF', bdr:'#BFDBFE', badge:'#2563EB' },
+      NEW:       { bg:'#F5F3FF', bdr:'#DDD6FE', badge:'#7C3AED' },
+    };
+
+    var html = '<div style="padding:16px">';
+    html += '<div style="font-size:.75rem;font-weight:700;color:var(--timber);text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px">Today — ' + orders.length + ' orders (including cancelled &amp; deleted)</div>';
+
+    orders.forEach(function(o) {
+      var isDeleted = o.isDeleted;
+      var s = sc[o.status] || { bg:'#F9FAFB', bdr:'#E5E7EB', badge:'#6B7280' };
+      var amt = parseFloat(o.discountedTotal) > 0 ? parseFloat(o.discountedTotal) : parseFloat(o.total);
+      var time = '';
+      try {
+        var d = new Date(new Date(o.createdAt || o.created_at).getTime() + phtOffset);
+        var h = d.getUTCHours(), m = String(d.getUTCMinutes()).padStart(2,'0');
+        time = (h%12||12) + ':' + m + ' ' + (h>=12?'PM':'AM');
+      } catch(e) {}
+      var items = (o.items||[]).map(function(it){ return it.name + ' ×' + it.qty; }).join(', ') || '—';
+
+      html += '<div style="background:' + s.bg + ';border:1px solid ' + s.bdr + ';border-radius:12px;padding:14px 16px;margin-bottom:10px' + (isDeleted ? ';opacity:.6' : '') + '">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
+      html += '<div style="display:flex;align-items:center;gap:6px">';
+      html += '<span style="font-weight:700;font-size:.88rem">' + esc(o.orderId) + '</span>';
+      if (isDeleted) html += '<span style="background:#EF4444;color:#fff;font-size:.62rem;font-weight:700;padding:2px 6px;border-radius:8px">DELETED</span>';
+      html += '<span style="background:' + s.badge + ';color:#fff;font-size:.62rem;font-weight:700;padding:2px 6px;border-radius:8px">' + o.status + '</span>';
+      html += '</div>';
+      html += '<span style="font-weight:700;color:var(--forest)">₱' + (isNaN(amt)?'?':amt.toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2})) + '</span>';
+      html += '</div>';
+      html += '<div style="font-size:.76rem;color:var(--timber);display:flex;gap:10px;flex-wrap:wrap;margin-bottom:5px">';
+      html += '<span>🕐 ' + time + '</span><span>🪑 T' + (o.tableNo||'?') + '</span><span>' + (o.orderType||'') + '</span>';
+      if (o.paymentMethod && o.paymentMethod !== 'UNKNOWN') html += '<span>💳 ' + o.paymentMethod + '</span>';
+      if (o.customerName && o.customerName !== 'Guest') html += '<span>👤 ' + esc(o.customerName) + '</span>';
+      html += '</div>';
+      html += '<div style="font-size:.76rem;color:var(--forest-d)">' + esc(items) + '</div>';
+      if (parseFloat(o.discountAmount) > 0) {
+        html += '<div style="font-size:.72rem;color:#D97706;margin-top:3px">🏷️ ' + (o.discountType||'Discount') + ' −₱' + parseFloat(o.discountAmount).toFixed(2) + ' → Final ₱' + parseFloat(o.discountedTotal).toFixed(2) + '</div>';
+      }
+      if (isDeleted && (currentUser.role === 'OWNER' || currentUser.role === 'ADMIN')) {
+        html += '<button onclick="restoreOrder(\'' + esc(o.orderId) + '\')" style="margin-top:8px;padding:5px 14px;background:var(--forest);color:#fff;border:none;border-radius:8px;font-size:.74rem;font-weight:700;cursor:pointer">↩️ Restore to Board</button>';
+      }
+      html += '</div>';
+    });
+    html += '</div>';
+    container.innerHTML = html;
+  } catch(e) {
+    container.innerHTML = '<div style="padding:32px;color:red">Error: ' + e.message + '</div>';
+  }
+}
+
+async function restoreOrder(orderId) {
+  if (!confirm('Restore ' + orderId + ' back to the board?')) return;
+  var result = await api('restoreOrder', { orderId: orderId, userId: currentUser && currentUser.userId });
+  if (result.ok) {
+    showToast('✅ ' + orderId + ' restored', 'success');
+    await loadOrders();
+    renderHistoryTab();
+  } else {
+    showToast('❌ ' + (result.error || 'Failed'), 'error');
+  }
+}
+
 // ══════════════════════════════════════════════════════════
 var _auditLogsCache = [];
 var _auditFilter = '';
