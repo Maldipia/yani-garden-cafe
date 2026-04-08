@@ -2074,16 +2074,14 @@ function renderStats() {
     // Use discounted_total when available so discounts are reflected correctly
     if (o.status === 'COMPLETED') {
       completed++;
-      var orderTotal = 0;
-      if (o.discountedTotal && typeof o.discountedTotal === 'number') {
-        orderTotal = o.discountedTotal;          // discounted price (correct)
-      } else if (o.total && typeof o.total === 'number') {
-        orderTotal = o.total;                    // full price fallback
-      } else if (o.subtotal && typeof o.subtotal === 'number') {
-        orderTotal = o.subtotal + (o.serviceCharge || 0);
-      } else if (o.items && o.items.length) {
-        o.items.forEach(function(it){ orderTotal += (it.price || 0) * (it.qty || 1) });
-      }
+      // parseFloat handles both number and string from Supabase numeric columns
+      var orderTotal = parseFloat(o.discountedTotal) > 0
+        ? parseFloat(o.discountedTotal)
+        : parseFloat(o.total) > 0
+          ? parseFloat(o.total)
+          : parseFloat(o.subtotal) > 0
+            ? parseFloat(o.subtotal) + (parseFloat(o.serviceCharge) || 0)
+            : (o.items || []).reduce(function(s,it){ return s + (parseFloat(it.price)||0)*(it.qty||1); }, 0);
       totalSales += orderTotal;
     }
   });
@@ -2757,6 +2755,15 @@ function eoRenderBody() {
     '</div>';
   });
   html += '</div>';
+  // Live running total at bottom of edit modal
+  var eoSubtotal = eoItems.reduce(function(s,it){ return s + (parseFloat(it.price)||0)*(it.qty||1); }, 0);
+  var eoSvc = eoSubtotal * 0.10;
+  var eoTotal = eoSubtotal + eoSvc;
+  html += '<div style="margin:14px 16px 4px;padding:12px 16px;background:var(--forest);border-radius:10px;color:#fff">' +
+    '<div style="display:flex;justify-content:space-between;font-size:.78rem;opacity:.8"><span>Subtotal</span><span>₱' + eoSubtotal.toFixed(2) + '</span></div>' +
+    '<div style="display:flex;justify-content:space-between;font-size:.78rem;opacity:.8;margin-top:2px"><span>Service Charge (10%)</span><span>₱' + eoSvc.toFixed(2) + '</span></div>' +
+    '<div style="display:flex;justify-content:space-between;font-size:.95rem;font-weight:800;margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.25)"><span>NEW TOTAL</span><span>₱' + eoTotal.toFixed(2) + '</span></div>' +
+  '</div>';
   document.getElementById('eoBody').innerHTML = html;
 }
 
@@ -2948,7 +2955,7 @@ function printReceipt(orderId, copies) {
     });
   }
 
-  var subtotal = (o.subtotal && typeof o.subtotal === 'number') ? o.subtotal : itemsTotal;
+  var subtotal = parseFloat(o.subtotal) > 0 ? parseFloat(o.subtotal) : itemsTotal;
   var serviceCharge = (o.serviceCharge && typeof o.serviceCharge === 'number') ? o.serviceCharge : 0;
   var vatAmount = (o.vatAmount && typeof o.vatAmount === 'number') ? o.vatAmount : 0;
   var vatEnabled = vatAmount > 0;
