@@ -104,6 +104,14 @@
     {
       "source": "/saas",
       "destination": "/saas.html"
+    },
+    {
+      "source": "/admin",
+      "destination": "/admin.html"
+    },
+    {
+      "source": "/order",
+      "destination": "/index-customer.html"
     }
   ],
   "headers": [
