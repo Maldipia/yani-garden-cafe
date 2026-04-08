@@ -1446,29 +1446,32 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       if (itemRows.length > 0) await supa('POST', 'dine_in_order_items', itemRows);
 
       // Update order totals
-      // If order had a discount, recalculate it on the new total
-      const existingR = await supaFetch(
-        `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=discount_type,discount_amount,discounted_total`
-      );
+      // If order had a discount, recalculate it proportionally on the new total
+      const existOrder = await supa('GET', 'dine_in_orders',null,{
+        order_id: `eq.${orderId}`,
+        select: 'discount_type,discount_amount,discounted_total,total'
+      });
       let newDiscountAmt = 0, newDiscountedTotal = null, discountType = null;
-      if (existingR.ok && existingR.data && existingR.data[0]) {
-        const ex = existingR.data[0];
-        discountType = ex.discount_type;
-        if (discountType && parseFloat(ex.discount_amount) > 0) {
-          // Recalculate: apply same discount % to new total
-          const oldPct = parseFloat(ex.discount_amount) / (parseFloat(ex.discounted_total) + parseFloat(ex.discount_amount) || 1);
-          newDiscountAmt = Math.round(total * oldPct * 100) / 100;
+      const ex = existOrder.ok && existOrder.data && existOrder.data[0];
+      if (ex) {
+        const exDiscAmt  = parseFloat(ex.discount_amount || 0);
+        const exDisc     = parseFloat(ex.discounted_total || 0);
+        const exTotal    = parseFloat(ex.total || 0);
+        discountType     = ex.discount_type || null;
+        if (discountType && exDiscAmt > 0 && exTotal > 0) {
+          const pct = exDiscAmt / exTotal;           // e.g. 15.29/152.90 = 0.10
+          newDiscountAmt     = Math.round(total * pct * 100) / 100;
           newDiscountedTotal = Math.round((total - newDiscountAmt) * 100) / 100;
         }
       }
       const patch = { subtotal, service_charge: svcCharge, vat_amount: vatAmt2, total };
-      if (newDiscountedTotal !== null) {
-        patch.discount_amount = newDiscountAmt;
-        patch.discounted_total = newDiscountedTotal;
+      if (newDiscountedTotal !== null && discountType) {
+        patch.discount_amount    = newDiscountAmt;
+        patch.discounted_total   = newDiscountedTotal;
       } else {
-        patch.discount_amount = 0;
-        patch.discounted_total = null;
-        patch.discount_type = null;
+        patch.discount_amount    = 0;
+        patch.discounted_total   = null;
+        patch.discount_type      = null;
       }
       await supa('PATCH', 'dine_in_orders', patch, { order_id: `eq.${orderId}` });
 
