@@ -1,1100 +1,346 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Yani Garden Cafe — System Architecture</title>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>YANI POS — System Blueprint</title>
   <style>
-    /* ── Reset & Base ─────────────────────────────────────────────────── */
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    :root {
-      --bg:        #0f1117;
-      --surface:   #1a1d27;
-      --surface2:  #21253a;
-      --border:    #2e3350;
-      --accent:    #e8a838;
-      --accent2:   #f0c060;
-      --teal:      #1abc9c;
-      --blue:      #3498db;
-      --purple:    #9b59b6;
-      --red:       #e74c3c;
-      --green:     #2ecc71;
-      --orange:    #e67e22;
-      --gray:      #8892b0;
-      --white:     #ccd6f6;
-      --white2:    #e6f1ff;
-      --font:      'Segoe UI', system-ui, -apple-system, sans-serif;
-      --mono:      'Cascadia Code', 'Fira Code', 'Consolas', monospace;
-    }
-    html { scroll-behavior: smooth; }
-    body {
-      background: var(--bg);
-      color: var(--white);
-      font-family: var(--font);
-      line-height: 1.7;
-      font-size: 15px;
-    }
-    a { color: var(--accent); text-decoration: none; }
-    a:hover { text-decoration: underline; }
-
-    /* ── Scrollbar ────────────────────────────────────────────────────── */
-    ::-webkit-scrollbar { width: 8px; }
-    ::-webkit-scrollbar-track { background: var(--bg); }
-    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-
-    /* ── Layout ───────────────────────────────────────────────────────── */
-    .page-wrapper { display: flex; min-height: 100vh; }
-
-    /* ── Sidebar Nav ──────────────────────────────────────────────────── */
-    .sidebar {
-      width: 260px;
-      min-width: 260px;
-      background: var(--surface);
-      border-right: 1px solid var(--border);
-      position: sticky;
-      top: 0;
-      height: 100vh;
-      overflow-y: auto;
-      padding: 28px 0 40px;
-      display: flex;
-      flex-direction: column;
-    }
-    .sidebar-logo {
-      padding: 0 24px 24px;
-      border-bottom: 1px solid var(--border);
-      margin-bottom: 20px;
-    }
-    .sidebar-logo .cafe-name {
-      font-size: 13px;
-      font-weight: 700;
-      color: var(--accent);
-      letter-spacing: 2px;
-      text-transform: uppercase;
-    }
-    .sidebar-logo .doc-title {
-      font-size: 11px;
-      color: var(--gray);
-      margin-top: 2px;
-    }
-    .nav-section-label {
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 1.5px;
-      text-transform: uppercase;
-      color: var(--gray);
-      padding: 8px 24px 4px;
-      margin-top: 8px;
-    }
-    .nav-link {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 8px 24px;
-      font-size: 13px;
-      color: var(--gray);
-      transition: all 0.2s;
-      border-left: 3px solid transparent;
-      cursor: pointer;
-    }
-    .nav-link:hover { color: var(--white2); background: var(--surface2); }
-    .nav-link.active { color: var(--accent); border-left-color: var(--accent); background: rgba(232,168,56,0.07); }
-    .nav-link .nav-icon { font-size: 14px; width: 18px; text-align: center; }
-
-    /* ── Main Content ─────────────────────────────────────────────────── */
-    .main {
-      flex: 1;
-      overflow-x: hidden;
-      padding: 48px 56px 80px;
-      max-width: 1100px;
-    }
-
-    /* ── Page Header ──────────────────────────────────────────────────── */
-    .page-header { margin-bottom: 48px; }
-    .page-header .badge {
-      display: inline-block;
-      background: rgba(232,168,56,0.15);
-      color: var(--accent);
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 1.5px;
-      text-transform: uppercase;
-      padding: 4px 12px;
-      border-radius: 20px;
-      border: 1px solid rgba(232,168,56,0.3);
-      margin-bottom: 16px;
-    }
-    .page-header h1 {
-      font-size: 36px;
-      font-weight: 800;
-      color: var(--white2);
-      line-height: 1.2;
-      margin-bottom: 12px;
-    }
-    .page-header h1 span { color: var(--accent); }
-    .page-header .subtitle {
-      font-size: 15px;
-      color: var(--gray);
-      max-width: 600px;
-    }
-    .meta-row {
-      display: flex;
-      gap: 24px;
-      margin-top: 20px;
-      flex-wrap: wrap;
-    }
-    .meta-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 12px;
-      color: var(--gray);
-    }
-    .meta-item .dot {
-      width: 8px; height: 8px;
-      border-radius: 50%;
-      background: var(--green);
-      animation: pulse 2s infinite;
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
-    }
-
-    /* ── Section ──────────────────────────────────────────────────────── */
-    .section { margin-bottom: 64px; scroll-margin-top: 32px; }
-    .section-header {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      margin-bottom: 24px;
-      padding-bottom: 16px;
-      border-bottom: 1px solid var(--border);
-    }
-    .section-icon {
-      width: 40px; height: 40px;
-      border-radius: 10px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 18px;
-      flex-shrink: 0;
-    }
-    .section-header h2 {
-      font-size: 22px;
-      font-weight: 700;
-      color: var(--white2);
-    }
-    .section-header .section-num {
-      font-size: 12px;
-      color: var(--gray);
-      font-weight: 400;
-      margin-left: 4px;
-    }
-
-    /* ── Diagram Container ────────────────────────────────────────────── */
-    .diagram-wrapper {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      overflow: hidden;
-      position: relative;
-    }
-    .diagram-toolbar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 12px 20px;
-      background: var(--surface2);
-      border-bottom: 1px solid var(--border);
-    }
-    .diagram-toolbar .toolbar-title {
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--gray);
-      letter-spacing: 1px;
-      text-transform: uppercase;
-    }
-    .diagram-toolbar .toolbar-actions { display: flex; gap: 8px; }
-    .toolbar-btn {
-      background: var(--border);
-      border: none;
-      color: var(--white);
-      font-size: 12px;
-      padding: 5px 12px;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-    .toolbar-btn:hover { background: var(--accent); color: #000; }
-    .diagram-img-wrap {
-      overflow: auto;
-      max-height: 600px;
-      cursor: grab;
-    }
-    .diagram-img-wrap:active { cursor: grabbing; }
-    .diagram-img-wrap img {
-      width: 100%;
-      min-width: 900px;
-      display: block;
-      transition: transform 0.2s;
-      transform-origin: top left;
-    }
-
-    /* ── Architecture Layers ──────────────────────────────────────────── */
-    .layers-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-    }
-    .layer-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 20px;
-      position: relative;
-      overflow: hidden;
-      transition: border-color 0.2s, transform 0.2s;
-    }
-    .layer-card:hover { border-color: var(--accent); transform: translateY(-2px); }
-    .layer-card::before {
-      content: '';
-      position: absolute;
-      top: 0; left: 0; right: 0;
-      height: 3px;
-    }
-    .layer-card.users::before    { background: var(--teal); }
-    .layer-card.vercel::before   { background: var(--blue); }
-    .layer-card.google::before   { background: var(--purple); }
-    .layer-card.github::before   { background: var(--green); }
-    .layer-card .layer-label {
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      margin-bottom: 10px;
-    }
-    .layer-card.users .layer-label    { color: var(--teal); }
-    .layer-card.vercel .layer-label   { color: var(--blue); }
-    .layer-card.google .layer-label   { color: var(--purple); }
-    .layer-card.github .layer-label   { color: var(--green); }
-    .layer-card h3 { font-size: 16px; font-weight: 700; color: var(--white2); margin-bottom: 8px; }
-    .layer-card p { font-size: 13px; color: var(--gray); margin-bottom: 12px; }
-    .tag-list { display: flex; flex-wrap: wrap; gap: 6px; }
-    .tag {
-      font-size: 11px;
-      padding: 3px 10px;
-      border-radius: 20px;
-      font-weight: 600;
-      font-family: var(--mono);
-    }
-    .tag.teal   { background: rgba(26,188,156,0.15); color: var(--teal); border: 1px solid rgba(26,188,156,0.3); }
-    .tag.blue   { background: rgba(52,152,219,0.15); color: var(--blue); border: 1px solid rgba(52,152,219,0.3); }
-    .tag.purple { background: rgba(155,89,182,0.15); color: var(--purple); border: 1px solid rgba(155,89,182,0.3); }
-    .tag.green  { background: rgba(46,204,113,0.15); color: var(--green); border: 1px solid rgba(46,204,113,0.3); }
-    .tag.orange { background: rgba(230,126,34,0.15); color: var(--orange); border: 1px solid rgba(230,126,34,0.3); }
-    .tag.amber  { background: rgba(232,168,56,0.15); color: var(--accent); border: 1px solid rgba(232,168,56,0.3); }
-    .tag.red    { background: rgba(231,76,60,0.15); color: var(--red); border: 1px solid rgba(231,76,60,0.3); }
-    .tag.gray   { background: rgba(136,146,176,0.15); color: var(--gray); border: 1px solid rgba(136,146,176,0.3); }
-
-    /* ── Data Flow ────────────────────────────────────────────────────── */
-    .flow-steps { display: flex; flex-direction: column; gap: 0; }
-    .flow-step {
-      display: flex;
-      gap: 20px;
-      align-items: flex-start;
-      position: relative;
-    }
-    .flow-step:not(:last-child)::after {
-      content: '';
-      position: absolute;
-      left: 19px;
-      top: 44px;
-      bottom: -8px;
-      width: 2px;
-      background: var(--border);
-    }
-    .step-num {
-      width: 40px; height: 40px;
-      border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 14px;
-      font-weight: 700;
-      flex-shrink: 0;
-      position: relative;
-      z-index: 1;
-    }
-    .flow-step.order .step-num  { background: rgba(26,188,156,0.2); color: var(--teal); border: 2px solid var(--teal); }
-    .flow-step.image .step-num  { background: rgba(232,168,56,0.2); color: var(--accent); border: 2px solid var(--accent); }
-    .flow-step.deploy .step-num { background: rgba(46,204,113,0.2); color: var(--green); border: 2px solid var(--green); }
-    .step-content { padding: 8px 0 24px; }
-    .step-content h4 { font-size: 14px; font-weight: 700; color: var(--white2); margin-bottom: 4px; }
-    .step-content p { font-size: 13px; color: var(--gray); }
-    .step-content code {
-      font-family: var(--mono);
-      font-size: 12px;
-      background: var(--surface2);
-      color: var(--accent);
-      padding: 1px 6px;
-      border-radius: 4px;
-    }
-
-    /* ── API Actions Table ────────────────────────────────────────────── */
-    .api-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 8px;
-    }
-    .api-action {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 12px 14px;
-      transition: border-color 0.2s;
-    }
-    .api-action:hover { border-color: var(--accent); }
-    .api-action .action-name {
-      font-family: var(--mono);
-      font-size: 12px;
-      color: var(--accent);
-      font-weight: 600;
-      margin-bottom: 4px;
-    }
-    .api-action .action-desc {
-      font-size: 11px;
-      color: var(--gray);
-    }
-    .api-action .action-role {
-      font-size: 10px;
-      margin-top: 6px;
-    }
-
-    /* ── Database Sheets ──────────────────────────────────────────────── */
-    .sheets-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 12px;
-    }
-    .sheet-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 16px;
-      transition: border-color 0.2s, transform 0.2s;
-    }
-    .sheet-card:hover { border-color: var(--green); transform: translateY(-2px); }
-    .sheet-card .sheet-icon { font-size: 22px; margin-bottom: 8px; }
-    .sheet-card .sheet-name {
-      font-family: var(--mono);
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--green);
-      margin-bottom: 6px;
-    }
-    .sheet-card .sheet-desc { font-size: 12px; color: var(--gray); }
-
-    /* ── Security Section ─────────────────────────────────────────────── */
-    .security-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 16px;
-    }
-    .security-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 20px;
-      transition: border-color 0.2s;
-    }
-    .security-card:hover { border-color: var(--red); }
-    .security-card .sec-icon { font-size: 28px; margin-bottom: 12px; }
-    .security-card h4 { font-size: 14px; font-weight: 700; color: var(--white2); margin-bottom: 8px; }
-    .security-card p { font-size: 13px; color: var(--gray); }
-
-    /* ── RBAC Table ───────────────────────────────────────────────────── */
-    .rbac-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13px;
-    }
-    .rbac-table th {
-      background: var(--surface2);
-      color: var(--gray);
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      padding: 12px 16px;
-      text-align: left;
-      border-bottom: 1px solid var(--border);
-    }
-    .rbac-table td {
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--border);
-      color: var(--white);
-    }
-    .rbac-table tr:last-child td { border-bottom: none; }
-    .rbac-table tr:hover td { background: var(--surface2); }
-    .rbac-table .role-badge {
-      display: inline-block;
-      padding: 2px 10px;
-      border-radius: 20px;
-      font-size: 11px;
-      font-weight: 700;
-    }
-    .role-owner  { background: rgba(232,168,56,0.2); color: var(--accent); }
-    .role-admin  { background: rgba(52,152,219,0.2); color: var(--blue); }
-    .role-staff  { background: rgba(46,204,113,0.2); color: var(--green); }
-    .check { color: var(--green); }
-    .cross { color: var(--red); }
-
-    /* ── Tech Stack ───────────────────────────────────────────────────── */
-    .stack-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 12px;
-    }
-    .stack-item {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 16px;
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      transition: border-color 0.2s;
-    }
-    .stack-item:hover { border-color: var(--accent); }
-    .stack-item .stack-logo {
-      width: 40px; height: 40px;
-      border-radius: 8px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 20px;
-      flex-shrink: 0;
-    }
-    .stack-item .stack-info h4 { font-size: 13px; font-weight: 700; color: var(--white2); }
-    .stack-item .stack-info p  { font-size: 11px; color: var(--gray); margin-top: 2px; }
-
-    /* ── Info Box ─────────────────────────────────────────────────────── */
-    .info-box {
-      background: rgba(232,168,56,0.07);
-      border: 1px solid rgba(232,168,56,0.25);
-      border-radius: 10px;
-      padding: 16px 20px;
-      margin-top: 16px;
-      font-size: 13px;
-      color: var(--white);
-      display: flex;
-      gap: 12px;
-      align-items: flex-start;
-    }
-    .info-box .info-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
-    .info-box p { color: var(--gray); }
-    .info-box strong { color: var(--accent); }
-
-    /* ── Prose ────────────────────────────────────────────────────────── */
-    .prose { font-size: 14px; color: var(--gray); line-height: 1.8; }
-    .prose p { margin-bottom: 14px; }
-    .prose strong { color: var(--white); }
-
-    /* ── Responsive ───────────────────────────────────────────────────── */
-    @media (max-width: 900px) {
-      .sidebar { display: none; }
-      .main { padding: 24px 20px 60px; }
-      .layers-grid, .security-grid, .stack-grid { grid-template-columns: 1fr; }
-      .api-grid { grid-template-columns: 1fr 1fr; }
-      .sheets-grid { grid-template-columns: 1fr 1fr; }
-    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{--bg:#0f1117;--surface:#1a1d27;--surface2:#21253a;--border:#2e3350;--teal:#1abc9c;--teal2:#16a085;--purple:#9b59b6;--blue:#3498db;--amber:#e8a838;--green:#2ecc71;--red:#e74c3c;--gray:#8892b0;--white:#ccd6f6;--white2:#e6f1ff;--font:'Segoe UI',system-ui,-apple-system,sans-serif;--mono:'Cascadia Code','Fira Code','Consolas',monospace}
+    html{scroll-behavior:smooth}
+    body{background:var(--bg);color:var(--white);font-family:var(--font);line-height:1.7;font-size:15px}
+    a{color:var(--teal);text-decoration:none}a:hover{text-decoration:underline}
+    ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+    .page{display:flex;min-height:100vh}
+    .sidebar{width:240px;min-width:240px;background:var(--surface);border-right:1px solid var(--border);position:sticky;top:0;height:100vh;overflow-y:auto;padding:20px 0 40px;display:flex;flex-direction:column}
+    .sb-logo{padding:0 20px 20px;border-bottom:1px solid var(--border);margin-bottom:16px}
+    .sb-logo .cafe{font-size:12px;font-weight:700;color:var(--teal);letter-spacing:2px;text-transform:uppercase}
+    .sb-logo .sub{font-size:11px;color:var(--gray);margin-top:2px}
+    .sb-score{margin:0 16px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:10px}
+    .sb-score .grade{font-size:24px;font-weight:700;color:var(--teal)}
+    .sb-score .meta{font-size:11px;color:var(--gray);line-height:1.4}
+    .nav-label{font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--gray);padding:8px 20px 4px;margin-top:6px}
+    .nav-link{display:flex;align-items:center;gap:8px;padding:7px 20px;font-size:13px;color:var(--gray);border-left:3px solid transparent;cursor:pointer;transition:all .15s}
+    .nav-link:hover{color:var(--white2);background:var(--surface2)}
+    .nav-link.active{color:var(--teal);border-left-color:var(--teal);background:rgba(26,188,156,.08)}
+    .nav-dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0;opacity:.6}
+    .main{flex:1;padding:32px 40px;max-width:1100px;overflow-x:hidden}
+    .page-header{margin-bottom:48px;padding-bottom:24px;border-bottom:1px solid var(--border)}
+    .page-header h1{font-size:28px;font-weight:700;color:var(--white2);margin-bottom:6px}
+    .page-header .tagline{font-size:14px;color:var(--gray)}
+    .stats-row{display:flex;gap:12px;flex-wrap:wrap;margin-top:16px}
+    .stat{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:12px}
+    .stat .label{color:var(--gray)}.stat .value{font-weight:700;color:var(--white2);margin-left:4px}
+    .stat.green .value{color:var(--teal)}.stat.amber .value{color:var(--amber)}
+    .section{margin-bottom:56px;scroll-margin-top:24px}
+    .section-header{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+    .section-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+    .section-icon.teal{background:rgba(26,188,156,.15);color:var(--teal)}.section-icon.purple{background:rgba(155,89,182,.15);color:var(--purple)}.section-icon.blue{background:rgba(52,152,219,.15);color:var(--blue)}.section-icon.amber{background:rgba(232,168,56,.15);color:var(--amber)}.section-icon.green{background:rgba(46,204,113,.15);color:var(--green)}
+    .section-header h2{font-size:20px;font-weight:700;color:var(--white2)}
+    .section-header .num{font-size:13px;color:var(--gray);margin-left:4px;font-weight:400}
+    .section-desc{font-size:14px;color:var(--gray);margin-bottom:20px;line-height:1.7}
+    .diagram-wrap{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:24px}
+    .diagram-bar{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface2)}
+    .diagram-bar .title{font-size:12px;font-weight:600;color:var(--white)}.diagram-bar .fig{font-size:11px;color:var(--gray)}
+    .diagram-img{width:100%;display:block;cursor:zoom-in}.diagram-img:hover{opacity:.95}
+    table{width:100%;border-collapse:collapse;margin-bottom:20px;font-size:13px}
+    th{background:rgba(26,188,156,.12);color:var(--teal);font-weight:600;text-align:left;padding:9px 12px;border-bottom:1px solid var(--border)}
+    td{padding:8px 12px;border-bottom:1px solid var(--border);color:var(--white);vertical-align:top}
+    tr:nth-child(even) td{background:rgba(255,255,255,.025)}
+    td code,th code{font-family:var(--mono);font-size:11px;background:var(--surface2);color:var(--amber);padding:1px 5px;border-radius:3px}
+    .badge{display:inline-block;font-size:10px;font-weight:600;padding:1px 7px;border-radius:99px;margin-right:4px;vertical-align:middle}
+    .badge.teal{background:rgba(26,188,156,.15);color:var(--teal)}.badge.purple{background:rgba(155,89,182,.15);color:var(--purple)}.badge.amber{background:rgba(232,168,56,.15);color:var(--amber)}.badge.red{background:rgba(231,76,60,.15);color:var(--red)}.badge.green{background:rgba(46,204,113,.15);color:var(--green)}.badge.blue{background:rgba(52,152,219,.15);color:var(--blue)}
+    .card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:20px}
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px}
+    .card .ct{font-size:13px;font-weight:600;color:var(--white2);margin-bottom:4px}.card .cs{font-size:12px;color:var(--gray);line-height:1.5}
+    .card.teal{border-top:2px solid var(--teal)}.card.purple{border-top:2px solid var(--purple)}.card.blue{border-top:2px solid var(--blue)}.card.amber{border-top:2px solid var(--amber)}.card.green{border-top:2px solid var(--green)}
+    pre{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px 16px;font-family:var(--mono);font-size:12px;color:var(--white);overflow-x:auto;margin-bottom:16px;line-height:1.6}
+    pre .k{color:var(--purple)}pre .s{color:var(--teal)}pre .c{color:var(--gray)}
+    .steps{display:flex;flex-direction:column;gap:0;margin-bottom:20px}
+    .step{display:flex;gap:14px;padding:14px 0;position:relative}
+    .step:not(:last-child)::after{content:'';position:absolute;left:15px;top:44px;bottom:-1px;width:2px;background:var(--border)}
+    .step-num{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;z-index:1}
+    .step-num.teal{background:rgba(26,188,156,.2);color:var(--teal);border:2px solid var(--teal)}.step-num.amber{background:rgba(232,168,56,.2);color:var(--amber);border:2px solid var(--amber)}.step-num.purple{background:rgba(155,89,182,.2);color:var(--purple);border:2px solid var(--purple)}.step-num.blue{background:rgba(52,152,219,.2);color:var(--blue);border:2px solid var(--blue)}.step-num.gray{background:rgba(136,146,176,.15);color:var(--gray);border:2px solid var(--border)}
+    .step-content .title{font-size:14px;font-weight:600;color:var(--white2);margin-bottom:2px}.step-content .desc{font-size:13px;color:var(--gray);line-height:1.5}
+    .info{background:rgba(26,188,156,.07);border:1px solid rgba(26,188,156,.2);border-radius:8px;padding:12px 16px;font-size:13px;color:var(--white);margin-bottom:16px;line-height:1.6}
+    .warn{background:rgba(232,168,56,.07);border:1px solid rgba(232,168,56,.2);border-radius:8px;padding:12px 16px;font-size:13px;color:var(--white);margin-bottom:16px;line-height:1.6}
+    .info strong,.warn strong{font-weight:600}
+    .role-row{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}.role-row:last-child{border-bottom:none}
+    .role-pin{font-family:var(--mono);font-size:16px;font-weight:700;color:var(--amber);min-width:44px}
+    .role-name{font-size:13px;font-weight:600;color:var(--white2);margin-bottom:2px}.role-can{font-size:12px;color:var(--gray)}
+    .job{display:flex;gap:14px;padding:10px 0;border-bottom:1px solid var(--border);font-size:13px}.job:last-child{border-bottom:none}
+    .job-time{font-family:var(--mono);font-size:11px;color:var(--teal);min-width:150px;padding-top:1px;flex-shrink:0}
+    .job-desc{color:var(--white)}.job-desc strong{color:var(--white2)}
+    @media(max-width:768px){.sidebar{display:none}.main{padding:20px}}
   </style>
 </head>
 <body>
-<div class="page-wrapper">
+<div class="page">
 
-  <!-- ── Sidebar ──────────────────────────────────────────────────────── -->
-  <nav class="sidebar">
-    <div class="sidebar-logo">
-      <div class="cafe-name">Yani Garden Cafe</div>
-      <div class="doc-title">System Architecture v1.0</div>
-    </div>
-    <div class="nav-section-label">Overview</div>
-    <div class="nav-link active" onclick="scrollTo('overview')">
-      <span class="nav-icon">🏠</span> Overview
-    </div>
-    <div class="nav-link" onclick="scrollTo('diagram')">
-      <span class="nav-icon">🗺️</span> Architecture Diagram
-    </div>
-    <div class="nav-section-label">Architecture</div>
-    <div class="nav-link" onclick="scrollTo('layers')">
-      <span class="nav-icon">📐</span> System Layers
-    </div>
-    <div class="nav-link" onclick="scrollTo('stack')">
-      <span class="nav-icon">⚙️</span> Tech Stack
-    </div>
-    <div class="nav-section-label">Backend</div>
-    <div class="nav-link" onclick="scrollTo('api')">
-      <span class="nav-icon">⚡</span> API Actions
-    </div>
-    <div class="nav-link" onclick="scrollTo('database')">
-      <span class="nav-icon">🗄️</span> Database Sheets
-    </div>
-    <div class="nav-section-label">Flows</div>
-    <div class="nav-link" onclick="scrollTo('flows')">
-      <span class="nav-icon">🔄</span> Data Flows
-    </div>
-    <div class="nav-link" onclick="scrollTo('cicd')">
-      <span class="nav-icon">🚀</span> CI/CD Pipeline
-    </div>
-    <div class="nav-section-label">Security</div>
-    <div class="nav-link" onclick="scrollTo('security')">
-      <span class="nav-icon">🔐</span> Security Model
-    </div>
-    <div class="nav-link" onclick="scrollTo('rbac')">
-      <span class="nav-icon">👥</span> Roles & Permissions
-    </div>
-  </nav>
+<nav class="sidebar">
+  <div class="sb-logo">
+    <div class="cafe">YANI GARDEN CAFE</div>
+    <div class="sub">System Blueprint &middot; April 2026</div>
+  </div>
+  <div class="sb-score">
+    <div class="grade">85</div>
+    <div class="meta">System score<br><span style="color:var(--teal)">Grade B+ &middot; Production</span></div>
+  </div>
+  <div class="nav-label">Overview</div>
+  <div class="nav-link active" onclick="goTo('overview',this)"><div class="nav-dot"></div>System overview</div>
+  <div class="nav-link" onclick="goTo('arch',this)"><div class="nav-dot"></div>Architecture diagram</div>
+  <div class="nav-label">Flows</div>
+  <div class="nav-link" onclick="goTo('order-flow',this)"><div class="nav-dot"></div>Order lifecycle</div>
+  <div class="nav-link" onclick="goTo('online-flow',this)"><div class="nav-dot"></div>Online order flow</div>
+  <div class="nav-link" onclick="goTo('payment-flow',this)"><div class="nav-dot"></div>Payment flow</div>
+  <div class="nav-label">Data</div>
+  <div class="nav-link" onclick="goTo('erd',this)"><div class="nav-dot"></div>Database schema (ERD)</div>
+  <div class="nav-link" onclick="goTo('costing',this)"><div class="nav-dot"></div>Costing module</div>
+  <div class="nav-label">Backend</div>
+  <div class="nav-link" onclick="goTo('api',this)"><div class="nav-dot"></div>API &mdash; 65 actions</div>
+  <div class="nav-link" onclick="goTo('auth',this)"><div class="nav-dot"></div>Auth &amp; roles</div>
+  <div class="nav-link" onclick="goTo('jobs',this)"><div class="nav-dot"></div>Automated jobs</div>
+  <div class="nav-label">Reference</div>
+  <div class="nav-link" onclick="goTo('business-day',this)"><div class="nav-dot"></div>Business day definition</div>
+  <div class="nav-link" onclick="goTo('stack',this)"><div class="nav-dot"></div>Tech stack</div>
+</nav>
 
-  <!-- ── Main ─────────────────────────────────────────────────────────── -->
-  <main class="main">
+<main class="main">
 
-    <!-- Page Header -->
-    <div class="page-header" id="overview">
-      <div class="badge">Technical Documentation</div>
-      <h1>Yani Garden Cafe<br/><span>POS System Architecture</span></h1>
-      <p class="subtitle">A comprehensive reference for the serverless point-of-sale and customer ordering platform — covering all components, data flows, API actions, and security model.</p>
-      <div class="meta-row">
-        <div class="meta-item"><div class="dot"></div> Live on Vercel</div>
-        <div class="meta-item">📅 March 2026</div>
-        <div class="meta-item">🔖 Version 1.0</div>
-        <div class="meta-item">🔗 <a href="https://yani-garden-cafe-d3l6.vercel.app" target="_blank">yani-garden-cafe-d3l6.vercel.app</a></div>
-      </div>
-    </div>
+<div class="page-header" id="overview">
+  <h1>YANI Garden Cafe POS &mdash; System Blueprint</h1>
+  <div class="tagline">Architecture &middot; Order logic &middot; Database schema &middot; API reference &middot; SaaS migration</div>
+  <div class="stats-row">
+    <div class="stat green"><span class="label">Score</span><span class="value">85/100 B+</span></div>
+    <div class="stat"><span class="label">Orders (30d)</span><span class="value">222</span></div>
+    <div class="stat green"><span class="label">Revenue (30d)</span><span class="value">&#8369;73,878</span></div>
+    <div class="stat"><span class="label">Audit events</span><span class="value">5,659</span></div>
+    <div class="stat green"><span class="label">Stale discounts</span><span class="value">0</span></div>
+    <div class="stat amber"><span class="label">Inventory covered</span><span class="value">7 / 61</span></div>
+  </div>
+</div>
 
-    <!-- ── Architecture Diagram ──────────────────────────────────────── -->
-    <div class="section" id="diagram">
-      <div class="section-header">
-        <div class="section-icon" style="background:rgba(232,168,56,0.15);">🗺️</div>
-        <h2>Architecture Diagram <span class="section-num">— Full System View</span></h2>
-      </div>
-      <div class="diagram-wrapper">
-        <div class="diagram-toolbar">
-          <span class="toolbar-title">System Architecture — v1.0 • March 2026</span>
-          <div class="toolbar-actions">
-            <button class="toolbar-btn" onclick="zoomIn()">+ Zoom In</button>
-            <button class="toolbar-btn" onclick="zoomOut()">− Zoom Out</button>
-            <button class="toolbar-btn" onclick="resetZoom()">Reset</button>
-          </div>
-        </div>
-        <div class="diagram-img-wrap" id="diagramWrap">
-          <img id="archImg" src="/system_architecture.png" alt="Yani Garden Cafe System Architecture Diagram" />
-        </div>
-      </div>
-      <div class="info-box" style="margin-top:12px;">
-        <span class="info-icon">💡</span>
-        <p>The diagram is organized into <strong>4 horizontal layers</strong>: Users → Vercel (CDN + Serverless) → Google Cloud (Apps Script + Sheets + Drive) → GitHub (Source of Truth + CI/CD). Arrows show data flow direction and type.</p>
-      </div>
-    </div>
+<div class="section" id="arch">
+  <div class="section-header"><div class="section-icon teal">&#127959;</div><h2>Architecture Diagram <span class="num">&mdash; Three-tier system</span></h2></div>
+  <p class="section-desc">Three Vercel deployments (customer menu, POS API, admin panel) sharing a single Supabase instance. All business logic lives in <code>api/pos.js</code> on the POS deployment.</p>
+  <div class="diagram-wrap">
+    <div class="diagram-bar"><span class="title">Figure 1 &mdash; System architecture</span><span class="fig">Client &rarr; Vercel Edge &rarr; Supabase</span></div>
+    <img class="diagram-img" src="/system_architecture.png" alt="System Architecture Diagram" onclick="openFull(this.src)"/>
+  </div>
+  <table>
+    <tr><th>Deployment</th><th>Domain</th><th>Purpose</th></tr>
+    <tr><td><span class="badge teal">Customer</span></td><td><code>yanigardencafe.com</code></td><td>QR menu, online ordering, order tracker, table reservations</td></tr>
+    <tr><td><span class="badge purple">POS API</span></td><td><code>pos.yanigardencafe.com</code></td><td>All 65 API actions &mdash; serverless Node.js, JWT auth, cron jobs</td></tr>
+    <tr><td><span class="badge blue">Admin</span></td><td><code>admin.yanigardencafe.com</code></td><td>8 JS admin modules &mdash; orders, menu, payments, costing, analytics</td></tr>
+  </table>
+</div>
 
-    <!-- ── System Layers ─────────────────────────────────────────────── -->
-    <div class="section" id="layers">
-      <div class="section-header">
-        <div class="section-icon" style="background:rgba(52,152,219,0.15);">📐</div>
-        <h2>System Layers <span class="section-num">— 4 Tiers</span></h2>
-      </div>
-      <div class="layers-grid">
-        <div class="layer-card users">
-          <div class="layer-label">Layer 1 — Users</div>
-          <h3>User Roles</h3>
-          <p>Four distinct user types interact with the system, each with a different entry point and access level.</p>
-          <div class="tag-list">
-            <span class="tag teal">Customer (QR Scan)</span>
-            <span class="tag blue">Staff / Admin</span>
-            <span class="tag amber">Owner (Full Access)</span>
-            <span class="tag red">Platform Orders</span>
-          </div>
-        </div>
-        <div class="layer-card vercel">
-          <div class="layer-label">Layer 2 — Vercel</div>
-          <h3>Frontend & Serverless</h3>
-          <p>Static HTML pages served via global CDN, with two serverless API functions acting as secure proxies.</p>
-          <div class="tag-list">
-            <span class="tag blue">index.html</span>
-            <span class="tag blue">admin.html</span>
-            <span class="tag blue">login.html</span>
-            <span class="tag blue">/images CDN</span>
-            <span class="tag amber">/api/pos</span>
-            <span class="tag amber">/api/upload-image</span>
-          </div>
-        </div>
-        <div class="layer-card google">
-          <div class="layer-label">Layer 3 — Google Cloud</div>
-          <h3>Backend & Database</h3>
-          <p>Google Apps Script handles all business logic. Google Sheets serves as the database. Google Drive stores files.</p>
-          <div class="tag-list">
-            <span class="tag purple">Code.gs</span>
-            <span class="tag purple">PaymentAndReceipts.gs</span>
-            <span class="tag purple">auth-functions.gs</span>
-            <span class="tag green">Google Sheets (7 tabs)</span>
-            <span class="tag orange">Google Drive</span>
-          </div>
-        </div>
-        <div class="layer-card github">
-          <div class="layer-label">Layer 4 — GitHub</div>
-          <h3>Source of Truth & CI/CD</h3>
-          <p>All code and assets live in the GitHub repo. Every push to <code style="font-family:monospace;font-size:11px;background:#21253a;padding:1px 5px;border-radius:3px;">main</code> auto-deploys to Vercel.</p>
-          <div class="tag-list">
-            <span class="tag green">Maldipia/yani-garden-cafe</span>
-            <span class="tag green">Auto-deploy on push</span>
-            <span class="tag green">54 menu images</span>
-            <span class="tag gray">Branch: main</span>
-          </div>
-        </div>
-      </div>
-    </div>
+<div class="section" id="order-flow">
+  <div class="section-header"><div class="section-icon teal">&#128260;</div><h2>Order Lifecycle <span class="num">&mdash; QR dine-in and take-out</span></h2></div>
+  <p class="section-desc">Customer scans QR &rarr; builds cart with size + sugar options &rarr; checks out &rarr; kitchen processes &rarr; payment collected. Customer phone polls every 5 seconds for status updates.</p>
+  <div class="diagram-wrap">
+    <div class="diagram-bar"><span class="title">Figure 2 &mdash; Order lifecycle flow</span><span class="fig">Customer journey (left) &middot; Kitchen/Staff workflow (right)</span></div>
+    <img class="diagram-img" src="/docs/orderflow.png" alt="Order Flow Diagram" onclick="openFull(this.src)"/>
+  </div>
+  <table>
+    <tr><th>Status</th><th>Trigger</th><th>Who</th><th>Customer sees</th></tr>
+    <tr><td><span class="badge green">NEW</span></td><td>Customer places order</td><td>Auto</td><td>Order confirmed, YANI-XXXX</td></tr>
+    <tr><td><span class="badge amber">PREPARING</span></td><td>Staff clicks START</td><td>Kitchen / Cashier</td><td>&ldquo;Your order is being prepared...&rdquo;</td></tr>
+    <tr><td><span class="badge blue">READY</span></td><td>Staff clicks READY</td><td>Kitchen / Cashier</td><td>&ldquo;Your order is ready!&rdquo;</td></tr>
+    <tr><td><span class="badge teal">COMPLETED</span></td><td>Staff clicks COMPLETE</td><td>Any role</td><td>&ldquo;Order completed. Thank you!&rdquo;</td></tr>
+    <tr><td><span class="badge red">CANCELLED</span></td><td>Staff clicks CANCEL (any time)</td><td>Any role</td><td>Order cancelled</td></tr>
+  </table>
+  <div class="info"><strong>Size + Sugar logic:</strong> Cold beverages show a size selector (Short &#8369;150 / Medium &#8369;170 / Tall &#8369;179) then a sugar selector (Grounded 25% / YANI 50% / Comfort 75% / Full Sweet 100%). Hot drinks skip size. Pastries and meals skip both. Choices stored per line item in <code>size_choice</code> and <code>sugar_choice</code>.</div>
+  <div class="warn"><strong>Service charge:</strong> 10% added automatically for DINE-IN only. Take-Out and platform orders are not charged. <code>total = subtotal + (subtotal &times; 0.10)</code>.</div>
+</div>
 
-    <!-- ── Tech Stack ─────────────────────────────────────────────────── -->
-    <div class="section" id="stack">
-      <div class="section-header">
-        <div class="section-icon" style="background:rgba(155,89,182,0.15);">⚙️</div>
-        <h2>Technology Stack</h2>
-      </div>
-      <div class="stack-grid">
-        <div class="stack-item">
-          <div class="stack-logo" style="background:rgba(52,152,219,0.15);">🌐</div>
-          <div class="stack-info">
-            <h4>HTML / CSS / JavaScript</h4>
-            <p>Vanilla frontend — no framework dependency</p>
-          </div>
-        </div>
-        <div class="stack-item">
-          <div class="stack-logo" style="background:rgba(0,0,0,0.3);">▲</div>
-          <div class="stack-info">
-            <h4>Vercel</h4>
-            <p>CDN hosting + Serverless Functions (Node.js)</p>
-          </div>
-        </div>
-        <div class="stack-item">
-          <div class="stack-logo" style="background:rgba(155,89,182,0.15);">📜</div>
-          <div class="stack-info">
-            <h4>Google Apps Script</h4>
-            <p>Backend API — JavaScript runtime on Google Cloud</p>
-          </div>
-        </div>
-        <div class="stack-item">
-          <div class="stack-logo" style="background:rgba(46,204,113,0.15);">📊</div>
-          <div class="stack-info">
-            <h4>Google Sheets</h4>
-            <p>Database — 7 sheets, row-based storage</p>
-          </div>
-        </div>
-        <div class="stack-item">
-          <div class="stack-logo" style="background:rgba(230,126,34,0.15);">📁</div>
-          <div class="stack-info">
-            <h4>Google Drive</h4>
-            <p>File storage for payment proofs & receipts</p>
-          </div>
-        </div>
-        <div class="stack-item">
-          <div class="stack-logo" style="background:rgba(24,23,23,0.5);">🐙</div>
-          <div class="stack-info">
-            <h4>GitHub</h4>
-            <p>Source control + image hosting via GitHub API</p>
-          </div>
-        </div>
-      </div>
-    </div>
+<div class="section" id="online-flow">
+  <div class="section-header"><div class="section-icon blue">&#128230;</div><h2>Online Order Flow <span class="num">&mdash; Delivery and platform orders</span></h2></div>
+  <p class="section-desc">Separate from the QR flow. Customers order via a web form without a table QR code. Orders go to the <code>online_orders</code> table and appear in admin under Platform Orders.</p>
+  <div class="steps">
+    <div class="step"><div class="step-num blue">1</div><div class="step-content"><div class="title">Customer visits <code>/online-order</code></div><div class="desc">No QR scan required. Browses same menu items. No table selection.</div></div></div>
+    <div class="step"><div class="step-num blue">2</div><div class="step-content"><div class="title">Fills out delivery form</div><div class="desc">Name, contact number, delivery address or pick-up preference, and items. No size/sugar selectors on platform orders.</div></div></div>
+    <div class="step"><div class="step-num blue">3</div><div class="step-content"><div class="title">Submits via public API</div><div class="desc">Hits <code>POST /api/online-order</code> (no JWT required). Creates a row in <code>online_orders</code> with a unique <code>order_ref</code>.</div></div></div>
+    <div class="step"><div class="step-num blue">4</div><div class="step-content"><div class="title">Staff sees in Platform Orders tab</div><div class="desc">Admin panel &rarr; Platform Orders. Staff processes and updates status the same way as QR orders.</div></div></div>
+    <div class="step"><div class="step-num blue">5</div><div class="step-content"><div class="title">Payment on delivery or pickup</div><div class="desc">No GCash QR flow. Payment arranged separately (cash on delivery or counter pickup).</div></div></div>
+  </div>
+  <div class="info"><strong>Key difference:</strong> Online orders use <code>online_orders</code> and <code>online_order_items</code> tables, NOT <code>dine_in_orders</code>. Excluded from dine-in revenue reports. No service charge applied. API endpoint: <code>/api/online-order</code> (separate from <code>/api/pos</code>).</div>
+</div>
 
-    <!-- ── API Actions ─────────────────────────────────────────────────── -->
-    <div class="section" id="api">
-      <div class="section-header">
-        <div class="section-icon" style="background:rgba(232,168,56,0.15);">⚡</div>
-        <h2>API Actions <span class="section-num">— 18 Endpoints via doPost()</span></h2>
-      </div>
-      <div class="prose">
-        <p>All backend operations are exposed through a single <strong>Google Apps Script web app URL</strong> using a JSON-RPC style pattern. The frontend sends a POST request with an <code style="font-family:monospace;font-size:12px;background:#21253a;color:#e8a838;padding:1px 6px;border-radius:4px;">action</code> field, and the backend routes to the appropriate function.</p>
-      </div>
-      <div class="api-grid" style="margin-top:16px;">
-        <div class="api-action">
-          <div class="action-name">getMenu</div>
-          <div class="action-desc">Returns all active menu items with prices</div>
-          <div class="action-role"><span class="tag teal" style="font-size:10px;">Public</span></div>
-        </div>
-        <div class="api-action">
-          <div class="action-name">getMenuAdmin</div>
-          <div class="action-desc">Returns all menu items including inactive</div>
-          <div class="action-role"><span class="tag blue" style="font-size:10px;">Admin+</span></div>
-        </div>
-        <div class="api-action">
-          <div class="action-name">placeOrder</div>
-          <div class="action-desc">Validates token, creates order in Sheets</div>
-          <div class="action-role"><span class="tag teal" style="font-size:10px;">Public (token)</span></div>
-        </div>
-        <div class="api-action">
-          <div class="action-name">getOrders</div>
-          <div class="action-desc">Returns all orders with items and status</div>
-          <div class="action-role"><span class="tag blue" style="font-size:10px;">Staff+</span></div>
-        </div>
-        <div class="api-action">
-          <div class="action-name">updateOrderStatus</div>
-          <div class="action-desc">Changes order status (NEW → PREPARING → READY → COMPLETED)</div>
-          <div class="action-role"><span class="tag blue" style="font-size:10px;">Staff+</span></div>
-        </div>
-        <div class="api-action">
-          <div class="action-name">editOrderItems</div>
-          <div class="action-desc">Replaces order items, recalculates totals</div>
-          <div class="action-role"><span class="tag amber" style="font-size:10px;">Admin+</span></div>
-        </div>
-        <div class="api-action">
-          <div class="action-name">deleteOrder</div>
-          <div class="action-desc">Permanently removes an order record</div>
-          <div class="action-role"><span class="tag amber" style="font-size:10px;">Admin+</span></div>
-        </div>
-        <div class="api-action">
-          <div class="action-name">placePlatformOrder</div>
-          <div class="action-desc">Creates order from GrabFood/FoodPanda</div>
-          <div class="action-role"><span class="tag amber" style="font-size:10px;">Admin+</span></div>
-        </div>
-        <div class="api-action">
-          <div class="action-name">uploadPayment</div>
-          <div class="action-desc">Stores payment proof file ID from customer</div>
-          <div class="action-role"><span class="tag teal" style="font-size:10px;">Public (token)</span></div>
-        </div>
-        <div class="api-action">
-          <div class="action-name">verifyPayment</div>
-          <div class="action-desc">Marks payment as verified by staff</div>
-          <div class="action-role"><span class="tag blue" style="font-size:10px;">Staff+</span></div>
-        </div>
-        <div class="api-action">
-          <div class="action-name">rejectPayment</div>
-          <div class="action-desc">Marks payment as rejected with reason</div>
-          <div class="action-role"><span class="tag blue" style="font-size:10px;">Staff+</span></div>
-        </div>
-        <div class="api-action">
-          <div class="action-name">listPayments</div>
-          <div class="action-desc">Returns all payment records</div>
-          <div class="action-role"><span class="tag blue" style="font-size:10px;">Staff+</span></div>
-        </div>
-        <div class="api-action">
-          <div class="action-name">updateMenuItem</div>
-          <div class="action-desc">Edits name, price, category of a menu item</div>
-          <div class="action-role"><span class="tag amber" style="font-size:10px;">Admin+</span></div>
-        </div>
-        <div class="api-action">
-          <div class="action-name">addMenuItem</div>
-          <div class="action-desc">Creates a new menu item in the sheet</div>
-          <div class="action-role"><span class="tag amber" style="font-size:10px;">Admin+</span></div>
-        </div>
-        <div class="api-action">
-          <div class="action-name">deleteMenuItem</div>
-          <div class="action-desc">Removes a menu item permanently</div>
-          <div class="action-role"><span class="tag amber" style="font-size:10px;">Admin+</span></div>
-        </div>
-        <div class="api-action">
-          <div class="action-name">requestReceipt</div>
-          <div class="action-desc">Generates and emails an official receipt</div>
-          <div class="action-role"><span class="tag teal" style="font-size:10px;">Public (token)</span></div>
-        </div>
-        <div class="api-action">
-          <div class="action-name">verifyUserPin</div>
-          <div class="action-desc">Authenticates admin by hashed PIN</div>
-          <div class="action-role"><span class="tag gray" style="font-size:10px;">Auth</span></div>
-        </div>
-        <div class="api-action">
-          <div class="action-name">checkPermission</div>
-          <div class="action-desc">Validates role-based action access</div>
-          <div class="action-role"><span class="tag gray" style="font-size:10px;">Auth</span></div>
-        </div>
-      </div>
-    </div>
+<div class="section" id="payment-flow">
+  <div class="section-header"><div class="section-icon amber">&#128179;</div><h2>Payment Flow <span class="num">&mdash; 7 methods supported</span></h2></div>
+  <table>
+    <tr><th>Method</th><th>Account</th><th>Flow</th></tr>
+    <tr><td><span class="badge teal">GCash</span></td><td>LEGERYN PIA</td><td>Scan QR &rarr; pay &rarr; screenshot &rarr; upload &rarr; staff verifies</td></tr>
+    <tr><td><span class="badge teal">InstaPay</span></td><td>LEGERYN PIA</td><td>Scan QR &rarr; pay &rarr; screenshot &rarr; upload &rarr; staff verifies</td></tr>
+    <tr><td><span class="badge blue">BDO</span></td><td>0126-000-62617</td><td>Scan QR &rarr; pay &rarr; screenshot &rarr; upload &rarr; staff verifies</td></tr>
+    <tr><td><span class="badge blue">BPI</span></td><td>1539-235-628</td><td>Scan QR &rarr; pay &rarr; screenshot &rarr; upload &rarr; staff verifies</td></tr>
+    <tr><td><span class="badge blue">UnionBank</span></td><td>1093-2100-0528</td><td>Scan QR &rarr; pay &rarr; screenshot &rarr; upload &rarr; staff verifies</td></tr>
+    <tr><td><span class="badge amber">Cash</span></td><td>N/A</td><td>Server brings bill to table &rarr; collects cash &rarr; marks paid</td></tr>
+    <tr><td><span class="badge amber">Card</span></td><td>N/A</td><td>Server brings terminal to table &rarr; processes &rarr; marks paid</td></tr>
+  </table>
+  <div class="info"><strong>Screenshot storage:</strong> Supabase Storage bucket <code>payment-proofs</code>. Admin &rarr; Payments tab. Status: <code>PENDING &rarr; SUBMITTED &rarr; VERIFIED</code> or <code>REJECTED</code>. Currently 13 payments pending staff verification.</div>
+</div>
 
-    <!-- ── Database ───────────────────────────────────────────────────── -->
-    <div class="section" id="database">
-      <div class="section-header">
-        <div class="section-icon" style="background:rgba(46,204,113,0.15);">🗄️</div>
-        <h2>Database Sheets <span class="section-num">— Google Sheets as DB</span></h2>
-      </div>
-      <div class="prose">
-        <p>The system uses a single Google Spreadsheet as its database. Each tab (sheet) acts as a database table with header-based column mapping. The backend reads and writes using the <code style="font-family:monospace;font-size:12px;background:#21253a;color:#e8a838;padding:1px 6px;border-radius:4px;">appendByHeaders()</code> and <code style="font-family:monospace;font-size:12px;background:#21253a;color:#e8a838;padding:1px 6px;border-radius:4px;">updateByHeaders()</code> utility functions.</p>
-      </div>
-      <div class="sheets-grid" style="margin-top:16px;">
-        <div class="sheet-card">
-          <div class="sheet-icon">🍵</div>
-          <div class="sheet-name">YGC_MENU</div>
-          <div class="sheet-desc">Master menu: item codes, names, prices (Short/Medium/Tall), categories, active status</div>
-        </div>
-        <div class="sheet-card">
-          <div class="sheet-icon">📋</div>
-          <div class="sheet-name">ORDERS</div>
-          <div class="sheet-desc">Every order: ORDER_ID, table, status, subtotal, service charge, total, items JSON</div>
-        </div>
-        <div class="sheet-card">
-          <div class="sheet-icon">📝</div>
-          <div class="sheet-name">ORDER_ITEMS</div>
-          <div class="sheet-desc">Line-item detail for every order: item code, name snapshot, qty, unit price, line total</div>
-        </div>
-        <div class="sheet-card">
-          <div class="sheet-icon">💳</div>
-          <div class="sheet-name">PAYMENTS</div>
-          <div class="sheet-desc">Payment submissions: proof file ID, status (PENDING/VERIFIED/REJECTED), timestamps</div>
-        </div>
-        <div class="sheet-card">
-          <div class="sheet-icon">👤</div>
-          <div class="sheet-name">USERS</div>
-          <div class="sheet-desc">Admin accounts: user ID, name, role (OWNER/ADMIN/STAFF), hashed PIN, last login</div>
-        </div>
-        <div class="sheet-card">
-          <div class="sheet-icon">📜</div>
-          <div class="sheet-name">LOGS</div>
-          <div class="sheet-desc">Audit trail: every significant action with actor, target, details, timestamp, status</div>
-        </div>
-        <div class="sheet-card">
-          <div class="sheet-icon">⚙️</div>
-          <div class="sheet-name">SETTINGS</div>
-          <div class="sheet-desc">Global config: order prefix, service charge rate, business name, receipt settings</div>
-        </div>
-        <div class="sheet-card">
-          <div class="sheet-icon">🪑</div>
-          <div class="sheet-name">TABLES</div>
-          <div class="sheet-desc">Table registry: table numbers and their unique QR tokens for order validation</div>
-        </div>
-      </div>
-    </div>
+<div class="section" id="erd">
+  <div class="section-header"><div class="section-icon green">&#128444;</div><h2>Database Schema <span class="num">&mdash; 24 tables in Supabase PostgreSQL</span></h2></div>
+  <p class="section-desc">All tables have Row Level Security enabled. Hosted ap-southeast-1 (Singapore). Project: <code>hnynvclpvfxzlfjphefj</code>.</p>
+  <div class="diagram-wrap">
+    <div class="diagram-bar"><span class="title">Figure 3 &mdash; Entity-relationship diagram (key tables)</span><span class="fig">24 tables total &middot; key relationships shown</span></div>
+    <img class="diagram-img" src="/docs/erd.png" alt="Database ERD" onclick="openFull(this.src)"/>
+  </div>
+  <table>
+    <tr><th>Table</th><th>Rows</th><th>Key Columns</th></tr>
+    <tr><td><code>dine_in_orders</code></td><td>1,311</td><td>order_id &middot; table_no &middot; status &middot; subtotal &middot; service_charge &middot; total &middot; discount_amount &middot; discounted_total &middot; payment_method</td></tr>
+    <tr><td><code>dine_in_order_items</code></td><td>1,802</td><td>order_id &middot; item_code &middot; unit_price &middot; qty &middot; size_choice &middot; sugar_choice &middot; addons (JSONB)</td></tr>
+    <tr><td><code>menu_items</code></td><td>65</td><td>item_code &middot; name &middot; base_price &middot; has_sizes &middot; price_short/medium/tall &middot; has_sugar_levels &middot; is_active &middot; is_signature</td></tr>
+    <tr><td><code>staff_users</code></td><td>4</td><td>user_id &middot; role &middot; pin_hash (bcrypt) &middot; active &middot; failed_attempts &middot; locked_until</td></tr>
+    <tr><td><code>role_permissions</code></td><td>27</td><td>action (PK) &middot; roles[] &mdash; DB-driven, 5-min cache</td></tr>
+    <tr><td><code>payments</code></td><td>49</td><td>order_id &middot; method &middot; status (PENDING/SUBMITTED/VERIFIED/REJECTED) &middot; proof_url &middot; verified_by</td></tr>
+    <tr><td><code>order_audit_logs</code></td><td>5,659</td><td>order_id &middot; action &middot; actor_id &middot; old_value &middot; new_value &middot; details (JSONB)</td></tr>
+    <tr><td><code>inventory</code></td><td>7 tracked</td><td>item_code &middot; stock_qty &middot; low_stock_threshold &middot; auto_disable &mdash; 54 of 61 items not yet enrolled</td></tr>
+    <tr><td><code>costing_recipes</code></td><td>64</td><td>Linked 1:1 to menu_items. selling_price, is_active</td></tr>
+    <tr><td><code>costing_ingredients</code></td><td>58</td><td>name &middot; unit &middot; cost_per_unit &middot; supplier_name</td></tr>
+    <tr><td><code>costing_recipe_ingredients</code></td><td>301</td><td>recipe_id &middot; ingredient_id &middot; qty &mdash; junction table</td></tr>
+    <tr><td><code>settings</code></td><td>33</td><td>Key-value: BUSINESS_NAME &middot; ORDER_PREFIX &middot; SERVICE_CHARGE_RATE &middot; JWT_SECRET &middot; QR tokens</td></tr>
+  </table>
+</div>
 
-    <!-- ── Data Flows ──────────────────────────────────────────────────── -->
-    <div class="section" id="flows">
-      <div class="section-header">
-        <div class="section-icon" style="background:rgba(26,188,156,0.15);">🔄</div>
-        <h2>Data Flows <span class="section-num">— Key Journeys</span></h2>
-      </div>
+<div class="section" id="costing">
+  <div class="section-header"><div class="section-icon amber">&#129518;</div><h2>Costing Module <span class="num">&mdash; Food cost for all 64 items</span></h2></div>
+  <p class="section-desc">All 64 active items costed with real supplier pricing. Calculates gross margin and food cost % per item. Access: admin &rarr; Costing tab (OWNER login).</p>
+  <div class="diagram-wrap">
+    <div class="diagram-bar"><span class="title">Figure 4 &mdash; Costing module flow</span><span class="fig">Ingredients &rarr; Recipes &rarr; Recipe Ingredients &rarr; Food Cost &rarr; Margin</span></div>
+    <img class="diagram-img" src="/docs/costing.png" alt="Costing Module Flow" onclick="openFull(this.src)"/>
+  </div>
+  <div class="steps">
+    <div class="step"><div class="step-num amber">1</div><div class="step-content"><div class="title">Define ingredients</div><div class="desc">58 ingredients with cost per unit and unit type. e.g. &ldquo;Espresso Powder, per gram, &#8369;0.45&rdquo;</div></div></div>
+    <div class="step"><div class="step-num amber">2</div><div class="step-content"><div class="title">Create recipes</div><div class="desc">One recipe per menu item, linked by item_code. 64 recipes covering all active items.</div></div></div>
+    <div class="step"><div class="step-num amber">3</div><div class="step-content"><div class="title">Add ingredients per recipe</div><div class="desc">Specify quantity per serving &mdash; e.g. &ldquo;Espresso Powder &times; 8g&rdquo;. 301 ingredient-recipe links total.</div></div></div>
+    <div class="step"><div class="step-num amber">4</div><div class="step-content"><div class="title">System calculates food cost</div><div class="desc"><code>cost_per_serving = &sum; (ingredient.cost_per_unit &times; qty)</code></div></div></div>
+    <div class="step"><div class="step-num amber">5</div><div class="step-content"><div class="title">Margin analysis</div><div class="desc"><code>gross_margin = selling_price &minus; cost_per_serving</code> &middot; <code>food_cost_% = (cost / price) &times; 100</code></div></div></div>
+  </div>
+  <div class="warn"><strong>Flagged items:</strong> Katapang &mdash; current price is below cost, needs repricing to &#8369;220+. Affogato &mdash; high food cost due to Milk Ice Cream powder.</div>
+</div>
 
-      <h3 style="font-size:15px;color:var(--teal);margin-bottom:16px;margin-top:8px;">Customer Order Flow</h3>
-      <div class="flow-steps">
-        <div class="flow-step order">
-          <div class="step-num">1</div>
-          <div class="step-content">
-            <h4>QR Code Scan</h4>
-            <p>Customer scans table QR code → opens <code>index.html?table=T1&token=abc123</code>. Token is unique per table, stored in the TABLES sheet.</p>
-          </div>
-        </div>
-        <div class="flow-step order">
-          <div class="step-num">2</div>
-          <div class="step-content">
-            <h4>Menu Fetch</h4>
-            <p>Frontend calls <code>POST /api/pos</code> with <code>action: "getMenu"</code>. Vercel proxy forwards to GAS → reads YGC_MENU sheet → returns 38 active items as JSON.</p>
-          </div>
-        </div>
-        <div class="flow-step order">
-          <div class="step-num">3</div>
-          <div class="step-content">
-            <h4>Cart & Order Placement</h4>
-            <p>Customer adds items to cart. On checkout, frontend calls <code>placeOrder</code> with cart items + table token. GAS validates token, calculates subtotal + 10% service charge, writes to ORDERS and ORDER_ITEMS sheets.</p>
-          </div>
-        </div>
-        <div class="flow-step order">
-          <div class="step-num">4</div>
-          <div class="step-content">
-            <h4>Live Dashboard Update</h4>
-            <p>Admin dashboard polls <code>getOrders</code> every few seconds. New order appears instantly with status <strong>NEW</strong>. Staff updates to PREPARING → READY → COMPLETED.</p>
-          </div>
-        </div>
-      </div>
+<div class="section" id="api">
+  <div class="section-header"><div class="section-icon purple">&#9889;</div><h2>API Reference <span class="num">&mdash; 65 actions via POST /api/pos</span></h2></div>
+  <p class="section-desc">Single Vercel serverless function. All requests are <code>POST</code> with a JSON body containing an <code>action</code> field. Write actions require <code>Authorization: Bearer &lt;jwt&gt;</code>.</p>
+  <pre><span class="c">// All requests &rarr;</span>
+POST https://pos.yanigardencafe.com/api/pos
+Content-Type: application/json
+Authorization: Bearer &lt;jwt&gt;  <span class="c">// required for write actions</span>
 
-      <h3 style="font-size:15px;color:var(--accent);margin-bottom:16px;margin-top:32px;">Photo Upload Flow</h3>
-      <div class="flow-steps">
-        <div class="flow-step image">
-          <div class="step-num">1</div>
-          <div class="step-content">
-            <h4>Admin Selects Photo</h4>
-            <p>In Menu Manager → Edit Item modal, admin clicks "Choose Photo" and selects a PNG/JPG file (max 5MB).</p>
-          </div>
-        </div>
-        <div class="flow-step image">
-          <div class="step-num">2</div>
-          <div class="step-content">
-            <h4>Upload to Vercel Function</h4>
-            <p>Frontend encodes image as base64 and sends to <code>POST /api/upload-image</code> with item code and file extension.</p>
-          </div>
-        </div>
-        <div class="flow-step image">
-          <div class="step-num">3</div>
-          <div class="step-content">
-            <h4>GitHub Commit via API</h4>
-            <p>Vercel function uses <code>GITHUB_TOKEN</code> to call the GitHub Contents API, committing the image to <code>images/{CODE}.png</code> in the <code>main</code> branch.</p>
-          </div>
-        </div>
-        <div class="flow-step image">
-          <div class="step-num">4</div>
-          <div class="step-content">
-            <h4>Auto-Deploy & CDN Live</h4>
-            <p>GitHub commit triggers a new Vercel deployment (~1-2 min). Image is then live at <code>https://yani-garden-cafe-d3l6.vercel.app/images/{CODE}.png</code> on the global CDN.</p>
-          </div>
-        </div>
-      </div>
-    </div>
+{ <span class="s">"action"</span>: <span class="s">"placeOrder"</span>, <span class="s">"tableNo"</span>: <span class="s">"1"</span>, <span class="s">"token"</span>: <span class="s">"b36e8426"</span> }</pre>
+  <table>
+    <tr><th>Section</th><th>Count</th><th>Key Actions</th></tr>
+    <tr><td>menuActions</td><td>6</td><td>getMenu &middot; getMenuAdmin &middot; addMenuItem &middot; updateMenuItem &middot; deleteMenuItem (OWNER) &middot; upsertToSupabase</td></tr>
+    <tr><td>orderActions</td><td>14</td><td>placeOrder (price validation) &middot; getOrders &middot; updateOrderStatus &middot; editOrderItems (recalcs discount) &middot; applyDiscount &middot; deleteOrder &middot; restoreOrder &middot; getShiftSummary &middot; requestReceipt</td></tr>
+    <tr><td>paymentActions</td><td>6</td><td>uploadPayment &middot; listPayments &middot; getPaymentProof &middot; verifyPayment &middot; rejectPayment &middot; migrateProofs</td></tr>
+    <tr><td>authActions</td><td>3</td><td>verifyUserPin (bcrypt + JWT) &middot; changePin &middot; testDriveUpload</td></tr>
+    <tr><td>onlineOrderActions</td><td>14</td><td>getOnlineOrders &middot; getAnalytics &middot; getAuditLogs &middot; getStaff &middot; getSettings &middot; updateSetting (OWNER) &middot; getTables &middot; createReservation &middot; getCustomers</td></tr>
+    <tr><td>inventoryActions</td><td>5</td><td>getInventory &middot; adjustInventory &middot; upsertInventory &middot; uploadInventoryPhoto &middot; getInventoryLog</td></tr>
+    <tr><td>tableActions + reservationActions</td><td>8</td><td>syncToSheets &middot; getTableStatus &middot; setTableStatus &middot; linkReservationTable &middot; seatReservation</td></tr>
+    <tr><td>addonActions + refundActions + cashActions</td><td>10</td><td>getAddons &middot; saveAddon &middot; deleteAddon &middot; processRefund &middot; getRefunds &middot; openCashSession &middot; closeCashSession &middot; getCashSessions</td></tr>
+  </table>
+  <div class="info"><strong>Security:</strong> CORS locked to known domains &middot; JWT verified on every write &middot; role check against <code>role_permissions</code> DB (5-min cache) &middot; prices re-fetched from DB on <code>placeOrder</code> &middot; IP rate limiting on auth &middot; all mutations logged to <code>order_audit_logs</code>.</div>
+</div>
 
-    <!-- ── CI/CD ───────────────────────────────────────────────────────── -->
-    <div class="section" id="cicd">
-      <div class="section-header">
-        <div class="section-icon" style="background:rgba(46,204,113,0.15);">🚀</div>
-        <h2>CI/CD Pipeline</h2>
-      </div>
-      <div class="layers-grid">
-        <div class="layer-card github" style="grid-column: span 2;">
-          <div class="layer-label">Vercel + GitHub Integration</div>
-          <h3>Automatic Deployment on Every Push</h3>
-          <p>The GitHub repository is connected to Vercel. Any commit pushed to the <code style="font-family:monospace;font-size:12px;background:#21253a;padding:1px 5px;border-radius:3px;">main</code> branch — whether from a developer or from the photo upload endpoint — automatically triggers a new Vercel deployment. The production URL is updated within 1-2 minutes.</p>
-          <div class="tag-list" style="margin-top:12px;">
-            <span class="tag green">git push → auto-deploy</span>
-            <span class="tag green">Image upload → GitHub commit → auto-deploy</span>
-            <span class="tag amber">GAS changes → manual redeploy required</span>
-          </div>
-        </div>
-      </div>
-      <div class="info-box">
-        <span class="info-icon">⚠️</span>
-        <p><strong>Important:</strong> Changes to <code style="font-family:monospace;font-size:12px;background:#21253a;color:#e8a838;padding:1px 6px;border-radius:4px;">Code.gs</code> or any other Apps Script file require a <strong>manual redeploy</strong> in the Google Apps Script editor (Deploy → Manage Deployments → New Version). The Vercel CI/CD pipeline does not cover GAS deployments.</p>
-      </div>
-    </div>
+<div class="section" id="auth">
+  <div class="section-header"><div class="section-icon blue">&#128274;</div><h2>Auth &amp; Roles <span class="num">&mdash; PIN &rarr; bcrypt &rarr; JWT &rarr; DB permission check</span></h2></div>
+  <pre>Staff enters PIN
+  &rarr; <span class="k">bcrypt.compare</span>(pin, pin_hash)  <span class="c">// rounds=12</span>
+  &rarr; <span class="k">signToken</span>({userId, role})       <span class="c">// HS256, 4h expiry</span>
+  &rarr; Client stores in sessionStorage
 
-    <!-- ── Security ───────────────────────────────────────────────────── -->
-    <div class="section" id="security">
-      <div class="section-header">
-        <div class="section-icon" style="background:rgba(231,76,60,0.15);">🔐</div>
-        <h2>Security Model</h2>
-      </div>
-      <div class="security-grid">
-        <div class="security-card">
-          <div class="sec-icon">🔑</div>
-          <h4>PIN Authentication</h4>
-          <p>Admin access is protected by a numeric PIN. The frontend hashes the PIN using SHA-256 before sending it to the backend. The backend compares against the stored hash in the USERS sheet — the raw PIN is never transmitted or stored.</p>
-        </div>
-        <div class="security-card">
-          <div class="sec-icon">🪙</div>
-          <h4>Table Token Validation</h4>
-          <p>Every customer order must include a valid table token. Tokens are unique per table, stored in the TABLES sheet, and validated server-side on every <code style="font-family:monospace;font-size:11px;background:#21253a;padding:1px 5px;border-radius:3px;">placeOrder</code> call. Invalid tokens are rejected immediately.</p>
-        </div>
-        <div class="security-card">
-          <div class="sec-icon">🛡️</div>
-          <h4>API Proxy Shield</h4>
-          <p>The direct Google Apps Script URL is never exposed to the browser. All requests go through the Vercel <code style="font-family:monospace;font-size:11px;background:#21253a;padding:1px 5px;border-radius:3px;">/api/pos</code> proxy, which handles authentication and shields the backend endpoint from direct access.</p>
-        </div>
-        <div class="security-card">
-          <div class="sec-icon">🚦</div>
-          <h4>Rate Limiting</h4>
-          <p>The backend implements an order throttle per table using the <code style="font-family:monospace;font-size:11px;background:#21253a;padding:1px 5px;border-radius:3px;">isThrottled()</code> function. This prevents customers from accidentally or maliciously flooding the system with duplicate orders in a short time window.</p>
-        </div>
-        <div class="security-card">
-          <div class="sec-icon">🔒</div>
-          <h4>Environment Secrets</h4>
-          <p>Sensitive credentials (<code style="font-family:monospace;font-size:11px;background:#21253a;padding:1px 5px;border-radius:3px;">GITHUB_TOKEN</code>, <code style="font-family:monospace;font-size:11px;background:#21253a;padding:1px 5px;border-radius:3px;">VERCEL_TOKEN</code>) are stored as Vercel environment variables — never hardcoded in source files or committed to the repository.</p>
-        </div>
-        <div class="security-card">
-          <div class="sec-icon">📋</div>
-          <h4>Audit Logging</h4>
-          <p>Every significant action (order placed, payment verified, menu item edited, login) is written to the LOGS sheet via the <code style="font-family:monospace;font-size:11px;background:#21253a;padding:1px 5px;border-radius:3px;">logAction()</code> function, creating a full audit trail with actor, timestamp, and outcome.</p>
-        </div>
-      </div>
-    </div>
+Each write request:
+  &rarr; <span class="k">verifyToken</span>(bearer)            <span class="c">// decode JWT</span>
+  &rarr; <span class="k">getRolePermissions</span>(action)     <span class="c">// DB lookup, 5-min cache</span>
+  &rarr; roles.includes(jwt.role)        <span class="c">// 403 if not allowed</span>
 
-    <!-- ── RBAC ────────────────────────────────────────────────────────── -->
-    <div class="section" id="rbac">
-      <div class="section-header">
-        <div class="section-icon" style="background:rgba(155,89,182,0.15);">👥</div>
-        <h2>Roles & Permissions <span class="section-num">— RBAC</span></h2>
-      </div>
-      <table class="rbac-table">
-        <thead>
-          <tr>
-            <th>Action</th>
-            <th>Customer</th>
-            <th><span class="role-badge role-staff">STAFF</span></th>
-            <th><span class="role-badge role-admin">ADMIN</span></th>
-            <th><span class="role-badge role-owner">OWNER</span></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>View menu & place order</td>
-            <td class="check">✓</td><td class="check">✓</td><td class="check">✓</td><td class="check">✓</td>
-          </tr>
-          <tr>
-            <td>View live orders dashboard</td>
-            <td class="cross">✗</td><td class="check">✓</td><td class="check">✓</td><td class="check">✓</td>
-          </tr>
-          <tr>
-            <td>Update order status</td>
-            <td class="cross">✗</td><td class="check">✓</td><td class="check">✓</td><td class="check">✓</td>
-          </tr>
-          <tr>
-            <td>Verify / reject payments</td>
-            <td class="cross">✗</td><td class="check">✓</td><td class="check">✓</td><td class="check">✓</td>
-          </tr>
-          <tr>
-            <td>Edit order items</td>
-            <td class="cross">✗</td><td class="cross">✗</td><td class="check">✓</td><td class="check">✓</td>
-          </tr>
-          <tr>
-            <td>Add / edit / delete menu items</td>
-            <td class="cross">✗</td><td class="cross">✗</td><td class="check">✓</td><td class="check">✓</td>
-          </tr>
-          <tr>
-            <td>Upload menu photos</td>
-            <td class="cross">✗</td><td class="cross">✗</td><td class="check">✓</td><td class="check">✓</td>
-          </tr>
-          <tr>
-            <td>Delete orders</td>
-            <td class="cross">✗</td><td class="cross">✗</td><td class="check">✓</td><td class="check">✓</td>
-          </tr>
-          <tr>
-            <td>View sales reports</td>
-            <td class="cross">✗</td><td class="cross">✗</td><td class="check">✓</td><td class="check">✓</td>
-          </tr>
-          <tr>
-            <td>Manage users & settings</td>
-            <td class="cross">✗</td><td class="cross">✗</td><td class="cross">✗</td><td class="check">✓</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+Failed login:
+  &rarr; failed_attempts++
+  &rarr; At 5: locked_until = NOW() + 30min</pre>
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px">
+    <div class="role-row"><div class="role-pin">2026</div><div><div class="role-name">OWNER <span class="badge teal">owner</span></div><div class="role-can">All 65 actions &mdash; full access, no restrictions</div></div></div>
+    <div class="role-row"><div class="role-pin">2233</div><div><div class="role-name">ADMIN <span class="badge blue">admin</span></div><div class="role-can">Most actions. Blocked: deleteMenuItem, updateSetting</div></div></div>
+    <div class="role-row"><div class="role-pin">5678</div><div><div class="role-name">CASHIER <span class="badge amber">cashier</span></div><div class="role-can">Orders, payments, discounts, menu view. No admin settings.</div></div></div>
+    <div class="role-row"><div class="role-pin">9012</div><div><div class="role-name">KITCHEN <span class="badge green">kitchen</span></div><div class="role-can">updateOrderStatus only &mdash; start, ready, complete. No financial access.</div></div></div>
+  </div>
+</div>
 
-  </main>
+<div class="section" id="jobs">
+  <div class="section-header"><div class="section-icon teal">&#9200;</div><h2>Automated Jobs <span class="num">&mdash; 6 running on schedule</span></h2></div>
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px">
+    <div class="job"><div class="job-time">6:00 AM PHT daily</div><div class="job-desc"><strong>Daily report</strong> &mdash; revenue, top items, payment breakdown. Via Resend. Uses 6AM&ndash;6AM business day window.</div></div>
+    <div class="job"><div class="job-time">8:00 AM PHT daily</div><div class="job-desc"><strong>Low stock check (AM)</strong> &mdash; emails alert if inventory at or below threshold. Currently: Cinnamon Espresso 9/10.</div></div>
+    <div class="job"><div class="job-time">2:00 PM PHT daily</div><div class="job-desc"><strong>Low stock check (PM)</strong> &mdash; second check after lunch rush.</div></div>
+    <div class="job"><div class="job-time">10:00 PM UTC nightly</div><div class="job-desc"><strong>Discount integrity</strong> &mdash; Supabase Edge Function. Checks discounted_total = total &minus; discount_amount &plusmn;&#8369;0.10. Currently: 0 issues.</div></div>
+    <div class="job"><div class="job-time">Mon 7:00 AM PHT</div><div class="job-desc"><strong>Weekly report</strong> &mdash; 7-day revenue, trend vs prior week, top 10 items.</div></div>
+    <div class="job"><div class="job-time">Every push to main</div><div class="job-desc"><strong>GitHub Actions CI</strong> &mdash; waits 100s for Vercel deploy, runs 15 audit checks.</div></div>
+  </div>
+</div>
+
+<div class="section" id="business-day">
+  <div class="section-header"><div class="section-icon amber">&#128197;</div><h2>Business Day Definition <span class="num">&mdash; 6:00 AM PHT to 5:59 AM PHT</span></h2></div>
+  <div class="info"><strong>Business day = 6:00 AM PHT &rarr; 5:59 AM PHT (next calendar day)</strong><br>Orders placed between midnight and 5:59 AM are counted in the <em>previous</em> business day&rsquo;s totals.</div>
+  <table>
+    <tr><th>Scenario</th><th>Result</th></tr>
+    <tr><td>Order placed Thursday 11:00 PM PHT</td><td>Counted in Thursday&rsquo;s sales &#10003;</td></tr>
+    <tr><td>Order placed Friday 2:00 AM PHT</td><td>Counted in <strong>Thursday&rsquo;s</strong> sales (before 6AM cutoff)</td></tr>
+    <tr><td>Order placed Friday 6:01 AM PHT</td><td>Counted in Friday&rsquo;s sales &#10003;</td></tr>
+  </table>
+  <p style="font-size:13px;color:var(--gray);margin-top:8px;line-height:1.7">Why 6AM? The cafe closes well before midnight. Orders after midnight are almost always test orders. The 6AM cutoff ensures daily totals match what staff think of as &ldquo;yesterday&rsquo;s business.&rdquo; The shift summary counts COMPLETED + READY + PREPARING to avoid undercounting when staff skip the COMPLETE step.</p>
+</div>
+
+<div class="section" id="stack">
+  <div class="section-header"><div class="section-icon purple">&#128296;</div><h2>Tech Stack <span class="num">&mdash; Current production system</span></h2></div>
+  <div class="card-grid">
+    <div class="card teal"><div class="ct">Frontend</div><div class="cs">HTML + Vanilla JS. No framework. 8 admin modules. Static files on Vercel CDN.</div></div>
+    <div class="card purple"><div class="ct">API</div><div class="cs">Vercel Serverless (Node.js). api/pos.js &mdash; 3,231 lines, 65 actions. pos.yanigardencafe.com</div></div>
+    <div class="card green"><div class="ct">Database</div><div class="cs">Supabase PostgreSQL. 24 tables, RLS on all. ap-southeast-1 (Singapore).</div></div>
+    <div class="card amber"><div class="ct">Auth</div><div class="cs">PIN &rarr; bcrypt (12 rounds) &rarr; HS256 JWT (4h). 27 DB permission rules. 5-attempt lockout.</div></div>
+    <div class="card blue"><div class="ct">Email</div><div class="cs">Resend. Daily + weekly reports, low stock alerts.</div></div>
+    <div class="card teal"><div class="ct">Storage</div><div class="cs">Supabase Storage. payment-proofs bucket.</div></div>
+    <div class="card purple"><div class="ct">CI/CD</div><div class="cs">GitHub Actions. 15-check audit on every push.</div></div>
+    <div class="card amber"><div class="ct">Edge Functions</div><div class="cs">Supabase Deno. discount-integrity + low-stock-alert.</div></div>
+  </div>
+  <div class="warn"><strong>Known gaps to reach 90+:</strong> (1) Only 7/61 items have inventory tracking. (2) api/pos.js needs esbuild pipeline to split. (3) No uptime monitoring. (4) 13 GCash payments pending staff verification. (5) No receipt printer integration.</div>
+</div>
+
+</main>
+</div>
+
+<div id="lightbox" onclick="closeFull()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9999;cursor:zoom-out;align-items:center;justify-content:center;padding:20px">
+  <img id="lbImg" style="max-width:100%;max-height:100%;border-radius:8px;object-fit:contain" alt="Diagram fullscreen"/>
 </div>
 
 <script>
-  // ── Zoom ──────────────────────────────────────────────────────────────
-  let zoomLevel = 1;
-  function zoomIn()    { zoomLevel = Math.min(zoomLevel + 0.2, 3); applyZoom(); }
-  function zoomOut()   { zoomLevel = Math.max(zoomLevel - 0.2, 0.5); applyZoom(); }
-  function resetZoom() { zoomLevel = 1; applyZoom(); }
-  function applyZoom() {
-    document.getElementById('archImg').style.transform = `scale(${zoomLevel})`;
-    document.getElementById('archImg').style.transformOrigin = 'top left';
-    document.getElementById('archImg').style.width = (100 / zoomLevel) + '%';
-  }
-
-  // ── Sidebar Active Nav ────────────────────────────────────────────────
-  function scrollTo(id) {
-    const el = document.getElementById(id);
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
-
-  const navLinks = document.querySelectorAll('.nav-link');
-  const sections = ['overview','diagram','layers','stack','api','database','flows','cicd','security','rbac'];
-
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        const id = entry.target.id;
-        navLinks.forEach(link => {
-          link.classList.remove('active');
-          if (link.getAttribute('onclick')?.includes(id)) {
-            link.classList.add('active');
-          }
-        });
-      }
-    });
-  }, { threshold: 0.3, rootMargin: '-10% 0px -60% 0px' });
-
-  sections.forEach(id => {
-    const el = document.getElementById(id);
-    if (el) observer.observe(el);
+function goTo(id,el){
+  document.getElementById(id)?.scrollIntoView({behavior:'smooth'});
+  document.querySelectorAll('.nav-link').forEach(l=>l.classList.remove('active'));
+  if(el) el.classList.add('active');
+}
+function openFull(src){
+  var lb=document.getElementById('lightbox');
+  document.getElementById('lbImg').src=src;
+  lb.style.display='flex';
+}
+function closeFull(){
+  document.getElementById('lightbox').style.display='none';
+}
+window.addEventListener('scroll',function(){
+  var sections=['overview','arch','order-flow','online-flow','payment-flow','erd','costing','api','auth','jobs','business-day','stack'];
+  var current='';
+  sections.forEach(function(id){
+    var el=document.getElementById(id);
+    if(el&&el.getBoundingClientRect().top<120) current=id;
   });
+  document.querySelectorAll('.nav-link').forEach(function(l){
+    var fn=l.getAttribute('onclick')||'';
+    l.classList.toggle('active',fn.indexOf("'"+current+"'")>-1);
+  });
+},{passive:true});
 </script>
 </body>
 </html>
