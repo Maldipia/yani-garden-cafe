@@ -105,6 +105,14 @@
     {
       "source": "/offline",
       "destination": "/offline.html"
+    },
+    {
+      "source": "/architecture",
+      "destination": "/architecture.html"
+    },
+    {
+      "source": "/blueprint",
+      "destination": "/architecture.html"
     }
   ],
   "headers": [
