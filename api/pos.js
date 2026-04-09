@@ -387,7 +387,7 @@ async function requireAuth(body, allowedRoles) {
   return { ok: true, role };
 }
 
-async function checkAdminAuth() {
+async function checkAuth(['ADMIN','OWNER']) {
   const userId = String(body.userId || '').trim();
   if (!userId) return { ok: false, error: 'userId is required for this action' };
   if (!VALID_USER_ID.test(userId)) return { ok: false, error: 'Invalid userId format' };
@@ -507,7 +507,7 @@ async function uploadToGoogleDrive(imageBuffer, mimeType, filename, folderId) {
 // menuActions
 // Actions: getMenu, getMenuAdmin, addMenuItem, updateMenuItem, deleteMenuItem, upsertToSupabase
 // ══════════════════════════════════════════════════════════════════
-async function menuActions(action, body, jwtUser, checkAuth) {
+async function menuActions(action, body, jwtUser, checkAuth, req) {
   // Fast path
   if (!['getMenu', 'getMenuAdmin', 'addMenuItem', 'updateMenuItem', 'deleteMenuItem', 'upsertToSupabase'].includes(action)) return null;
 
@@ -545,7 +545,7 @@ async function menuActions(action, body, jwtUser, checkAuth) {
 
     // ── getMenuAdmin ───────────────────────────────────────────────────────
     if (action === 'getMenuAdmin') {
-      const authMA = await checkAdminAuth();
+      const authMA = await checkAuth(['ADMIN','OWNER']);
       if (!authMA.ok) return [403, { ok: false, error: authMA.error }];
       const now = Date.now();
       if (menuCache.admin && (now - menuCache.ts) < MENU_CACHE_TTL) {
@@ -578,7 +578,7 @@ async function menuActions(action, body, jwtUser, checkAuth) {
 
     // ── addMenuItem ────────────────────────────────────────────────────────
     if (action === 'addMenuItem') {
-      const authAdd = await checkAdminAuth();
+      const authAdd = await checkAuth(['ADMIN','OWNER']);
       if (!authAdd.ok) return [403, { ok: false, error: authAdd.error }];
       if (!isNonEmptyString(body.name, 100) || body.name.trim().length < 2) {
         return [400, { ok: false, error: 'name must be 2-100 characters' }];
@@ -612,7 +612,7 @@ async function menuActions(action, body, jwtUser, checkAuth) {
 
     // ── updateMenuItem ─────────────────────────────────────────────────────
     if (action === 'updateMenuItem') {
-      const authUpd = await checkAdminAuth();
+      const authUpd = await checkAuth(['ADMIN','OWNER']);
       if (!authUpd.ok) return [403, { ok: false, error: authUpd.error }];
       if (!isValidItemCode(body.itemId)) {
         return [400, { ok: false, error: 'itemId is required and must be a valid item code' }];
@@ -643,7 +643,7 @@ async function menuActions(action, body, jwtUser, checkAuth) {
 
     // ── deleteMenuItem ─────────────────────────────────────────────────────
     if (action === 'deleteMenuItem') {
-      const authDel = await checkAdminAuth();
+      const authDel = await checkAuth(['ADMIN','OWNER']);
       if (!authDel.ok) return [403, { ok: false, error: authDel.error }];
       if (!isValidItemCode(body.itemId)) {
         return [400, { ok: false, error: 'itemId is required and must be a valid item code' }];
@@ -658,7 +658,7 @@ async function menuActions(action, body, jwtUser, checkAuth) {
 
     // ── upsertToSupabase (backfill helper — ADMIN/OWNER only) ──────────────
     if (action === 'upsertToSupabase') {
-      const authUps = await checkAdminAuth();
+      const authUps = await checkAuth(['ADMIN','OWNER']);
       if (!authUps.ok) return [403, { ok: false, error: authUps.error }];
       if (!isValidItemCode(body.itemId)) {
         return [400, { ok: false, error: 'itemId is required' }];
@@ -688,7 +688,7 @@ async function menuActions(action, body, jwtUser, checkAuth) {
 // orderActions
 // Actions: placeOrder, getOrders, updateOrderStatus, updateOrderTotals, restoreOrder, deleteOrder, toggleItemPrepared, setPaymentMethod, applyDiscount, getShiftSummary, editOrderItems, placePlatformOrder, requestReceipt, resendReceipt
 // ══════════════════════════════════════════════════════════════════
-async function orderActions(action, body, jwtUser, checkAuth) {
+async function orderActions(action, body, jwtUser, checkAuth, req) {
   // Fast path
   if (!['placeOrder', 'getOrders', 'updateOrderStatus', 'updateOrderTotals', 'restoreOrder', 'deleteOrder', 'toggleItemPrepared', 'setPaymentMethod', 'applyDiscount', 'getShiftSummary', 'editOrderItems', 'placePlatformOrder', 'requestReceipt', 'resendReceipt'].includes(action)) return null;
 
@@ -1688,7 +1688,7 @@ async function orderActions(action, body, jwtUser, checkAuth) {
 // paymentActions
 // Actions: uploadPayment, listPayments, getPaymentProof, migrateProofs, verifyPayment, rejectPayment
 // ══════════════════════════════════════════════════════════════════
-async function paymentActions(action, body, jwtUser, checkAuth) {
+async function paymentActions(action, body, jwtUser, checkAuth, req) {
   // Fast path
   if (!['uploadPayment', 'listPayments', 'getPaymentProof', 'migrateProofs', 'verifyPayment', 'rejectPayment'].includes(action)) return null;
 
@@ -1781,7 +1781,7 @@ async function paymentActions(action, body, jwtUser, checkAuth) {
 
     // ── listPayments ───────────────────────────────────────────────────────
     if (action === 'listPayments') {
-      const authLP = await checkAdminAuth();
+      const authLP = await checkAuth(['ADMIN','OWNER']);
       if (!authLP.ok) return [403, { ok: false, error: authLP.error }];
 
       const r = await supaFetch(
@@ -1850,7 +1850,7 @@ async function paymentActions(action, body, jwtUser, checkAuth) {
     // ── getPaymentProof ───────────────────────────────────────────────────
     // Returns the base64 proof image for a single payment (on-demand)
     if (action === 'getPaymentProof') {
-      const authGP = await checkAdminAuth();
+      const authGP = await checkAuth(['ADMIN','OWNER']);
       if (!authGP.ok) return [403, { ok: false, error: authGP.error }];
       const payId = String(body.paymentId || '').trim();
       if (!payId) return [400, { ok: false, error: 'paymentId required' }];
@@ -1906,7 +1906,7 @@ async function paymentActions(action, body, jwtUser, checkAuth) {
     // ── verifyPayment ──────────────────────────────────────────────────────
     if (action === 'verifyPayment') {
       const paymentId  = String(body.paymentId  || '').trim();
-      const authVP     = await checkAdminAuth();
+      const authVP     = await checkAuth(['ADMIN','OWNER']);
       if (!authVP.ok) return [403, { ok: false, error: authVP.error }];
       if (!paymentId) return [400, { ok: false, error: 'paymentId is required' }];
 
@@ -1964,7 +1964,7 @@ async function paymentActions(action, body, jwtUser, checkAuth) {
 // authActions
 // Actions: changePin, testDriveUpload, verifyUserPin
 // ══════════════════════════════════════════════════════════════════
-async function authActions(action, body, jwtUser, checkAuth) {
+async function authActions(action, body, jwtUser, checkAuth, req) {
   // Fast path
   if (!['changePin', 'testDriveUpload', 'verifyUserPin'].includes(action)) return null;
 
@@ -2140,7 +2140,7 @@ async function authActions(action, body, jwtUser, checkAuth) {
 // onlineOrderActions
 // Actions: getOnlineOrders, createReservation, getTables, updateTable, deleteTable, addTable, getReservations, updateReservation, getCustomers, getAnalytics, getAuditLogs, getStaff, getSettings, updateSetting
 // ══════════════════════════════════════════════════════════════════
-async function onlineOrderActions(action, body, jwtUser, checkAuth) {
+async function onlineOrderActions(action, body, jwtUser, checkAuth, req) {
   // Fast path
   if (!['getOnlineOrders', 'createReservation', 'getTables', 'updateTable', 'deleteTable', 'addTable', 'getReservations', 'updateReservation', 'getCustomers', 'getAnalytics', 'getAuditLogs', 'getStaff', 'getSettings', 'updateSetting'].includes(action)) return null;
 
@@ -2181,7 +2181,7 @@ async function onlineOrderActions(action, body, jwtUser, checkAuth) {
       // ONLINE bookings (no userId) are allowed — staff bookings require admin role
       const isOnline = !body.userId;
       if (!isOnline) {
-        const authR = await checkAdminAuth();
+        const authR = await checkAuth(['ADMIN','OWNER']);
         if (!authR.ok) return [403, { ok: false, error: authR.error }];
       }
 
@@ -2239,7 +2239,7 @@ async function onlineOrderActions(action, body, jwtUser, checkAuth) {
 
     // ── updateTable ────────────────────────────────────────────────────────
     if (action === 'updateTable') {
-      const authR = await checkAdminAuth();
+      const authR = await checkAuth(['ADMIN','OWNER']);
       if (!authR.ok) return [403, { ok: false, error: authR.error }];
       const { tableNo, tableName, capacity } = body;
       if (!tableNo) return [400, { ok: false, error: 'tableNo required' }];
@@ -2256,7 +2256,7 @@ async function onlineOrderActions(action, body, jwtUser, checkAuth) {
 
     // ── deleteTable ────────────────────────────────────────────────────────
     if (action === 'deleteTable') {
-      const authR = await checkAdminAuth();
+      const authR = await checkAuth(['ADMIN','OWNER']);
       if (!authR.ok) return [403, { ok: false, error: authR.error }];
       const { tableNo } = body;
       if (!tableNo) return [400, { ok: false, error: 'tableNo required' }];
@@ -2270,7 +2270,7 @@ async function onlineOrderActions(action, body, jwtUser, checkAuth) {
 
     // ── addTable ───────────────────────────────────────────────────────────
     if (action === 'addTable') {
-      const authR = await checkAdminAuth();
+      const authR = await checkAuth(['ADMIN','OWNER']);
       if (!authR.ok) return [403, { ok: false, error: authR.error }];
       const tableNo = parseInt(body.tableNo);
       if (!tableNo || tableNo < 1 || tableNo > 99)
@@ -2286,7 +2286,7 @@ async function onlineOrderActions(action, body, jwtUser, checkAuth) {
 
     // ── getReservations ────────────────────────────────────────────────────
     if (action === 'getReservations') {
-      const authR = await checkAdminAuth();
+      const authR = await checkAuth(['ADMIN','OWNER']);
       if (!authR.ok) return [403, { ok: false, error: authR.error }];
 
       const date = body.date ? String(body.date) : new Date().toISOString().slice(0,10);
@@ -2298,7 +2298,7 @@ async function onlineOrderActions(action, body, jwtUser, checkAuth) {
 
     // ── updateReservation ──────────────────────────────────────────────────
     if (action === 'updateReservation') {
-      const authR = await checkAdminAuth();
+      const authR = await checkAuth(['ADMIN','OWNER']);
       if (!authR.ok) return [403, { ok: false, error: authR.error }];
 
       const { resId, status, notes } = body;
@@ -2317,7 +2317,7 @@ async function onlineOrderActions(action, body, jwtUser, checkAuth) {
     }
 
     if (action === 'getCustomers') {
-      const authGC = await checkAdminAuth();
+      const authGC = await checkAuth(['ADMIN','OWNER']);
       if (!authGC.ok) return [403, { ok: false, error: authGC.error }];
       const r = await supaFetch(
         `${SUPABASE_URL}/rest/v1/online_orders?order=created_at.asc&limit=500&select=customer_phone,customer_name,created_at,total_amount,order_ref`
@@ -2348,7 +2348,7 @@ async function onlineOrderActions(action, body, jwtUser, checkAuth) {
     // ── getAnalytics ───────────────────────────────────────────────────────
     if (action === 'getAnalytics') {
       // OWNER / ADMIN only
-      const authA = await checkAdminAuth();
+      const authA = await checkAuth(['ADMIN','OWNER']);
       if (!authA.ok) return [403, { ok: false, error: authA.error }];
 
       const BASE = `${SUPABASE_URL}/rest/v1`;
@@ -2548,7 +2548,7 @@ async function onlineOrderActions(action, body, jwtUser, checkAuth) {
     }
 
     if (action === 'getStaff') {
-      const authS = await checkAdminAuth();
+      const authS = await checkAuth(['ADMIN','OWNER']);
       if (!authS.ok) return [403, { ok: false, error: authS.error }];
       const r = await supaFetch(
         `${SUPABASE_URL}/rest/v1/staff_users?active=eq.true&order=user_id.asc&select=user_id,username,display_name,role,last_login,failed_attempts`
@@ -2596,7 +2596,7 @@ async function onlineOrderActions(action, body, jwtUser, checkAuth) {
 // tableActions
 // Actions: syncToSheets, getPendingSync, markSynced, getTableStatus, setTableStatus
 // ══════════════════════════════════════════════════════════════════
-async function tableActions(action, body, jwtUser, checkAuth) {
+async function tableActions(action, body, jwtUser, checkAuth, req) {
   // Fast path
   if (!['syncToSheets', 'getPendingSync', 'markSynced', 'getTableStatus', 'setTableStatus'].includes(action)) return null;
 
@@ -2606,7 +2606,7 @@ async function tableActions(action, body, jwtUser, checkAuth) {
     // ── syncToSheets ──────────────────────────────────────────────────────
     // Manual trigger: re-queue all unsynced items + ping GAS URL to run immediately
     if (action === 'syncToSheets') {
-      const authSync = await checkAdminAuth();
+      const authSync = await checkAuth(['ADMIN','OWNER']);
       if (!authSync.ok) return [403, { ok: false, error: authSync.error }];
 
       // Count unsynced items
@@ -2776,7 +2776,7 @@ async function tableActions(action, body, jwtUser, checkAuth) {
 // reservationActions
 // Actions: linkReservationTable, seatReservation
 // ══════════════════════════════════════════════════════════════════
-async function reservationActions(action, body, jwtUser, checkAuth) {
+async function reservationActions(action, body, jwtUser, checkAuth, req) {
   // Fast path
   if (!['linkReservationTable', 'seatReservation'].includes(action)) return null;
 
@@ -2859,7 +2859,7 @@ async function reservationActions(action, body, jwtUser, checkAuth) {
 // inventoryActions
 // Actions: getInventory, uploadInventoryPhoto, upsertInventory, adjustInventory, getInventoryLog
 // ══════════════════════════════════════════════════════════════════
-async function inventoryActions(action, body, jwtUser, checkAuth) {
+async function inventoryActions(action, body, jwtUser, checkAuth, req) {
   // Fast path
   if (!['getInventory', 'uploadInventoryPhoto', 'upsertInventory', 'adjustInventory', 'getInventoryLog'].includes(action)) return null;
 
@@ -2892,7 +2892,7 @@ async function inventoryActions(action, body, jwtUser, checkAuth) {
 
     // ── uploadInventoryPhoto ───────────────────────────────────────────────
     if (action === 'uploadInventoryPhoto') {
-      const auth = await checkAdminAuth();
+      const auth = await checkAuth(['ADMIN','OWNER']);
       if (!auth.ok) return [403, { ok: false, error: auth.error }];
       const { itemCode, imageBase64, mimeType } = body;
       if (!itemCode || !imageBase64) return [400, { ok: false, error: 'itemCode + imageBase64 required' }];
@@ -2925,7 +2925,7 @@ async function inventoryActions(action, body, jwtUser, checkAuth) {
 
     // ── upsertInventory ────────────────────────────────────────────────────
     if (action === 'upsertInventory') {
-      const auth = await checkAdminAuth();
+      const auth = await checkAuth(['ADMIN','OWNER']);
       if (!auth.ok) return [403, { ok: false, error: auth.error }];
       const { itemCode, stockQty, lowStockThreshold, unit, costPerUnit, sellingPrice,
               sizePerUnit, autoDisable, restockNotes, photoUrl } = body;
@@ -2975,7 +2975,7 @@ async function inventoryActions(action, body, jwtUser, checkAuth) {
 
     // ── adjustInventory ────────────────────────────────────────────────────
     if (action === 'adjustInventory') {
-      const auth = await checkAdminAuth();
+      const auth = await checkAuth(['ADMIN','OWNER']);
       if (!auth.ok) return [403, { ok: false, error: auth.error }];
       const { itemCode, adjustment, changeType, notes, unitPrice, reference, direction } = body;
       if (!itemCode || adjustment === undefined) return [400, { ok: false, error: 'itemCode + adjustment required' }];
@@ -3032,7 +3032,7 @@ async function inventoryActions(action, body, jwtUser, checkAuth) {
 // addonActions
 // Actions: getAddons, getAddonsAdmin, saveAddon, deleteAddon
 // ══════════════════════════════════════════════════════════════════
-async function addonActions(action, body, jwtUser, checkAuth) {
+async function addonActions(action, body, jwtUser, checkAuth, req) {
   // Fast path
   if (!['getAddons', 'getAddonsAdmin', 'saveAddon', 'deleteAddon'].includes(action)) return null;
 
@@ -3049,7 +3049,7 @@ async function addonActions(action, body, jwtUser, checkAuth) {
 
     // ── getAddonsAdmin ─────────────────────────────────────────────────────
     if (action === 'getAddonsAdmin') {
-      const auth = await checkAdminAuth();
+      const auth = await checkAuth(['ADMIN','OWNER']);
       if (!auth.ok) return [403, { ok: false, error: auth.error }];
       const r = await supaFetch(
         `${SUPABASE_URL}/rest/v1/menu_addons?order=sort_order.asc,name.asc`
@@ -3059,7 +3059,7 @@ async function addonActions(action, body, jwtUser, checkAuth) {
 
     // ── saveAddon ──────────────────────────────────────────────────────────
     if (action === 'saveAddon') {
-      const auth = await checkAdminAuth();
+      const auth = await checkAuth(['ADMIN','OWNER']);
       if (!auth.ok) return [403, { ok: false, error: auth.error }];
       const { addonCode, name, price, appliesToAll, appliesToCodes, sortOrder } = body;
       if (!name) return [400, { ok: false, error: 'name required' }];
@@ -3085,7 +3085,7 @@ async function addonActions(action, body, jwtUser, checkAuth) {
 
     // ── deleteAddon ────────────────────────────────────────────────────────
     if (action === 'deleteAddon') {
-      const auth = await checkAdminAuth();
+      const auth = await checkAuth(['ADMIN','OWNER']);
       if (!auth.ok) return [403, { ok: false, error: auth.error }];
       const { addonCode } = body;
       if (!addonCode) return [400, { ok: false, error: 'addonCode required' }];
@@ -3105,7 +3105,7 @@ async function addonActions(action, body, jwtUser, checkAuth) {
 // refundActions
 // Actions: processRefund, getRefunds
 // ══════════════════════════════════════════════════════════════════
-async function refundActions(action, body, jwtUser, checkAuth) {
+async function refundActions(action, body, jwtUser, checkAuth, req) {
   // Fast path
   if (!['processRefund', 'getRefunds'].includes(action)) return null;
 
@@ -3183,7 +3183,7 @@ async function refundActions(action, body, jwtUser, checkAuth) {
 // cashActions
 // Actions: openCashSession, closeCashSession, getCashSessions, getOpenCashSession
 // ══════════════════════════════════════════════════════════════════
-async function cashActions(action, body, jwtUser, checkAuth) {
+async function cashActions(action, body, jwtUser, checkAuth, req) {
   // Fast path
   if (!['openCashSession', 'closeCashSession', 'getCashSessions', 'getOpenCashSession'].includes(action)) return null;
 
@@ -3343,7 +3343,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       // Legacy: validate body.userId against DB
       return requireAuth(body, allowedRoles);
     }
-    async function checkAdminAuth() { return checkAuth(['ADMIN', 'OWNER']); }
+    async function checkAuth(['ADMIN','OWNER']) { return checkAuth(['ADMIN', 'OWNER']); }
 
     // ══════════════════════════════════════════════════════════════════════
     // ── Dispatch to section functions ─────────────────────────────────────────
@@ -3361,7 +3361,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       cashActions,
     ];
     for (const _fn of _dispatch) {
-      const _r = await _fn(action, body, jwtUser, checkAuth);
+      const _r = await _fn(action, body, jwtUser, checkAuth, req);
       if (_r !== null) return res.status(_r[0]).json(_r[1]);
     }
     return res.status(400).json({ ok: false, error: `Unknown action: ${action}` });
