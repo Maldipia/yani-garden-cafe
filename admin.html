@@ -2689,6 +2689,8 @@ function openEditOrder(orderId) {
   var o = allOrders.find(function(x) { return x.orderId === orderId; });
   if (!o) { showToast('Order not found', 'error'); return; }
   eoOrderId = orderId;
+  window._eoHasDiscount  = parseFloat(o.discountAmount) > 0;
+  window._eoDiscountType = (o.discountType || 'discount').replace('_',' ');
   // Deep-copy items so we can mutate without affecting allOrders
   eoItems = (o.items || []).map(function(it) {
     return { code: it.code, name: it.name, size: it.size || '', sugar: it.sugar || '',
