@@ -387,7 +387,7 @@ async function requireAuth(body, allowedRoles) {
   return { ok: true, role };
 }
 
-async function checkAuth(['ADMIN','OWNER']) {
+async function checkAdminAuth() {
   const userId = String(body.userId || '').trim();
   if (!userId) return { ok: false, error: 'userId is required for this action' };
   if (!VALID_USER_ID.test(userId)) return { ok: false, error: 'Invalid userId format' };
@@ -502,15 +502,60 @@ async function uploadToGoogleDrive(imageBuffer, mimeType, filename, folderId) {
   } catch(e) { console.error('Drive upload error:', e.message); return { error: e.message }; }
 }
 
+export default async function handler(req, res) {
+  // Restrict CORS to known domains only
+  const origin = req.headers.origin || '';
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardencafe.com,https://yanigardencafe.com,https://admin.yanigardencafe.com').split(',').map(s => s.trim());
+  if (ALLOWED_ORIGINS.includes(origin) || ALLOWED_ORIGINS.includes('*')) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  } else if (!origin) {
+    res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGINS[0] || '*');
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
-// ══════════════════════════════════════════════════════════════════
-// menuActions
-// Actions: getMenu, getMenuAdmin, addMenuItem, updateMenuItem, deleteMenuItem, upsertToSupabase
-// ══════════════════════════════════════════════════════════════════
-async function menuActions(action, body, jwtUser, checkAuth, req) {
-  // Fast path
-  if (!['getMenu', 'getMenuAdmin', 'addMenuItem', 'updateMenuItem', 'deleteMenuItem', 'upsertToSupabase'].includes(action)) return null;
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed' });
 
+  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
+  if (!await checkRateLimit(ip)) {
+    return res.status(429).json({ ok: false, error: 'Too many requests. Please wait a moment.' });
+  }
+
+  try {
+    const body = req.body;
+    if (!body || !body.action) return res.status(400).json({ ok: false, error: 'Missing action' });
+
+    const action = String(body.action).trim();
+    if (!/^[a-zA-Z][a-zA-Z0-9_]{1,60}$/.test(action)) {
+      return res.status(400).json({ ok: false, error: 'Invalid action name' });
+    }
+
+    // ── Identify caller ───────────────────────────────────────────────────
+    // Try JWT token from Authorization header first (secure path).
+    // Falls back to body.userId lookup in DB (legacy backward-compat path).
+    const authHeader = (req.headers.authorization || req.headers.Authorization || '').trim();
+    const rawToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    const jwtUser = rawToken ? await verifyToken(rawToken) : null;
+
+    // checkAuth(allowedRoles): use inside any action handler instead of requireAuth/requireAdminRole.
+    // Returns { ok, role, userId } — no DB hit if JWT is valid.
+    async function checkAuth(allowedRoles) {
+      if (jwtUser) {
+        // Prefer DB permissions — they can be changed without redeploy
+        const dbPerms = await getRolePermissions();
+        const roles = (dbPerms && dbPerms[action]) ? dbPerms[action] : (allowedRoles || []);
+        if (!roles.length || roles.includes(jwtUser.role)) {
+          return { ok: true, role: jwtUser.role, userId: jwtUser.userId };
+        }
+        return { ok: false, error: 'Unauthorized: insufficient role' };
+      }
+      // Legacy: validate body.userId against DB
+      return requireAuth(body, allowedRoles);
+    }
+    async function checkAdminAuth() { return checkAuth(['ADMIN', 'OWNER']); }
+
+    // ══════════════════════════════════════════════════════════════════════
     // MENU ACTIONS
     // ══════════════════════════════════════════════════════════════════════
 
@@ -518,12 +563,12 @@ async function menuActions(action, body, jwtUser, checkAuth, req) {
     if (action === 'getMenu') {
       const now = Date.now();
       if (menuCache.public && (now - menuCache.ts) < MENU_CACHE_TTL) {
-        return [200, { ok: true, items: menuCache.public, cached: true }];
+        return res.status(200).json({ ok: true, items: menuCache.public, cached: true });
       }
       const r = await supaFetch(
         `${SUPABASE_URL}/rest/v1/menu_items?is_active=eq.true&order=name.asc&select=item_code,name,base_price,has_sizes,has_sugar_levels,price_short,price_medium,price_tall,image_path,category_id,is_signature`
       );
-      if (!r.ok) return [502, { ok: false, error: 'Failed to load menu' }];
+      if (!r.ok) return res.status(502).json({ ok: false, error: 'Failed to load menu' });
       const items = r.data.map(m => ({
         code:        m.item_code,
         name:        m.name,
@@ -540,21 +585,21 @@ async function menuActions(action, body, jwtUser, checkAuth, req) {
       }));
       menuCache.public = items;
       menuCache.ts = now;
-      return [200, { ok: true, items }];
+      return res.status(200).json({ ok: true, items });
     }
 
     // ── getMenuAdmin ───────────────────────────────────────────────────────
     if (action === 'getMenuAdmin') {
-      const authMA = await checkAuth(['ADMIN','OWNER']);
-      if (!authMA.ok) return [403, { ok: false, error: authMA.error }];
+      const authMA = await checkAdminAuth();
+      if (!authMA.ok) return res.status(403).json({ ok: false, error: authMA.error });
       const now = Date.now();
       if (menuCache.admin && (now - menuCache.ts) < MENU_CACHE_TTL) {
-        return [200, { ok: true, items: menuCache.admin, cached: true }];
+        return res.status(200).json({ ok: true, items: menuCache.admin, cached: true });
       }
       const r = await supaFetch(
         `${SUPABASE_URL}/rest/v1/menu_items?order=name.asc&select=item_code,name,base_price,has_sizes,has_sugar_levels,price_short,price_medium,price_tall,image_path,category_id,is_active,is_signature`
       );
-      if (!r.ok) return [502, { ok: false, error: 'Failed to load menu' }];
+      if (!r.ok) return res.status(502).json({ ok: false, error: 'Failed to load menu' });
       const items = r.data.map(m => ({
         code:        m.item_code,
         name:        m.name,
@@ -573,18 +618,18 @@ async function menuActions(action, body, jwtUser, checkAuth, req) {
       }));
       menuCache.admin = items;
       menuCache.ts = now;
-      return [200, { ok: true, items }];
+      return res.status(200).json({ ok: true, items });
     }
 
     // ── addMenuItem ────────────────────────────────────────────────────────
     if (action === 'addMenuItem') {
-      const authAdd = await checkAuth(['ADMIN','OWNER']);
-      if (!authAdd.ok) return [403, { ok: false, error: authAdd.error }];
+      const authAdd = await checkAdminAuth();
+      if (!authAdd.ok) return res.status(403).json({ ok: false, error: authAdd.error });
       if (!isNonEmptyString(body.name, 100) || body.name.trim().length < 2) {
-        return [400, { ok: false, error: 'name must be 2-100 characters' }];
+        return res.status(400).json({ ok: false, error: 'name must be 2-100 characters' });
       }
       const errs = validateMenuPayload(body, false);
-      if (errs.length) return [400, { ok: false, error: errs.join('; ') }];
+      if (errs.length) return res.status(400).json({ ok: false, error: errs.join('; ') });
 
       // Auto-generate item_code if not provided (format: ITEM_<timestamp>)
       const autoCode = 'ITEM_' + Date.now();
@@ -603,22 +648,22 @@ async function menuActions(action, body, jwtUser, checkAuth, req) {
         is_signature:     !!body.isSignature,
       };
       const r = await supa('POST', 'menu_items', row);
-      if (!r.ok) return [500, { ok: false, error: 'Failed to add menu item: ' + JSON.stringify(r.data) }];
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to add menu item: ' + JSON.stringify(r.data) });
       const newItem = Array.isArray(r.data) ? r.data[0] : r.data;
       invalidateMenuCache();
       logSync('menu_items', newItem?.item_code || body.itemId || 'new', 'INSERT');
-      return [200, { ok: true, itemId: newItem?.item_code || body.itemId }];
+      return res.status(200).json({ ok: true, itemId: newItem?.item_code || body.itemId });
     }
 
     // ── updateMenuItem ─────────────────────────────────────────────────────
     if (action === 'updateMenuItem') {
-      const authUpd = await checkAuth(['ADMIN','OWNER']);
-      if (!authUpd.ok) return [403, { ok: false, error: authUpd.error }];
+      const authUpd = await checkAdminAuth();
+      if (!authUpd.ok) return res.status(403).json({ ok: false, error: authUpd.error });
       if (!isValidItemCode(body.itemId)) {
-        return [400, { ok: false, error: 'itemId is required and must be a valid item code' }];
+        return res.status(400).json({ ok: false, error: 'itemId is required and must be a valid item code' });
       }
       const errs = validateMenuPayload(body, false);
-      if (errs.length) return [400, { ok: false, error: errs.join('; ') }];
+      if (errs.length) return res.status(400).json({ ok: false, error: errs.join('; ') });
 
       const updates = {};
       if (body.name      !== undefined) updates.name             = body.name;
@@ -632,36 +677,36 @@ async function menuActions(action, body, jwtUser, checkAuth, req) {
       if (body.image     !== undefined) updates.image_path        = body.image || null;
       if (body.status      !== undefined) updates.is_active         = (body.status || 'ACTIVE').toUpperCase() === 'ACTIVE';
       if (body.isSignature !== undefined) updates.is_signature      = !!body.isSignature;
-      if (Object.keys(updates).length === 0) return [200, { ok: true }];
+      if (Object.keys(updates).length === 0) return res.status(200).json({ ok: true });
 
       const r = await supa('PATCH', 'menu_items', updates, { item_code: `eq.${body.itemId}` });
-      if (!r.ok) return [500, { ok: false, error: 'Failed to update menu item' }];
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to update menu item' });
       invalidateMenuCache();
       logSync('menu_items', body.itemId, 'UPDATE');
-      return [200, { ok: true }];
+      return res.status(200).json({ ok: true });
     }
 
     // ── deleteMenuItem ─────────────────────────────────────────────────────
     if (action === 'deleteMenuItem') {
-      const authDel = await checkAuth(['ADMIN','OWNER']);
-      if (!authDel.ok) return [403, { ok: false, error: authDel.error }];
+      const authDel = await checkAdminAuth();
+      if (!authDel.ok) return res.status(403).json({ ok: false, error: authDel.error });
       if (!isValidItemCode(body.itemId)) {
-        return [400, { ok: false, error: 'itemId is required and must be a valid item code' }];
+        return res.status(400).json({ ok: false, error: 'itemId is required and must be a valid item code' });
       }
       // Hard delete — permanently removes menu item. Order items store snapshots so no FK risk.
       const r = await supa('DELETE', 'menu_items', null, { item_code: `eq.${body.itemId}` });
-      if (!r.ok) return [500, { ok: false, error: 'Failed to delete menu item' }];
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to delete menu item' });
       invalidateMenuCache();
       logSync('menu_items', body.itemId, 'DELETE');
-      return [200, { ok: true }];
+      return res.status(200).json({ ok: true });
     }
 
     // ── upsertToSupabase (backfill helper — ADMIN/OWNER only) ──────────────
     if (action === 'upsertToSupabase') {
-      const authUps = await checkAuth(['ADMIN','OWNER']);
-      if (!authUps.ok) return [403, { ok: false, error: authUps.error }];
+      const authUps = await checkAdminAuth();
+      if (!authUps.ok) return res.status(403).json({ ok: false, error: authUps.error });
       if (!isValidItemCode(body.itemId)) {
-        return [400, { ok: false, error: 'itemId is required' }];
+        return res.status(400).json({ ok: false, error: 'itemId is required' });
       }
       const row = {
         item_code:        body.itemId,
@@ -677,21 +722,10 @@ async function menuActions(action, body, jwtUser, checkAuth, req) {
         is_active:        (body.status || 'ACTIVE').toUpperCase() === 'ACTIVE',
       };
       const r = await supa('POST', 'menu_items', row, null, 'resolution=merge-duplicates');
-      return [200, { ok: r.ok, data: r.data }];
+      return res.status(200).json({ ok: r.ok, data: r.data });
     }
 
     // ══════════════════════════════════════════════════════════════════════
-  return null;
-}
-
-// ══════════════════════════════════════════════════════════════════
-// orderActions
-// Actions: placeOrder, getOrders, updateOrderStatus, updateOrderTotals, restoreOrder, deleteOrder, toggleItemPrepared, setPaymentMethod, applyDiscount, getShiftSummary, editOrderItems, placePlatformOrder, requestReceipt, resendReceipt
-// ══════════════════════════════════════════════════════════════════
-async function orderActions(action, body, jwtUser, checkAuth, req) {
-  // Fast path
-  if (!['placeOrder', 'getOrders', 'updateOrderStatus', 'updateOrderTotals', 'restoreOrder', 'deleteOrder', 'toggleItemPrepared', 'setPaymentMethod', 'applyDiscount', 'getShiftSummary', 'editOrderItems', 'placePlatformOrder', 'requestReceipt', 'resendReceipt'].includes(action)) return null;
-
     // ORDER ACTIONS
     // ══════════════════════════════════════════════════════════════════════
 
@@ -709,9 +743,9 @@ async function orderActions(action, body, jwtUser, checkAuth, req) {
       const items        = Array.isArray(body.items) ? body.items : [];
 
       // Validate items
-      if (items.length === 0) return [400, { ok: false, error: 'Order must have at least one item' }];
+      if (items.length === 0) return res.status(400).json({ ok: false, error: 'Order must have at least one item' });
       if (items.some(i => (parseFloat(i.price) || 0) < 0)) {
-        return [400, { ok: false, error: 'Item prices cannot be negative' }];
+        return res.status(400).json({ ok: false, error: 'Item prices cannot be negative' });
       }
 
       // Server-side price validation — fetch menu from DB and verify each item price
@@ -750,10 +784,10 @@ async function orderActions(action, body, jwtUser, checkAuth, req) {
             const validPrice = validBase + addonTotal;
             // Allow 1 peso tolerance for floating point
             if (Math.abs(sentPrice - validPrice) > 1.01) {
-              return [400, {
+              return res.status(400).json({
                 ok: false,
                 error: `Invalid price for ${item.code}: sent ₱${sentPrice}, expected ₱${validPrice}`
-              }];
+              });
             }
           }
         }
@@ -762,13 +796,13 @@ async function orderActions(action, body, jwtUser, checkAuth, req) {
       // Validate table token against DB — mandatory for customer (non-staff) dine-in orders
       if (!isStaffOrder && tableNo !== '0') {
         if (!tableToken) {
-          return [403, { ok: false, error: 'Table token required' }];
+          return res.status(403).json({ ok: false, error: 'Table token required' });
         }
         const tokenR = await supaFetch(
           `${SUPABASE_URL}/rest/v1/cafe_tables?table_number=eq.${encodeURIComponent(tableNo)}&qr_token=eq.${encodeURIComponent(tableToken)}&select=table_number`
         );
         if (!tokenR.ok || !tokenR.data || tokenR.data.length === 0) {
-          return [403, { ok: false, error: 'Invalid table token' }];
+          return res.status(403).json({ ok: false, error: 'Invalid table token' });
         }
       }
 
@@ -811,7 +845,7 @@ async function orderActions(action, body, jwtUser, checkAuth, req) {
         });
       }
 
-      if (orderItems.length === 0) return [400, { ok: false, error: 'No valid items in order' }];
+      if (orderItems.length === 0) return res.status(400).json({ ok: false, error: 'No valid items in order' });
 
       const svcCharge = orderType === 'DINE-IN' ? Math.round(subtotal * SERVICE_CHARGE_RATE * 100) / 100 : 0;
       const preTax    = subtotal + svcCharge;
@@ -823,7 +857,7 @@ async function orderActions(action, body, jwtUser, checkAuth, req) {
       const vatAmt     = vatEnabled ? Math.round(preTax * (vatRate / (1 + vatRate)) * 100) / 100 : 0;
       const total      = Math.round(preTax * 100) / 100; // total stays the same; VAT is shown as breakdown
 
-      if (total <= 0) return [400, { ok: false, error: 'Order total must be greater than zero' }];
+      if (total <= 0) return res.status(400).json({ ok: false, error: 'Order total must be greater than zero' });
 
       // Generate order ID using sequence — with self-healing retry on duplicate key
       const TEST_TABLES = ['T99', '0', 'T0'];
@@ -879,7 +913,7 @@ async function orderActions(action, body, jwtUser, checkAuth, req) {
       }
       if (!orderR || !orderR.ok) {
         console.error('placeOrder insert failed:', orderR && orderR.status, JSON.stringify(orderR && orderR.data));
-        return [500, { ok: false, error: 'Failed to place order' }];
+        return res.status(500).json({ ok: false, error: 'Failed to place order' });
       }
 
       // Insert order items
@@ -981,7 +1015,7 @@ async function orderActions(action, body, jwtUser, checkAuth, req) {
         console.error('Inventory deduction error:', invErr.message);
       }
 
-            return [200, {
+            return res.status(200).json({
         ok: true,
         orderId,
         ORDER_ID: orderId,
@@ -991,7 +1025,7 @@ async function orderActions(action, body, jwtUser, checkAuth, req) {
         vatAmount: vatAmt,
         vatEnabled,
         total,
-      }];
+      });
     }
 
     // ── getOrders ──────────────────────────────────────────────────────────
@@ -1009,7 +1043,7 @@ async function orderActions(action, body, jwtUser, checkAuth, req) {
       if (excludeTest) url += `&is_test=eq.false`;
 
       const ordersR = await supaFetch(url);
-      if (!ordersR.ok) return [502, { ok: false, orders: [], error: 'Failed to load orders' }];
+      if (!ordersR.ok) return res.status(502).json({ ok: false, orders: [], error: 'Failed to load orders' });
 
       // Fetch items for all orders
       const orderIds = ordersR.data.map(o => o.order_id);
@@ -1078,7 +1112,7 @@ async function orderActions(action, body, jwtUser, checkAuth, req) {
         items:         itemsMap[o.order_id] || [],
       }));
 
-      return [200, { ok: true, orders }];
+      return res.status(200).json({ ok: true, orders });
     }
 
     // ── updateOrderStatus ──────────────────────────────────────────────────
@@ -1087,20 +1121,20 @@ async function orderActions(action, body, jwtUser, checkAuth, req) {
       const newStatus    = String(body.status  || '').trim().toUpperCase();
       const cancelReason = body.cancelReason ? String(body.cancelReason).trim() : null;
       const validStatuses = ['NEW', 'PREPARING', 'READY', 'COMPLETED', 'CANCELLED'];
-      if (!orderId)                           return [400, { ok: false, error: 'orderId is required' }];
-      if (!isValidOrderId(orderId))           return [400, { ok: false, error: 'Invalid orderId format' }];
-      if (!validStatuses.includes(newStatus)) return [400, { ok: false, error: 'Invalid status: ' + newStatus }];
+      if (!orderId)                           return res.status(400).json({ ok: false, error: 'orderId is required' });
+      if (!isValidOrderId(orderId))           return res.status(400).json({ ok: false, error: 'Invalid orderId format' });
+      if (!validStatuses.includes(newStatus)) return res.status(400).json({ ok: false, error: 'Invalid status: ' + newStatus });
 
       // Role guard — staff only (all roles permitted for kitchen workflow)
       const userId = String(body.userId || '').trim();
-      if (!userId) return [403, { ok: false, error: 'userId is required to update order status' }];
+      if (!userId) return res.status(403).json({ ok: false, error: 'userId is required to update order status' });
       const staffR = await supaFetch(
         `${SUPABASE_URL}/rest/v1/staff_users?user_id=eq.${encodeURIComponent(userId)}&active=eq.true&select=role`
       );
-      if (!staffR.ok || !staffR.data.length) return [403, { ok: false, error: 'Unauthorized: invalid user' }];
+      if (!staffR.ok || !staffR.data.length) return res.status(403).json({ ok: false, error: 'Unauthorized: invalid user' });
       const staffRole = staffR.data[0].role;
       const allowedRoles = ['KITCHEN', 'CASHIER', 'ADMIN', 'OWNER'];
-      if (!allowedRoles.includes(staffRole)) return [403, { ok: false, error: 'Unauthorized: insufficient role' }];
+      if (!allowedRoles.includes(staffRole)) return res.status(403).json({ ok: false, error: 'Unauthorized: insufficient role' });
 
       // Capture previous status for audit log
       const prevR = await supaFetch(`${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=status&limit=1`);
@@ -1110,7 +1144,7 @@ async function orderActions(action, body, jwtUser, checkAuth, req) {
       if (newStatus === 'CANCELLED' && cancelReason) patch.cancel_reason = cancelReason;
 
       const r = await supa('PATCH', 'dine_in_orders', patch, { order_id: `eq.${orderId}` });
-      if (!r.ok) return [500, { ok: false, error: 'Failed to update status' }];
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to update status' });
 
       logSync('dine_in_orders', orderId, 'UPDATE');
       auditLog({ orderId, action: 'STATUS_CHANGED', actor: { userId, role: staffRole }, oldValue: prevStatus, newValue: newStatus });
@@ -1137,57 +1171,57 @@ async function orderActions(action, body, jwtUser, checkAuth, req) {
         }
       }
 
-      return [200, { ok: true, orderId, status: newStatus }];
+      return res.status(200).json({ ok: true, orderId, status: newStatus });
     }
 
     // ── updateOrderTotals ──────────────────────────────────────────────────
     // Allows OWNER/ADMIN to waive or restore service charge on active orders
     if (action === 'updateOrderTotals') {
       const authT = await checkAuth(['OWNER','ADMIN']);
-      if (!authT.ok) return [403, { ok: false, error: authT.error }];
+      if (!authT.ok) return res.status(403).json({ ok: false, error: authT.error });
       const { orderId, serviceCharge, total } = body;
-      if (!orderId) return [400, { ok: false, error: 'orderId required' }];
+      if (!orderId) return res.status(400).json({ ok: false, error: 'orderId required' });
       const svc   = parseFloat(serviceCharge);
       const tot   = parseFloat(total);
       if (isNaN(svc) || isNaN(tot) || tot < 0)
-        return [400, { ok: false, error: 'Invalid amounts' }];
+        return res.status(400).json({ ok: false, error: 'Invalid amounts' });
       const patch = { service_charge: svc, total: tot, updated_at: new Date().toISOString() };
       const r = await supa('PATCH', 'dine_in_orders', patch, { order_id: `eq.${orderId}` });
-      if (!r.ok) return [500, { ok: false, error: 'Failed to update order totals' }];
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to update order totals' });
       auditLog({ orderId, action: 'SERVICE_CHARGE_WAIVED', details: { serviceCharge: svc, total: tot, by: authT.userId } });
-      return [200, { ok: true, serviceCharge: svc, total: tot }];
+      return res.status(200).json({ ok: true, serviceCharge: svc, total: tot });
     }
 
     // ── restoreOrder ──────────────────────────────────────────────────────
     if (action === 'restoreOrder') {
       const authRO = await checkAuth(['OWNER','ADMIN']);
-      if (!authRO.ok) return [403, { ok: false, error: authRO.error }];
+      if (!authRO.ok) return res.status(403).json({ ok: false, error: authRO.error });
       const orderId = String(body.orderId || '').trim();
-      if (!orderId || !isValidOrderId(orderId)) return [400, { ok: false, error: 'Invalid orderId' }];
+      if (!orderId || !isValidOrderId(orderId)) return res.status(400).json({ ok: false, error: 'Invalid orderId' });
       const r = await supa('PATCH', 'dine_in_orders', { is_deleted: false, updated_at: new Date().toISOString() }, { order_id: `eq.${orderId}` });
-      if (!r.ok) return [500, { ok: false, error: 'Failed to restore order' }];
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to restore order' });
       auditLog({ orderId, action: 'ORDER_RESTORED', actor: { userId: body.userId, role: authRO.role } });
-      return [200, { ok: true, orderId }];
+      return res.status(200).json({ ok: true, orderId });
     }
 
     // ── deleteOrder ────────────────────────────────────────────────────────
     if (action === 'deleteOrder') {
       const authDO = await checkAuth(['OWNER','ADMIN']);
-      if (!authDO.ok) return [403, { ok: false, error: authDO.error }];
+      if (!authDO.ok) return res.status(403).json({ ok: false, error: authDO.error });
       const orderId = String(body.orderId || '').trim();
-      if (!orderId) return [400, { ok: false, error: 'orderId is required' }];
-      if (!isValidOrderId(orderId)) return [400, { ok: false, error: 'Invalid orderId format' }];
+      if (!orderId) return res.status(400).json({ ok: false, error: 'orderId is required' });
+      if (!isValidOrderId(orderId)) return res.status(400).json({ ok: false, error: 'Invalid orderId format' });
 
       // Soft delete — preserve order history for analytics/audit
       const r = await supa('PATCH', 'dine_in_orders',
         { is_deleted: true, deleted_at: new Date().toISOString() },
         { order_id: `eq.${orderId}` }
       );
-      if (!r.ok) return [500, { ok: false, error: 'Failed to delete order' }];
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to delete order' });
 
       logSync('dine_in_orders', orderId, 'DELETE');
       auditLog({ orderId, action: 'ORDER_DELETED', actor: { userId: body.userId } });
-      return [200, { ok: true, orderId }];
+      return res.status(200).json({ ok: true, orderId });
     }
 
     // ── toggleItemPrepared ────────────────────────────────────────────────
@@ -1195,18 +1229,18 @@ async function orderActions(action, body, jwtUser, checkAuth, req) {
     // Allowed for KITCHEN, CASHIER, ADMIN, OWNER.
     if (action === 'toggleItemPrepared') {
       const authK = await checkAuth();
-      if (!authK.ok) return [403, { ok: false, error: authK.error }];
+      if (!authK.ok) return res.status(403).json({ ok: false, error: authK.error });
 
       const itemId  = parseInt(body.itemId, 10);
       const prepared = Boolean(body.prepared);
-      if (!itemId || isNaN(itemId)) return [400, { ok: false, error: 'itemId is required' }];
+      if (!itemId || isNaN(itemId)) return res.status(400).json({ ok: false, error: 'itemId is required' });
 
       const r = await supa('PATCH', 'dine_in_order_items',
         { prepared },
         { id: `eq.${itemId}` }
       );
-      if (!r.ok) return [500, { ok: false, error: 'Failed to update item' }];
-      return [200, { ok: true, itemId, prepared }];
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to update item' });
+      return res.status(200).json({ ok: true, itemId, prepared });
     }
 
     // ── setPaymentMethod ──────────────────────────────────────────────────
@@ -1214,20 +1248,20 @@ async function orderActions(action, body, jwtUser, checkAuth, req) {
     // method can be single (CASH) or split (GCASH+CASH, CARD+GCASH, etc.)
     if (action === 'setPaymentMethod') {
       const authP = await checkAuth(['OWNER','ADMIN','CASHIER']);
-      if (!authP.ok) return [403, { ok: false, error: authP.error }];
+      if (!authP.ok) return res.status(403).json({ ok: false, error: authP.error });
 
       const orderId = String(body.orderId || '').trim();
       const method  = String(body.method  || '').trim().toUpperCase();
       const notes   = String(body.notes   || '').trim().slice(0, 300);
       const VALID   = new Set(['CASH','CARD','GCASH','INSTAPAY','BDO','BPI','UNIONBANK','MAYA','OTHER']);
 
-      if (!orderId) return [400, { ok: false, error: 'orderId required' }];
-      if (!isValidOrderId(orderId)) return [400, { ok: false, error: 'Invalid orderId' }];
+      if (!orderId) return res.status(400).json({ ok: false, error: 'orderId required' });
+      if (!isValidOrderId(orderId)) return res.status(400).json({ ok: false, error: 'Invalid orderId' });
 
       // Accept single or split methods (e.g. "GCASH+CASH")
       const parts = method.split('+').map(s => s.trim());
       if (parts.length > 2 || parts.some(p => !VALID.has(p)))
-        return [400, { ok: false, error: 'Invalid payment method: ' + method }];
+        return res.status(400).json({ ok: false, error: 'Invalid payment method: ' + method });
 
       const patchData = {
         payment_method: method,
@@ -1239,17 +1273,17 @@ async function orderActions(action, body, jwtUser, checkAuth, req) {
       const r = await supa('PATCH', 'dine_in_orders', patchData,
         { order_id: `eq.${encodeURIComponent(orderId)}` }
       );
-      if (!r.ok) return [500, { ok: false, error: 'Failed to update payment method' }];
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to update payment method' });
       auditLog({ orderId, action: 'PAYMENT_SET', actor: { userId: body.userId, role: authP.role }, newValue: method, details: { notes: notes || null } });
       pushToSheets('updateOrderPayment', { orderId, paymentMethod: method, paymentStatus: 'VERIFIED' });
-      return [200, { ok: true, orderId, method, split: parts.length === 2 }];
+      return res.status(200).json({ ok: true, orderId, method, split: parts.length === 2 });
     }
 
     // ── applyDiscount ─────────────────────────────────────────────────────
     // OWNER/ADMIN/CASHIER can apply PWD, SENIOR, PROMO, or CUSTOM discount
     if (action === 'applyDiscount') {
       const authD = await checkAuth(['OWNER','ADMIN','CASHIER']);
-      if (!authD.ok) return [403, { ok: false, error: authD.error }];
+      if (!authD.ok) return res.status(403).json({ ok: false, error: authD.error });
 
       const orderId   = String(body.orderId || '').trim();
       const type      = String(body.discountType || '').toUpperCase(); // PWD | SENIOR | BOTH | PROMO | CUSTOM
@@ -1259,17 +1293,17 @@ async function orderActions(action, body, jwtUser, checkAuth, req) {
       const customAmt = parseFloat(body.customAmt) || 0;      // fixed ₱ for CUSTOM
       const note      = String(body.note || '').trim().slice(0, 200);
 
-      if (!orderId) return [400, { ok: false, error: 'orderId required' }];
-      if (!isValidOrderId(orderId)) return [400, { ok: false, error: 'Invalid orderId' }];
+      if (!orderId) return res.status(400).json({ ok: false, error: 'orderId required' });
+      if (!isValidOrderId(orderId)) return res.status(400).json({ ok: false, error: 'Invalid orderId' });
       if (!['PWD','SENIOR','BOTH','PROMO','CUSTOM','REMOVE'].includes(type))
-        return [400, { ok: false, error: 'Invalid discountType' }];
+        return res.status(400).json({ ok: false, error: 'Invalid discountType' });
 
       // Fetch current order total
       const orderR = await supaFetch(
         `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=total`
       );
       if (!orderR.ok || !orderR.data?.length)
-        return [404, { ok: false, error: 'Order not found' }];
+        return res.status(404).json({ ok: false, error: 'Order not found' });
       const total = parseFloat(orderR.data[0].total) || 0;
 
       let discountAmount = 0;
@@ -1282,9 +1316,9 @@ async function orderActions(action, body, jwtUser, checkAuth, req) {
             discounted_total: null, discount_note: null, updated_at: new Date().toISOString() },
           { order_id: `eq.${encodeURIComponent(orderId)}` }
         );
-        if (!r.ok) return [500, { ok: false, error: 'Failed to remove discount' }];
+        if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to remove discount' });
         auditLog({ orderId, action: 'DISCOUNT_REMOVED', actor: { userId: body.userId, role: authD.role } });
-        return [200, { ok: true, orderId, discountRemoved: true }];
+        return res.status(200).json({ ok: true, orderId, discountRemoved: true });
       }
 
       if (type === 'PWD' || type === 'SENIOR') {
@@ -1313,17 +1347,17 @@ async function orderActions(action, body, jwtUser, checkAuth, req) {
           discount_note: note || null, updated_at: new Date().toISOString() },
         { order_id: `eq.${encodeURIComponent(orderId)}` }
       );
-      if (!r.ok) return [500, { ok: false, error: 'Failed to apply discount' }];
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to apply discount' });
       auditLog({ orderId, action: 'DISCOUNT_APPLIED', actor: { userId: body.userId, role: authD.role }, newValue: type, details: { discountAmount, discountedTotal, note: body.note || null } });
       pushToSheets('updateOrderDiscount', { orderId, discountType: type, discountAmount, discountedTotal });
-      return [200, { ok: true, orderId, type, discountAmount, discountedTotal, total }];
+      return res.status(200).json({ ok: true, orderId, type, discountAmount, discountedTotal, total });
     }
 
     // ── getShiftSummary ────────────────────────────────────────────────────
     // Returns today's sales breakdown by payment method for end-of-day reconciliation
     if (action === 'getShiftSummary') {
       const authSh = await checkAuth(['OWNER','ADMIN','CASHIER']);
-      if (!authSh.ok) return [403, { ok: false, error: authSh.error }];
+      if (!authSh.ok) return res.status(403).json({ ok: false, error: authSh.error });
 
       // Get timezone from settings (default Asia/Manila)
       const tz = await getSetting('TIMEZONE') || 'Asia/Manila';
@@ -1345,7 +1379,7 @@ async function orderActions(action, body, jwtUser, checkAuth, req) {
       const ordersR = await supaFetch(
         `${SUPABASE_URL}/rest/v1/dine_in_orders?created_at=gte.${encodeURIComponent(todayStart)}&created_at=lte.${encodeURIComponent(todayEnd)}&is_test=eq.false&select=status,total,discounted_total,payment_method,payment_status,discount_type,discount_amount,order_type,created_at&order=created_at.asc`
       );
-      if (!ordersR.ok) return [500, { ok: false, error: 'Failed to fetch shift data' }];
+      if (!ordersR.ok) return res.status(500).json({ ok: false, error: 'Failed to fetch shift data' });
 
       const orders = ordersR.data || [];
       const completed = orders.filter(o => o.status === 'COMPLETED');
@@ -1369,7 +1403,7 @@ async function orderActions(action, body, jwtUser, checkAuth, req) {
       const dineIn  = completed.filter(o => o.order_type === 'DINE-IN').length;
       const takeOut = completed.filter(o => o.order_type === 'TAKE-OUT').length;
 
-      return [200, {
+      return res.status(200).json({
         ok: true,
         date: bdayStart.toISOString().slice(0,10),
         totalOrders: completed.length,
@@ -1386,29 +1420,29 @@ async function orderActions(action, body, jwtUser, checkAuth, req) {
           discountType: o.discount_type || null,
           time: o.created_at,
         }))
-      }];
+      });
     }
 
     // ── editOrderItems ─────────────────────────────────────────────────────
     if (action === 'editOrderItems') {
       const authE = await checkAuth(['OWNER','ADMIN','CASHIER']);
-      if (!authE.ok) return [403, { ok: false, error: authE.error }];
+      if (!authE.ok) return res.status(403).json({ ok: false, error: authE.error });
 
       const orderId = String(body.orderId || '').trim();
       const items   = Array.isArray(body.items) ? body.items : [];
-      if (!orderId) return [400, { ok: false, error: 'orderId is required' }];
-      if (!isValidOrderId(orderId)) return [400, { ok: false, error: 'Invalid orderId format' }];
+      if (!orderId) return res.status(400).json({ ok: false, error: 'orderId is required' });
+      if (!isValidOrderId(orderId)) return res.status(400).json({ ok: false, error: 'Invalid orderId format' });
 
       // Get order to check it exists and get order_no/table_no
       const orderR = await supaFetch(
         `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=order_no,table_no,order_type,discounted_total,discount_amount,status`
       );
-      if (!orderR.ok || !orderR.data.length) return [404, { ok: false, error: 'Order not found' }];
+      if (!orderR.ok || !orderR.data.length) return res.status(404).json({ ok: false, error: 'Order not found' });
       const { order_no, table_no, order_type, discounted_total, discount_amount, status: orderStatus } = orderR.data[0];
 
       // Block editing completed or cancelled orders
       if (['COMPLETED','CANCELLED'].includes(orderStatus)) {
-        return [400, { ok: false, error: `Cannot edit a ${orderStatus} order` }];
+        return res.status(400).json({ ok: false, error: `Cannot edit a ${orderStatus} order` });
       }
 
       // Discount is handled below — editOrderItems recalculates discount proportionally
@@ -1476,7 +1510,7 @@ async function orderActions(action, body, jwtUser, checkAuth, req) {
 
       logSync('dine_in_orders', orderId, 'UPDATE');
       auditLog({ orderId, action: 'ORDER_EDITED', actor: { userId: body.userId, role: authE.role }, details: { newTotal: total, itemCount: itemRows.length, discountRecalculated: !!newDiscountedTotal } });
-      return [200, { ok: true, orderId, subtotal, serviceCharge: svcCharge, total, discountedTotal: newDiscountedTotal, discountAmount: newDiscountAmt }];
+      return res.status(200).json({ ok: true, orderId, subtotal, serviceCharge: svcCharge, total, discountedTotal: newDiscountedTotal, discountAmount: newDiscountAmt });
     }
 
     // ── placePlatformOrder ─────────────────────────────────────────────────
@@ -1486,8 +1520,8 @@ async function orderActions(action, body, jwtUser, checkAuth, req) {
       const notes       = String(body.notes       || '').trim().substring(0, 500);
       const items       = Array.isArray(body.items) ? body.items : [];
 
-      if (!platform) return [400, { ok: false, error: 'platform is required' }];
-      if (items.length === 0) return [400, { ok: false, error: 'Order must have at least one item' }];
+      if (!platform) return res.status(400).json({ ok: false, error: 'platform is required' });
+      if (items.length === 0) return res.status(400).json({ ok: false, error: 'Order must have at least one item' });
 
       // Look up prices from menu
       const itemCodes = [...new Set(items.map(i => i.code))];
@@ -1522,7 +1556,7 @@ async function orderActions(action, body, jwtUser, checkAuth, req) {
         });
       }
 
-      if (orderItems.length === 0) return [400, { ok: false, error: 'No valid items in order' }];
+      if (orderItems.length === 0) return res.status(400).json({ ok: false, error: 'No valid items in order' });
 
       const total = Math.round(subtotal * 100) / 100; // No service charge for platform orders
 
@@ -1550,7 +1584,7 @@ async function orderActions(action, body, jwtUser, checkAuth, req) {
         platform_ref:   platformRef,
       };
       const orderR = await supa('POST', 'dine_in_orders', orderRow);
-      if (!orderR.ok) return [500, { ok: false, error: 'Failed to place platform order' }];
+      if (!orderR.ok) return res.status(500).json({ ok: false, error: 'Failed to place platform order' });
 
       const itemRows = orderItems.map(it => ({
         order_id:     orderId,
@@ -1568,7 +1602,7 @@ async function orderActions(action, body, jwtUser, checkAuth, req) {
       logSync('dine_in_orders', orderId, 'INSERT');
       auditLog({ orderId, action: 'PLATFORM_ORDER_PLACED', actor: { userId: body.userId }, details: { platform: body.platform, total } });
 
-      return [200, { ok: true, orderId, total, subtotal }];
+      return res.status(200).json({ ok: true, orderId, total, subtotal });
     }
 
     // ── requestReceipt ─────────────────────────────────────────────────────
@@ -1581,7 +1615,7 @@ async function orderActions(action, body, jwtUser, checkAuth, req) {
       const address        = String(body.address        || '').trim().slice(0, 500);
       const tin            = String(body.tin            || '').trim().slice(0, 50);
 
-      if (!orderId) return [400, { ok: false, error: 'orderId is required' }];
+      if (!orderId) return res.status(400).json({ ok: false, error: 'orderId is required' });
 
       // 1. Assign OR number for BIR receipts
       let orNumber = null;
@@ -1609,14 +1643,14 @@ async function orderActions(action, body, jwtUser, checkAuth, req) {
       // 2. If email delivery → fetch order + items → send email
       if (deliveryMethod === 'email') {
         if (!email || !email.includes('@'))
-          return [400, { ok: false, error: 'Valid email address required for email delivery' }];
+          return res.status(400).json({ ok: false, error: 'Valid email address required for email delivery' });
 
         // Fetch order details
         const orderR = await supaFetch(
           `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&limit=1`
         );
         if (!orderR.ok || !orderR.data.length)
-          return [404, { ok: false, error: 'Order not found' }];
+          return res.status(404).json({ ok: false, error: 'Order not found' });
         const order = orderR.data[0];
         // Merge in the receipt fields we just saved (PATCH may not have flushed yet)
         Object.assign(order, { receipt_name: name, receipt_address: address, receipt_tin: tin });
@@ -1635,34 +1669,34 @@ async function orderActions(action, body, jwtUser, checkAuth, req) {
             isBIR: receiptType === 'bir',
           });
           auditLog({ orderId, action: 'RECEIPT_SENT', newValue: `email:${email}`, details: { type: receiptType, emailId } });
-          return [200, { ok: true, sent: true, emailId, message: `Receipt sent to ${email}` }];
+          return res.status(200).json({ ok: true, sent: true, emailId, message: `Receipt sent to ${email}` });
         } catch (emailErr) {
-          return [500, { ok: false, error: `Email failed: ${emailErr.message}` }];
+          return res.status(500).json({ ok: false, error: `Email failed: ${emailErr.message}` });
         }
       }
 
       // 3. Printed delivery → just saved the info, staff will handle at counter
-      return [200, { ok: true, sent: false, message: 'Receipt details saved. Print at counter.', orNumber: orNumber || null }];
+      return res.status(200).json({ ok: true, sent: false, message: 'Receipt details saved. Print at counter.', orNumber: orNumber || null });
     }
 
     // ── resendReceipt ──────────────────────────────────────────────────────
     // Staff-triggered: resend receipt email for any completed order
     if (action === 'resendReceipt') {
       const authR = await checkAuth(['OWNER','ADMIN','CASHIER']);
-      if (!authR.ok) return [403, { ok: false, error: authR.error }];
+      if (!authR.ok) return res.status(403).json({ ok: false, error: authR.error });
 
       const orderId   = String(body.orderId   || '').trim();
       const toEmail   = String(body.email     || '').trim().toLowerCase();
       const rcpType   = String(body.receiptType || 'simple').trim();
 
-      if (!orderId) return [400, { ok: false, error: 'orderId required' }];
-      if (!toEmail || !toEmail.includes('@')) return [400, { ok: false, error: 'Valid email required' }];
+      if (!orderId) return res.status(400).json({ ok: false, error: 'orderId required' });
+      if (!toEmail || !toEmail.includes('@')) return res.status(400).json({ ok: false, error: 'Valid email required' });
 
       const orderR = await supaFetch(
         `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&limit=1`
       );
       if (!orderR.ok || !orderR.data.length)
-        return [404, { ok: false, error: 'Order not found' }];
+        return res.status(404).json({ ok: false, error: 'Order not found' });
       const order = orderR.data[0];
 
       const itemsR = await supaFetch(
@@ -1674,24 +1708,13 @@ async function orderActions(action, body, jwtUser, checkAuth, req) {
         const emailId = await sendReceiptEmail({ toEmail, order, items, isBIR: rcpType === 'bir' });
         auditLog({ orderId, action: 'RECEIPT_SENT', actor: { userId: body.userId },
           newValue: `resend:${toEmail}`, details: { type: rcpType, emailId } });
-        return [200, { ok: true, emailId, message: `Receipt resent to ${toEmail}` }];
+        return res.status(200).json({ ok: true, emailId, message: `Receipt resent to ${toEmail}` });
       } catch (e) {
-        return [500, { ok: false, error: `Email failed: ${e.message}` }];
+        return res.status(500).json({ ok: false, error: `Email failed: ${e.message}` });
       }
     }
 
     // ══════════════════════════════════════════════════════════════════════
-  return null;
-}
-
-// ══════════════════════════════════════════════════════════════════
-// paymentActions
-// Actions: uploadPayment, listPayments, getPaymentProof, migrateProofs, verifyPayment, rejectPayment
-// ══════════════════════════════════════════════════════════════════
-async function paymentActions(action, body, jwtUser, checkAuth, req) {
-  // Fast path
-  if (!['uploadPayment', 'listPayments', 'getPaymentProof', 'migrateProofs', 'verifyPayment', 'rejectPayment'].includes(action)) return null;
-
     // PAYMENT ACTIONS
     // ══════════════════════════════════════════════════════════════════════
 
@@ -1705,8 +1728,8 @@ async function paymentActions(action, body, jwtUser, checkAuth, req) {
       const imageData    = body.imageData || '';
       const filename     = String(body.filename     || '').trim().substring(0, 200);
 
-      if (!orderId) return [400, { ok: false, error: 'orderId is required' }];
-      if (amount <= 0) return [400, { ok: false, error: 'amount must be positive' }];
+      if (!orderId) return res.status(400).json({ ok: false, error: 'orderId is required' });
+      if (amount <= 0) return res.status(400).json({ ok: false, error: 'amount must be positive' });
 
       // Generate payment ID
       const paymentId = `PAY-${Date.now().toString(36).toUpperCase()}`;
@@ -1767,7 +1790,7 @@ async function paymentActions(action, body, jwtUser, checkAuth, req) {
         status:         'PENDING',
       };
       const r = await supa('POST', 'payments', payRow);
-      if (!r.ok) return [500, { ok: false, error: 'Failed to submit payment' }];
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to submit payment' });
 
       // Update order payment status
       await supa('PATCH', 'dine_in_orders', {
@@ -1776,18 +1799,18 @@ async function paymentActions(action, body, jwtUser, checkAuth, req) {
       }, { order_id: `eq.${orderId}` });
 
       logSync('payments', paymentId, 'INSERT');
-      return [200, { ok: true, paymentId, proofUrl, filename: storedFilename }];
+      return res.status(200).json({ ok: true, paymentId, proofUrl, filename: storedFilename });
     }
 
     // ── listPayments ───────────────────────────────────────────────────────
     if (action === 'listPayments') {
-      const authLP = await checkAuth(['ADMIN','OWNER']);
-      if (!authLP.ok) return [403, { ok: false, error: authLP.error }];
+      const authLP = await checkAdminAuth();
+      if (!authLP.ok) return res.status(403).json({ ok: false, error: authLP.error });
 
       const r = await supaFetch(
         `${SUPABASE_URL}/rest/v1/payments?order=created_at.desc&limit=200`
       );
-      if (!r.ok) return [502, { ok: false, payments: [], error: 'Failed to load payments' }];
+      if (!r.ok) return res.status(502).json({ ok: false, payments: [], error: 'Failed to load payments' });
 
       // Batch-fetch table numbers from dine_in_orders
       const orderIds = [...new Set(r.data.map(p => p.order_id).filter(Boolean))];
@@ -1844,32 +1867,32 @@ async function paymentActions(action, body, jwtUser, checkAuth, req) {
         };
       });
 
-      return [200, { ok: true, payments }];
+      return res.status(200).json({ ok: true, payments });
     }
 
     // ── getPaymentProof ───────────────────────────────────────────────────
     // Returns the base64 proof image for a single payment (on-demand)
     if (action === 'getPaymentProof') {
-      const authGP = await checkAuth(['ADMIN','OWNER']);
-      if (!authGP.ok) return [403, { ok: false, error: authGP.error }];
+      const authGP = await checkAdminAuth();
+      if (!authGP.ok) return res.status(403).json({ ok: false, error: authGP.error });
       const payId = String(body.paymentId || '').trim();
-      if (!payId) return [400, { ok: false, error: 'paymentId required' }];
+      if (!payId) return res.status(400).json({ ok: false, error: 'paymentId required' });
       const r = await supaFetch(
         `${SUPABASE_URL}/rest/v1/payments?payment_id=eq.${encodeURIComponent(payId)}&select=payment_id,proof_url,proof_filename`
       );
-      if (!r.ok || !r.data?.length) return [404, { ok: false, error: 'Payment not found' }];
-      return [200, { ok: true, imageUrl: r.data[0].proof_url, filename: r.data[0].proof_filename }];
+      if (!r.ok || !r.data?.length) return res.status(404).json({ ok: false, error: 'Payment not found' });
+      return res.status(200).json({ ok: true, imageUrl: r.data[0].proof_url, filename: r.data[0].proof_filename });
     }
 
     // ── migrateProofs (one-time: move base64 → Supabase Storage) ──────────
     if (action === 'migrateProofs') {
       const auth = await checkAuth(['OWNER']);
-      if (!auth.ok) return [403, { ok: false, error: auth.error }];
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
       // Find all payments where proof_url starts with 'data:'
       const r = await supaFetch(
         `${SUPABASE_URL}/rest/v1/payments?proof_url=like.data%3A*&select=payment_id,proof_url,proof_filename`
       );
-      if (!r.ok) return [502, { ok: false, error: 'Failed to fetch payments' }];
+      if (!r.ok) return res.status(502).json({ ok: false, error: 'Failed to fetch payments' });
       let migrated = 0, failed = 0;
       for (const p of r.data || []) {
         try {
@@ -1900,22 +1923,22 @@ async function paymentActions(action, body, jwtUser, checkAuth, req) {
           } else { failed++; }
         } catch (_) { failed++; }
       }
-      return [200, { ok: true, migrated, failed, total: r.data?.length || 0 }];
+      return res.status(200).json({ ok: true, migrated, failed, total: r.data?.length || 0 });
     }
 
     // ── verifyPayment ──────────────────────────────────────────────────────
     if (action === 'verifyPayment') {
       const paymentId  = String(body.paymentId  || '').trim();
-      const authVP     = await checkAuth(['ADMIN','OWNER']);
-      if (!authVP.ok) return [403, { ok: false, error: authVP.error }];
-      if (!paymentId) return [400, { ok: false, error: 'paymentId is required' }];
+      const authVP     = await checkAdminAuth();
+      if (!authVP.ok) return res.status(403).json({ ok: false, error: authVP.error });
+      if (!paymentId) return res.status(400).json({ ok: false, error: 'paymentId is required' });
 
       const r = await supa('PATCH', 'payments', {
         status:      'VERIFIED',
         verified_by: String(body.userId || 'Staff').trim(),
         verified_at: new Date().toISOString(),
       }, { payment_id: `eq.${paymentId}` });
-      if (!r.ok) return [500, { ok: false, error: 'Failed to verify payment' }];
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to verify payment' });
 
       // Get the order_id to update order payment status
       const payR = await supaFetch(
@@ -1926,7 +1949,7 @@ async function paymentActions(action, body, jwtUser, checkAuth, req) {
       }
 
       logSync('payments', paymentId, 'UPDATE');
-      return [200, { ok: true, paymentId }];
+      return res.status(200).json({ ok: true, paymentId });
     }
 
     // ── rejectPayment ──────────────────────────────────────────────────────
@@ -1934,7 +1957,7 @@ async function paymentActions(action, body, jwtUser, checkAuth, req) {
       const paymentId  = String(body.paymentId  || '').trim();
       const reason     = String(body.reason     || '').trim().substring(0, 500);
       const verifiedBy = String(body.verifiedBy || 'Staff').trim().substring(0, 100);
-      if (!paymentId) return [400, { ok: false, error: 'paymentId is required' }];
+      if (!paymentId) return res.status(400).json({ ok: false, error: 'paymentId is required' });
 
       const r = await supa('PATCH', 'payments', {
         status:           'REJECTED',
@@ -1942,7 +1965,7 @@ async function paymentActions(action, body, jwtUser, checkAuth, req) {
         verified_at:      new Date().toISOString(),
         rejection_reason: reason,
       }, { payment_id: `eq.${paymentId}` });
-      if (!r.ok) return [500, { ok: false, error: 'Failed to reject payment' }];
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to reject payment' });
 
       // Get the order_id to update order payment status
       const payR = await supaFetch(
@@ -1953,21 +1976,10 @@ async function paymentActions(action, body, jwtUser, checkAuth, req) {
       }
 
       logSync('payments', paymentId, 'UPDATE');
-      return [200, { ok: true, paymentId }];
+      return res.status(200).json({ ok: true, paymentId });
     }
 
     // ══════════════════════════════════════════════════════════════════════
-  return null;
-}
-
-// ══════════════════════════════════════════════════════════════════
-// authActions
-// Actions: changePin, testDriveUpload, verifyUserPin
-// ══════════════════════════════════════════════════════════════════
-async function authActions(action, body, jwtUser, checkAuth, req) {
-  // Fast path
-  if (!['changePin', 'testDriveUpload', 'verifyUserPin'].includes(action)) return null;
-
     // AUTH ACTIONS
     // ══════════════════════════════════════════════════════════════════════
 
@@ -1979,16 +1991,16 @@ async function authActions(action, body, jwtUser, checkAuth, req) {
       const newPin       = String(body.newPin || '').trim();
       const currentPin   = String(body.currentPin || '').trim();
 
-      if (!targetUserId) return [400, { ok: false, error: 'targetUserId is required' }];
-      if (!newPin || newPin.length < 4) return [400, { ok: false, error: 'New PIN must be at least 4 digits' }];
-      if (!/^\d{4,8}$/.test(newPin)) return [400, { ok: false, error: 'PIN must be 4-8 digits only' }];
+      if (!targetUserId) return res.status(400).json({ ok: false, error: 'targetUserId is required' });
+      if (!newPin || newPin.length < 4) return res.status(400).json({ ok: false, error: 'New PIN must be at least 4 digits' });
+      if (!/^\d{4,8}$/.test(newPin)) return res.status(400).json({ ok: false, error: 'PIN must be 4-8 digits only' });
 
       // Fetch the target user
       const targetR = await supaFetch(
         `${SUPABASE_URL}/rest/v1/staff_users?user_id=eq.${encodeURIComponent(targetUserId)}&active=eq.true&select=user_id,pin_hash,role`
       );
       if (!targetR.ok || !targetR.data?.length) {
-        return [404, { ok: false, error: 'User not found' }];
+        return res.status(404).json({ ok: false, error: 'User not found' });
       }
       const targetUser = targetR.data[0];
 
@@ -2012,10 +2024,10 @@ async function authActions(action, body, jwtUser, checkAuth, req) {
       } else if (currentPin) {
         // Non-admin (or no userId sent) changing their own PIN — verify current PIN
         authorized = await bcrypt.compare(currentPin, targetUser.pin_hash);
-        if (!authorized) return [403, { ok: false, error: 'Current PIN is incorrect' }];
+        if (!authorized) return res.status(403).json({ ok: false, error: 'Current PIN is incorrect' });
       }
 
-      if (!authorized) return [403, { ok: false, error: 'Unauthorized to change this PIN' }];
+      if (!authorized) return res.status(403).json({ ok: false, error: 'Unauthorized to change this PIN' });
 
       // Hash new PIN and save
       const newHash = await bcrypt.hash(newPin, 12);
@@ -2023,15 +2035,15 @@ async function authActions(action, body, jwtUser, checkAuth, req) {
         { pin_hash: newHash, failed_attempts: 0, locked_until: null },
         { user_id: `eq.${targetUserId}` }
       );
-      if (!upd.ok) return [500, { ok: false, error: 'Failed to update PIN' }];
+      if (!upd.ok) return res.status(500).json({ ok: false, error: 'Failed to update PIN' });
 
-      return [200, { ok: true, message: 'PIN updated successfully' }];
+      return res.status(200).json({ ok: true, message: 'PIN updated successfully' });
     }
 
     // ── verifyUserPin ──────────────────────────────────────────────────────
     if (action === 'testDriveUpload') {
       // Diagnostic only — protected by secret key
-      if (body.secret !== 'yani-drive-test-2026') return [401, { ok: false, error: 'Bad secret' }];
+      if (body.secret !== 'yani-drive-test-2026') return res.status(401).json({ ok: false, error: 'Bad secret' });
       const tinyPng = Buffer.from(
         'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==','base64');
       const driveResult = await uploadToGoogleDrive(tinyPng,'image/png',`TEST_${Date.now()}.png`,'1hDQlljGpRUwT9q33xHukbXvz_M8tk5lR');
@@ -2048,12 +2060,12 @@ async function authActions(action, body, jwtUser, checkAuth, req) {
       const saEmail = saSet ? JSON.parse(testSaJson).client_email : 'NOT SET';
       const driveError = (driveResult && typeof driveResult === 'object' && driveResult.error) ? driveResult.error : null;
       const driveUrl   = (driveResult && typeof driveResult === 'string') ? driveResult : null;
-      return [200, { ok: !!driveUrl, driveUrl, driveError, saEmail, saSet }];
+      return res.status(200).json({ ok: !!driveUrl, driveUrl, driveError, saEmail, saSet });
     }
 
     if (action === 'verifyUserPin') {
       const pin = String(body.pin || '').trim();
-      if (!pin || pin.length < 4) return [400, { ok: false, error: 'PIN is required' }];
+      if (!pin || pin.length < 4) return res.status(400).json({ ok: false, error: 'PIN is required' });
 
       // ── IP-based brute-force protection ──────────────────────────────
       // 10 wrong PINs per IP in 5 minutes → 429 blocked
@@ -2066,7 +2078,7 @@ async function authActions(action, body, jwtUser, checkAuth, req) {
             body: JSON.stringify({ p_key: loginKey, p_window: 300, p_limit: 10 }) }
         );
         if (pinRlR.ok && await pinRlR.json() === false) {
-          return [429, { ok:false, error:'Too many failed attempts. Try again in 5 minutes.' }];
+          return res.status(429).json({ ok:false, error:'Too many failed attempts. Try again in 5 minutes.' });
         }
       } catch(rlErr) { console.error('PIN rate limit:', rlErr.message); /* fail open */ }
 
@@ -2075,7 +2087,7 @@ async function authActions(action, body, jwtUser, checkAuth, req) {
       const r = await supaFetch(
         `${SUPABASE_URL}/rest/v1/staff_users?active=eq.true&select=user_id,username,display_name,role,pin_hash,failed_attempts,locked_until`
       );
-      if (!r.ok || !r.data) return [500, { ok: false, error: 'Auth service error' }];
+      if (!r.ok || !r.data) return res.status(500).json({ ok: false, error: 'Auth service error' });
 
       // Find matching user — try each active staff member
       let matchedUser = null;
@@ -2089,12 +2101,12 @@ async function authActions(action, body, jwtUser, checkAuth, req) {
 
       if (!matchedUser) {
         // Rate already tracked per IP above
-        return [200, { ok: false, error: 'Invalid PIN' }];
+        return res.status(200).json({ ok: false, error: 'Invalid PIN' });
       }
 
       // Check if account is locked
       if (matchedUser.locked_until && new Date(matchedUser.locked_until) > new Date()) {
-        return [200, { ok: false, error: 'Account locked. Try again in 15 minutes.' }];
+        return res.status(200).json({ ok: false, error: 'Account locked. Try again in 15 minutes.' });
       }
 
       // PIN correct — reset rate limit + update last_login
@@ -2115,7 +2127,7 @@ async function authActions(action, body, jwtUser, checkAuth, req) {
       try { token = await signToken(matchedUser.user_id, matchedUser.role, matchedUser.display_name); }
       catch (_) { /* token generation failure non-fatal — client still works via legacy path */ }
 
-      return [200, {
+      return res.status(200).json({
         ok: true,
         userId:      matchedUser.user_id,
         username:    matchedUser.username,
@@ -2129,21 +2141,10 @@ async function authActions(action, body, jwtUser, checkAuth, req) {
           displayName: matchedUser.display_name,
           role:        matchedUser.role,
         },
-      }];
+      });
     }
 
     // ══════════════════════════════════════════════════════════════════════
-  return null;
-}
-
-// ══════════════════════════════════════════════════════════════════
-// onlineOrderActions
-// Actions: getOnlineOrders, createReservation, getTables, updateTable, deleteTable, addTable, getReservations, updateReservation, getCustomers, getAnalytics, getAuditLogs, getStaff, getSettings, updateSetting
-// ══════════════════════════════════════════════════════════════════
-async function onlineOrderActions(action, body, jwtUser, checkAuth, req) {
-  // Fast path
-  if (!['getOnlineOrders', 'createReservation', 'getTables', 'updateTable', 'deleteTable', 'addTable', 'getReservations', 'updateReservation', 'getCustomers', 'getAnalytics', 'getAuditLogs', 'getStaff', 'getSettings', 'updateSetting'].includes(action)) return null;
-
     // ONLINE ORDER ACTIONS (pass-through to Supabase)
     // ══════════════════════════════════════════════════════════════════════
 
@@ -2172,7 +2173,7 @@ async function onlineOrderActions(action, body, jwtUser, checkAuth, req) {
         deliveryZone:        o.delivery_zone || null,
         lastUpdated:         o.updated_at,
       }));
-      return [200, { ok: true, orders }];
+      return res.status(200).json({ ok: true, orders });
     }
 
     // ── getCustomers ───────────────────────────────────────────────────────
@@ -2181,25 +2182,25 @@ async function onlineOrderActions(action, body, jwtUser, checkAuth, req) {
       // ONLINE bookings (no userId) are allowed — staff bookings require admin role
       const isOnline = !body.userId;
       if (!isOnline) {
-        const authR = await checkAuth(['ADMIN','OWNER']);
-        if (!authR.ok) return [403, { ok: false, error: authR.error }];
+        const authR = await checkAdminAuth();
+        if (!authR.ok) return res.status(403).json({ ok: false, error: authR.error });
       }
 
       const { guestName, guestPhone, guestEmail, tableNo, pax, resDate, resTime,
               notes, occasion, seatingPref, dietary } = body;
 
       if (!guestName || !resDate || !resTime)
-        return [400, { ok: false, error: 'guestName, resDate, resTime are required' }];
+        return res.status(400).json({ ok: false, error: 'guestName, resDate, resTime are required' });
 
       // Online bookings don't pick a specific table — staff assigns one
       const table = tableNo ? parseInt(tableNo) : null;
       if (table !== null && (table < 1 || table > 10))
-        return [400, { ok: false, error: 'tableNo must be 1-10' }];
+        return res.status(400).json({ ok: false, error: 'tableNo must be 1-10' });
 
       // Validate date not in the past
       const today = new Date().toISOString().slice(0, 10);
       if (resDate < today)
-        return [400, { ok: false, error: 'Reservation date cannot be in the past' }];
+        return res.status(400).json({ ok: false, error: 'Reservation date cannot be in the past' });
 
       // Get next res_id
       const seqR = await supaFetch(`${SUPABASE_URL}/rest/v1/rpc/get_next_res_id`, {
@@ -2223,26 +2224,26 @@ async function onlineOrderActions(action, body, jwtUser, checkAuth, req) {
         source:       isOnline ? 'ONLINE' : 'STAFF',
         status:       'CONFIRMED',
       });
-      if (!r.ok) return [500, { ok: false, error: 'Failed to create reservation' }];
-      return [200, { ok: true, resId }];
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to create reservation' });
+      return res.status(200).json({ ok: true, resId });
     }
 
     // ── getTables ──────────────────────────────────────────────────────────
     if (action === 'getTables') {
       const authR = await checkAuth();
-      if (!authR.ok) return [403, { ok: false, error: authR.error }];
+      if (!authR.ok) return res.status(403).json({ ok: false, error: authR.error });
       const r = await supaFetch(
         `${SUPABASE_URL}/rest/v1/cafe_tables?order=table_number.asc&select=table_number,qr_token,table_name,capacity`
       );
-      return [200, { ok: true, tables: r.data || [] }];
+      return res.status(200).json({ ok: true, tables: r.data || [] });
     }
 
     // ── updateTable ────────────────────────────────────────────────────────
     if (action === 'updateTable') {
-      const authR = await checkAuth(['ADMIN','OWNER']);
-      if (!authR.ok) return [403, { ok: false, error: authR.error }];
+      const authR = await checkAdminAuth();
+      if (!authR.ok) return res.status(403).json({ ok: false, error: authR.error });
       const { tableNo, tableName, capacity } = body;
-      if (!tableNo) return [400, { ok: false, error: 'tableNo required' }];
+      if (!tableNo) return res.status(400).json({ ok: false, error: 'tableNo required' });
       const updates = {};
       if (tableName !== undefined) updates.table_name = String(tableName).trim().slice(0, 50);
       if (capacity !== undefined) updates.capacity = parseInt(capacity) || 4;
@@ -2250,75 +2251,75 @@ async function onlineOrderActions(action, body, jwtUser, checkAuth, req) {
         `${SUPABASE_URL}/rest/v1/cafe_tables?table_number=eq.${encodeURIComponent(tableNo)}`,
         { method: 'PATCH', body: JSON.stringify(updates) }
       );
-      if (!r.ok) return [500, { ok: false, error: 'Failed to update table' }];
-      return [200, { ok: true }];
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to update table' });
+      return res.status(200).json({ ok: true });
     }
 
     // ── deleteTable ────────────────────────────────────────────────────────
     if (action === 'deleteTable') {
-      const authR = await checkAuth(['ADMIN','OWNER']);
-      if (!authR.ok) return [403, { ok: false, error: authR.error }];
+      const authR = await checkAdminAuth();
+      if (!authR.ok) return res.status(403).json({ ok: false, error: authR.error });
       const { tableNo } = body;
-      if (!tableNo) return [400, { ok: false, error: 'tableNo required' }];
+      if (!tableNo) return res.status(400).json({ ok: false, error: 'tableNo required' });
       const r = await supaFetch(
         `${SUPABASE_URL}/rest/v1/cafe_tables?table_number=eq.${encodeURIComponent(tableNo)}`,
         { method: 'DELETE' }
       );
-      if (!r.ok) return [500, { ok: false, error: 'Failed to delete table' }];
-      return [200, { ok: true }];
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to delete table' });
+      return res.status(200).json({ ok: true });
     }
 
     // ── addTable ───────────────────────────────────────────────────────────
     if (action === 'addTable') {
-      const authR = await checkAuth(['ADMIN','OWNER']);
-      if (!authR.ok) return [403, { ok: false, error: authR.error }];
+      const authR = await checkAdminAuth();
+      if (!authR.ok) return res.status(403).json({ ok: false, error: authR.error });
       const tableNo = parseInt(body.tableNo);
       if (!tableNo || tableNo < 1 || tableNo > 99)
-        return [400, { ok: false, error: 'Invalid table number (1-99)' }];
+        return res.status(400).json({ ok: false, error: 'Invalid table number (1-99)' });
       // Generate random 8-char hex token
       const token = Array.from({length:8}, () => Math.floor(Math.random()*16).toString(16)).join('');
       const tableName = body.tableName ? String(body.tableName).trim().slice(0,50) : `Table ${tableNo}`;
       const capacity = parseInt(body.capacity) || 4;
       const r = await supa('POST', 'cafe_tables', { table_number: tableNo, qr_token: token, table_name: tableName, capacity });
-      if (!r.ok) return [500, { ok: false, error: 'Failed to add table — may already exist' }];
-      return [200, { ok: true, tableNo, token }];
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to add table — may already exist' });
+      return res.status(200).json({ ok: true, tableNo, token });
     }
 
     // ── getReservations ────────────────────────────────────────────────────
     if (action === 'getReservations') {
-      const authR = await checkAuth(['ADMIN','OWNER']);
-      if (!authR.ok) return [403, { ok: false, error: authR.error }];
+      const authR = await checkAdminAuth();
+      if (!authR.ok) return res.status(403).json({ ok: false, error: authR.error });
 
       const date = body.date ? String(body.date) : new Date().toISOString().slice(0,10);
       const r = await supaFetch(
         `${SUPABASE_URL}/rest/v1/reservations?res_date=eq.${date}&status=neq.CANCELLED&order=res_time.asc&select=*`
       );
-      return [200, { ok: true, reservations: r.data || [] }];
+      return res.status(200).json({ ok: true, reservations: r.data || [] });
     }
 
     // ── updateReservation ──────────────────────────────────────────────────
     if (action === 'updateReservation') {
-      const authR = await checkAuth(['ADMIN','OWNER']);
-      if (!authR.ok) return [403, { ok: false, error: authR.error }];
+      const authR = await checkAdminAuth();
+      if (!authR.ok) return res.status(403).json({ ok: false, error: authR.error });
 
       const { resId, status, notes } = body;
-      if (!resId) return [400, { ok: false, error: 'resId is required' }];
+      if (!resId) return res.status(400).json({ ok: false, error: 'resId is required' });
       const validStatuses = ['CONFIRMED','SEATED','COMPLETED','CANCELLED','NO_SHOW'];
       if (status && !validStatuses.includes(status))
-        return [400, { ok: false, error: 'Invalid status' }];
+        return res.status(400).json({ ok: false, error: 'Invalid status' });
 
       const patch = {};
       if (status) patch.status = status;
       if (notes !== undefined) patch.notes = notes;
 
       const r = await supa('PATCH', 'reservations', patch, { res_id: `eq.${resId}` });
-      if (!r.ok) return [500, { ok: false, error: 'Failed to update reservation' }];
-      return [200, { ok: true }];
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to update reservation' });
+      return res.status(200).json({ ok: true });
     }
 
     if (action === 'getCustomers') {
-      const authGC = await checkAuth(['ADMIN','OWNER']);
-      if (!authGC.ok) return [403, { ok: false, error: authGC.error }];
+      const authGC = await checkAdminAuth();
+      if (!authGC.ok) return res.status(403).json({ ok: false, error: authGC.error });
       const r = await supaFetch(
         `${SUPABASE_URL}/rest/v1/online_orders?order=created_at.asc&limit=500&select=customer_phone,customer_name,created_at,total_amount,order_ref`
       );
@@ -2342,14 +2343,14 @@ async function onlineOrderActions(action, body, jwtUser, checkAuth, req) {
       });
       const customers = Object.values(custMap)
         .sort((a, b) => new Date(b.lastOrderDate) - new Date(a.lastOrderDate));
-      return [200, { ok: true, customers }];
+      return res.status(200).json({ ok: true, customers });
     }
 
     // ── getAnalytics ───────────────────────────────────────────────────────
     if (action === 'getAnalytics') {
       // OWNER / ADMIN only
-      const authA = await checkAuth(['ADMIN','OWNER']);
-      if (!authA.ok) return [403, { ok: false, error: authA.error }];
+      const authA = await checkAdminAuth();
+      if (!authA.ok) return res.status(403).json({ ok: false, error: authA.error });
 
       const BASE = `${SUPABASE_URL}/rest/v1`;
       const H    = { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` };
@@ -2511,7 +2512,7 @@ async function onlineOrderActions(action, body, jwtUser, checkAuth, req) {
         totalDiscounts30d += parseFloat(o.discount_amount || 0);
       });
 
-      return [200, {
+      return res.status(200).json({
         ok: true,
         // Flat aliases for dashboard compatibility
         todaySales:  Math.round(todayData.revenue*100)/100,
@@ -2530,84 +2531,73 @@ async function onlineOrderActions(action, body, jwtUser, checkAuth, req) {
         topItems,
         cancelBreakdown: cancelMap,
         paymentBreakdown: payBreakdown,
-      }];
+      });
     }
 
     // ── getStaff ───────────────────────────────────────────────────────────
     // ── getAuditLogs ───────────────────────────────────────────────────────
     if (action === 'getAuditLogs') {
       const authA = await checkAuth(['OWNER','ADMIN']);
-      if (!authA.ok) return [403, { ok: false, error: authA.error }];
+      if (!authA.ok) return res.status(403).json({ ok: false, error: authA.error });
       const orderId = body.orderId ? String(body.orderId).trim() : null;
       const limit   = Math.min(parseInt(body.limit) || 100, 500);
       let url = `${SUPABASE_URL}/rest/v1/order_audit_logs?order=created_at.desc&limit=${limit}`;
       if (orderId) url += `&order_id=eq.${encodeURIComponent(orderId)}`;
       const r = await supaFetch(url);
-      if (!r.ok) return [500, { ok: false, error: 'Failed to fetch audit logs' }];
-      return [200, { ok: true, logs: r.data || [] }];
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to fetch audit logs' });
+      return res.status(200).json({ ok: true, logs: r.data || [] });
     }
 
     if (action === 'getStaff') {
-      const authS = await checkAuth(['ADMIN','OWNER']);
-      if (!authS.ok) return [403, { ok: false, error: authS.error }];
+      const authS = await checkAdminAuth();
+      if (!authS.ok) return res.status(403).json({ ok: false, error: authS.error });
       const r = await supaFetch(
         `${SUPABASE_URL}/rest/v1/staff_users?active=eq.true&order=user_id.asc&select=user_id,username,display_name,role,last_login,failed_attempts`
       );
-      if (!r.ok) return [500, { ok: false, error: 'Failed to fetch staff' }];
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to fetch staff' });
       const staffList = r.data || [];
-      return [200, { ok: true, staff: staffList, users: staffList }];
+      return res.status(200).json({ ok: true, staff: staffList, users: staffList });
     }
 
     // ── getSettings ────────────────────────────────────────────────────────
     if (action === 'getSettings') {
       const r = await supaFetch(`${SUPABASE_URL}/rest/v1/settings?order=key.asc&select=key,value,description`);
-      if (!r.ok) return [500, { ok: false, error: 'Failed to fetch settings' }];
-      return [200, { ok: true, settings: r.data || [] }];
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to fetch settings' });
+      return res.status(200).json({ ok: true, settings: r.data || [] });
     }
 
     // ── updateSetting ──────────────────────────────────────────────────────
     if (action === 'updateSetting') {
       const authUS = await checkAuth(['OWNER']);
-      if (!authUS.ok) return [403, { ok: false, error: authUS.error }];
+      if (!authUS.ok) return res.status(403).json({ ok: false, error: authUS.error });
       const { key, value } = body;
-      if (!key) return [400, { ok: false, error: 'key is required' }];
+      if (!key) return res.status(400).json({ ok: false, error: 'key is required' });
       // Validate VAT-specific values
       if (key === 'VAT_ENABLED' && !['true','false'].includes(value)) {
-        return [400, { ok: false, error: 'VAT_ENABLED must be true or false' }];
+        return res.status(400).json({ ok: false, error: 'VAT_ENABLED must be true or false' });
       }
       if (key === 'VAT_RATE') {
         const n = parseFloat(value);
-        if (isNaN(n) || n < 0 || n > 1) return [400, { ok: false, error: 'VAT_RATE must be between 0 and 1 (e.g. 0.12 for 12%)' }];
+        if (isNaN(n) || n < 0 || n > 1) return res.status(400).json({ ok: false, error: 'VAT_RATE must be between 0 and 1 (e.g. 0.12 for 12%)' });
       }
       const r = await supaFetch(
         `${SUPABASE_URL}/rest/v1/settings?key=eq.${encodeURIComponent(key)}`,
         { method: 'PATCH', body: JSON.stringify({ value: String(value), updated_at: new Date().toISOString() }) }
       );
-      if (!r.ok) return [500, { ok: false, error: 'Failed to update setting' }];
-      return [200, { ok: true, key, value }];
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to update setting' });
+      return res.status(200).json({ ok: true, key, value });
     }
 
 
     // ══════════════════════════════════════════════════════════════════════
-  return null;
-}
-
-// ══════════════════════════════════════════════════════════════════
-// tableActions
-// Actions: syncToSheets, getPendingSync, markSynced, getTableStatus, setTableStatus
-// ══════════════════════════════════════════════════════════════════
-async function tableActions(action, body, jwtUser, checkAuth, req) {
-  // Fast path
-  if (!['syncToSheets', 'getPendingSync', 'markSynced', 'getTableStatus', 'setTableStatus'].includes(action)) return null;
-
     // TABLE OCCUPANCY STATUS
     // ══════════════════════════════════════════════════════════════════════
 
     // ── syncToSheets ──────────────────────────────────────────────────────
     // Manual trigger: re-queue all unsynced items + ping GAS URL to run immediately
     if (action === 'syncToSheets') {
-      const authSync = await checkAuth(['ADMIN','OWNER']);
-      if (!authSync.ok) return [403, { ok: false, error: authSync.error }];
+      const authSync = await checkAdminAuth();
+      if (!authSync.ok) return res.status(403).json({ ok: false, error: authSync.error });
 
       // Count unsynced items
       const countR = await supaFetch(
@@ -2626,7 +2616,7 @@ async function tableActions(action, body, jwtUser, checkAuth, req) {
       }
 
       auditLog({ orderId: 'MANUAL_SYNC', action: 'SHEETS_SYNC_TRIGGERED', actor: { userId: body.userId }, details: { pending, gasPinged } });
-      return [200, { ok: true, pending, gasPinged, message: `${pending} item(s) queued. GAS will sync within 1 minute.` }];
+      return res.status(200).json({ ok: true, pending, gasPinged, message: `${pending} item(s) queued. GAS will sync within 1 minute.` });
     }
 
     // ── getPendingSync ─────────────────────────────────────────────────────
@@ -2634,16 +2624,16 @@ async function tableActions(action, body, jwtUser, checkAuth, req) {
     // No auth required (GAS runs as sheet owner, data is non-sensitive aggregate)
     if (action === 'getPendingSync') {
       const secret = String(body.secret || '').trim();
-      if (secret !== 'yani-sync-2026') return [403, { ok: false, error: 'Invalid secret' }];
+      if (secret !== 'yani-sync-2026') return res.status(403).json({ ok: false, error: 'Invalid secret' });
 
       // Get pending sync items (limit 100 per batch)
       const batchLimit = Math.min(parseInt(body.limit) || 50, 100);
       const pendingR = await supaFetch(
         `${SUPABASE_URL}/rest/v1/sheets_sync_log?synced=eq.false&order=created_at.asc&limit=${batchLimit}&select=id,table_name,record_id,action`
       );
-      if (!pendingR.ok) return [500, { ok: false, error: 'Failed to read sync log' }];
+      if (!pendingR.ok) return res.status(500).json({ ok: false, error: 'Failed to read sync log' });
       const pending = pendingR.data || [];
-      if (pending.length === 0) return [200, { ok: true, items: [], total: 0 }];
+      if (pending.length === 0) return res.status(200).json({ ok: true, items: [], total: 0 });
 
       // Fetch full data for each item
       const orderIds  = [...new Set(pending.filter(p=>p.table_name==='dine_in_orders').map(p=>p.record_id))];
@@ -2724,24 +2714,24 @@ async function tableActions(action, body, jwtUser, checkAuth, req) {
         ).catch(() => {});
       }
 
-      return [200, { ok: true, items, total: pending.length, syncLogIds, skipped: skippedSyncIds.length }];
+      return res.status(200).json({ ok: true, items, total: pending.length, syncLogIds, skipped: skippedSyncIds.length });
     }
 
     // ── markSynced ─────────────────────────────────────────────────────────
     // Called by GAS after successfully writing items to Sheets
     if (action === 'markSynced') {
       const secret = String(body.secret || '').trim();
-      if (secret !== 'yani-sync-2026') return [403, { ok: false, error: 'Invalid secret' }];
+      if (secret !== 'yani-sync-2026') return res.status(403).json({ ok: false, error: 'Invalid secret' });
       const ids = body.ids;
-      if (!Array.isArray(ids) || ids.length === 0) return [400, { ok: false, error: 'ids array required' }];
+      if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ ok: false, error: 'ids array required' });
       const validIds = ids.filter(id => Number.isInteger(id) && id > 0);
-      if (validIds.length === 0) return [400, { ok: false, error: 'No valid ids' }];
+      if (validIds.length === 0) return res.status(400).json({ ok: false, error: 'No valid ids' });
 
       const r = await supa('PATCH', 'sheets_sync_log',
         { synced: true, synced_at: new Date().toISOString() },
         { id: `in.(${validIds.join(',')})` }
       );
-      return [200, { ok: r.ok, marked: validIds.length }];
+      return res.status(200).json({ ok: r.ok, marked: validIds.length });
     }
 
     // ── getTableStatus ─────────────────────────────────────────────────────
@@ -2749,46 +2739,35 @@ async function tableActions(action, body, jwtUser, checkAuth, req) {
       const r = await supaFetch(
         `${SUPABASE_URL}/rest/v1/cafe_tables?select=id,table_number,table_name,capacity,qr_token,status&order=table_number.asc`
       );
-      if (!r.ok) return [500, { ok: false, error: 'Failed to fetch tables' }];
-      return [200, { ok: true, tables: r.data || [] }];
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to fetch tables' });
+      return res.status(200).json({ ok: true, tables: r.data || [] });
     }
 
     // ── setTableStatus ─────────────────────────────────────────────────────
     if (action === 'setTableStatus') {
       const auth = await checkAuth(['OWNER','ADMIN','CASHIER']);
-      if (!auth.ok) return [403, { ok: false, error: auth.error }];
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
       const { tableNumber, status } = body;
       const valid = ['AVAILABLE','OCCUPIED','RESERVED','MAINTENANCE'];
-      if (!valid.includes(status)) return [400, { ok: false, error: 'Invalid status' }];
+      if (!valid.includes(status)) return res.status(400).json({ ok: false, error: 'Invalid status' });
       const r = await supaFetch(
         `${SUPABASE_URL}/rest/v1/cafe_tables?table_number=eq.${encodeURIComponent(tableNumber)}`,
         { method: 'PATCH', body: JSON.stringify({ status }) }
       );
-      if (!r.ok) return [500, { ok: false, error: 'Failed to update table status' }];
-      return [200, { ok: true, tableNumber, status }];
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to update table status' });
+      return res.status(200).json({ ok: true, tableNumber, status });
     }
 
     // ══════════════════════════════════════════════════════════════════════
-  return null;
-}
-
-// ══════════════════════════════════════════════════════════════════
-// reservationActions
-// Actions: linkReservationTable, seatReservation
-// ══════════════════════════════════════════════════════════════════
-async function reservationActions(action, body, jwtUser, checkAuth, req) {
-  // Fast path
-  if (!['linkReservationTable', 'seatReservation'].includes(action)) return null;
-
     // RESERVATIONS ↔ TABLE AUTO-LINK
     // ══════════════════════════════════════════════════════════════════════
 
     // ── linkReservationTable ───────────────────────────────────────────────
     if (action === 'linkReservationTable') {
       const auth = await checkAuth(['OWNER','ADMIN','CASHIER']);
-      if (!auth.ok) return [403, { ok: false, error: auth.error }];
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
       const { resId, tableNumber } = body;
-      if (!resId) return [400, { ok: false, error: 'resId required' }];
+      if (!resId) return res.status(400).json({ ok: false, error: 'resId required' });
 
       // Get table UUID from number
       let tableId = null;
@@ -2808,7 +2787,7 @@ async function reservationActions(action, body, jwtUser, checkAuth, req) {
           status: tableNumber ? 'CONFIRMED' : 'CONFIRMED'
         })}
       );
-      if (!r.ok) return [500, { ok: false, error: 'Failed to link reservation' }];
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to link reservation' });
 
       // Auto-set table to RESERVED if tableNumber provided
       if (tableNumber) {
@@ -2817,13 +2796,13 @@ async function reservationActions(action, body, jwtUser, checkAuth, req) {
           { method: 'PATCH', body: JSON.stringify({ status: 'RESERVED' }) }
         );
       }
-      return [200, { ok: true, resId, tableNumber, tableId }];
+      return res.status(200).json({ ok: true, resId, tableNumber, tableId });
     }
 
     // ── seatReservation ────────────────────────────────────────────────────
     if (action === 'seatReservation') {
       const auth = await checkAuth(['OWNER','ADMIN','CASHIER']);
-      if (!auth.ok) return [403, { ok: false, error: auth.error }];
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
       const { resId } = body;
 
       // Get reservation to find linked table
@@ -2831,7 +2810,7 @@ async function reservationActions(action, body, jwtUser, checkAuth, req) {
         `${SUPABASE_URL}/rest/v1/reservations?res_id=eq.${encodeURIComponent(resId)}&select=table_id,status`
       );
       if (!resRes.ok || !resRes.data || !resRes.data[0]) {
-        return [404, { ok: false, error: 'Reservation not found' }];
+        return res.status(404).json({ ok: false, error: 'Reservation not found' });
       }
       const res_rec = resRes.data[0];
 
@@ -2848,32 +2827,21 @@ async function reservationActions(action, body, jwtUser, checkAuth, req) {
           { method: 'PATCH', body: JSON.stringify({ status: 'OCCUPIED' }) }
         );
       }
-      return [200, { ok: true, resId, status: 'SEATED' }];
+      return res.status(200).json({ ok: true, resId, status: 'SEATED' });
     }
 
     // ══════════════════════════════════════════════════════════════════════
-  return null;
-}
-
-// ══════════════════════════════════════════════════════════════════
-// inventoryActions
-// Actions: getInventory, uploadInventoryPhoto, upsertInventory, adjustInventory, getInventoryLog
-// ══════════════════════════════════════════════════════════════════
-async function inventoryActions(action, body, jwtUser, checkAuth, req) {
-  // Fast path
-  if (!['getInventory', 'uploadInventoryPhoto', 'upsertInventory', 'adjustInventory', 'getInventoryLog'].includes(action)) return null;
-
     // INVENTORY
     // ══════════════════════════════════════════════════════════════════════
 
     // ── getInventory ───────────────────────────────────────────────────────
     if (action === 'getInventory') {
       const auth = await checkAuth(['OWNER','ADMIN','CASHIER']);
-      if (!auth.ok) return [403, { ok: false, error: auth.error }];
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
       const r = await supaFetch(
         `${SUPABASE_URL}/rest/v1/inventory?select=*&order=item_code.asc`
       );
-      if (!r.ok) return [500, { ok: false, error: 'Failed to fetch inventory' }];
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to fetch inventory' });
       // Attach menu item names
       const menuR = await supaFetch(`${SUPABASE_URL}/rest/v1/menu_items?select=item_code,name,is_active`);
       const menuMap = {};
@@ -2887,15 +2855,15 @@ async function inventoryActions(action, body, jwtUser, checkAuth, req) {
         size_per_unit: i.size_per_unit || '',
         photo_url: i.photo_url || null,
       }));
-      return [200, { ok: true, items }];
+      return res.status(200).json({ ok: true, items });
     }
 
     // ── uploadInventoryPhoto ───────────────────────────────────────────────
     if (action === 'uploadInventoryPhoto') {
-      const auth = await checkAuth(['ADMIN','OWNER']);
-      if (!auth.ok) return [403, { ok: false, error: auth.error }];
+      const auth = await checkAdminAuth();
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
       const { itemCode, imageBase64, mimeType } = body;
-      if (!itemCode || !imageBase64) return [400, { ok: false, error: 'itemCode + imageBase64 required' }];
+      if (!itemCode || !imageBase64) return res.status(400).json({ ok: false, error: 'itemCode + imageBase64 required' });
       const ext = (mimeType || 'image/jpeg').split('/')[1] || 'jpg';
       const filename = `${itemCode.replace(/[^a-zA-Z0-9-_]/g, '_')}.${ext}`;
       // Decode base64 and upload to Supabase Storage
@@ -2912,7 +2880,7 @@ async function inventoryActions(action, body, jwtUser, checkAuth, req) {
       });
       if (!uploadResp.ok) {
         const errText = await uploadResp.text();
-        return [500, { ok: false, error: 'Upload failed: ' + errText }];
+        return res.status(500).json({ ok: false, error: 'Upload failed: ' + errText });
       }
       const photoUrl = `${SUPABASE_URL}/storage/v1/object/public/inventory/${filename}`;
       // Save URL on inventory row
@@ -2920,16 +2888,16 @@ async function inventoryActions(action, body, jwtUser, checkAuth, req) {
         `${SUPABASE_URL}/rest/v1/inventory?item_code=eq.${encodeURIComponent(itemCode)}`,
         { method: 'PATCH', body: JSON.stringify({ photo_url: photoUrl, updated_at: new Date().toISOString() }) }
       );
-      return [200, { ok: true, photoUrl, filename }];
+      return res.status(200).json({ ok: true, photoUrl, filename });
     }
 
     // ── upsertInventory ────────────────────────────────────────────────────
     if (action === 'upsertInventory') {
-      const auth = await checkAuth(['ADMIN','OWNER']);
-      if (!auth.ok) return [403, { ok: false, error: auth.error }];
+      const auth = await checkAdminAuth();
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
       const { itemCode, stockQty, lowStockThreshold, unit, costPerUnit, sellingPrice,
               sizePerUnit, autoDisable, restockNotes, photoUrl } = body;
-      if (!itemCode) return [400, { ok: false, error: 'itemCode required' }];
+      if (!itemCode) return res.status(400).json({ ok: false, error: 'itemCode required' });
       const row = {
         item_code: itemCode,
         stock_qty: parseFloat(stockQty) || 0,
@@ -2959,7 +2927,7 @@ async function inventoryActions(action, body, jwtUser, checkAuth, req) {
             { method: 'POST', body: JSON.stringify(row),
               headers: { Prefer: 'return=representation' } }
           );
-      if (!r.ok) return [500, { ok: false, error: 'Failed to save inventory' }];
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to save inventory' });
       // Log restock
       await supaFetch(`${SUPABASE_URL}/rest/v1/inventory_log`, {
         method: 'POST',
@@ -2970,15 +2938,15 @@ async function inventoryActions(action, body, jwtUser, checkAuth, req) {
           notes: restockNotes || 'Manual restock', actor_id: body.userId,
         })
       });
-      return [200, { ok: true, item: r.data?.[0] || row }];
+      return res.status(200).json({ ok: true, item: r.data?.[0] || row });
     }
 
     // ── adjustInventory ────────────────────────────────────────────────────
     if (action === 'adjustInventory') {
-      const auth = await checkAuth(['ADMIN','OWNER']);
-      if (!auth.ok) return [403, { ok: false, error: auth.error }];
+      const auth = await checkAdminAuth();
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
       const { itemCode, adjustment, changeType, notes, unitPrice, reference, direction } = body;
-      if (!itemCode || adjustment === undefined) return [400, { ok: false, error: 'itemCode + adjustment required' }];
+      if (!itemCode || adjustment === undefined) return res.status(400).json({ ok: false, error: 'itemCode + adjustment required' });
       // direction: 'IN' = positive (RESTOCK/RETURN), 'OUT' = negative (WASTE/SALE)
       // If direction provided, force the sign; otherwise trust the sign of adjustment
       let qty = parseFloat(adjustment);
@@ -2991,7 +2959,7 @@ async function inventoryActions(action, body, jwtUser, checkAuth, req) {
       // Get current
       const cur = await supaFetch(`${SUPABASE_URL}/rest/v1/inventory?item_code=eq.${encodeURIComponent(itemCode)}&select=stock_qty,auto_disable`);
       const current = cur.data?.[0];
-      if (!current) return [404, { ok: false, error: 'Item not in inventory' }];
+      if (!current) return res.status(404).json({ ok: false, error: 'Item not in inventory' });
       const newQty = Math.max(0, parseFloat(current.stock_qty) + qty);
       const updatePatch = { stock_qty: newQty, updated_at: new Date().toISOString() };
       if (direction === 'IN') updatePatch.last_restocked_at = new Date().toISOString();
@@ -3009,33 +2977,22 @@ async function inventoryActions(action, body, jwtUser, checkAuth, req) {
           qty_after: newQty, notes: notes || '', actor_id: body.userId,
           unit_price: parseFloat(unitPrice) || 0,
           reference: reference || '' }) });
-      return [200, { ok: true, itemCode, qtyBefore: current.stock_qty, qtyAfter: newQty, direction: qty >= 0 ? 'IN' : 'OUT' }];
+      return res.status(200).json({ ok: true, itemCode, qtyBefore: current.stock_qty, qtyAfter: newQty, direction: qty >= 0 ? 'IN' : 'OUT' });
     }
 
     // ── getInventoryLog ────────────────────────────────────────────────────
     if (action === 'getInventoryLog') {
       const auth = await checkAuth(['OWNER','ADMIN']);
-      if (!auth.ok) return [403, { ok: false, error: auth.error }];
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
       const limit = Math.min(parseInt(body.limit) || 50, 200);
       const filter = body.itemCode ? `&item_code=eq.${encodeURIComponent(body.itemCode)}` : '';
       const r = await supaFetch(
         `${SUPABASE_URL}/rest/v1/inventory_log?select=*&order=created_at.desc&limit=${limit}${filter}`
       );
-      return [200, { ok: r.ok, logs: r.data || [] }];
+      return res.status(200).json({ ok: r.ok, logs: r.data || [] });
     }
 
     // ══════════════════════════════════════════════════════════════════════
-  return null;
-}
-
-// ══════════════════════════════════════════════════════════════════
-// addonActions
-// Actions: getAddons, getAddonsAdmin, saveAddon, deleteAddon
-// ══════════════════════════════════════════════════════════════════
-async function addonActions(action, body, jwtUser, checkAuth, req) {
-  // Fast path
-  if (!['getAddons', 'getAddonsAdmin', 'saveAddon', 'deleteAddon'].includes(action)) return null;
-
     // ADD-ONS / MODIFIERS
     // ══════════════════════════════════════════════════════════════════════
 
@@ -3044,25 +3001,25 @@ async function addonActions(action, body, jwtUser, checkAuth, req) {
       const r = await supaFetch(
         `${SUPABASE_URL}/rest/v1/menu_addons?is_active=eq.true&order=sort_order.asc,name.asc`
       );
-      return [200, { ok: r.ok, addons: r.data || [] }];
+      return res.status(200).json({ ok: r.ok, addons: r.data || [] });
     }
 
     // ── getAddonsAdmin ─────────────────────────────────────────────────────
     if (action === 'getAddonsAdmin') {
-      const auth = await checkAuth(['ADMIN','OWNER']);
-      if (!auth.ok) return [403, { ok: false, error: auth.error }];
+      const auth = await checkAdminAuth();
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
       const r = await supaFetch(
         `${SUPABASE_URL}/rest/v1/menu_addons?order=sort_order.asc,name.asc`
       );
-      return [200, { ok: r.ok, addons: r.data || [] }];
+      return res.status(200).json({ ok: r.ok, addons: r.data || [] });
     }
 
     // ── saveAddon ──────────────────────────────────────────────────────────
     if (action === 'saveAddon') {
-      const auth = await checkAuth(['ADMIN','OWNER']);
-      if (!auth.ok) return [403, { ok: false, error: auth.error }];
+      const auth = await checkAdminAuth();
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
       const { addonCode, name, price, appliesToAll, appliesToCodes, sortOrder } = body;
-      if (!name) return [400, { ok: false, error: 'name required' }];
+      if (!name) return res.status(400).json({ ok: false, error: 'name required' });
       const code = addonCode || 'ADD-' + Date.now();
       const row = {
         addon_code: code, name: String(name).trim().substring(0, 80),
@@ -3079,56 +3036,45 @@ async function addonActions(action, body, jwtUser, checkAuth, req) {
         : `${SUPABASE_URL}/rest/v1/menu_addons`;
       const r = await supaFetch(url, { method, body: JSON.stringify(row),
         headers: method === 'POST' ? { Prefer: 'return=representation' } : {} });
-      if (!r.ok) return [500, { ok: false, error: 'Failed to save addon' }];
-      return [200, { ok: true, addon: method === 'POST' ? r.data?.[0] : row }];
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to save addon' });
+      return res.status(200).json({ ok: true, addon: method === 'POST' ? r.data?.[0] : row });
     }
 
     // ── deleteAddon ────────────────────────────────────────────────────────
     if (action === 'deleteAddon') {
-      const auth = await checkAuth(['ADMIN','OWNER']);
-      if (!auth.ok) return [403, { ok: false, error: auth.error }];
+      const auth = await checkAdminAuth();
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
       const { addonCode } = body;
-      if (!addonCode) return [400, { ok: false, error: 'addonCode required' }];
+      if (!addonCode) return res.status(400).json({ ok: false, error: 'addonCode required' });
       // Soft delete
       const r = await supaFetch(
         `${SUPABASE_URL}/rest/v1/menu_addons?addon_code=eq.${encodeURIComponent(addonCode)}`,
         { method: 'PATCH', body: JSON.stringify({ is_active: false, updated_at: new Date().toISOString() }) }
       );
-      return [200, { ok: r.ok }];
+      return res.status(200).json({ ok: r.ok });
     }
 
     // ══════════════════════════════════════════════════════════════════════
-  return null;
-}
-
-// ══════════════════════════════════════════════════════════════════
-// refundActions
-// Actions: processRefund, getRefunds
-// ══════════════════════════════════════════════════════════════════
-async function refundActions(action, body, jwtUser, checkAuth, req) {
-  // Fast path
-  if (!['processRefund', 'getRefunds'].includes(action)) return null;
-
     // VOID / REFUND WORKFLOW
     // ══════════════════════════════════════════════════════════════════════
 
     // ── processRefund ──────────────────────────────────────────────────────
     if (action === 'processRefund') {
       const auth = await checkAuth(['OWNER','ADMIN']);
-      if (!auth.ok) return [403, { ok: false, error: auth.error }];
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
       const { orderId, refundType, refundAmount, reasonCode, reasonNote, refundMethod, itemsRefunded } = body;
       const validTypes = ['FULL','PARTIAL','VOID'];
       const validReasons = ['WRONG_ORDER','DUPLICATE','COMPLAINT','OVERCHARGE','ITEM_UNAVAILABLE','OTHER'];
-      if (!orderId) return [400, { ok: false, error: 'orderId required' }];
-      if (!validTypes.includes(refundType)) return [400, { ok: false, error: 'Invalid refundType' }];
-      if (!validReasons.includes(reasonCode)) return [400, { ok: false, error: 'Invalid reasonCode' }];
-      if (parseFloat(refundAmount) < 0) return [400, { ok: false, error: 'refundAmount cannot be negative' }];
+      if (!orderId) return res.status(400).json({ ok: false, error: 'orderId required' });
+      if (!validTypes.includes(refundType)) return res.status(400).json({ ok: false, error: 'Invalid refundType' });
+      if (!validReasons.includes(reasonCode)) return res.status(400).json({ ok: false, error: 'Invalid reasonCode' });
+      if (parseFloat(refundAmount) < 0) return res.status(400).json({ ok: false, error: 'refundAmount cannot be negative' });
 
       // Verify order exists
       const orderRes = await supaFetch(
         `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=order_id,total,status`
       );
-      if (!orderRes.ok || !orderRes.data?.length) return [404, { ok: false, error: 'Order not found' }];
+      if (!orderRes.ok || !orderRes.data?.length) return res.status(404).json({ ok: false, error: 'Order not found' });
 
       const refundId = 'REF-' + Date.now();
       const row = {
@@ -3145,7 +3091,7 @@ async function refundActions(action, body, jwtUser, checkAuth, req) {
       };
       const r = await supaFetch(`${SUPABASE_URL}/rest/v1/refunds`,
         { method: 'POST', body: JSON.stringify(row), headers: { Prefer: 'return=representation' } });
-      if (!r.ok) return [500, { ok: false, error: 'Failed to save refund' }];
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to save refund' });
 
       // If VOID — cancel the order
       if (refundType === 'VOID') {
@@ -3160,47 +3106,36 @@ async function refundActions(action, body, jwtUser, checkAuth, req) {
           actor_id: body.userId, actor_name: auth.role,
           details: { refundId, refundType, refundAmount, reasonCode } }) });
 
-      return [200, { ok: true, refundId, refundType, refundAmount }];
+      return res.status(200).json({ ok: true, refundId, refundType, refundAmount });
     }
 
     // ── getRefunds ─────────────────────────────────────────────────────────
     if (action === 'getRefunds') {
       const auth = await checkAuth(['OWNER','ADMIN']);
-      if (!auth.ok) return [403, { ok: false, error: auth.error }];
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
       const limit = Math.min(parseInt(body.limit) || 50, 200);
       const filter = body.orderId ? `&order_id=eq.${encodeURIComponent(body.orderId)}` : '';
       const r = await supaFetch(
         `${SUPABASE_URL}/rest/v1/refunds?select=*&order=created_at.desc&limit=${limit}${filter}`
       );
-      return [200, { ok: r.ok, refunds: r.data || [] }];
+      return res.status(200).json({ ok: r.ok, refunds: r.data || [] });
     }
 
     // ══════════════════════════════════════════════════════════════════════
-  return null;
-}
-
-// ══════════════════════════════════════════════════════════════════
-// cashActions
-// Actions: openCashSession, closeCashSession, getCashSessions, getOpenCashSession
-// ══════════════════════════════════════════════════════════════════
-async function cashActions(action, body, jwtUser, checkAuth, req) {
-  // Fast path
-  if (!['openCashSession', 'closeCashSession', 'getCashSessions', 'getOpenCashSession'].includes(action)) return null;
-
     // CASH DRAWER / EOD RECONCILIATION
     // ══════════════════════════════════════════════════════════════════════
 
     // ── openCashSession ────────────────────────────────────────────────────
     if (action === 'openCashSession') {
       const auth = await checkAuth(['OWNER','ADMIN','CASHIER']);
-      if (!auth.ok) return [403, { ok: false, error: auth.error }];
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
       // Check no session is already open
       const existing = await supaFetch(
         `${SUPABASE_URL}/rest/v1/cash_sessions?status=eq.OPEN&select=session_id,opened_at,opened_by`
       );
       if (existing.ok && existing.data?.length) {
-        return [200, { ok: false, error: 'A cash session is already open',
-          existingSession: existing.data[0] }];
+        return res.status(200).json({ ok: false, error: 'A cash session is already open',
+          existingSession: existing.data[0] });
       }
       const sessionId = 'CASH-' + Date.now();
       const row = {
@@ -3213,22 +3148,22 @@ async function cashActions(action, body, jwtUser, checkAuth, req) {
       };
       const r = await supaFetch(`${SUPABASE_URL}/rest/v1/cash_sessions`,
         { method: 'POST', body: JSON.stringify(row), headers: { Prefer: 'return=representation' } });
-      if (!r.ok) return [500, { ok: false, error: 'Failed to open cash session' }];
-      return [200, { ok: true, sessionId, shift: row.shift, openingFloat: row.opening_float }];
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to open cash session' });
+      return res.status(200).json({ ok: true, sessionId, shift: row.shift, openingFloat: row.opening_float });
     }
 
     // ── closeCashSession ───────────────────────────────────────────────────
     if (action === 'closeCashSession') {
       const auth = await checkAuth(['OWNER','ADMIN','CASHIER']);
-      if (!auth.ok) return [403, { ok: false, error: auth.error }];
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
       const { sessionId, closingCount, denominationBreakdown, notes } = body;
-      if (!sessionId) return [400, { ok: false, error: 'sessionId required' }];
+      if (!sessionId) return res.status(400).json({ ok: false, error: 'sessionId required' });
 
       // Get session + compute expected cash (cash sales since session opened)
       const sessRes = await supaFetch(
         `${SUPABASE_URL}/rest/v1/cash_sessions?session_id=eq.${encodeURIComponent(sessionId)}&select=*`
       );
-      if (!sessRes.ok || !sessRes.data?.length) return [404, { ok: false, error: 'Session not found' }];
+      if (!sessRes.ok || !sessRes.data?.length) return res.status(404).json({ ok: false, error: 'Session not found' });
       const sess = sessRes.data[0];
 
       // Sum cash sales since session opened — use Array.isArray guard to prevent .reduce crash
@@ -3259,23 +3194,23 @@ async function cashActions(action, body, jwtUser, checkAuth, req) {
           closed_at: new Date().toISOString(),
         })}
       );
-      if (!r.ok) return [500, { ok: false, error: 'Failed to close session' }];
-      return [200, {
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to close session' });
+      return res.status(200).json({
         ok: true, sessionId, totalSales, cashSales,
         openingFloat: sess.opening_float, expectedCash, closingCount: closing, variance,
         overShort: variance >= 0 ? `OVER ₱${Math.abs(variance).toFixed(2)}` : `SHORT ₱${Math.abs(variance).toFixed(2)}`
-      }];
+      });
     }
 
     // ── getCashSessions ────────────────────────────────────────────────────
     if (action === 'getCashSessions') {
       const auth = await checkAuth(['OWNER','ADMIN']);
-      if (!auth.ok) return [403, { ok: false, error: auth.error }];
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
       const limit = Math.min(parseInt(body.limit) || 20, 100);
       const r = await supaFetch(
         `${SUPABASE_URL}/rest/v1/cash_sessions?select=*&order=created_at.desc&limit=${limit}`
       );
-      return [200, { ok: r.ok, sessions: r.data || [] }];
+      return res.status(200).json({ ok: r.ok, sessions: r.data || [] });
     }
 
     // ── getOpenCashSession ─────────────────────────────────────────────────
@@ -3283,91 +3218,13 @@ async function cashActions(action, body, jwtUser, checkAuth, req) {
       const r = await supaFetch(
         `${SUPABASE_URL}/rest/v1/cash_sessions?status=eq.OPEN&select=*&order=opened_at.desc&limit=1`
       );
-      return [200, { ok: r.ok, session: r.data?.[0] || null }];
+      return res.status(200).json({ ok: r.ok, session: r.data?.[0] || null });
     }
 
     // ── Unknown action ─────────────────────────────────────────────────────
-    return [400, { ok: false, error: `Unknown action: ${action}` }];
-
-  return null;
-}
-
-export default async function handler(req, res) {
-  // Restrict CORS to known domains only
-  const origin = req.headers.origin || '';
-const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardencafe.com,https://yanigardencafe.com,https://admin.yanigardencafe.com').split(',').map(s => s.trim());
-  if (ALLOWED_ORIGINS.includes(origin) || ALLOWED_ORIGINS.includes('*')) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-  } else if (!origin) {
-    res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGINS[0] || '*');
-  }
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed' });
-
-  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
-  if (!await checkRateLimit(ip)) {
-    return res.status(429).json({ ok: false, error: 'Too many requests. Please wait a moment.' });
-  }
-
-  try {
-    const body = req.body;
-    if (!body || !body.action) return res.status(400).json({ ok: false, error: 'Missing action' });
-
-    const action = String(body.action).trim();
-    if (!/^[a-zA-Z][a-zA-Z0-9_]{1,60}$/.test(action)) {
-      return res.status(400).json({ ok: false, error: 'Invalid action name' });
-    }
-
-    // ── Identify caller ───────────────────────────────────────────────────
-    // Try JWT token from Authorization header first (secure path).
-    // Falls back to body.userId lookup in DB (legacy backward-compat path).
-    const authHeader = (req.headers.authorization || req.headers.Authorization || '').trim();
-    const rawToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-    const jwtUser = rawToken ? await verifyToken(rawToken) : null;
-
-    // checkAuth(allowedRoles): use inside any action handler instead of requireAuth/requireAdminRole.
-    // Returns { ok, role, userId } — no DB hit if JWT is valid.
-    async function checkAuth(allowedRoles) {
-      if (jwtUser) {
-        // Prefer DB permissions — they can be changed without redeploy
-        const dbPerms = await getRolePermissions();
-        const roles = (dbPerms && dbPerms[action]) ? dbPerms[action] : (allowedRoles || []);
-        if (!roles.length || roles.includes(jwtUser.role)) {
-          return { ok: true, role: jwtUser.role, userId: jwtUser.userId };
-        }
-        return { ok: false, error: 'Unauthorized: insufficient role' };
-      }
-      // Legacy: validate body.userId against DB
-      return requireAuth(body, allowedRoles);
-    }
-    async function checkAuth(['ADMIN','OWNER']) { return checkAuth(['ADMIN', 'OWNER']); }
-
-    // ══════════════════════════════════════════════════════════════════════
-    // ── Dispatch to section functions ─────────────────────────────────────────
-    const _dispatch = [
-      menuActions,
-      orderActions,
-      paymentActions,
-      authActions,
-      onlineOrderActions,
-      tableActions,
-      reservationActions,
-      inventoryActions,
-      addonActions,
-      refundActions,
-      cashActions,
-    ];
-    for (const _fn of _dispatch) {
-      const _r = await _fn(action, body, jwtUser, checkAuth, req);
-      if (_r !== null) return res.status(_r[0]).json(_r[1]);
-    }
     return res.status(400).json({ ok: false, error: `Unknown action: ${action}` });
 
-
-    } catch (err) {
+  } catch (err) {
     console.error('API error:', err);
     return res.status(500).json({ ok: false, error: 'Server error: ' + err.message });
   }
