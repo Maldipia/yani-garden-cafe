@@ -1,0 +1,142 @@
+name: Post-deploy audit
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  audit:
+    name: Run full system audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Wait for Vercel deployment
+        run: sleep 90
+
+      - name: Run audit
+        run: |
+          python3 << 'PYEOF'
+          import urllib.request, json, sys, time
+
+          BASE   = "https://pos.yanigardencafe.com/api/pos"
+          HEALTH = "https://pos.yanigardencafe.com/api/health"
+          OL     = "https://yanigardencafe.com/api/online-order"
+
+          results = []
+          def chk(label, passed, detail=""):
+              results.append((passed, label))
+              icon = "✅" if passed else "❌"
+              print(f"  {icon} {label}{(' — '+str(detail)) if detail else ''}", flush=True)
+
+          def post(url, data, token=None, timeout=20):
+              h = {"Content-Type":"application/json"}
+              if token: h["Authorization"] = f"Bearer {token}"
+              try:
+                  r = urllib.request.urlopen(urllib.request.Request(
+                      url, json.dumps(data).encode(), headers=h, method="POST"), timeout=timeout)
+                  return json.loads(r.read()), r.getcode()
+              except urllib.request.HTTPError as e:
+                  try: b = json.loads(e.read().decode())
+                  except: b = {}
+                  return b, e.code
+
+          def get(url, timeout=10):
+              try:
+                  r = urllib.request.urlopen(url, timeout=timeout)
+                  return r.read(2000).decode('utf-8','ignore'), r.getcode()
+              except urllib.request.HTTPError as e:
+                  return "", e.code
+
+          # Auth
+          owner,_ = post(BASE,{"action":"verifyUserPin","pin":"${{ secrets.OWNER_PIN }}"})
+          admin,_ = post(BASE,{"action":"verifyUserPin","pin":"${{ secrets.ADMIN_PIN }}"})
+          kit,_   = post(BASE,{"action":"verifyUserPin","pin":"${{ secrets.KITCHEN_PIN }}"})
+          tok=owner.get("token",""); atok=admin.get("token",""); ktok=kit.get("token","")
+
+          print("\n=== 1. AUTH ===")
+          chk("Owner login",   owner.get("ok") and owner.get("role")=="OWNER",   owner.get("role"))
+          chk("Admin login",   admin.get("ok") and admin.get("role")=="ADMIN",   admin.get("role"))
+          chk("Kitchen login", kit.get("ok")   and kit.get("role")=="KITCHEN",   kit.get("role"))
+
+          print("\n=== 2. HEALTH & PAGES ===")
+          h, code = get(HEALTH)
+          chk("Health endpoint", code==200 and ("ok" in h.lower() or "supabase" in h.lower()))
+          for label, url in [
+              ("admin.yanigardencafe.com", "https://admin.yanigardencafe.com"),
+              ("yanigardencafe.com",       "https://yanigardencafe.com"),
+          ]:
+              _, c = get(url)
+              chk(f"Page: {label}", c==200)
+
+          print("\n=== 3. SECURITY ===")
+          for action in ["getAuditLogs","updateSetting","deleteOrder","addMenuItem"]:
+              r,c = post(BASE,{"action":action})
+              chk(f"No-auth blocked: {action}", not r.get("ok") or c in [401,403])
+          r,_ = post(BASE,{"action":"placeOrder","tableNo":"1","token":"b36e8426",
+              "items":[{"code":"C005","qty":1,"price":1,"addons":[],"size":"","sugarLevel":""}],
+              "subtotal":1,"serviceCharge":0.1,"total":1.1,"orderType":"DINE-IN"})
+          chk("Tampered price rejected", not r.get("ok"))
+
+          print("\n=== 4. ROLE ENFORCEMENT ===")
+          r,c = post(BASE,{"action":"updateSetting","key":"X","value":"Y","userId":"USR_002"},token=atok)
+          chk("Admin blocked: updateSetting", not r.get("ok") or c==403)
+          r,c = post(BASE,{"action":"applyDiscount","orderId":"X","discountType":"PROMO","promoPct":10,"userId":"USR_004"},token=ktok)
+          chk("Kitchen blocked: applyDiscount", not r.get("ok") or c==403)
+          r,c = post(BASE,{"action":"getAuditLogs","userId":"USR_002"},token=atok)
+          chk("Admin allowed: getAuditLogs", r.get("ok"))
+
+          print("\n=== 5. ORDER LIFECYCLE ===")
+          r,_ = post(BASE,{"action":"placeOrder","tableNo":"1","token":"b36e8426",
+              "items":[{"code":"C005","qty":1,"price":139,"addons":[],"size":"","sugarLevel":""}],
+              "subtotal":139,"serviceCharge":13.9,"total":152.9,"orderType":"DINE-IN"})
+          oid = r.get("orderId")
+          chk("placeOrder", r.get("ok"), oid)
+          if oid:
+              got,_ = post(BASE,{"action":"getOrders","orderId":oid},token=tok)
+              o = (got.get("orders") or [{}])[0]
+              chk("total is float", isinstance(o.get("total"),(int,float)), o.get("total"))
+              chk("total includes svc", abs(o.get("total",0)-(o.get("subtotal",0)+o.get("serviceCharge",0)))<0.01)
+              chk("isDeleted field", "isDeleted" in o)
+              post(BASE,{"action":"updateOrderStatus","orderId":oid,"status":"CANCELLED","userId":"USR_001"},token=tok)
+              post(BASE,{"action":"deleteOrder","orderId":oid,"userId":"USR_001"},token=tok)
+
+          print("\n=== 6. MENU & ANALYTICS ===")
+          r,_ = post(BASE,{"action":"getMenu"})
+          chk("getMenu", r.get("ok"), f"{len(r.get('items',[]))} items")
+          r,_ = post(BASE,{"action":"getAnalytics"},token=tok)
+          chk("getAnalytics", r.get("ok"))
+
+          print("\n=== 7. DB INTEGRITY ===")
+          # Discount integrity check via edge function
+          try:
+              req = urllib.request.Request(
+                  "https://hnynvclpvfxzlfjphefj.supabase.co/functions/v1/discount-integrity-check",
+                  b'{}', headers={"Content-Type":"application/json"}, method="GET")
+              dr = urllib.request.urlopen(req, timeout=20)
+              d = json.loads(dr.read())
+              chk("Discount integrity", d.get("issues",0)==0, f"{d.get('issues',0)} stale records")
+          except Exception as ex:
+              chk("Discount integrity", False, str(ex)[:60])
+
+          # Final
+          total = len(results)
+          passed = sum(1 for p,_ in results if p)
+          failed = [l for p,l in results if not p]
+          pct = int(passed/total*100)
+          print(f"\n{'='*50}")
+          print(f"{'✅' if not failed else '❌'}  {passed}/{total}  ({pct}%)")
+          if failed:
+              print("\nFAILURES:")
+              for l in failed: print(f"  ❌ {l}")
+              sys.exit(1)
+          else:
+              print("All checks passed!")
+          PYEOF
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "::error::Post-deploy audit FAILED — check the logs above for details"
+          echo "Deploy may have broken something. Review before opening cafe."

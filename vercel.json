@@ -112,6 +112,10 @@
     {
       "source": "/order",
       "destination": "/index-customer.html"
+    },
+    {
+      "source": "/offline",
+      "destination": "/offline.html"
     }
   ],
   "headers": [

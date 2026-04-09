@@ -17,6 +17,29 @@ const SUPABASE_KEY = (() => {
   return k;
 })();
 
+// ── Permission table cache (loaded from role_permissions DB table) ───────────
+// Refreshed every 5 min — permissions never change by accident via code edits
+let _permCache = null;
+let _permCacheAt = 0;
+async function getRolePermissions() {
+  if (_permCache && Date.now() - _permCacheAt < 5 * 60 * 1000) return _permCache;
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/role_permissions?select=action,roles`,
+      { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
+    );
+    if (r.ok) {
+      const rows = await r.json();
+      if (Array.isArray(rows) && rows.length > 0) {
+        _permCache = Object.fromEntries(rows.map(row => [row.action, row.roles]));
+        _permCacheAt = Date.now();
+        return _permCache;
+      }
+    }
+  } catch(e) { console.warn('Permission table unavailable, using code defaults:', e.message); }
+  return null; // fallback: code-level checkAuth still enforces permissions
+}
+
 const SERVICE_CHARGE_RATE = 0.10;
 const ORDER_PREFIX = 'ORD';
 
