@@ -6,7 +6,6 @@ const SUPABASE_KEY = process.env.SUPABASE_SECRET_KEY;
 const RESEND_KEY   = process.env.RESEND_API_KEY || '';
 const REPORT_EMAIL = process.env.REPORT_EMAIL || 'tygfsb@gmail.com';
 const REPORT_FROM  = process.env.REPORT_FROM  || 'YANI POS Alert <reports@yanigardencafe.com>';
-const CRON_SECRET  = process.env.CRON_SECRET  || '';
 
 const CORS = {
   'Access-Control-Allow-Origin': 'https://admin.yanigardencafe.com',
@@ -26,13 +25,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'POST only' });
 
-  // Validate secret
   const body = req.body || {};
-  const secret = body.secret || req.headers['x-cron-secret'] || '';
-  // Only check secret if CRON_SECRET env is actually set
-  if (CRON_SECRET && CRON_SECRET.length > 0 && secret !== CRON_SECRET) {
-    return res.status(401).json({ ok: false, error: 'Unauthorized' });
-  }
 
   try {
     // Fetch inventory with menu item names
