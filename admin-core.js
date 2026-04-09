@@ -52,7 +52,7 @@ function initRealtime() {
   try {
     _supabaseClient = supabase.createClient(
       (window.SUPABASE_URL || (APP_CONFIG && APP_CONFIG.SUPABASE_URL) || 'https://hnynvclpvfxzlfjphefj.supabase.co'),
-      (APP_CONFIG && APP_CONFIG.SUPABASE_ANON_KEY) || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhueW52Y2xwdmZ4emxmanBoZWZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI0NTg5MTMsImV4cCI6MjA4ODAzNDkxM30.cBIoq9dVUFC0d7Su5B7ubBG83-q-bffheKoOCTRDqXE'
+      (APP_CONFIG && APP_CONFIG.SUPABASE_ANON_KEY) || ''
     );
     _realtimeChannel = _supabaseClient
       .channel('order-board')

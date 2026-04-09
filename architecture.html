@@ -184,7 +184,7 @@
 
 <div class="section" id="erd">
   <div class="section-header"><div class="section-icon green">&#128444;</div><h2>Database Schema <span class="num">&mdash; 24 tables in Supabase PostgreSQL</span></h2></div>
-  <p class="section-desc">All tables have Row Level Security enabled. Hosted ap-southeast-1 (Singapore). Project: <code>hnynvclpvfxzlfjphefj</code>.</p>
+  <p class="section-desc">All tables have Row Level Security enabled. Hosted ap-southeast-1 (Singapore). Project: <code>[project-id]</code>.</p>
   <div class="diagram-wrap">
     <div class="diagram-bar"><span class="title">Figure 3 &mdash; Entity-relationship diagram (key tables)</span><span class="fig">24 tables total &middot; key relationships shown</span></div>
     <img class="diagram-img" src="/docs/erd.png" alt="Database ERD" onclick="openFull(this.src)"/>
@@ -231,7 +231,7 @@ POST https://pos.yanigardencafe.com/api/pos
 Content-Type: application/json
 Authorization: Bearer &lt;jwt&gt;  <span class="c">// required for write actions</span>
 
-{ <span class="s">"action"</span>: <span class="s">"placeOrder"</span>, <span class="s">"tableNo"</span>: <span class="s">"1"</span>, <span class="s">"token"</span>: <span class="s">"b36e8426"</span> }</pre>
+{ <span class="s">"action"</span>: <span class="s">"placeOrder"</span>, <span class="s">"tableNo"</span>: <span class="s">"1"</span>, <span class="s">"token"</span>: <span class="s">"[token]"</span> }</pre>
   <table>
     <tr><th>Section</th><th>Count</th><th>Key Actions</th></tr>
     <tr><td>menuActions</td><td>6</td><td>getMenu &middot; getMenuAdmin &middot; addMenuItem &middot; updateMenuItem &middot; deleteMenuItem (OWNER) &middot; upsertToSupabase</td></tr>
@@ -262,10 +262,10 @@ Failed login:
   &rarr; failed_attempts++
   &rarr; At 5: locked_until = NOW() + 30min</pre>
   <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px">
-    <div class="role-row"><div class="role-pin">2026</div><div><div class="role-name">OWNER <span class="badge teal">owner</span></div><div class="role-can">All 65 actions &mdash; full access, no restrictions</div></div></div>
-    <div class="role-row"><div class="role-pin">2233</div><div><div class="role-name">ADMIN <span class="badge blue">admin</span></div><div class="role-can">Most actions. Blocked: deleteMenuItem, updateSetting</div></div></div>
-    <div class="role-row"><div class="role-pin">5678</div><div><div class="role-name">CASHIER <span class="badge amber">cashier</span></div><div class="role-can">Orders, payments, discounts, menu view. No admin settings.</div></div></div>
-    <div class="role-row"><div class="role-pin">9012</div><div><div class="role-name">KITCHEN <span class="badge green">kitchen</span></div><div class="role-can">updateOrderStatus only &mdash; start, ready, complete. No financial access.</div></div></div>
+    <div class="role-row"><div class="role-pin">****</div><div><div class="role-name">OWNER <span class="badge teal">owner</span></div><div class="role-can">All 65 actions &mdash; full access, no restrictions</div></div></div>
+    <div class="role-row"><div class="role-pin">****</div><div><div class="role-name">ADMIN <span class="badge blue">admin</span></div><div class="role-can">Most actions. Blocked: deleteMenuItem, updateSetting</div></div></div>
+    <div class="role-row"><div class="role-pin">****</div><div><div class="role-name">CASHIER <span class="badge amber">cashier</span></div><div class="role-can">Orders, payments, discounts, menu view. No admin settings.</div></div></div>
+    <div class="role-row"><div class="role-pin">****</div><div><div class="role-name">KITCHEN <span class="badge green">kitchen</span></div><div class="role-can">updateOrderStatus only &mdash; start, ready, complete. No financial access.</div></div></div>
   </div>
 </div>
 

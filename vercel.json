@@ -15,13 +15,7 @@
     "api/upload-proof.js": {
       "maxDuration": 30
     },
-    "api/sheets-sync.js": {
-      "maxDuration": 30
-    },
     "api/health.js": {
-      "maxDuration": 15
-    },
-    "api/sync-menu.js": {
       "maxDuration": 15
     },
     "api/queue-status.js": {
@@ -38,6 +32,9 @@
     },
     "api/weekly-report.js": {
       "maxDuration": 60
+    },
+    "api/low-stock.js": {
+      "maxDuration": 15
     }
   },
   "rewrites": [
