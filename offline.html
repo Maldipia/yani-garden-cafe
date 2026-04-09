@@ -2,87 +2,55 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>YANI Garden Cafe — System Offline</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>YANI — System Temporarily Unavailable</title>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#F5F2EC;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
-.card{background:#fff;border-radius:16px;padding:32px 28px;max-width:420px;width:100%;box-shadow:0 2px 16px rgba(0,0,0,.08)}
-.logo{width:56px;height:56px;background:#314C47;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:24px}
-h1{font-size:18px;font-weight:600;color:#1a1a1a;text-align:center;margin-bottom:8px}
-.sub{font-size:14px;color:#6b7280;text-align:center;margin-bottom:28px;line-height:1.5}
-.section{background:#F9FAFB;border-radius:10px;padding:16px 18px;margin-bottom:14px}
-.section-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#374151;margin-bottom:10px}
-.step{display:flex;gap:10px;align-items:flex-start;margin-bottom:8px;font-size:13px;color:#374151;line-height:1.5}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#F5F2EC;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}
+.card{background:#fff;border-radius:20px;padding:40px 32px;max-width:400px;width:100%;text-align:center}
+.dot{width:12px;height:12px;background:#ef4444;border-radius:50%;display:inline-block;margin-right:8px;animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+h1{font-size:1.15rem;font-weight:700;color:#1a1a1a;margin-bottom:8px}
+.sub{font-size:.88rem;color:#6b7280;margin-bottom:28px;line-height:1.6}
+.steps{background:#F5F2EC;border-radius:14px;padding:20px;text-align:left;margin-bottom:24px}
+.steps h3{font-size:.72rem;font-weight:700;color:#314C47;text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px}
+.step{display:flex;gap:12px;align-items:flex-start;margin-bottom:12px}
 .step:last-child{margin-bottom:0}
-.num{width:20px;height:20px;border-radius:50%;background:#314C47;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
-.alert{background:#FEF2F2;border:1px solid #FECACA;border-radius:10px;padding:14px 16px;margin-bottom:14px;font-size:13px;color:#991b1b;line-height:1.5}
-.alert strong{display:block;margin-bottom:4px}
-.retry{display:block;width:100%;padding:12px;background:#314C47;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;margin-top:8px}
-.status{text-align:center;font-size:12px;color:#9ca3af;margin-top:16px}
+.num{width:22px;height:22px;background:#314C47;color:#fff;border-radius:50%;font-size:.7rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px}
+.step-text{font-size:.82rem;color:#374151;line-height:1.5}
+.step-text strong{color:#1a1a1a}
+.btn{width:100%;padding:14px;background:#314C47;color:#fff;border:none;border-radius:12px;font-size:.9rem;font-weight:600;cursor:pointer;margin-bottom:12px}
+.btn:active{background:#263d38}
+.info{font-size:.73rem;color:#9ca3af;line-height:1.5}
 </style>
 </head>
 <body>
 <div class="card">
-  <div class="logo">🌿</div>
-  <h1>System Temporarily Offline</h1>
-  <p class="sub">YANI Garden Cafe POS cannot reach the server right now. Follow the steps below to keep serving customers.</p>
-
-  <div class="alert">
-    <strong>Do NOT close this tab</strong>
-    The system will reconnect automatically. Keep taking orders manually using the steps below.
+  <h1><span class="dot"></span>System temporarily unavailable</h1>
+  <p class="sub">The POS is unreachable right now. Follow these steps while it's down.</p>
+  <div class="steps">
+    <h3>What to do</h3>
+    <div class="step"><div class="num">1</div><div class="step-text"><strong>Take orders on paper</strong> — write table number, items, and time.</div></div>
+    <div class="step"><div class="num">2</div><div class="step-text"><strong>Collect payment normally</strong> — GCash, cash, card still work.</div></div>
+    <div class="step"><div class="num">3</div><div class="step-text"><strong>Keep the paper receipt</strong> — enter it in the system when it's back.</div></div>
+    <div class="step"><div class="num">4</div><div class="step-text"><strong>Call Pia</strong> if down more than 10 minutes.</div></div>
   </div>
-
-  <div class="section">
-    <div class="section-title">📝 Taking Orders Manually</div>
-    <div class="step"><div class="num">1</div><div>Write order on paper — include table number, items, size, sugar level</div></div>
-    <div class="step"><div class="num">2</div><div>Tell customer their estimated total verbally</div></div>
-    <div class="step"><div class="num">3</div><div>For GCash: show the QR code printed at counter</div></div>
-    <div class="step"><div class="num">4</div><div>Note the paper order ID (e.g. P-001, P-002) to avoid confusion</div></div>
-  </div>
-
-  <div class="section">
-    <div class="section-title">🔌 When System Comes Back</div>
-    <div class="step"><div class="num">1</div><div>Click Retry below or refresh the page</div></div>
-    <div class="step"><div class="num">2</div><div>Enter all paper orders into the system using <strong>Walk-in Order</strong></div></div>
-    <div class="step"><div class="num">3</div><div>Mark payment method and verify GCash screenshots</div></div>
-  </div>
-
-  <button class="retry" onclick="retryConnection()">🔄 Retry Connection</button>
-  <div class="status" id="status">Checking connection...</div>
+  <button class="btn" onclick="retry()">Try reconnecting</button>
+  <p class="info">Auto-retries every 30 seconds. This page works without internet.</p>
 </div>
-
 <script>
-const HEALTH_URL = 'https://pos.yanigardencafe.com/api/health';
-let attempts = 0;
-
-async function checkConnection() {
-  try {
-    const r = await fetch(HEALTH_URL, { signal: AbortSignal.timeout(5000) });
-    if (r.ok) {
-      document.getElementById('status').textContent = '✅ System is back online — reloading...';
-      setTimeout(() => window.location.href = 'https://admin.yanigardencafe.com', 1500);
-      return true;
-    }
-  } catch(e) {}
-  return false;
+function retry(){
+  var b=document.querySelector('.btn');
+  b.textContent='Checking...';b.disabled=true;
+  fetch('https://pos.yanigardencafe.com/api/health',{cache:'no-store'})
+    .then(function(r){if(r.ok){window.location.href='/admin.html';}else{reset();}})
+    .catch(reset);
+  function reset(){setTimeout(function(){b.textContent='Try reconnecting';b.disabled=false;},2000);}
 }
-
-async function retryConnection() {
-  document.getElementById('status').textContent = 'Connecting...';
-  const ok = await checkConnection();
-  if (!ok) document.getElementById('status').textContent = 'Still offline. Will keep checking every 30s.';
-}
-
-// Auto-check every 30 seconds
-setInterval(checkConnection, 30000);
-
-// Initial check
-checkConnection().then(ok => {
-  if (!ok) {
-    document.getElementById('status').textContent = 'Offline. Auto-checking every 30 seconds.';
-  }
-});
+setInterval(function(){
+  fetch('https://pos.yanigardencafe.com/api/health',{cache:'no-store'})
+    .then(function(r){if(r.ok)window.location.href='/admin.html';}).catch(function(){});
+},30000);
 </script>
 </body>
 </html>

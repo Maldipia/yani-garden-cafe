@@ -542,7 +542,10 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
     // Returns { ok, role, userId } — no DB hit if JWT is valid.
     async function checkAuth(allowedRoles) {
       if (jwtUser) {
-        if (!allowedRoles || !allowedRoles.length || allowedRoles.includes(jwtUser.role)) {
+        // Prefer DB permissions — they can be changed without redeploy
+        const dbPerms = await getRolePermissions();
+        const roles = (dbPerms && dbPerms[action]) ? dbPerms[action] : (allowedRoles || []);
+        if (!roles.length || roles.includes(jwtUser.role)) {
           return { ok: true, role: jwtUser.role, userId: jwtUser.userId };
         }
         return { ok: false, error: 'Unauthorized: insufficient role' };
