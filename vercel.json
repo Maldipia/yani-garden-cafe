@@ -62,16 +62,8 @@
       "destination": "/api/queue-status"
     },
     {
-      "source": "/api/sheets-sync",
-      "destination": "/api/sheets-sync"
-    },
-    {
       "source": "/api/health",
       "destination": "/api/health"
-    },
-    {
-      "source": "/api/sync-menu",
-      "destination": "/api/sync-menu"
     },
     {
       "source": "/api/daily-report",

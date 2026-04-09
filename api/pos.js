@@ -1117,6 +1117,10 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
 
     // ── updateOrderStatus ──────────────────────────────────────────────────
     if (action === 'updateOrderStatus') {
+      // JWT auth first (preferred) — all roles allowed for kitchen workflow
+      const authUO = await checkAuth(['OWNER','ADMIN','CASHIER','KITCHEN']);
+      if (!authUO.ok) return res.status(403).json({ ok: false, error: authUO.error });
+
       const orderId      = String(body.orderId || '').trim();
       const newStatus    = String(body.status  || '').trim().toUpperCase();
       const cancelReason = body.cancelReason ? String(body.cancelReason).trim() : null;
@@ -1125,16 +1129,12 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       if (!isValidOrderId(orderId))           return res.status(400).json({ ok: false, error: 'Invalid orderId format' });
       if (!validStatuses.includes(newStatus)) return res.status(400).json({ ok: false, error: 'Invalid status: ' + newStatus });
 
-      // Role guard — staff only (all roles permitted for kitchen workflow)
-      const userId = String(body.userId || '').trim();
-      if (!userId) return res.status(403).json({ ok: false, error: 'userId is required to update order status' });
-      const staffR = await supaFetch(
-        `${SUPABASE_URL}/rest/v1/staff_users?user_id=eq.${encodeURIComponent(userId)}&active=eq.true&select=role`
-      );
-      if (!staffR.ok || !staffR.data.length) return res.status(403).json({ ok: false, error: 'Unauthorized: invalid user' });
-      const staffRole = staffR.data[0].role;
-      const allowedRoles = ['KITCHEN', 'CASHIER', 'ADMIN', 'OWNER'];
-      if (!allowedRoles.includes(staffRole)) return res.status(403).json({ ok: false, error: 'Unauthorized: insufficient role' });
+      // Role derived from JWT (preferred) or legacy body.userId
+      const userId = jwtUser ? jwtUser.userId : String(body.userId || '').trim();
+      const staffRole = jwtUser ? jwtUser.role : (() => {
+        // Legacy path: still validate via DB if no JWT
+        return authUO.role;
+      })();
 
       // Capture previous status for audit log
       const prevR = await supaFetch(`${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=status&limit=1`);
@@ -1566,7 +1566,13 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
         { method: 'POST', body: '{}' }
       );
       const orderNo = seqR.ok ? (seqR.data || 1001) : Date.now() % 9000 + 1000;
-      const orderId = `${ORDER_PREFIX}-${orderNo}`;
+      // Read ORDER_PREFIX from DB settings (same as dine-in orders)
+      let olPrefix = ORDER_PREFIX;
+      try {
+        const olPfxR = await supaFetch(`${SUPABASE_URL}/rest/v1/settings?key=eq.ORDER_PREFIX&select=value`);
+        if (olPfxR.ok && olPfxR.data?.[0]?.value) olPrefix = olPfxR.data[0].value;
+      } catch(_) {}
+      const orderId = `${olPrefix}-${orderNo}`;
 
       const orderRow = {
         order_id:       orderId,
@@ -1985,6 +1991,10 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
 
     // ── changePin ──────────────────────────────────────────────────────────
     if (action === 'changePin') {
+      // Requires a valid JWT — all roles can change their own PIN, OWNER/ADMIN can change any
+      const authCP = await checkAuth(['OWNER','ADMIN','CASHIER','KITCHEN']);
+      if (!authCP.ok) return res.status(403).json({ ok: false, error: authCP.error });
+
       // Requires OWNER or ADMIN to change any PIN
       // OR the user themselves (must provide currentPin to verify identity)
       const targetUserId = String(body.targetUserId || '').trim();
