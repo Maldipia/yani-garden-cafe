@@ -1,4 +1,5 @@
-// YANI POS — Vercel Serverless API  (v4 — hardened)
+// YANI POS — Shared helpers
+// Imported by api/pos.js and route handlers
 // ══════════════════════════════════════════════════════════════════════
 // All actions handled directly in Supabase. GAS-free.
 // Write endpoints require ADMIN or OWNER role (userId in request body).
@@ -6,12 +7,12 @@
 // ══════════════════════════════════════════════════════════════════════
 
 import bcrypt from 'bcryptjs';
-const SUPABASE_URL  = (process.env.SUPABASE_URL || 'https://hnynvclpvfxzlfjphefj.supabase.co');
-const RESEND_KEY    = process.env.RESEND_API_KEY || '';
-const FROM_EMAIL    = 'onboarding@resend.dev';  // upgrade to branded domain when DNS ready
-const BUSINESS_NAME = (process.env.BUSINESS_NAME || 'Yani Garden Cafe');
+export const SUPABASE_URL  = (process.env.SUPABASE_URL || 'https://hnynvclpvfxzlfjphefj.supabase.co');
+export const RESEND_KEY    = process.env.RESEND_API_KEY || '';
+export const FROM_EMAIL    = 'onboarding@resend.dev';  // upgrade to branded domain when DNS ready
+export const BUSINESS_NAME = (process.env.BUSINESS_NAME || 'Yani Garden Cafe');
 // Service role key — loaded from env only. No hardcoded fallback.
-const SUPABASE_KEY = (() => {
+export const SUPABASE_KEY = (() => {
   const k = process.env.SUPABASE_SECRET_KEY;
   if (!k) throw new Error('SUPABASE_SECRET_KEY env var is not set');
   return k;
@@ -21,7 +22,7 @@ const SUPABASE_KEY = (() => {
 // Refreshed every 5 min — permissions never change by accident via code edits
 let _permCache = null;
 let _permCacheAt = 0;
-async function getRolePermissions() {
+export async function getRolePermissions() {
   if (_permCache && Date.now() - _permCacheAt < 5 * 60 * 1000) return _permCache;
   try {
     const r = await fetch(
@@ -40,11 +41,11 @@ async function getRolePermissions() {
   return null; // fallback: code-level checkAuth still enforces permissions
 }
 
-const SERVICE_CHARGE_RATE = 0.10;
-const ORDER_PREFIX = 'ORD';
+export const SERVICE_CHARGE_RATE = 0.10;
+export const ORDER_PREFIX = 'ORD';
 
 // ── Fetch a single setting value from DB ───────────────────────────────────
-async function getSetting(key) {
+export async function getSetting(key) {
   try {
     const r = await supaFetch(`${SUPABASE_URL}/rest/v1/settings?key=eq.${encodeURIComponent(key)}&select=value&limit=1`);
     if (r.ok && r.data && r.data.length > 0) return r.data[0].value;
@@ -56,7 +57,7 @@ async function getSetting(key) {
 // Inserts a row into order_audit_logs. Called after every mutating action.
 // actor: { userId, role, displayName }   (all optional)
 // meta:  { orderId, action, oldValue, newValue, details:{} }
-async function auditLog({ orderId, action, actor, oldValue, newValue, details } = {}) {
+export async function auditLog({ orderId, action, actor, oldValue, newValue, details } = {}) {
   try {
     await supaFetch(`${SUPABASE_URL}/rest/v1/order_audit_logs`, {
       method: 'POST',
@@ -317,7 +318,7 @@ function getCategoryName(categoryId) {
 }
 
 // ── Supabase REST helper ───────────────────────────────────────────────────
-async function supa(method, table, body, params, preferOverride) {
+export async function supa(method, table, body, params, preferOverride) {
   let url = `${SUPABASE_URL}/rest/v1/${table}`;
   if (params) {
     const qs = Object.entries(params).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
@@ -338,7 +339,7 @@ async function supa(method, table, body, params, preferOverride) {
 }
 
 // ── Raw Supabase fetch (for complex queries with filters) ──────────────────
-async function supaFetch(url, opts = {}) {
+export async function supaFetch(url, opts = {}) {
   const headers = {
     'apikey': SUPABASE_KEY,
     'Authorization': `Bearer ${SUPABASE_KEY}`,
@@ -437,7 +438,7 @@ async function verifyToken(token) {
 
 // ── Main handler ──────────────────────────────────────────────────────────
 // ── Google Drive upload helper ─────────────────────────────────────────────
-async function uploadToGoogleDrive(imageBuffer, mimeType, filename, folderId) {
+export async function uploadToGoogleDrive(imageBuffer, mimeType, filename, folderId) {
   try {
     // Read SA from Supabase settings (fallback to env var)
     let saJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON || '';
@@ -502,98 +503,3 @@ async function uploadToGoogleDrive(imageBuffer, mimeType, filename, folderId) {
   } catch(e) { console.error('Drive upload error:', e.message); return { error: e.message }; }
 }
 
-
-// ── Route handlers (split by domain) ─────────────────────────────────────────
-import { handle_menu }          from './handlers/menu.js';
-import { handle_orders }        from './handlers/orders.js';
-import { handle_payments }      from './handlers/payments.js';
-import { handle_auth }          from './handlers/auth.js';
-import { handle_online_orders } from './handlers/online-orders.js';
-import { handle_tables }        from './handlers/tables.js';
-import { handle_inventory }     from './handlers/inventory.js';
-import { handle_addons }        from './handlers/addons.js';
-import { handle_refunds }       from './handlers/refunds.js';
-import { handle_cash }          from './handlers/cash.js';
-
-export default async function handler(req, res) {
-export default async function handler(req, res) {
-  // Restrict CORS to known domains only
-  const origin = req.headers.origin || '';
-const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardencafe.com,https://yanigardencafe.com,https://admin.yanigardencafe.com').split(',').map(s => s.trim());
-  if (ALLOWED_ORIGINS.includes(origin) || ALLOWED_ORIGINS.includes('*')) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-  } else if (!origin) {
-    res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGINS[0] || '*');
-  }
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed' });
-
-  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
-  if (!await checkRateLimit(ip)) {
-    return res.status(429).json({ ok: false, error: 'Too many requests. Please wait a moment.' });
-  }
-
-  try {
-    const body = req.body;
-    if (!body || !body.action) return res.status(400).json({ ok: false, error: 'Missing action' });
-
-    const action = String(body.action).trim();
-    if (!/^[a-zA-Z][a-zA-Z0-9_]{1,60}$/.test(action)) {
-      return res.status(400).json({ ok: false, error: 'Invalid action name' });
-    }
-
-    // ── Identify caller ───────────────────────────────────────────────────
-    // Try JWT token from Authorization header first (secure path).
-    // Falls back to body.userId lookup in DB (legacy backward-compat path).
-    const authHeader = (req.headers.authorization || req.headers.Authorization || '').trim();
-    const rawToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-    const jwtUser = rawToken ? await verifyToken(rawToken) : null;
-
-    // checkAuth(allowedRoles): use inside any action handler instead of requireAuth/requireAdminRole.
-    // Returns { ok, role, userId } — no DB hit if JWT is valid.
-    async function checkAuth(allowedRoles) {
-      if (jwtUser) {
-        // Prefer DB permissions — they can be changed without redeploy
-        const dbPerms = await getRolePermissions();
-        const roles = (dbPerms && dbPerms[action]) ? dbPerms[action] : (allowedRoles || []);
-        if (!roles.length || roles.includes(jwtUser.role)) {
-          return { ok: true, role: jwtUser.role, userId: jwtUser.userId };
-        }
-        return { ok: false, error: 'Unauthorized: insufficient role' };
-      }
-      // Legacy: validate body.userId against DB
-      return requireAuth(body, allowedRoles);
-    }
-    async function checkAdminAuth() { return checkAuth(['ADMIN', 'OWNER']); }
-
-
-    // ── Route dispatcher ────────────────────────────────────────────────────
-    const ctx = {
-      action, body, req, res, jwtUser, checkAuth, supa, supaFetch, auditLog,
-      SUPABASE_URL, SUPABASE_KEY, SERVICE_CHARGE_RATE, ORDER_PREFIX, getSetting,
-    };
-
-    // Try each handler module in order (first match wins)
-    if (await handle_menu(action, ctx))          return;
-    if (await handle_orders(action, ctx))        return;
-    if (await handle_payments(action, ctx))      return;
-    if (await handle_auth(action, ctx))          return;
-    if (await handle_online_orders(action, ctx)) return;
-    if (await handle_tables(action, ctx))        return;
-    if (await handle_inventory(action, ctx))     return;
-    if (await handle_addons(action, ctx))        return;
-    if (await handle_refunds(action, ctx))       return;
-    if (await handle_cash(action, ctx))          return;
-
-    // Unknown action
-    return res.status(400).json({ ok: false, error: `Unknown action: ${action}` });
-
-  } catch (err) {
-  } catch (err) {
-    console.error('API error:', err);
-    return res.status(500).json({ ok: false, error: 'Server error: ' + err.message });
-  }
-}
