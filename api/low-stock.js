@@ -29,7 +29,8 @@ export default async function handler(req, res) {
   // Validate secret
   const body = req.body || {};
   const secret = body.secret || req.headers['x-cron-secret'] || '';
-  if (CRON_SECRET && secret !== CRON_SECRET) {
+  // Only check secret if CRON_SECRET env is actually set
+  if (CRON_SECRET && CRON_SECRET.length > 0 && secret !== CRON_SECRET) {
     return res.status(401).json({ ok: false, error: 'Unauthorized' });
   }
 
