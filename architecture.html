@@ -71,7 +71,9 @@
     .job{display:flex;gap:14px;padding:10px 0;border-bottom:1px solid var(--border);font-size:13px}.job:last-child{border-bottom:none}
     .job-time{font-family:var(--mono);font-size:11px;color:var(--teal);min-width:150px;padding-top:1px;flex-shrink:0}
     .job-desc{color:var(--white)}.job-desc strong{color:var(--white2)}
-    @media(max-width:768px){.sidebar{display:none}.main{padding:20px}}
+    pre{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;font-family:var(--mono);font-size:12px;color:var(--white);overflow-x:auto;line-height:1.6;margin-bottom:12px}
+  h3{font-size:14px;font-weight:600;color:var(--white2)}
+  @media(max-width:768px){.sidebar{display:none}.main{padding:20px}}
   </style>
 </head>
 <body>
@@ -101,7 +103,10 @@
   <div class="nav-link" onclick="goTo('auth',this)"><div class="nav-dot"></div>Auth &amp; roles</div>
   <div class="nav-link" onclick="goTo('jobs',this)"><div class="nav-dot"></div>Automated jobs</div>
   <div class="nav-label">Reference</div>
-  <div class="nav-link" onclick="goTo('business-day',this)"><div class="nav-dot"></div>Business day definition</div>
+  <div class="nav-link" onclick="goTo('ui-screenshots',this)"><div class="nav-dot"></div>UI screenshots</div>
+  <div class="nav-link" onclick="goTo('changelog',this)"><div class="nav-dot"></div>Changelog</div>
+  <div class="nav-link" onclick="goTo('quick-ref',this)"><div class="nav-dot"></div>Quick reference</div>
+  <div class="nav-link" onclick="goTo('business-day',this)"><div class="nav-dot"></div>Business day</div>
   <div class="nav-link" onclick="goTo('stack',this)"><div class="nav-dot"></div>Tech stack</div>
 </nav>
 
@@ -293,6 +298,90 @@ Failed login:
   <p style="font-size:13px;color:var(--gray);margin-top:8px;line-height:1.7">Why 6AM? The cafe closes well before midnight. Orders after midnight are almost always test orders. The 6AM cutoff ensures daily totals match what staff think of as &ldquo;yesterday&rsquo;s business.&rdquo; The shift summary counts COMPLETED + READY + PREPARING to avoid undercounting when staff skip the COMPLETE step.</p>
 </div>
 
+
+<div class="section" id="ui-screenshots">
+  <div class="section-header"><div class="section-icon teal">&#128444;</div><h2>UI Screenshots <span class="num">&mdash; Customer menu &middot; Kitchen &middot; Admin</span></h2></div>
+  <p class="section-desc">The three main interfaces. Customer menu is mobile-first (390px). Kitchen display runs on a tablet or counter monitor. Admin panel is desktop (1280px+).</p>
+
+  <div style="display:grid;grid-template-columns:1fr 2fr;gap:20px;margin-bottom:24px;align-items:start">
+    <div>
+      <div class="diagram-bar" style="border-radius:var(--border-radius-md) var(--border-radius-md) 0 0"><span class="title">Screenshot 1 &mdash; Customer menu (mobile)</span></div>
+      <img src="/docs/ui_customer.png" alt="Customer ordering menu" style="width:100%;display:block;border:1px solid var(--border);border-top:none;border-radius:0 0 var(--border-radius-md) var(--border-radius-md);cursor:zoom-in" onclick="openFull(this.src)"/>
+      <p style="font-size:11px;color:var(--gray);margin-top:6px;line-height:1.5">Card grid with size/sugar selectors. Yani&rsquo;s Signature badge on featured items. Cart in header.</p>
+    </div>
+    <div>
+      <div class="diagram-bar" style="border-radius:var(--border-radius-md) var(--border-radius-md) 0 0"><span class="title">Screenshot 2 &mdash; Kitchen display (1024px)</span></div>
+      <img src="/docs/ui_kitchen.png" alt="Kitchen display" style="width:100%;display:block;border:1px solid var(--border);border-top:none;border-radius:0 0 var(--border-radius-md) var(--border-radius-md);cursor:zoom-in" onclick="openFull(this.src)"/>
+      <p style="font-size:11px;color:var(--gray);margin-top:6px;line-height:1.5">Color-coded by status. Shows size + sugar per item. START / READY / COMPLETE buttons per card.</p>
+    </div>
+  </div>
+
+  <div class="diagram-wrap">
+    <div class="diagram-bar"><span class="title">Screenshot 3 &mdash; Admin order board (1280px)</span><span class="fig">OWNER view &middot; all tabs visible</span></div>
+    <img src="/docs/ui_admin.png" alt="Admin panel" style="width:100%;display:block;cursor:zoom-in" onclick="openFull(this.src)"/>
+  </div>
+  <p style="font-size:11px;color:var(--gray);line-height:1.5;margin-bottom:20px">Sidebar navigation (OWNER sees all tabs). Stat cards for revenue, active orders, avg order, pending payments. Order grid with status colour-coding. CASHIER sees a subset; KITCHEN sees status-only view.</p>
+</div>
+
+<div class="section" id="changelog">
+  <div class="section-header"><div class="section-icon purple">&#128203;</div><h2>Changelog <span class="num">&mdash; v1.0 (2024) to v3.1 (Apr 2026)</span></h2></div>
+  <table>
+    <tr><th>Version</th><th>Date</th><th>What changed</th></tr>
+    <tr><td>v1.0 (GAS)</td><td>Feb 2024</td><td>Initial build: Google Apps Script + Google Sheets. 18 endpoints via doPost(). 7-tab spreadsheet as DB. Table QR codes with token auth.</td></tr>
+    <tr><td>v2.0 (Supabase)</td><td>Nov 2025</td><td>Full migration to Supabase PostgreSQL + Vercel serverless. 24 tables with RLS. bcrypt PIN auth + JWT. 3 Vercel deployments. GAS backend fully retired.</td></tr>
+    <tr><td>v2.1</td><td>Jan 2026</td><td>Admin panel split from one 8,961-line HTML file into 8 separate JS modules. admin.html reduced to 1,812 lines.</td></tr>
+    <tr><td>v2.2</td><td>Feb 2026</td><td>Role permissions moved to DB table (27 rules). GitHub Actions post-deploy audit added (15 checks). Offline fallback page added.</td></tr>
+    <tr><td>v2.3</td><td>Feb 2026</td><td>Supabase Storage for payment screenshots. Nightly discount integrity Edge Function. Discount warning banner in edit order modal.</td></tr>
+    <tr><td>v3.0</td><td>Mar 2026</td><td>Low stock alerts (8AM + 2PM PHT). Inventory auto-deduct. Weekly report email. Yani&rsquo;s Signature badge. ORDER_PREFIX from DB settings.</td></tr>
+    <tr><td>v3.1</td><td>Apr 2026</td><td>Security hardening: removed hardcoded anon key, removed PINs/tokens from public HTML, fixed vercel.json dead function references. Architecture page rebuilt with live diagrams + UI screenshots + changelog.</td></tr>
+  </table>
+  <div class="warn" style="margin-top:8px"><strong>Pending v3.2+:</strong> Enroll remaining 54 items in inventory &middot; Split api/pos.js with esbuild pipeline &middot; Add uptime monitoring &middot; PayMongo auto-verification for GCash payments &middot; Receipt printer integration</div>
+</div>
+
+<div class="section" id="quick-ref">
+  <div class="section-header"><div class="section-icon amber">&#128203;</div><h2>Quick Reference <span class="num">&mdash; Staff cheat sheet</span></h2></div>
+  <div class="info" style="margin-bottom:20px"><strong>Print this section</strong> and keep it at the counter. Staff only need this for day-to-day operation.</div>
+
+  <h3 style="font-size:14px;font-weight:600;color:var(--white2);margin:0 0 10px">URLs</h3>
+  <table>
+    <tr><th>Purpose</th><th>URL</th></tr>
+    <tr><td>Customer ordering menu</td><td><code>https://yanigardencafe.com</code></td></tr>
+    <tr><td>Admin panel</td><td><code>https://admin.yanigardencafe.com</code></td></tr>
+    <tr><td>Kitchen display</td><td><code>https://admin.yanigardencafe.com/kitchen.html</code></td></tr>
+    <tr><td>Order tracker (for customers)</td><td><code>https://yanigardencafe.com/track</code></td></tr>
+    <tr><td>Online delivery orders</td><td><code>https://yanigardencafe.com/online-order</code></td></tr>
+    <tr><td>System blueprint</td><td><code>https://yanigardencafe.com/architecture</code></td></tr>
+    <tr><td>Offline emergency page</td><td><code>https://yanigardencafe.com/offline</code></td></tr>
+  </table>
+
+  <h3 style="font-size:14px;font-weight:600;color:var(--white2);margin:16px 0 10px">Order status guide</h3>
+  <table>
+    <tr><th>Status</th><th>Staff action</th><th>When</th></tr>
+    <tr><td><span class="badge amber">NEW</span></td><td>Click START as soon as you see it</td><td>Immediately when order arrives</td></tr>
+    <tr><td><span class="badge blue">PREPARING</span></td><td>Click READY when all items are done</td><td>Barista/cook finishes the order</td></tr>
+    <tr><td><span class="badge green">READY</span></td><td>Bring to table, then click COMPLETE</td><td>After delivering to customer</td></tr>
+    <tr><td><span class="badge red">CANCELLED</span></td><td>Click CANCEL at any step</td><td>Wrong order / out of stock / customer cancels</td></tr>
+  </table>
+
+  <h3 style="font-size:14px;font-weight:600;color:var(--white2);margin:16px 0 10px">Discount formula (printed receipts)</h3>
+  <pre style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:12px;color:var(--white);line-height:1.7">(total &divide; number of pax) &times; 20% &times; qualifying persons
+
+Example: &#8369;526.90 total, 3 people, 1 PWD
+  &#8369;526.90 &divide; 3 = &#8369;175.63 per person
+  PWD discount = &#8369;175.63 &times; 20% = &#8369;35.13
+  New total = &#8369;526.90 &minus; &#8369;35.13 = &#8369;491.77</pre>
+
+  <h3 style="font-size:14px;font-weight:600;color:var(--white2);margin:16px 0 10px">Emergency procedures</h3>
+  <table>
+    <tr><th>Situation</th><th>What to do</th></tr>
+    <tr><td>System down / 404</td><td>Go to <code>/offline</code> for manual order procedure. System auto-retries every 30s.</td></tr>
+    <tr><td>Customer can&rsquo;t scan QR</td><td>Walk-up POS: admin &rarr; Payments &rarr; &ldquo;New Order&rdquo; button</td></tr>
+    <tr><td>GCash payment issue</td><td>Ask for screenshot. Upload via payment screen. Verify in admin &rarr; Payments tab.</td></tr>
+    <tr><td>Forgot PIN</td><td>OWNER resets: admin &rarr; Staff &rarr; Change PIN</td></tr>
+    <tr><td>Wrong item ordered</td><td>Edit order before COMPLETED, or use admin &rarr; Refunds</td></tr>
+  </table>
+</div>
+
 <div class="section" id="stack">
   <div class="section-header"><div class="section-icon purple">&#128296;</div><h2>Tech Stack <span class="num">&mdash; Current production system</span></h2></div>
   <div class="card-grid">
@@ -330,7 +419,7 @@ function closeFull(){
   document.getElementById('lightbox').style.display='none';
 }
 window.addEventListener('scroll',function(){
-  var sections=['overview','arch','order-flow','online-flow','payment-flow','erd','costing','api','auth','jobs','business-day','stack'];
+  var sections=['overview','arch','order-flow','online-flow','payment-flow','erd','costing','api','auth','jobs','ui-screenshots','changelog','quick-ref','business-day','stack'];
   var current='';
   sections.forEach(function(id){
     var el=document.getElementById(id);
