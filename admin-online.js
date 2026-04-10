@@ -1112,21 +1112,86 @@ function _settingsGeneral() {
 
 function _settingsPayment() {
   var s = _settings;
-  function qrCard(title, urlKey, accountKey, accountLabel) {
+  function qrCard(title, code, urlKey, accountKey, accountLabel) {
     var url = s[urlKey] || '';
-    var acc = s[accountKey] || '';
-    return '<div class="s-card"><div class="s-card-title">' + title + '</div>'
-      + (url ? '<img src="' + url + '" style="width:80px;height:80px;object-fit:contain;border-radius:8px;border:1px solid var(--mist);margin-bottom:10px;display:block">' : '')
-      + _sField('s_' + urlKey.toLowerCase(), 'QR Code Image URL', url, 'url', 'https://drive.google.com/...')
-      + (accountKey ? _sField('s_' + accountKey.toLowerCase(), accountLabel || 'Account Number', acc, 'text') : '')
+    var acc = accountKey ? (s[accountKey] || '') : '';
+    var inputId = 's_' + urlKey.toLowerCase();
+    var fileId = 'qrfile_' + code.toLowerCase();
+    var previewId = 'qrprev_' + code.toLowerCase();
+    return '<div class="s-card">'
+      + '<div class="s-card-title">' + title + '</div>'
+      + '<div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:12px">'
+      // QR preview
+      + '<div style="flex-shrink:0">'
+      + '<img id="' + previewId + '" src="' + (url||'') + '" style="width:80px;height:80px;object-fit:contain;border-radius:8px;border:1.5px solid var(--mist);background:#f8f8f8;display:' + (url?'block':'none') + '">'
+      + '<div id="' + previewId + '_placeholder" style="width:80px;height:80px;border-radius:8px;border:2px dashed var(--mist);display:' + (url?'none':'flex') + ';align-items:center;justify-content:center;font-size:.65rem;color:var(--timber);text-align:center">No QR</div>'
+      + '</div>'
+      // URL + upload
+      + '<div style="flex:1">'
+      + '<div class="s-field" style="margin-bottom:8px"><label>QR Code Image URL</label>'
+      + '<input type="url" id="' + inputId + '" value="' + (url||'') + '" placeholder="https://drive.google.com/..." oninput="updateQrPreview(\'' + previewId + '\',this.value)">'
+      + '</div>'
+      + '<input type="file" id="' + fileId + '" accept="image/png,image/jpeg,image/webp" style="display:none" onchange="uploadQrCode(\'' + code + '\',\'' + inputId + '\',\'' + previewId + '\',this)">'
+      + '<button onclick="document.getElementById(\'' + fileId + '\').click()" style="padding:7px 14px;background:var(--forest);color:#fff;border:none;border-radius:8px;font-size:.78rem;font-weight:700;cursor:pointer">⬆️ Upload Image</button>'
+      + '<span id="' + fileId + '_status" style="font-size:.72rem;color:var(--timber);margin-left:8px"></span>'
+      + '</div>'
+      + '</div>'
+      + (accountKey ? '<div class="s-field"><label>' + (accountLabel||'Account Number') + '</label><input type="text" id="s_' + accountKey.toLowerCase() + '" value="' + acc + '"></div>' : '')
       + '</div>';
   }
-  return qrCard('📱 GCash', 'GCASH_QR_URL', 'GCASH_NUMBER', 'GCash Number')
-    + qrCard('🏦 InstaPay', 'INSTAPAY_QR_URL', '', '')
-    + qrCard('🏛️ BDO', 'BDO_QR_URL', 'BDO_ACCOUNT', 'BDO Account Number')
-    + qrCard('🏛️ BPI', 'BPI_QR_URL', 'BPI_ACCOUNT', 'BPI Account Number')
-    + qrCard('🏛️ UnionBank', 'UNIONBANK_QR_URL', 'UNIONBANK_ACCOUNT', 'UnionBank Account Number')
+  return qrCard('📱 GCash', 'GCASH', 'GCASH_QR_URL', 'GCASH_NUMBER', 'GCash Number')
+    + qrCard('🏦 InstaPay', 'INSTAPAY', 'INSTAPAY_QR_URL', null, null)
+    + qrCard('🏛️ BDO', 'BDO', 'BDO_QR_URL', 'BDO_ACCOUNT', 'BDO Account Number')
+    + qrCard('🏛️ BPI', 'BPI', 'BPI_QR_URL', 'BPI_ACCOUNT', 'BPI Account Number')
+    + qrCard('🏛️ UnionBank', 'UNIONBANK', 'UNIONBANK_QR_URL', 'UNIONBANK_ACCOUNT', 'UnionBank Account Number')
     + '<button class="s-save-btn" onclick="savePaymentSettings(this)">💾 Save Payment Settings</button>';
+}
+
+function updateQrPreview(previewId, url) {
+  var img = document.getElementById(previewId);
+  var ph = document.getElementById(previewId + '_placeholder');
+  if (url) {
+    img.src = url; img.style.display = 'block';
+    if (ph) ph.style.display = 'none';
+  } else {
+    img.style.display = 'none';
+    if (ph) ph.style.display = 'flex';
+  }
+}
+
+async function uploadQrCode(code, inputId, previewId, fileInput) {
+  var file = fileInput.files[0];
+  if (!file) return;
+  var statusEl = document.getElementById(fileInput.id + '_status');
+  statusEl.textContent = 'Uploading…';
+  try {
+    var base64 = await new Promise(function(res, rej) {
+      var r = new FileReader();
+      r.onload = function(e) { res(e.target.result.split(',')[1]); };
+      r.onerror = rej;
+      r.readAsDataURL(file);
+    });
+    var ext = file.name.split('.').pop().toLowerCase();
+    var resp = await fetch('/api/upload-image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: 'QR_' + code, ext: ext, base64: base64 })
+    });
+    var result = await resp.json();
+    if (result.ok) {
+      var urlInput = document.getElementById(inputId);
+      urlInput.value = result.path;
+      updateQrPreview(previewId, result.path);
+      statusEl.textContent = '✅ Uploaded!';
+      statusEl.style.color = '#059669';
+    } else {
+      statusEl.textContent = '❌ ' + (result.error || 'Upload failed');
+      statusEl.style.color = '#EF4444';
+    }
+  } catch(e) {
+    statusEl.textContent = '❌ Error: ' + e.message;
+    statusEl.style.color = '#EF4444';
+  }
 }
 
 function _settingsBranding() {
@@ -1158,15 +1223,25 @@ function _settingsOperations() {
     + _sToggle('s_require_phone', 'Require Phone Number', 'Collect customer phone for notifications', s.REQUIRE_PHONE_NUMBER === 'true')
     + '</div>'
     + '<div class="s-card"><div class="s-card-title">💰 Tax & Discounts</div>'
-    + _sToggle('s_vat_enabled', 'VAT Enabled (12%)', 'Automatically compute VAT on all orders', vatEnabled)
+    + _sToggle('s_vat_enabled', 'VAT Enabled (12%)', vatEnabled ? 'Currently: VAT Registered (12%)' : 'Currently: Non-VAT Registered', vatEnabled)
     + _sToggle('s_pwd_senior', 'PWD / Senior Citizen Discount', '20% discount (RA 9994 / RA 7277) — staff verifies ID', s.PWD_SENIOR_ENABLED !== 'false')
     + '<div style="padding:10px 0;border-bottom:1px solid var(--mist-light)">'
-    + '<div class="s-toggle-label">Service Charge</div><div class="s-toggle-sub">Added to dine-in orders</div>'
+    + '<div class="s-toggle-label">Service Charge</div><div class="s-toggle-sub">Added to dine-in orders (not applied on PWD/Senior)</div>'
     + '<div style="display:flex;align-items:center;gap:8px;margin-top:8px"><input type="number" id="s_service_charge" value="' + svcPct + '" min="0" max="30" style="width:70px;padding:8px;border:1.5px solid var(--mist);border-radius:8px;font-size:.95rem;font-weight:700;text-align:center"><span style="font-weight:600">%</span></div>'
     + '</div>'
     + '<div style="padding:10px 0">'
     + '<div class="s-toggle-label">Avg Prep Time</div><div class="s-toggle-sub">Used for order tracking ETA</div>'
     + '<div style="display:flex;align-items:center;gap:8px;margin-top:8px"><input type="number" id="s_avg_prep" value="' + (s.AVG_PREP_TIME||'10') + '" min="1" max="120" style="width:70px;padding:8px;border:1.5px solid var(--mist);border-radius:8px;font-size:.95rem;font-weight:700;text-align:center"><span style="font-weight:600">minutes</span></div>'
+    + '</div></div>'
+    // VAT Receipt Preview
+    + '<div class="s-card"><div class="s-card-title">🧾 Receipt Preview (Sample Order ₱526.90)</div>'
+    + '<div style="font-family:monospace;font-size:.78rem;line-height:1.9;color:#333;background:#f9f9f9;border-radius:8px;padding:12px">'
+    + 'Subtotal:        ₱479.00<br>'
+    + 'Service Charge:  ₱ 47.90<br>'
+    + (vatEnabled ? '<span style="color:var(--forest);font-weight:700">VAT (12%, incl.):  ₱ ' + (526.90 * 0.12 / 1.12).toFixed(2) + '</span><br>' : '')
+    + '──────────────────────<br>'
+    + '<strong>TOTAL:           ₱526.90</strong><br><br>'
+    + '<span style="color:#888">' + (vatEnabled ? '✅ VAT Registered' : 'Non-VAT Registered') + '</span>'
     + '</div></div>'
     + '<button class="s-save-btn" onclick="saveOperationsSettings(this)">💾 Save Operations</button>';
 }
