@@ -38,6 +38,9 @@
     },
     "api/setup-db.js": {
       "maxDuration": 15
+    },
+    "api/create-promo-table.js": {
+      "maxDuration": 15
     }
   },
   "rewrites": [
@@ -120,6 +123,10 @@
     {
       "source": "/api/setup-db",
       "destination": "/api/setup-db"
+    },
+    {
+      "source": "/api/create-promo-table",
+      "destination": "/api/create-promo-table"
     }
   ],
   "headers": [
