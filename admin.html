@@ -1020,7 +1020,11 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
   display:none; position:fixed; inset:0; background:rgba(0,0,0,.45);
   z-index:89;
 }
-@media (max-width:767px) {
+@media (max-width:900px) and (min-width:521px) {
+  .sidebar { width:170px; min-width:170px }
+  .sidebar-label { font-size:.76rem }
+}
+@media (max-width:520px) {
   .sidebar-toggle { display:block }
   .sidebar {
     position:fixed; top:60px; left:0; height:calc(100dvh - 60px);
