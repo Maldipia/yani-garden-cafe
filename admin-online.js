@@ -1052,20 +1052,192 @@ async function retryAllDead() {
 // ══════════════════════════════════════════════════════════
 var _settings = {};
 
+var _currentSettingsTab = 'general';
+
 async function loadSettings() {
   var r = await api('getSettings', { userId: currentUser.userId });
   if (!r.ok) { showToast('Failed to load settings', 'error'); return; }
   _settings = {};
   (r.settings || []).forEach(function(s) { _settings[s.key] = s.value; });
-
-  var vatEnabled = _settings['VAT_ENABLED'] === 'true';
-  var vatRate = parseFloat(_settings['VAT_RATE'] || '0.12') * 100;
-
-  // Update toggle
-  var toggle = document.getElementById('vatToggle');
-  if (toggle) toggle.checked = vatEnabled;
-  applyVatToggleUI(vatEnabled, vatRate);
+  switchSettingsTab(_currentSettingsTab);
 }
+
+function switchSettingsTab(tab) {
+  _currentSettingsTab = tab;
+  ['general','payment','branding','operations'].forEach(function(t) {
+    var el = document.getElementById('stab-' + t);
+    if (el) el.className = 's-tab' + (t === tab ? ' active' : '');
+  });
+  var content = document.getElementById('settingsContent');
+  if (!content) return;
+  if (tab === 'general') content.innerHTML = _settingsGeneral();
+  else if (tab === 'payment') content.innerHTML = _settingsPayment();
+  else if (tab === 'branding') content.innerHTML = _settingsBranding();
+  else if (tab === 'operations') content.innerHTML = _settingsOperations();
+}
+
+function _sField(id, label, val, type, placeholder) {
+  type = type || 'text';
+  return '<div class="s-field"><label>' + label + '</label>'
+    + (type === 'textarea'
+      ? '<textarea id="' + id + '" rows="2">' + (val||'') + '</textarea>'
+      : '<input type="' + type + '" id="' + id + '" value="' + (val||'') + '" placeholder="' + (placeholder||'') + '">')
+    + '</div>';
+}
+
+function _sToggle(id, label, sub, checked) {
+  return '<div class="s-toggle-row"><div><div class="s-toggle-label">' + label + '</div>'
+    + '<div class="s-toggle-sub">' + sub + '</div></div>'
+    + '<label class="s-toggle"><input type="checkbox" id="' + id + '"' + (checked ? ' checked' : '') + '>'
+    + '<span class="s-toggle-slider"></span></label></div>';
+}
+
+function _settingsGeneral() {
+  var s = _settings;
+  return '<div class="s-card"><div class="s-card-title">🏪 Business Information</div>'
+    + _sField('s_business_name', 'Business Name', s.BUSINESS_NAME, 'text')
+    + _sField('s_tagline', 'Tagline', s.TAGLINE, 'text', 'e.g. Garden Cafe')
+    + _sField('s_account_name', 'Account Name (for receipts)', s.ACCOUNT_NAME, 'text')
+    + _sField('s_address', 'Address', s.ADDRESS, 'text')
+    + _sField('s_admin_phone', 'Contact Number', s.ADMIN_PHONE, 'text', '+63 9XX XXX XXXX')
+    + _sField('s_receipt_email', 'Receipt Email', s.RECEIPT_EMAIL, 'email')
+    + '</div>'
+    + '<div class="s-card"><div class="s-card-title">🧾 Receipt Settings</div>'
+    + _sField('s_order_prefix', 'Order ID Prefix', s.ORDER_PREFIX, 'text', 'e.g. YANI')
+    + _sField('s_or_start', 'OR Number Start', s.OR_NUMBER_START, 'number')
+    + _sField('s_receipt_footer', 'Receipt Footer Message', s.RECEIPT_FOOTER, 'textarea')
+    + '</div>'
+    + '<button class="s-save-btn" onclick="saveGeneralSettings()">💾 Save General Settings</button>';
+}
+
+function _settingsPayment() {
+  var s = _settings;
+  function qrCard(title, urlKey, accountKey, accountLabel) {
+    var url = s[urlKey] || '';
+    var acc = s[accountKey] || '';
+    return '<div class="s-card"><div class="s-card-title">' + title + '</div>'
+      + (url ? '<img src="' + url + '" style="width:80px;height:80px;object-fit:contain;border-radius:8px;border:1px solid var(--mist);margin-bottom:10px;display:block">' : '')
+      + _sField('s_' + urlKey.toLowerCase(), 'QR Code Image URL', url, 'url', 'https://drive.google.com/...')
+      + (accountKey ? _sField('s_' + accountKey.toLowerCase(), accountLabel || 'Account Number', acc, 'text') : '')
+      + '</div>';
+  }
+  return qrCard('📱 GCash', 'GCASH_QR_URL', 'GCASH_NUMBER', 'GCash Number')
+    + qrCard('🏦 InstaPay', 'INSTAPAY_QR_URL', '', '')
+    + qrCard('🏛️ BDO', 'BDO_QR_URL', 'BDO_ACCOUNT', 'BDO Account Number')
+    + qrCard('🏛️ BPI', 'BPI_QR_URL', 'BPI_ACCOUNT', 'BPI Account Number')
+    + qrCard('🏛️ UnionBank', 'UNIONBANK_QR_URL', 'UNIONBANK_ACCOUNT', 'UnionBank Account Number')
+    + '<button class="s-save-btn" onclick="savePaymentSettings()">💾 Save Payment Settings</button>';
+}
+
+function _settingsBranding() {
+  var s = _settings;
+  return '<div class="s-card"><div class="s-card-title">🎨 Brand Colors</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'
+    + '<div class="s-field"><label>Primary Color</label><div style="display:flex;gap:8px;align-items:center"><input type="color" id="s_primary_color" value="' + (s.PRIMARY_COLOR||'#314C47') + '" style="width:44px;height:36px;padding:2px;border-radius:6px;cursor:pointer"><input type="text" id="s_primary_color_hex" value="' + (s.PRIMARY_COLOR||'#314C47') + '" oninput="document.getElementById(\'s_primary_color\').value=this.value" style="flex:1"></div></div>'
+    + '<div class="s-field"><label>Accent Color</label><div style="display:flex;gap:8px;align-items:center"><input type="color" id="s_secondary_color" value="' + (s.SECONDARY_COLOR||'#C4704B') + '" style="width:44px;height:36px;padding:2px;border-radius:6px;cursor:pointer"><input type="text" id="s_secondary_color_hex" value="' + (s.SECONDARY_COLOR||'#C4704B') + '" oninput="document.getElementById(\'s_secondary_color\').value=this.value" style="flex:1"></div></div>'
+    + '</div>'
+    + '<div style="margin-top:12px;padding:12px;background:var(--mist-light);border-radius:10px">'
+    + '<div style="font-size:.72rem;color:var(--timber);margin-bottom:8px;font-weight:600">PREVIEW</div>'
+    + '<div id="s_color_preview" style="background:var(--forest);color:#fff;padding:10px 16px;border-radius:8px;font-weight:700;text-align:center">' + (s.BUSINESS_NAME||'Your Cafe') + '</div>'
+    + '</div></div>'
+    + '<div class="s-card"><div class="s-card-title">🖼️ Logo</div>'
+    + _sField('s_logo_url', 'Logo URL', s.LOGO_URL, 'url', '/images/logo.png')
+    + '<div style="font-size:.72rem;color:var(--timber);margin-top:-8px">Use a URL to your logo image. Current: <a href="' + (s.LOGO_URL||'') + '" target="_blank" style="color:var(--forest)">' + (s.LOGO_URL||'not set') + '</a></div>'
+    + '</div>'
+    + '<button class="s-save-btn" onclick="saveBrandingSettings()">💾 Save Branding</button>';
+}
+
+function _settingsOperations() {
+  var s = _settings;
+  var svcPct = Math.round(parseFloat(s.SERVICE_CHARGE||'0.10') * 100);
+  var vatEnabled = s.VAT_ENABLED === 'true';
+  var vatRate = Math.round(parseFloat(s.VAT_RATE||'0.12') * 100);
+  return '<div class="s-card"><div class="s-card-title">📲 Ordering</div>'
+    + _sToggle('s_online_ordering', 'Online Ordering Enabled', 'Customers can browse menu and place orders', s.ONLINE_ORDERING_ENABLED !== 'false')
+    + _sToggle('s_require_name', 'Require Customer Name', 'Customer must enter their name when ordering', s.REQUIRE_CUSTOMER_NAME !== 'false')
+    + _sToggle('s_require_phone', 'Require Phone Number', 'Collect customer phone for notifications', s.REQUIRE_PHONE_NUMBER === 'true')
+    + '</div>'
+    + '<div class="s-card"><div class="s-card-title">💰 Tax & Discounts</div>'
+    + _sToggle('s_vat_enabled', 'VAT Enabled (12%)', 'Automatically compute VAT on all orders', vatEnabled)
+    + _sToggle('s_pwd_senior', 'PWD / Senior Citizen Discount', '20% discount (RA 9994 / RA 7277) — staff verifies ID', s.PWD_SENIOR_ENABLED !== 'false')
+    + '<div style="padding:10px 0;border-bottom:1px solid var(--mist-light)">'
+    + '<div class="s-toggle-label">Service Charge</div><div class="s-toggle-sub">Added to dine-in orders</div>'
+    + '<div style="display:flex;align-items:center;gap:8px;margin-top:8px"><input type="number" id="s_service_charge" value="' + svcPct + '" min="0" max="30" style="width:70px;padding:8px;border:1.5px solid var(--mist);border-radius:8px;font-size:.95rem;font-weight:700;text-align:center"><span style="font-weight:600">%</span></div>'
+    + '</div>'
+    + '<div style="padding:10px 0">'
+    + '<div class="s-toggle-label">Avg Prep Time</div><div class="s-toggle-sub">Used for order tracking ETA</div>'
+    + '<div style="display:flex;align-items:center;gap:8px;margin-top:8px"><input type="number" id="s_avg_prep" value="' + (s.AVG_PREP_TIME||'10') + '" min="1" max="120" style="width:70px;padding:8px;border:1.5px solid var(--mist);border-radius:8px;font-size:.95rem;font-weight:700;text-align:center"><span style="font-weight:600">minutes</span></div>'
+    + '</div></div>'
+    + '<button class="s-save-btn" onclick="saveOperationsSettings()">💾 Save Operations</button>';
+}
+
+async function saveGeneralSettings() {
+  var fields = {
+    BUSINESS_NAME: document.getElementById('s_business_name').value,
+    TAGLINE: document.getElementById('s_tagline').value,
+    ACCOUNT_NAME: document.getElementById('s_account_name').value,
+    ADDRESS: document.getElementById('s_address').value,
+    ADMIN_PHONE: document.getElementById('s_admin_phone').value,
+    RECEIPT_EMAIL: document.getElementById('s_receipt_email').value,
+    ORDER_PREFIX: document.getElementById('s_order_prefix').value,
+    OR_NUMBER_START: document.getElementById('s_or_start').value,
+    RECEIPT_FOOTER: document.getElementById('s_receipt_footer').value,
+  };
+  await _saveSettingsMap(fields, 'General settings saved ✅');
+}
+
+async function savePaymentSettings() {
+  var fields = {
+    GCASH_QR_URL: document.getElementById('s_gcash_qr_url').value,
+    GCASH_NUMBER: document.getElementById('s_gcash_number').value,
+    INSTAPAY_QR_URL: document.getElementById('s_instapay_qr_url').value,
+    BDO_QR_URL: document.getElementById('s_bdo_qr_url').value,
+    BDO_ACCOUNT: document.getElementById('s_bdo_account').value,
+    BPI_QR_URL: document.getElementById('s_bpi_qr_url').value,
+    BPI_ACCOUNT: document.getElementById('s_bpi_account').value,
+    UNIONBANK_QR_URL: document.getElementById('s_unionbank_qr_url').value,
+    UNIONBANK_ACCOUNT: document.getElementById('s_unionbank_account').value,
+  };
+  await _saveSettingsMap(fields, 'Payment settings saved ✅');
+}
+
+async function saveBrandingSettings() {
+  var fields = {
+    PRIMARY_COLOR: document.getElementById('s_primary_color').value,
+    SECONDARY_COLOR: document.getElementById('s_secondary_color').value,
+    LOGO_URL: document.getElementById('s_logo_url').value,
+  };
+  await _saveSettingsMap(fields, 'Branding saved ✅');
+}
+
+async function saveOperationsSettings() {
+  var svc = parseFloat(document.getElementById('s_service_charge').value) / 100;
+  var fields = {
+    ONLINE_ORDERING_ENABLED: String(document.getElementById('s_online_ordering').checked),
+    REQUIRE_CUSTOMER_NAME: String(document.getElementById('s_require_name').checked),
+    REQUIRE_PHONE_NUMBER: String(document.getElementById('s_require_phone').checked),
+    VAT_ENABLED: String(document.getElementById('s_vat_enabled').checked),
+    PWD_SENIOR_ENABLED: String(document.getElementById('s_pwd_senior').checked),
+    SERVICE_CHARGE: String(isNaN(svc) ? 0.10 : svc),
+    AVG_PREP_TIME: document.getElementById('s_avg_prep').value,
+  };
+  await _saveSettingsMap(fields, 'Operations settings saved ✅');
+}
+
+async function _saveSettingsMap(fields, successMsg) {
+  var btn = event && event.target;
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  var errors = [];
+  for (var key in fields) {
+    var r = await api('updateSetting', { userId: currentUser.userId, key: key, value: fields[key] });
+    if (!r.ok) errors.push(key);
+    else _settings[key] = fields[key];
+  }
+  if (btn) { btn.disabled = false; btn.textContent = '💾 Save'; }
+  if (errors.length) showToast('Failed to save: ' + errors.join(', '), 'error');
+  else showToast(successMsg, 'success');
+}
+
 
 function applyVatToggleUI(enabled, ratePct) {
   var slider = document.getElementById('vatSlider');
