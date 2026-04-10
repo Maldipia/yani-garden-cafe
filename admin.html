@@ -970,7 +970,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
   display:flex; min-height:calc(100dvh - 60px);
 }
 .sidebar {
-  width:220px; min-width:220px; background:var(--white);
+  width:175px; min-width:175px; background:var(--white);
   border-right:1.5px solid var(--mist); height:calc(100dvh - 60px);
   position:sticky; top:60px; overflow-y:auto; overflow-x:hidden;
   display:flex; flex-direction:column; gap:0;
@@ -979,14 +979,14 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
   z-index:90;
 }
 .sidebar-section-label {
-  font-size:.6rem; font-weight:700; letter-spacing:1.2px;
+  font-size:.58rem; font-weight:700; letter-spacing:1.2px;
   text-transform:uppercase; color:var(--timber); opacity:.7;
-  padding:18px 16px 6px;
+  padding:16px 14px 5px;
 }
-.sidebar-section-label:first-child { padding-top:12px }
+.sidebar-section-label:first-child { padding-top:10px }
 .sidebar-item {
-  display:flex; align-items:center; gap:10px;
-  padding:10px 16px; font-size:.82rem; font-weight:600;
+  display:flex; align-items:center; gap:8px;
+  padding:9px 14px; font-size:.78rem; font-weight:600;
   color:var(--forest-deep); cursor:pointer; border:none;
   background:transparent; width:100%; text-align:left;
   font-family:var(--font-body); border-radius:0;
@@ -997,11 +997,11 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
   background:var(--forest); color:var(--white); border-radius:0;
 }
 .sidebar-item.active .sidebar-badge { background:rgba(255,255,255,.25); color:#fff }
-.sidebar-icon { font-size:1rem; width:20px; text-align:center; flex-shrink:0 }
+.sidebar-icon { font-size:.9rem; width:18px; text-align:center; flex-shrink:0 }
 .sidebar-label { flex:1 }
 .sidebar-badge {
   background:var(--terra); color:#fff; border-radius:10px;
-  font-size:.6rem; font-weight:800; padding:1px 6px; min-width:16px;
+  font-size:.58rem; font-weight:800; padding:1px 5px; min-width:14px;
   text-align:center; line-height:1.6;
 }
 .sidebar-badge:empty { display:none }
@@ -1021,8 +1021,8 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
   z-index:89;
 }
 @media (max-width:900px) and (min-width:521px) {
-  .sidebar { width:170px; min-width:170px }
-  .sidebar-label { font-size:.76rem }
+  .sidebar { width:140px; min-width:140px }
+  .sidebar-label { font-size:.72rem }
 }
 @media (max-width:520px) {
   .sidebar-toggle { display:block }

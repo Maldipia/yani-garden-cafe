@@ -6,6 +6,7 @@ function renderOrders() {
     if (currentFilter === 'ALL') return true;
     if (currentFilter === 'ACTIVE') return !o.isTest && (o.status === 'NEW' || o.status === 'PREPARING' || o.status === 'READY');
     if (currentFilter === 'PLATFORM') return !!o.platform;
+    if (currentFilter === 'DELETED') return !!(o.isDeleted || o.status === 'DELETED');
     // For status-based filters (NEW/PREPARING/READY/COMPLETED/CANCELLED), hide test orders
     if (['NEW','PREPARING','READY'].includes(currentFilter)) return !o.isTest && o.status === currentFilter;
     return o.status === currentFilter;

@@ -566,29 +566,32 @@ function renderStats() {
 // ══════════════════════════════════════════════════════════
 function renderFilters() {
   // Only order-status chips — section navigation is now in the sidebar
-  var counts = { ALL:0, ACTIVE:0, NEW:0, PREPARING:0, READY:0, COMPLETED:0, CANCELLED:0, PLATFORM:0 };
+  var counts = { ALL:0, ACTIVE:0, NEW:0, PREPARING:0, READY:0, COMPLETED:0, CANCELLED:0, PLATFORM:0, DELETED:0 };
   allOrders.forEach(function(o) {
     counts.ALL++;
     if (!o.isTest) counts[o.status] = (counts[o.status] || 0) + 1;
     if (!o.isTest && (o.status === 'NEW' || o.status === 'PREPARING' || o.status === 'READY')) counts.ACTIVE++;
     if (o.platform) counts.PLATFORM++;
+    if (o.isDeleted || o.status === 'DELETED') counts.DELETED++;
   });
 
   var chips = [
-    { key:'ACTIVE',    label:'🔥 Active',    count:counts.ACTIVE },
-    { key:'NEW',       label:'🔔 New',        count:counts.NEW },
+    { key:'ACTIVE',    label:'🔥 Active',      count:counts.ACTIVE },
+    { key:'NEW',       label:'🔔 New',          count:counts.NEW },
     { key:'PREPARING', label:'👨‍🍳 Preparing', count:counts.PREPARING },
-    { key:'READY',     label:'✨ Ready',       count:counts.READY },
-    { key:'COMPLETED', label:'🎉 Done',        count:counts.COMPLETED },
-    { key:'PLATFORM',  label:'📦 Platform',    count:counts.PLATFORM },
-    { key:'ALL',       label:'All',            count:counts.ALL }
+    { key:'READY',     label:'✨ Ready',         count:counts.READY },
+    { key:'COMPLETED', label:'🎉 Done',          count:counts.COMPLETED },
+    { key:'PLATFORM',  label:'📦 Platform',      count:counts.PLATFORM },
+    { key:'ALL',       label:'All',              count:counts.ALL },
+    { key:'CANCELLED', label:'❌ Cancelled',     count:counts.CANCELLED },
+    { key:'DELETED',   label:'🗑️ Deleted',       count:counts.DELETED }
   ];
 
   var newHash = chips.map(function(t){return t.key+':'+t.count;}).join('|') + '|active:'+currentFilter;
   if (window._filterHash === newHash) return;
   window._filterHash = newHash;
 
-  var isOrderView = ['ACTIVE','NEW','PREPARING','READY','COMPLETED','PLATFORM','ALL'].indexOf(currentFilter) >= 0;
+  var isOrderView = ['ACTIVE','NEW','PREPARING','READY','COMPLETED','PLATFORM','ALL','CANCELLED','DELETED'].indexOf(currentFilter) >= 0;
   var fb = document.getElementById('filterBar');
   if (fb) fb.style.display = isOrderView ? '' : 'none';
 
