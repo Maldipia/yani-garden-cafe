@@ -860,7 +860,7 @@ async function loadStaffTab() {
     return;
   }
   var roleColors = { OWNER:'#7C3AED', ADMIN:'#2563EB', CASHIER:'#059669', KITCHEN:'#D97706' };
-  var html = '<div style="padding:16px 16px 100px">';
+  var html = '<div style="padding:16px 16px 100px;max-width:960px;margin:0 auto">';
   html += '<div style="font-size:.85rem;color:var(--bark);margin-bottom:14px;">' + r.users.length + ' active staff accounts</div>';
   r.users.forEach(function(u) {
     var lastLogin = u.last_login ? new Date(u.last_login).toLocaleString('en-PH',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : 'Never';
@@ -895,7 +895,7 @@ async function loadShiftSummary() {
     return;
   }
   var pmIcons = {CASH:'💵',CARD:'💳',GCASH:'📱',MAYA:'📲',INSTAPAY:'🏦',BDO:'🏛️',BPI:'🏛️',UNIONBANK:'🏛️',OTHER:'💰',UNRECORDED:'⚠️'};
-  var html = '<div style="padding:16px 16px 100px">';
+  var html = '<div style="padding:16px 16px 100px;max-width:960px;margin:0 auto">';
   // Date + header
   html += '<div style="font-size:.8rem;color:var(--bark);margin-bottom:12px">📅 ' + r.date + ' · Today\'s Shift</div>';
   // Summary cards
@@ -1063,7 +1063,7 @@ function renderFloorMap() {
         + '</div></div>';
     }).join('') : '';
 
-  el.innerHTML = '<div style="padding:16px 16px 0">'
+  el.innerHTML = '<div style="padding:16px 16px 0;max-width:960px;margin:0 auto">'
     + '<div style="font-weight:800;font-size:1.05rem;color:var(--forest-deep);margin-bottom:10px">🗺️ Floor Map</div>'
     + '<div style="margin-bottom:14px">' + legendHtml + '</div>'
     + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:10px">' + gridHtml + '</div>'
@@ -1162,7 +1162,7 @@ function renderInventoryView() {
   if (outCount > 0) summaryBadges += '<span style="background:#fef2f2;color:#ef4444;border-radius:8px;padding:3px 10px;font-size:.75rem;font-weight:700;margin-right:6px">⚠️ ' + outCount + ' OUT OF STOCK</span>';
   if (lowCount > 0) summaryBadges += '<span style="background:#fff7ed;color:#f59e0b;border-radius:8px;padding:3px 10px;font-size:.75rem;font-weight:700">⚠️ ' + lowCount + ' LOW STOCK</span>';
 
-  el.innerHTML = '<div style="padding:16px 16px 0">'
+  el.innerHTML = '<div style="padding:16px 16px 0;max-width:960px;margin:0 auto">'
     + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
     + '<div><div style="font-weight:800;font-size:1.05rem;color:var(--forest-deep)">📦 Inventory</div>'
     + (summaryBadges ? '<div style="margin-top:4px">' + summaryBadges + '</div>' : '') + '</div>'
@@ -1457,7 +1457,7 @@ function renderAddonsView() {
         + '</div>';
     }).join('');
 
-  el.innerHTML = '<div style="padding:16px 16px 0">'
+  el.innerHTML = '<div style="padding:16px 16px 0;max-width:960px;margin:0 auto">'
     + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'
     + '<div style="font-weight:800;font-size:1.05rem;color:var(--forest-deep)">➕ Add-ons & Modifiers</div>'
     + '<button onclick="openAddonAdd()" style="background:var(--forest-deep);color:#fff;border:none;border-radius:10px;padding:8px 14px;font-size:.82rem;font-weight:700;cursor:pointer">+ Add</button>'
@@ -1597,7 +1597,7 @@ function renderRefundsView() {
         + '</div>';
     }).join('');
 
-  el.innerHTML = '<div style="padding:16px 16px 0">'
+  el.innerHTML = '<div style="padding:16px 16px 0;max-width:960px;margin:0 auto">'
     + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'
     + '<div style="font-weight:800;font-size:1.05rem;color:var(--forest-deep)">↩️ Void / Refunds</div>'
     + '<button onclick="openRefundForm()" style="background:#ef4444;color:#fff;border:none;border-radius:10px;padding:8px 14px;font-size:.82rem;font-weight:700;cursor:pointer">+ Process</button>'
@@ -1784,7 +1784,7 @@ function renderCashView() {
         + '</div></div>';
     }).join('');
 
-  el.innerHTML = '<div style="padding:16px 16px 0">'
+  el.innerHTML = '<div style="padding:16px 16px 0;max-width:960px;margin:0 auto">'
     + '<div style="font-weight:800;font-size:1.05rem;color:var(--forest-deep);margin-bottom:14px">💵 Cash Drawer</div>'
     + sessionHtml
     + '<div style="font-weight:700;font-size:.85rem;color:#475569;margin-bottom:8px">Session History</div>'
