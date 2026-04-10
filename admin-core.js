@@ -480,6 +480,19 @@ async function loadOrders() {
     if (order) order.status = ov.status;
   });
 
+  // AUTO-COMPLETE SWEEP: orders with payment recorded but stuck in active status
+  allOrders.forEach(function(o) {
+    var isActive = o.status === 'NEW' || o.status === 'PREPARING' || o.status === 'READY';
+    var isPaid = o.paymentMethod && (o.paymentStatus === 'VERIFIED' || o.paymentStatus === 'PLATFORM_PAID' ||
+      (o.paymentMethod && o.paymentStatus !== 'PENDING' && o.paymentStatus !== 'SUBMITTED'));
+    if (isActive && isPaid && !_statusOverrides[o.orderId]) {
+      _statusOverrides[o.orderId] = { status: 'COMPLETED', ts: Date.now() };
+      o.status = 'COMPLETED';
+      // Fire silently in background
+      api('updateOrderStatus', { orderId: o.orderId, status: 'COMPLETED', userId: currentUser && currentUser.userId });
+    }
+  });
+
   renderStats();
   renderFilters();
   if (changed) renderOrders(); // Only re-render cards if something changed
