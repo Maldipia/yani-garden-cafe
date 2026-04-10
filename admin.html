@@ -1008,6 +1008,31 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 .sidebar-divider {
   height:1px; background:var(--mist); margin:6px 12px;
 }
+/* Sidebar bottom: user profile + sign out */
+.sidebar-bottom {
+  margin-top:auto; border-top:1.5px solid var(--mist);
+  padding:10px 12px 12px;
+}
+.sidebar-user {
+  display:flex; align-items:center; gap:8px; padding:6px 4px;
+}
+.sidebar-avatar {
+  width:30px; height:30px; border-radius:50%;
+  background:var(--forest); color:#fff;
+  display:flex; align-items:center; justify-content:center;
+  font-size:.75rem; font-weight:700; flex-shrink:0;
+}
+.sidebar-user-info { flex:1; min-width:0 }
+.sidebar-user-name { font-size:.78rem; font-weight:700; color:var(--forest-deep); white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.sidebar-user-role { font-size:.62rem; color:var(--timber); text-transform:uppercase; letter-spacing:.5px }
+.sidebar-signout {
+  display:flex; align-items:center; gap:8px; padding:7px 4px;
+  font-size:.76rem; font-weight:600; color:var(--terra);
+  cursor:pointer; border:none; background:none;
+  width:100%; text-align:left; font-family:var(--font-body);
+  border-radius:6px; transition:background .15s;
+}
+.sidebar-signout:hover { background:#FEF2F2 }
 .main-content { flex:1; min-width:0; overflow-x:hidden }
 /* Professional content constraint — max-width, left-aligned */
 .main-content > div[id$="View"],
@@ -1100,6 +1125,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
     <div class="stat-card"><div class="stat-value" id="statSales">₱0</div><div class="stat-label">Today's Sales</div></div>
     <div class="stat-card"><div class="stat-value" id="statOrders">0</div><div class="stat-label">Orders</div></div>
     <div class="stat-card"><div class="stat-value" id="statActive">0</div><div class="stat-label">Active</div></div>
+    <div class="stat-card"><div class="stat-value" id="statAvg">—</div><div class="stat-label">Avg Order</div></div>
   </div>
 
   <div class="quick-links" id="quickLinks">
@@ -1401,6 +1427,9 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
       </div>
     </div>
   </div>
+
+<!-- ══ DASHBOARD VIEW ══ -->
+<div id="dashboardView" style="display:none;padding:0 0 100px"></div>
 
 <!-- ══ SETTINGS VIEW (OWNER only) ══ -->
 <div id="staffView" style="display:none;max-width:720px"></div>

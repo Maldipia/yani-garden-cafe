@@ -549,8 +549,10 @@ function renderStats() {
   });
 
   document.getElementById('statSales').textContent = '₱' + totalSales.toLocaleString();
-  document.getElementById('statOrders').textContent = completed; // COMPLETED orders only
+  document.getElementById('statOrders').textContent = completed;
   document.getElementById('statActive').textContent = active;
+  var avgEl = document.getElementById('statAvg');
+  if (avgEl) avgEl.textContent = completed > 0 ? '₱' + Math.round(totalSales / completed).toLocaleString() : '—';
 
   // Count pending payments across all orders
   // Count orders with SUBMITTED payment (waiting for verification)
@@ -564,6 +566,136 @@ function renderStats() {
 // ══════════════════════════════════════════════════════════
 // FILTERS
 // ══════════════════════════════════════════════════════════
+function renderDashboardView() {
+  var el = document.getElementById('dashboardView');
+  if (!el) return;
+
+  // Greeting
+  var hour = new Date().getHours();
+  var greet = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  var uname = (currentUser && currentUser.username) || 'there';
+  var dateStr = new Date().toLocaleDateString('en-PH', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+
+  // Stats from allOrders
+  var manilaOffset = 8 * 3600000;
+  var nowPHT = new Date(Date.now() + manilaOffset);
+  var curHour = nowPHT.getUTCHours();
+  var bdayStart = new Date(nowPHT); bdayStart.setUTCHours(6,0,0,0);
+  if (curHour < 6) bdayStart.setTime(bdayStart.getTime() - 86400000);
+  var bdayEnd = new Date(bdayStart.getTime() + 86400000);
+
+  var todayOrders = allOrders.filter(function(o) {
+    try {
+      var raw = o.createdAt || ''; if (raw && !raw.endsWith('Z') && !raw.includes('+') && raw.length > 10) raw += '+00:00';
+      var d = new Date(raw); if (isNaN(d.getTime())) return false;
+      return d.getTime() >= bdayStart.getTime() - manilaOffset && d.getTime() < bdayEnd.getTime() - manilaOffset;
+    } catch(e) { return false; }
+  });
+
+  var sales = 0, completed = 0, cancelled = 0;
+  var active = allOrders.filter(function(o){ return o.status==='NEW'||o.status==='PREPARING'||o.status==='READY'; }).length;
+  todayOrders.forEach(function(o) {
+    if (o.status === 'COMPLETED') {
+      completed++;
+      sales += parseFloat(o.discountedTotal) > 0 ? parseFloat(o.discountedTotal) : parseFloat(o.total) || 0;
+    }
+    if (o.status === 'CANCELLED') cancelled++;
+  });
+  var avg = completed > 0 ? Math.round(sales / completed) : 0;
+  var total = todayOrders.length;
+  var compRate = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+  // Recent active orders for live feed
+  var liveOrders = allOrders.filter(function(o){ return o.status==='NEW'||o.status==='PREPARING'||o.status==='READY'; })
+    .slice(0, 5);
+
+  var liveHtml = liveOrders.length === 0
+    ? '<div style="text-align:center;padding:28px;color:var(--timber);font-size:.85rem">✅ All clear — no active orders</div>'
+    : liveOrders.map(function(o) {
+        var sColor = o.status==='NEW'?'#F59E0B':o.status==='PREPARING'?'#3B82F6':'#10B981';
+        var ago = '';
+        try { var d = new Date(o.createdAt); ago = Math.round((Date.now()-d)/60000)+'m ago'; } catch(e){}
+        return '<div style="display:flex;align-items:center;padding:10px 16px;border-bottom:1px solid var(--mist-light);cursor:pointer" onclick="setFilter(\'ACTIVE\')">'
+          + '<div style="width:4px;height:36px;background:'+sColor+';border-radius:2px;margin-right:12px;flex-shrink:0"></div>'
+          + '<div style="flex:1">'
+          + '<div style="font-weight:700;font-size:.85rem">' + (o.orderId||'—') + '</div>'
+          + '<div style="font-size:.72rem;color:var(--timber)">' + (o.customerName||'Guest') + ' · ' + (o.orderType||'DINE-IN') + '</div>'
+          + '</div>'
+          + '<div style="text-align:right">'
+          + '<div style="font-weight:700;font-size:.85rem">₱' + (parseFloat(o.total)||0).toLocaleString() + '</div>'
+          + '<div style="font-size:.68rem;color:var(--timber)">' + ago + '</div>'
+          + '</div>'
+          + '<div style="margin-left:10px;font-size:.68rem;font-weight:700;padding:3px 8px;border-radius:10px;background:'+sColor+'20;color:'+sColor+'">' + o.status + '</div>'
+          + '</div>';
+      }).join('');
+
+  el.innerHTML =
+    '<div style="padding:20px 16px 0;max-width:960px">'
+    // Greeting
+    + '<div style="margin-bottom:20px">'
+    + '<div style="font-family:var(--font-soul);font-size:1.6rem;font-weight:700;color:var(--forest-deep)">' + greet + ', ' + uname + ' 👋</div>'
+    + '<div style="font-size:.78rem;color:var(--timber);margin-top:2px">' + dateStr + '</div>'
+    + '</div>'
+
+    // 4 Mini stat cards
+    + '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px">'
+    + _dCard('💰', "Today's Revenue", '₱' + sales.toLocaleString(), completed + ' orders completed', '#059669', '#F0FDF4')
+    + _dCard('🔔', 'Active Orders', active, active > 0 ? 'Needs attention' : 'All clear', active > 0 ? '#D97706' : '#059669', active > 0 ? '#FFFBEB' : '#F0FDF4')
+    + _dCard('📋', 'Total Today', total, 'Since 6 AM', '#2563EB', '#EFF6FF')
+    + _dCard('📊', 'Avg Order Value', avg > 0 ? '₱' + avg.toLocaleString() : '—', 'Per completed order', '#7C3AED', '#F5F3FF')
+    + '</div>'
+
+    // 2-col layout: Live Orders + Today's Summary
+    + '<div style="display:grid;grid-template-columns:1fr 320px;gap:14px">'
+
+    // Live Orders
+    + '<div style="background:#fff;border-radius:14px;box-shadow:var(--shadow-sm);overflow:hidden">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1.5px solid var(--mist-light)">'
+    + '<div style="font-weight:700;font-size:.9rem;color:var(--forest-deep)">⚡ Live Orders</div>'
+    + '<button onclick="setFilter(\'ACTIVE\')" style="font-size:.72rem;font-weight:700;color:var(--forest);background:var(--mist-light);border:none;border-radius:8px;padding:4px 10px;cursor:pointer">View all →</button>'
+    + '</div>'
+    + liveHtml
+    + '</div>'
+
+    // Today's Summary
+    + '<div style="display:flex;flex-direction:column;gap:10px">'
+    + '<div style="background:#fff;border-radius:14px;box-shadow:var(--shadow-sm);padding:14px 16px">'
+    + '<div style="font-weight:700;font-size:.85rem;color:var(--forest-deep);margin-bottom:12px">Today\'s Summary</div>'
+    + _sRow('✅', 'Completed', completed, '#059669')
+    + _sRow('🔔', 'Active', active, '#D97706')
+    + _sRow('❌', 'Cancelled', cancelled, '#EF4444')
+    + '<div style="margin-top:10px">'
+    + '<div style="display:flex;justify-content:space-between;font-size:.72rem;margin-bottom:4px"><span style="color:var(--timber)">Completion rate</span><span style="font-weight:700;color:' + (compRate>=70?'#059669':compRate>=40?'#D97706':'#EF4444') + '">' + compRate + '%</span></div>'
+    + '<div style="height:6px;background:var(--mist-light);border-radius:3px"><div style="height:6px;background:' + (compRate>=70?'#059669':compRate>=40?'#D97706':'#EF4444') + ';border-radius:3px;width:' + compRate + '%"></div></div>'
+    + '</div></div>'
+
+    // Quick links
+    + '<div style="background:#fff;border-radius:14px;box-shadow:var(--shadow-sm);padding:12px 14px;display:flex;flex-direction:column;gap:6px">'
+    + '<button onclick="setFilter(\'ACTIVE\')" style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--mist-light);border:none;border-radius:8px;cursor:pointer;font-size:.78rem;font-weight:600;color:var(--forest-deep)">🔥 Order Queue <span>→</span></button>'
+    + '<button onclick="setFilter(\'ANALYTICS\')" style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--mist-light);border:none;border-radius:8px;cursor:pointer;font-size:.78rem;font-weight:600;color:var(--forest-deep)">📈 Analytics <span>→</span></button>'
+    + '<button onclick="setFilter(\'SHIFT\')" style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--mist-light);border:none;border-radius:8px;cursor:pointer;font-size:.78rem;font-weight:600;color:var(--forest-deep)">📋 Shift Summary <span>→</span></button>'
+    + '</div>'
+    + '</div>'// end right col
+    + '</div>'// end 2-col
+    + '</div>';
+}
+
+function _dCard(icon, label, val, sub, color, bg) {
+  return '<div style="background:' + bg + ';border-radius:12px;padding:14px;border:1px solid ' + color + '20">'
+    + '<div style="font-size:1.1rem;margin-bottom:4px">' + icon + '</div>'
+    + '<div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.6px;color:' + color + ';font-weight:700;margin-bottom:2px">' + label + '</div>'
+    + '<div style="font-size:1.35rem;font-weight:800;color:var(--forest-deep);font-family:var(--font-soul)">' + val + '</div>'
+    + '<div style="font-size:.68rem;color:var(--timber);margin-top:2px">' + sub + '</div>'
+    + '</div>';
+}
+
+function _sRow(icon, label, val, color) {
+  return '<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0">'
+    + '<div style="display:flex;align-items:center;gap:6px;font-size:.78rem;color:var(--forest-deep)">' + icon + ' ' + label + '</div>'
+    + '<div style="font-weight:700;font-size:.88rem;color:' + color + '">' + val + '</div>'
+    + '</div>';
+}
+
 function renderFilters() {
   // Only order-status chips — section navigation is now in the sidebar
   var counts = { ALL:0, ACTIVE:0, NEW:0, PREPARING:0, READY:0, COMPLETED:0, CANCELLED:0, PLATFORM:0, DELETED:0 };
@@ -617,6 +749,11 @@ function renderSidebar() {
   }
 
   var html = '';
+
+  // Dashboard first
+  html += item('DASHBOARD', '🏠', 'Dashboard', '');
+  html += '<div class="sidebar-divider"></div>';
+
   html += '<div class="sidebar-section-label">Operations</div>';
   html += item('ACTIVE', '🔥', 'Order Queue', '');
   if (role !== 'KITCHEN') html += item('PAYMENTS', '💳', 'Payments', pendingPayCount || '');
@@ -650,6 +787,19 @@ function renderSidebar() {
     html += item('STAFF', '👥', 'Staff & Roles', '');
     html += item('SETTINGS', '⚙️', 'Settings', '');
   }
+
+  // User profile at bottom
+  var uname = (currentUser && currentUser.username) || '';
+  var initial = uname ? uname[0].toUpperCase() : '?';
+  html += '<div class="sidebar-bottom">';
+  html += '<div class="sidebar-user">';
+  html += '<div class="sidebar-avatar">' + initial + '</div>';
+  html += '<div class="sidebar-user-info">';
+  html += '<div class="sidebar-user-name">' + uname + '</div>';
+  html += '<div class="sidebar-user-role">' + role + '</div>';
+  html += '</div></div>';
+  html += '<button class="sidebar-signout" onclick="logout()">↩ Sign Out</button>';
+  html += '</div>';
 
   var el = document.getElementById('sidebar');
   if (el) el.innerHTML = html;
@@ -716,7 +866,13 @@ function setFilter(f) {
   var costingView = document.getElementById('costingView');
   if (costingView) costingView.style.display = 'none';
 
-  if (f === 'PAYMENTS') {
+  var dashboardView = document.getElementById('dashboardView');
+  if (dashboardView) dashboardView.style.display = 'none';
+
+  if (f === 'DASHBOARD') {
+    if (dashboardView) dashboardView.style.display = 'block';
+    renderDashboardView();
+  } else if (f === 'PAYMENTS') {
     paymentsView.style.display = 'block';
     loadPayments();
   } else if (f === 'MENU_MANAGER') {
