@@ -14,17 +14,31 @@ async function loadMenuManager() {
     return;
   }
   menuMgrItems = result.items || [];
+  // Load all categories from API (includes empty ones like Pasalubong)
+  var catResult = await api('getCategories');
+  _allMenuCategories = (catResult && catResult.ok && catResult.categories)
+    ? catResult.categories.map(function(c){ return c.name; })
+    : null;
   buildMenuCatTabs();
   renderMenuMgrGrid();
 }
 
+var _allMenuCategories = null;
+
 function buildMenuCatTabs() {
-  var cats = [];
-  menuMgrItems.forEach(function(item) {
-    var c = (item.category || 'Other').trim();
-    if (cats.indexOf(c) === -1) cats.push(c);
-  });
-  cats.sort();
+  var cats;
+  if (_allMenuCategories) {
+    // Use full category list from DB (includes empty categories)
+    cats = _allMenuCategories.slice().sort();
+  } else {
+    // Fallback: derive from loaded items
+    cats = [];
+    menuMgrItems.forEach(function(item) {
+      var c = (item.category || 'Other').trim();
+      if (cats.indexOf(c) === -1) cats.push(c);
+    });
+    cats.sort();
+  }
   var container = document.getElementById('mmCatBtns');
   if (!container) return;
   container.innerHTML = cats.map(function(c) {

@@ -2586,6 +2586,13 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       return res.status(200).json({ ok: true, staff: staffList, users: staffList });
     }
 
+    // ── getCategories ──────────────────────────────────────────────────────
+    if (action === 'getCategories') {
+      const r = await supaFetch(`${SUPABASE_URL}/rest/v1/menu_categories?select=id,name&order=name.asc`);
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to fetch categories' });
+      return res.status(200).json({ ok: true, categories: r.data || [] });
+    }
+
     // ── getSettings ────────────────────────────────────────────────────────
     if (action === 'getSettings') {
       const r = await supaFetch(`${SUPABASE_URL}/rest/v1/settings?order=key.asc&select=key,value,description`);
