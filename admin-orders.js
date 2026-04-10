@@ -305,6 +305,15 @@ async function adminTogglePrep(rowEl, orderId, itemId, currentPrepared) {
     if (label) label.textContent = prepCount + '/' + allRows.length + ' prepped';
     var fill = card.querySelector('.prep-bar-fill');
     if (fill && allRows.length > 0) fill.style.width = Math.round((prepCount/allRows.length)*100) + '%';
+
+    // AUTO-READY: if all items prepped and order is still NEW or PREPARING
+    if (newPrepared && prepCount === allRows.length && allRows.length > 0) {
+      var order = allOrders.find(function(o){ return o.orderId === orderId; });
+      if (order && (order.status === 'NEW' || order.status === 'PREPARING')) {
+        showToast('✨ All items prepped — moving to READY');
+        setTimeout(function(){ updateStatus(orderId, 'READY'); }, 600);
+      }
+    }
   }
   try {
     await api('toggleItemPrepared', {

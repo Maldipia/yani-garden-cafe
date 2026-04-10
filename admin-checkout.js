@@ -342,8 +342,12 @@ async function confirmPaymentMethod() {
     });
     if (r && r.ok) {
       closePaymentModal();
-      if (pmFromComplete) {
+      // Always auto-complete when payment is recorded (regardless of fromComplete flag)
+      var order = allOrders.find(function(o){ return o.orderId === pmCurrentOrder; });
+      var needsComplete = order && (order.status === 'READY' || order.status === 'PREPARING' || order.status === 'NEW');
+      if (pmFromComplete || needsComplete) {
         await updateStatus(pmCurrentOrder || r.orderId, 'COMPLETED');
+        showToast('✅ Paid + Completed: ' + finalMethod);
       } else {
         await loadOrders();
         var label = pmSelectedMethod2
