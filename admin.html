@@ -964,6 +964,72 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
   font-family:var(--font-body);
 }
 .ygc-prompt-cancel:hover { background:var(--mist) }
+
+/* ── Sidebar Layout ── */
+.app-body {
+  display:flex; min-height:calc(100dvh - 60px);
+}
+.sidebar {
+  width:220px; min-width:220px; background:var(--white);
+  border-right:1.5px solid var(--mist); height:calc(100dvh - 60px);
+  position:sticky; top:60px; overflow-y:auto; overflow-x:hidden;
+  display:flex; flex-direction:column; gap:0;
+  scrollbar-width:thin; scrollbar-color:var(--mist) transparent;
+  transition:transform .25s ease;
+  z-index:90;
+}
+.sidebar-section-label {
+  font-size:.6rem; font-weight:700; letter-spacing:1.2px;
+  text-transform:uppercase; color:var(--timber); opacity:.7;
+  padding:18px 16px 6px;
+}
+.sidebar-section-label:first-child { padding-top:12px }
+.sidebar-item {
+  display:flex; align-items:center; gap:10px;
+  padding:10px 16px; font-size:.82rem; font-weight:600;
+  color:var(--forest-deep); cursor:pointer; border:none;
+  background:transparent; width:100%; text-align:left;
+  font-family:var(--font-body); border-radius:0;
+  transition:background .15s; position:relative;
+}
+.sidebar-item:hover { background:var(--mist-light) }
+.sidebar-item.active {
+  background:var(--forest); color:var(--white); border-radius:0;
+}
+.sidebar-item.active .sidebar-badge { background:rgba(255,255,255,.25); color:#fff }
+.sidebar-icon { font-size:1rem; width:20px; text-align:center; flex-shrink:0 }
+.sidebar-label { flex:1 }
+.sidebar-badge {
+  background:var(--terra); color:#fff; border-radius:10px;
+  font-size:.6rem; font-weight:800; padding:1px 6px; min-width:16px;
+  text-align:center; line-height:1.6;
+}
+.sidebar-badge:empty { display:none }
+.sidebar-divider {
+  height:1px; background:var(--mist); margin:6px 12px;
+}
+.main-content { flex:1; min-width:0; overflow-x:hidden }
+
+/* Hamburger for mobile */
+.sidebar-toggle {
+  display:none; background:none; border:none; cursor:pointer;
+  color:#fff; font-size:1.3rem; padding:4px 8px; margin-right:4px;
+  line-height:1;
+}
+.sidebar-overlay {
+  display:none; position:fixed; inset:0; background:rgba(0,0,0,.45);
+  z-index:89;
+}
+@media (max-width:767px) {
+  .sidebar-toggle { display:block }
+  .sidebar {
+    position:fixed; top:60px; left:0; height:calc(100dvh - 60px);
+    transform:translateX(-100%); box-shadow:4px 0 20px rgba(0,0,0,.15);
+  }
+  .sidebar.open { transform:translateX(0) }
+  .sidebar-overlay.open { display:block }
+  .main-content { width:100% }
+}
 </style>
 </head>
 <body>
@@ -984,6 +1050,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 <div id="dashboard" style="display:none">
 
   <div class="topbar">
+    <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()">☰</button>
     <img class="topbar-logo" src="/images/logo.png" alt="Logo">
     <div class="topbar-title">Order Board</div>
     <div class="topbar-live"><div class="topbar-dot"></div> LIVE</div>
@@ -995,6 +1062,15 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
       <button class="logout-btn" onclick="logout()">Logout</button>
     </div>
   </div>
+
+  <!-- Sidebar overlay (mobile) -->
+  <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+
+  <!-- App Body: Sidebar + Main -->
+  <div class="app-body">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <div class="main-content">
 
   <!-- System Health Alert Banner (ADMIN/OWNER only) -->
   <div class="health-banner" id="healthBanner">
@@ -1796,8 +1872,9 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
     </div>
     <button class="pm-confirm" id="dmConfirmBtn" disabled onclick="submitDiscount()">✅ Apply Discount</button>
     <span class="pm-cancel-link" onclick="closeDiscountModal()">Cancel</span>
-  </div>
-</div>
+  </div><!-- /main-content -->
+  </div><!-- /app-body -->
+</div><!-- /dashboard -->
 
 
 
