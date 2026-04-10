@@ -35,6 +35,9 @@
     },
     "api/low-stock.js": {
       "maxDuration": 15
+    },
+    "api/setup-db.js": {
+      "maxDuration": 15
     }
   },
   "rewrites": [
@@ -113,6 +116,10 @@
     {
       "source": "/blueprint",
       "destination": "/architecture.html"
+    },
+    {
+      "source": "/api/setup-db",
+      "destination": "/api/setup-db"
     }
   ],
   "headers": [
