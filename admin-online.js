@@ -1118,12 +1118,15 @@ function _settingsPayment() {
     var inputId = 's_' + urlKey.toLowerCase();
     var fileId = 'qrfile_' + code.toLowerCase();
     var previewId = 'qrprev_' + code.toLowerCase();
-    // Google Drive URLs don't render in img tags — always show placeholder for Drive URLs
+    // Google Drive URLs don't render in img tags — only warn for actual Drive URLs
     var isDrive = url && url.indexOf('drive.google.com') >= 0;
+    var isSupabase = url && url.indexOf('supabase.co') >= 0;
+    var isLocal = url && (url.startsWith('/images/') || url.startsWith('/api/'));
+    isDrive = isDrive && !isSupabase && !isLocal; // don't warn if already migrated
     var showImg = url && !isDrive;
     return '<div class="s-card">'
       + '<div class="s-card-title">' + title + '</div>'
-      + (isDrive ? '<div style="background:#FEF3C7;border:1px solid #FCD34D;border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:.75rem;color:#92400E">⚠️ Your current QR is stored on Google Drive which can\'t preview here. Use <strong>Upload Image</strong> to move it to the server.</div>' : '')
+      + (isDrive ? '<div id="drivewarn_' + code.toLowerCase() + '" style="background:#FEF3C7;border:1px solid #FCD34D;border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:.75rem;color:#92400E">⚠️ Your current QR is stored on Google Drive which can\'t preview here. Use <strong>Upload Image</strong> to move it to the server.</div>' : '')
       + '<div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:12px">'
       + '<div style="flex-shrink:0">'
       + '<img id="' + previewId + '" src="' + (showImg ? url : '') + '" onerror="this.style.display=\'none\';var ph=document.getElementById(\'' + previewId + '_placeholder\');if(ph)ph.style.display=\'flex\';" style="width:80px;height:80px;object-fit:contain;border-radius:8px;border:1.5px solid var(--mist);background:#f8f8f8;display:' + (showImg ? 'block' : 'none') + '">'
@@ -1132,7 +1135,7 @@ function _settingsPayment() {
       + '<div style="flex:1">'
       + '<div class="s-field" style="margin-bottom:8px"><label>QR Code Image URL</label>'
       + '<input type="url" id="' + inputId + '" value="' + (url||'') + '" placeholder="https://..." oninput="updateQrPreview(\'' + previewId + '\',this.value)">'
-      + '<div style="font-size:.65rem;color:var(--timber);margin-top:3px">💡 Google Drive URLs may not preview here — use Upload Image for best results.</div>'
+
       + '</div>'
       + '<input type="file" id="' + fileId + '" accept="image/png,image/jpeg,image/webp" style="display:none" onchange="uploadQrCode(\'' + code + '\',\'' + inputId + '\',\'' + previewId + '\',this)">'
       + '<button onclick="document.getElementById(\'' + fileId + '\').click()" style="padding:7px 14px;background:var(--forest);color:#fff;border:none;border-radius:8px;font-size:.78rem;font-weight:700;cursor:pointer">⬆️ Upload Image</button>'
@@ -1191,6 +1194,9 @@ async function uploadQrCode(code, inputId, previewId, fileInput) {
       updateQrPreview(previewId, result.path);
       statusEl.textContent = '✅ Uploaded!';
       statusEl.style.color = '#059669';
+      // Hide Drive warning banner if present
+      var warn = document.getElementById('drivewarn_' + code.toLowerCase());
+      if (warn) warn.style.display = 'none';
     } else {
       statusEl.textContent = '❌ ' + (result.error || 'Upload failed');
       statusEl.style.color = '#EF4444';
