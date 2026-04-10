@@ -100,6 +100,7 @@ function renderOrders() {
             (it.addons && it.addons.length ? '<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px">' + it.addons.map(function(a){ return '<span style="background:#dcfce7;color:#14532d;border:1.5px solid #86efac;border-radius:6px;padding:2px 8px;font-size:.75rem;font-weight:800">➕ ' + esc(a.name) + ' +₱' + parseFloat(a.price||0).toFixed(0) + '</span>'; }).join('') + '</div>' : '') +
             (it.notes ? '<div class="oc-item-notes">"' + esc(it.notes) + '"</div>' : '') +
           '</div>' +
+          '<div style="font-size:.78rem;font-weight:700;color:var(--forest-deep);white-space:nowrap;margin-left:auto;padding-left:8px;flex-shrink:0">₱' + lineTotal.toLocaleString() + '</div>' +
         '</div>';
       });
     }
