@@ -186,8 +186,9 @@ function renderOrders() {
       html += '<div class="oc-actions">';
       var canCancel = (currentUser.role !== 'KITCHEN');
       cfg.actions.forEach(function(act) {
-        if (act === 'start') html += '<button class="oc-btn oc-btn-start" onclick="updateStatus(\'' + o.orderId + '\',\'PREPARING\')">☕ Start Preparing</button>';
-        if (act === 'ready') html += '<button class="oc-btn oc-btn-ready" onclick="updateStatus(\'' + o.orderId + '\',\'READY\')">✨ Mark Ready</button>';
+        // START and READY removed — kitchen checkboxes auto-trigger these statuses
+        // if (act === 'start') — handled automatically when first checkbox ticked
+        // if (act === 'ready') — handled automatically when last checkbox ticked
         if (act === 'complete') html += '<button class="oc-btn oc-btn-complete" onclick="updateStatus(\'' + o.orderId + '\',\'COMPLETED\')">🙏 Complete</button>';
         if (act === 'cancel' && canCancel) html += '<button class="oc-btn oc-btn-cancel" onclick="updateStatus(\'' + o.orderId + '\',\'CANCELLED\')">✕</button>';
       });

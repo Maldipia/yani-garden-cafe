@@ -587,13 +587,9 @@ function buildCard(o) {
   const orderNote = o.notes ? `<div class="order-note">📝 ${o.notes}</div>` : '';
 
   let btnHTML = '';
-  if (o.status === 'NEW') {
-    btnHTML = `<button class="btn-action btn-start" onclick="updateStatus('${o.orderId}', 'PREPARING', this)">☕ START</button>`;
-  } else if (o.status === 'PREPARING') {
-    const readyCls = allDone ? 'btn-ready btn-ready-pulse' : 'btn-ready';
-    const readyLabel = allDone ? '✨ READY  ✅ All done!' : `✨ READY  (${preparedCount}/${totalItems} prepped)`;
-    btnHTML = `<button class="btn-action ${readyCls}" onclick="updateStatus('${o.orderId}', 'READY', this)">${readyLabel}</button>`;
-  }
+  // No START or READY buttons — checkboxes drive the status automatically.
+  // First checkbox ticked → PREPARING. Last checkbox ticked → READY.
+  // Staff only needs COMPLETE after delivery.
 
   el.innerHTML = `
     <div class="card-header">
@@ -674,17 +670,7 @@ async function toggleItemPrep(rowEl, orderId, itemId, currentPrepared) {
   card.querySelector('.prep-label').textContent = `${doneCount}/${total} prepared`;
   card.querySelector('.prep-label').style.color = color;
 
-  // Update READY button label if PREPARING
-  const readyBtn = card.querySelector('.btn-ready');
-  if (readyBtn) {
-    if (doneCount === total) {
-      readyBtn.classList.add('btn-ready-pulse');
-      readyBtn.textContent = '✨ READY  ✅ All done!';
-    } else {
-      readyBtn.classList.remove('btn-ready-pulse');
-      readyBtn.textContent = `✨ READY  (${doneCount}/${total} prepped)`;
-    }
-  }
+  // No READY button to update — auto-trigger handles status on last checkbox
 
   // API call in background
   try {
@@ -700,6 +686,28 @@ async function toggleItemPrep(rowEl, orderId, itemId, currentPrepared) {
       rowEl.classList.toggle('item-row-done', currentPrepared);
       rowEl.querySelector('.item-check').textContent = currentPrepared ? '✅' : '⬜';
       rowEl.setAttribute('onclick', `toggleItemPrep(this, '${orderId}', ${itemId}, ${currentPrepared ? 1 : 0})`);
+    } else {
+      // Auto-advance order status based on checkbox state
+      const card2 = rowEl.closest('.order-card');
+      const allRows2 = card2 ? card2.querySelectorAll('.item-row[data-item-id]') : [];
+      const doneCount2 = [...allRows2].filter(r => r.classList.contains('item-row-done')).length;
+      const total2 = allRows2.length;
+      const currentStatus = d.orderStatus || card2?.dataset?.status || '';
+
+      if (newPrepared && doneCount2 === 1 && total2 > 0) {
+        // First item ticked → auto-PREPARING (tells customer "being made")
+        if (currentStatus === 'NEW' || !currentStatus) {
+          await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'updateOrderStatus', orderId, status: 'PREPARING', userId }) });
+        }
+      }
+      if (newPrepared && doneCount2 === total2 && total2 > 0) {
+        // Last item ticked → auto-READY (notifies customer to pick up / come to table)
+        await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'updateOrderStatus', orderId, status: 'READY', userId }) });
+        showToast('✅ All done — order marked READY');
+        await loadOrders();
+      }
     }
   } catch(e) {
     showToast('❌ Network error');

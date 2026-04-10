@@ -1240,7 +1240,23 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
         { id: `eq.${itemId}` }
       );
       if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to update item' });
-      return res.status(200).json({ ok: true, itemId, prepared });
+      // Return the order's current status so kitchen.html can auto-trigger PREPARING/READY
+      let orderStatus = null;
+      try {
+        const oRes = await supa('GET', 'dine_in_order_items',
+          null, { id: `eq.${itemId}`, select: 'order_id' }
+        );
+        if (oRes.ok && oRes.data && oRes.data[0]) {
+          const orderId = oRes.data[0].order_id;
+          const statusRes = await supa('GET', 'dine_in_orders',
+            null, { order_id: `eq.${orderId}`, select: 'status' }
+          );
+          if (statusRes.ok && statusRes.data && statusRes.data[0]) {
+            orderStatus = statusRes.data[0].status;
+          }
+        }
+      } catch(_) {}
+      return res.status(200).json({ ok: true, itemId, prepared, orderStatus });
     }
 
     // ── setPaymentMethod ──────────────────────────────────────────────────
