@@ -240,6 +240,9 @@ function applyRoleUI() {
   // Quick links (Payments Sheet): SERVER, ADMIN, OWNER
   var canViewPayments = (role !== 'KITCHEN');
   document.getElementById('quickLinks').style.display = canViewPayments ? '' : 'none';
+
+  // Build sidebar nav based on role
+  renderSidebar();
 }
 
 // ══════════════════════════════════════════════════════════
@@ -562,74 +565,106 @@ function renderStats() {
 // FILTERS
 // ══════════════════════════════════════════════════════════
 function renderFilters() {
+  // Only order-status chips — section navigation is now in the sidebar
   var counts = { ALL:0, ACTIVE:0, NEW:0, PREPARING:0, READY:0, COMPLETED:0, CANCELLED:0, PLATFORM:0 };
   allOrders.forEach(function(o) {
     counts.ALL++;
-    if (!o.isTest) counts[o.status] = (counts[o.status] || 0) + 1; // exclude test from status counts
+    if (!o.isTest) counts[o.status] = (counts[o.status] || 0) + 1;
     if (!o.isTest && (o.status === 'NEW' || o.status === 'PREPARING' || o.status === 'READY')) counts.ACTIVE++;
     if (o.platform) counts.PLATFORM++;
   });
 
-  var tabs = [
-    { key:'ACTIVE', label:'🔥 Active', count:counts.ACTIVE },
-    { key:'NEW', label:'🔔 New', count:counts.NEW },
+  var chips = [
+    { key:'ACTIVE',    label:'🔥 Active',    count:counts.ACTIVE },
+    { key:'NEW',       label:'🔔 New',        count:counts.NEW },
     { key:'PREPARING', label:'👨‍🍳 Preparing', count:counts.PREPARING },
-    { key:'READY', label:'✨ Ready', count:counts.READY },
-    { key:'COMPLETED', label:'🎉 Done', count:counts.COMPLETED },
-    { key:'PLATFORM', label:'📦 Platform', count:counts.PLATFORM },
-    { key:'ALL', label:'All', count:counts.ALL }
+    { key:'READY',     label:'✨ Ready',       count:counts.READY },
+    { key:'COMPLETED', label:'🎉 Done',        count:counts.COMPLETED },
+    { key:'PLATFORM',  label:'📦 Platform',    count:counts.PLATFORM },
+    { key:'ALL',       label:'All',            count:counts.ALL }
   ];
-  // Payments tab: SERVER, ADMIN, OWNER only
-  if (currentUser.role !== 'KITCHEN') {
-    tabs.push({ key:'PAYMENTS', label:'💳 Payments', count:pendingPayCount });
-  }
-  // Menu Manager tab: ADMIN and OWNER only
-  if (currentUser.role === 'ADMIN' || currentUser.role === 'OWNER') {
-    tabs.push({ key:'MENU_MANAGER', label:'🍽️ Menu', count:'' });
-  }
-  // Online Orders tab: ALL roles can see it
-  tabs.push({ key:'ONLINE_ORDERS', label:'🛵 Online', count:onlineOrderPendingCount || '' });
-  // Sheets tab: ADMIN and OWNER only
-  if (currentUser.role === 'ADMIN' || currentUser.role === 'OWNER') {
-    tabs.push({ key:'SHEETS', label:'📊 Sheets', count:'' });
-  }
-  // Analytics tab: OWNER and ADMIN only
-  if (currentUser.role === 'ADMIN' || currentUser.role === 'OWNER') {
-    tabs.push({ key:'ANALYTICS', label:'📈 Analytics', count:'' });
-  }
-  // Tables & Reservations: ADMIN and OWNER only
-  if (currentUser.role === 'ADMIN' || currentUser.role === 'OWNER') {
-    tabs.push({ key:'TABLES', label:'🪑 Tables', count:'' });
-    tabs.push({ key:'FLOOR_MAP', label:'🗺️ Floor', count:'' });
-  }
-  // Inventory: ADMIN and OWNER only
-  if (currentUser.role === 'ADMIN' || currentUser.role === 'OWNER') {
-    tabs.push({ key:'INVENTORY', label:'📦 Inventory', count:'' });
-    tabs.push({ key:'ADDONS', label:'➕ Add-ons', count:'' });
-  }
-  // Refunds & Cash: OWNER only
-  if (currentUser.role === 'OWNER') {
-    tabs.push({ key:'REFUNDS', label:'↩️ Refunds', count:'' });
-    tabs.push({ key:'CASH', label:'💵 Cash', count:'' });
-  }
-  // Settings: OWNER only
-  if (currentUser.role === 'OWNER') {
-    tabs.push({ key:'SETTINGS', label:'⚙️ Settings', count:'' });
-    tabs.push({ key:'STAFF', label:'👥 Staff', count:'' });
-    tabs.push({ key:'SHIFT', label:'📋 Shift', count:'' });
-    tabs.push({ key:'LOGS', label:'📜 Logs', count:'' });
-    tabs.push({ key:'COSTING', label:'🧮 Costing', count:'' });
-  }
 
-  // Only rebuild DOM if tab counts changed — prevents flicker on every 5s poll
-  var newHash = tabs.map(function(t){return t.key+':'+t.count;}).join('|') + '|active:'+currentFilter;
-  if (window._filterHash === newHash) return; // nothing changed, skip DOM rebuild
+  var newHash = chips.map(function(t){return t.key+':'+t.count;}).join('|') + '|active:'+currentFilter;
+  if (window._filterHash === newHash) return;
   window._filterHash = newHash;
 
-  document.getElementById('filterBar').innerHTML = tabs.map(function(t) {
+  var isOrderView = ['ACTIVE','NEW','PREPARING','READY','COMPLETED','PLATFORM','ALL'].indexOf(currentFilter) >= 0;
+  var fb = document.getElementById('filterBar');
+  if (fb) fb.style.display = isOrderView ? '' : 'none';
+
+  if (fb) fb.innerHTML = chips.map(function(t) {
     return '<button class="filter-btn' + (currentFilter===t.key?' active':'') + '" onclick="setFilter(\'' + t.key + '\')">' +
       t.label + '<span class="filter-count">' + t.count + '</span></button>';
   }).join('');
+
+  renderSidebar();
+}
+
+function renderSidebar() {
+  var role = currentUser ? currentUser.role : '';
+  var isAdmin = role === 'ADMIN' || role === 'OWNER';
+  var isOwner = role === 'OWNER';
+
+  function item(key, icon, label, badge) {
+    var active = currentFilter === key ? ' active' : '';
+    var b = badge ? '<span class="sidebar-badge">' + badge + '</span>' : '';
+    return '<button class="sidebar-item' + active + '" onclick="setFilter(\'' + key + '\');closeSidebarMobile()">' +
+      '<span class="sidebar-icon">' + icon + '</span>' +
+      '<span class="sidebar-label">' + label + '</span>' + b + '</button>';
+  }
+
+  var html = '';
+  html += '<div class="sidebar-section-label">Operations</div>';
+  html += item('ACTIVE', '🔥', 'Order Queue', '');
+  if (role !== 'KITCHEN') html += item('PAYMENTS', '💳', 'Payments', pendingPayCount || '');
+  html += item('ONLINE_ORDERS', '🛵', 'Online Orders', onlineOrderPendingCount || '');
+  if (isOwner) html += item('REFUNDS', '↩️', 'Refunds', '');
+  if (isOwner) html += item('CASH', '💵', 'Cash Sessions', '');
+
+  if (isAdmin) {
+    html += '<div class="sidebar-divider"></div>';
+    html += '<div class="sidebar-section-label">Management</div>';
+    html += item('MENU_MANAGER', '🍽️', 'Menu & Pricing', '');
+    html += item('TABLES', '🪑', 'Tables & QR', '');
+    html += item('FLOOR_MAP', '🗺️', 'Floor Plan', '');
+    html += item('INVENTORY', '📦', 'Inventory', '');
+    html += item('ADDONS', '➕', 'Add-ons', '');
+  }
+
+  if (isAdmin) {
+    html += '<div class="sidebar-divider"></div>';
+    html += '<div class="sidebar-section-label">Insights</div>';
+    html += item('ANALYTICS', '📈', 'Analytics', '');
+    html += item('SHEETS', '📊', 'Sheets Sync', '');
+    if (isOwner) html += item('SHIFT', '📋', 'Shift Summary', '');
+    if (isOwner) html += item('LOGS', '📜', 'Activity Logs', '');
+    if (isOwner) html += item('COSTING', '🧮', 'Menu Costing', '');
+  }
+
+  if (isOwner) {
+    html += '<div class="sidebar-divider"></div>';
+    html += '<div class="sidebar-section-label">Settings</div>';
+    html += item('STAFF', '👥', 'Staff & Roles', '');
+    html += item('SETTINGS', '⚙️', 'Settings', '');
+  }
+
+  var el = document.getElementById('sidebar');
+  if (el) el.innerHTML = html;
+}
+
+function toggleSidebar() {
+  var sb = document.getElementById('sidebar');
+  var ov = document.getElementById('sidebarOverlay');
+  if (!sb) return;
+  sb.classList.toggle('open');
+  if (ov) ov.classList.toggle('open');
+}
+
+function closeSidebarMobile() {
+  var sb = document.getElementById('sidebar');
+  var ov = document.getElementById('sidebarOverlay');
+  if (sb) sb.classList.remove('open');
+  if (ov) ov.classList.remove('open');
 }
 
 function setFilter(f) {
