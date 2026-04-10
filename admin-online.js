@@ -78,7 +78,9 @@ function renderOnlineOrders() {
     document.getElementById('onlineOrdersGrid').innerHTML = '<div class="empty-state"><div class="empty-icon">🛕</div><div class="empty-text">No online orders here</div></div>';
     return;
   }
-  document.getElementById('onlineOrdersGrid').innerHTML = filtered.map(function(o) {
+  document.getElementById('onlineOrdersGrid').innerHTML =
+    '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:12px;padding:0">' +
+    filtered.map(function(o) {
     var displayStatus, statusStyle;
     if (o.status === 'PENDING' && o.payment_status === 'SUBMITTED') {
       displayStatus = 'PROOF SUBMITTED';
@@ -107,7 +109,7 @@ function renderOnlineOrders() {
     }
     var timeStr = '';
     try { var d = new Date(o.created_at); timeStr = d.toLocaleString('en-PH', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit', hour12:true, timeZone:'Asia/Manila' }); } catch(e) {}
-    var html = '<div class="order-card" data-status="' + esc(o.status) + '" style="margin-bottom:12px">';
+    var html = '<div class="order-card" data-status="' + esc(o.status) + '">';
     // Header
     html += '<div class="oc-header">';
     html += '<div class="oc-id">' + esc(o.order_ref || o.id) + '</div>';
@@ -219,7 +221,7 @@ function renderOnlineOrders() {
     }
     html += '</div>';
     return html;
-  }).join('');
+  }).join('') + '</div>';
 }
 
 async function onlineOrderAction(orderRef, newStatus) {
