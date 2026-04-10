@@ -3149,6 +3149,88 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
     }
 
     // ── getRefunds ─────────────────────────────────────────────────────────
+    // ── getPromoCodes ──────────────────────────────────────────────────────
+    if (action === 'getPromoCodes') {
+      const auth = await checkAuth(['ADMIN','OWNER']);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      const r = await supaFetch(`${SUPABASE_URL}/rest/v1/promo_codes?order=created_at.desc&select=*`);
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to fetch promo codes' });
+      return res.status(200).json({ ok: true, codes: r.data || [] });
+    }
+
+    // ── createPromoCode ────────────────────────────────────────────────────
+    if (action === 'createPromoCode') {
+      const auth = await checkAuth(['ADMIN','OWNER']);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      const { code, discount_type, discount_value, valid_from, valid_until, max_uses, description } = body;
+      if (!code || !discount_type || !discount_value) return res.status(400).json({ ok: false, error: 'code, discount_type, and discount_value required' });
+      const payload = {
+        code: String(code).toUpperCase().trim(),
+        discount_type,
+        discount_value: parseFloat(discount_value),
+        valid_from: valid_from || null,
+        valid_until: valid_until || null,
+        max_uses: max_uses ? parseInt(max_uses) : null,
+        description: description || null,
+        used_count: 0,
+        is_active: true,
+        created_at: new Date().toISOString()
+      };
+      const r = await supaFetch(`${SUPABASE_URL}/rest/v1/promo_codes`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+        headers: { 'Prefer': 'return=representation' }
+      });
+      if (!r.ok) return res.status(500).json({ ok: false, error: r.data?.message || 'Failed to create promo code' });
+      return res.status(200).json({ ok: true, code: r.data[0] });
+    }
+
+    // ── updatePromoCode ────────────────────────────────────────────────────
+    if (action === 'updatePromoCode') {
+      const auth = await checkAuth(['ADMIN','OWNER']);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      const { id, is_active, discount_value, valid_until, max_uses, description } = body;
+      if (!id) return res.status(400).json({ ok: false, error: 'id required' });
+      const updates = {};
+      if (is_active !== undefined) updates.is_active = is_active;
+      if (discount_value !== undefined) updates.discount_value = parseFloat(discount_value);
+      if (valid_until !== undefined) updates.valid_until = valid_until || null;
+      if (max_uses !== undefined) updates.max_uses = max_uses ? parseInt(max_uses) : null;
+      if (description !== undefined) updates.description = description;
+      const r = await supaFetch(`${SUPABASE_URL}/rest/v1/promo_codes?id=eq.${encodeURIComponent(id)}`, {
+        method: 'PATCH', body: JSON.stringify(updates)
+      });
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to update promo code' });
+      return res.status(200).json({ ok: true });
+    }
+
+    // ── deletePromoCode ────────────────────────────────────────────────────
+    if (action === 'deletePromoCode') {
+      const auth = await checkAuth(['OWNER']);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      const { id } = body;
+      if (!id) return res.status(400).json({ ok: false, error: 'id required' });
+      const r = await supaFetch(`${SUPABASE_URL}/rest/v1/promo_codes?id=eq.${encodeURIComponent(id)}`, { method: 'DELETE' });
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to delete promo code' });
+      return res.status(200).json({ ok: true });
+    }
+
+    // ── validatePromoCode (used by customer POS) ───────────────────────────
+    if (action === 'validatePromoCode') {
+      const { code, subtotal } = body;
+      if (!code) return res.status(400).json({ ok: false, error: 'code required' });
+      const r = await supaFetch(`${SUPABASE_URL}/rest/v1/promo_codes?code=eq.${encodeURIComponent(code.toUpperCase())}&is_active=eq.true&select=*&limit=1`);
+      if (!r.ok || !r.data?.length) return res.status(200).json({ ok: false, error: 'Invalid or expired promo code' });
+      const pc = r.data[0];
+      const now = new Date();
+      if (pc.valid_from && new Date(pc.valid_from) > now) return res.status(200).json({ ok: false, error: 'Promo code not yet active' });
+      if (pc.valid_until && new Date(pc.valid_until) < now) return res.status(200).json({ ok: false, error: 'Promo code has expired' });
+      if (pc.max_uses && pc.used_count >= pc.max_uses) return res.status(200).json({ ok: false, error: 'Promo code usage limit reached' });
+      const sub = parseFloat(subtotal) || 0;
+      const discount = pc.discount_type === 'PERCENT' ? Math.round(sub * pc.discount_value / 100 * 100) / 100 : parseFloat(pc.discount_value);
+      return res.status(200).json({ ok: true, code: pc.code, discount_type: pc.discount_type, discount_value: pc.discount_value, discount_amount: discount, description: pc.description });
+    }
+
     if (action === 'getRefunds') {
       const auth = await checkAuth(['OWNER','ADMIN']);
       if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
@@ -3260,6 +3342,39 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       return res.status(200).json({ ok: r.ok, session: r.data?.[0] || null });
     }
 
+    // ── runMigration (OWNER only - creates tables if not exist) ───────────────
+    if (action === 'runMigration') {
+      const auth = await checkAuth(['OWNER']);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      const sql = `
+        CREATE TABLE IF NOT EXISTS promo_codes (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          code text UNIQUE NOT NULL,
+          discount_type text NOT NULL CHECK (discount_type IN ('PERCENT','FIXED')),
+          discount_value numeric NOT NULL CHECK (discount_value > 0),
+          description text,
+          valid_from timestamptz,
+          valid_until timestamptz,
+          max_uses integer,
+          used_count integer DEFAULT 0,
+          is_active boolean DEFAULT true,
+          created_at timestamptz DEFAULT now()
+        );
+        CREATE INDEX IF NOT EXISTS promo_codes_code_idx ON promo_codes(code);
+        CREATE INDEX IF NOT EXISTS promo_codes_active_idx ON promo_codes(is_active);
+      `;
+      const r = await supaFetch(`${SUPABASE_URL}/rest/v1/rpc/exec_sql`, {
+        method: 'POST', body: JSON.stringify({ sql })
+      });
+      // Try direct query endpoint as fallback
+      const r2 = await fetch(`${SUPABASE_URL.replace('.supabase.co','')}/pg/query`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
+        body: JSON.stringify({ query: sql })
+      });
+      return res.status(200).json({ ok: true, msg: 'Migration attempted' });
+    }
+
     // ── Unknown action ─────────────────────────────────────────────────────
     return res.status(400).json({ ok: false, error: `Unknown action: ${action}` });
 
@@ -3268,3 +3383,5 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
     return res.status(500).json({ ok: false, error: 'Server error: ' + err.message });
   }
 }
+
+// ── One-time migration endpoint (safe to call multiple times - uses IF NOT EXISTS) ──

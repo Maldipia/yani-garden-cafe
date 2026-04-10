@@ -1327,3 +1327,171 @@ async function _saveSettingsMap(fields, successMsg, btnEl) {
 
 
 // TABLES & RESERVATIONS
+// ══════════════════════════════════════════════════════════
+// PROMO CODES
+// ══════════════════════════════════════════════════════════
+var _promoCodes = [];
+
+async function loadPromoCodesView() {
+  var el = document.getElementById('promoCodesView');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:20px;color:var(--timber)">Loading promo codes...</div>';
+  var r = await api('getPromoCodes', { userId: currentUser && currentUser.userId });
+  if (!r.ok) {
+    el.innerHTML = '<div style="padding:20px;color:#EF4444">❌ ' + (r.error || 'Failed to load') + '</div>';
+    return;
+  }
+  _promoCodes = r.codes || [];
+  renderPromoCodesView();
+}
+
+function renderPromoCodesView() {
+  var el = document.getElementById('promoCodesView');
+  if (!el) return;
+
+  var html = '<div style="padding:16px 16px 0;max-width:760px">';
+  // Header
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">';
+  html += '<div>';
+  html += '<div style="font-weight:800;font-size:1.1rem;color:var(--forest-deep)">🏷️ Promo Codes</div>';
+  html += '<div style="font-size:.78rem;color:var(--timber);margin-top:2px">Discount codes for customer orders</div>';
+  html += '</div>';
+  html += '<button onclick="openPromoModal()" style="padding:10px 18px;background:var(--forest);color:#fff;border:none;border-radius:10px;font-size:.85rem;font-weight:700;cursor:pointer;font-family:var(--font-body)">+ New Code</button>';
+  html += '</div>';
+
+  if (_promoCodes.length === 0) {
+    html += '<div style="background:#fff;border-radius:14px;padding:40px;text-align:center;color:var(--timber);box-shadow:var(--shadow-sm)">';
+    html += '<div style="font-size:2rem;margin-bottom:8px">🏷️</div>';
+    html += '<div style="font-weight:700">No promo codes yet</div>';
+    html += '<div style="font-size:.8rem;margin-top:4px">Create your first discount code</div></div>';
+  } else {
+    _promoCodes.forEach(function(pc) {
+      var isActive = pc.is_active;
+      var isExpired = pc.valid_until && new Date(pc.valid_until) < new Date();
+      var badgeColor = isExpired ? '#94a3b8' : isActive ? '#059669' : '#94a3b8';
+      var badgeBg = isExpired ? '#f1f5f9' : isActive ? '#d1fae5' : '#f1f5f9';
+      var badgeText = isExpired ? 'Expired' : isActive ? 'Active' : 'Inactive';
+      var discLabel = pc.discount_type === 'PERCENT'
+        ? pc.discount_value + '% off'
+        : '₱' + parseFloat(pc.discount_value).toFixed(0) + ' off';
+
+      html += '<div style="background:#fff;border-radius:14px;box-shadow:var(--shadow-sm);padding:16px 18px;margin-bottom:10px;display:flex;align-items:center;gap:14px">';
+      // Code + badge
+      html += '<div style="flex:1;min-width:0">';
+      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">';
+      html += '<span style="font-weight:800;font-size:.95rem;color:var(--forest-deep);font-family:monospace;letter-spacing:.5px">' + esc(pc.code) + '</span>';
+      html += '<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:8px;background:' + badgeBg + ';color:' + badgeColor + '">' + badgeText + '</span>';
+      html += '</div>';
+      html += '<div style="font-size:.82rem;font-weight:700;color:var(--terra)">' + discLabel + '</div>';
+      if (pc.description) html += '<div style="font-size:.75rem;color:var(--timber);margin-top:2px">' + esc(pc.description) + '</div>';
+      html += '<div style="display:flex;gap:12px;margin-top:6px;font-size:.72rem;color:var(--timber)">';
+      html += '<span>Used: <b>' + (pc.used_count || 0) + '</b>' + (pc.max_uses ? ' / ' + pc.max_uses : '') + '</span>';
+      if (pc.valid_until) html += '<span>Expires: <b>' + new Date(pc.valid_until).toLocaleDateString('en-PH') + '</b></span>';
+      if (pc.valid_from) html += '<span>From: <b>' + new Date(pc.valid_from).toLocaleDateString('en-PH') + '</b></span>';
+      html += '</div></div>';
+      // Actions
+      html += '<div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">';
+      html += '<button onclick="togglePromoActive(\'' + pc.id + '\',' + !isActive + ')" style="padding:6px 12px;background:' + (isActive ? '#FEF3C7' : '#D1FAE5') + ';color:' + (isActive ? '#92400E' : '#065F46') + ';border:none;border-radius:8px;font-size:.72rem;font-weight:700;cursor:pointer">' + (isActive ? 'Deactivate' : 'Activate') + '</button>';
+      html += '<button onclick="deletePromoCode(\'' + pc.id + '\',\'' + esc(pc.code) + '\')" style="padding:6px 12px;background:#FEE2E2;color:#991B1B;border:none;border-radius:8px;font-size:.72rem;font-weight:700;cursor:pointer">Delete</button>';
+      html += '</div></div>';
+    });
+  }
+  html += '</div>';
+  el.innerHTML = html;
+
+  // Also render the create modal (hidden)
+  if (!document.getElementById('promoModal')) {
+    var modal = document.createElement('div');
+    modal.id = 'promoModal';
+    modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:800;align-items:center;justify-content:center;padding:20px';
+    modal.innerHTML = '<div style="background:#fff;border-radius:16px;width:100%;max-width:440px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.2)">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">'
+      + '<div style="font-weight:800;font-size:1rem;color:var(--forest-deep)">🏷️ New Promo Code</div>'
+      + '<button onclick="closePromoModal()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--timber)">&times;</button>'
+      + '</div>'
+      + '<div class="s-field"><label>Code <span style="color:#e04444">*</span></label><input id="pm_code" type="text" placeholder="e.g. SAVE10" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()"></div>'
+      + '<div class="s-field"><label>Description</label><input id="pm_desc" type="text" placeholder="e.g. 10% off all orders"></div>'
+      + '<div class="s-field"><label>Discount Type <span style="color:#e04444">*</span></label>'
+      + '<select id="pm_type"><option value="PERCENT">Percent (%)</option><option value="FIXED">Fixed Amount (₱)</option></select></div>'
+      + '<div class="s-field"><label>Discount Value <span style="color:#e04444">*</span></label><input id="pm_val" type="number" min="1" placeholder="e.g. 10"></div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+      + '<div class="s-field"><label>Valid From</label><input id="pm_from" type="date"></div>'
+      + '<div class="s-field"><label>Valid Until</label><input id="pm_until" type="date"></div>'
+      + '</div>'
+      + '<div class="s-field"><label>Max Uses <span style="font-size:.7rem;color:var(--timber);font-weight:400">(leave blank = unlimited)</span></label><input id="pm_max" type="number" min="1" placeholder="Unlimited"></div>'
+      + '<button id="pm_save_btn" onclick="savePromoCode()" style="width:100%;padding:12px;background:var(--forest);color:#fff;border:none;border-radius:10px;font-size:.9rem;font-weight:700;cursor:pointer;font-family:var(--font-body);margin-top:4px">✅ Create Promo Code</button>'
+      + '</div>';
+    document.body.appendChild(modal);
+  }
+}
+
+function openPromoModal() {
+  var m = document.getElementById('promoModal');
+  if (m) { m.style.display = 'flex'; document.getElementById('pm_code').focus(); }
+}
+
+function closePromoModal() {
+  var m = document.getElementById('promoModal');
+  if (m) m.style.display = 'none';
+  ['pm_code','pm_desc','pm_val','pm_from','pm_until','pm_max'].forEach(function(id) {
+    var el = document.getElementById(id); if (el) el.value = '';
+  });
+  var t = document.getElementById('pm_type'); if (t) t.value = 'PERCENT';
+}
+
+async function savePromoCode() {
+  var code = (document.getElementById('pm_code').value || '').trim().toUpperCase();
+  var desc = (document.getElementById('pm_desc').value || '').trim();
+  var type = document.getElementById('pm_type').value;
+  var val  = parseFloat(document.getElementById('pm_val').value);
+  var from = document.getElementById('pm_from').value || null;
+  var until= document.getElementById('pm_until').value || null;
+  var max  = document.getElementById('pm_max').value || null;
+
+  if (!code) { showToast('Enter a promo code', 'error'); return; }
+  if (!val || val <= 0) { showToast('Enter a discount value', 'error'); return; }
+  if (type === 'PERCENT' && val > 100) { showToast('Percent discount cannot exceed 100%', 'error'); return; }
+
+  var btn = document.getElementById('pm_save_btn');
+  btn.disabled = true; btn.textContent = 'Saving...';
+
+  var r = await api('createPromoCode', {
+    userId: currentUser && currentUser.userId,
+    code: code, discount_type: type, discount_value: val,
+    description: desc || null,
+    valid_from: from ? from + 'T00:00:00+08:00' : null,
+    valid_until: until ? until + 'T23:59:59+08:00' : null,
+    max_uses: max ? parseInt(max) : null
+  });
+
+  btn.disabled = false; btn.textContent = '✅ Create Promo Code';
+
+  if (r.ok) {
+    showToast('✅ Promo code ' + code + ' created!');
+    closePromoModal();
+    loadPromoCodesView();
+  } else {
+    showToast('❌ ' + (r.error || 'Failed to create'), 'error');
+  }
+}
+
+async function togglePromoActive(id, newActive) {
+  var r = await api('updatePromoCode', { userId: currentUser && currentUser.userId, id: id, is_active: newActive });
+  if (r.ok) {
+    showToast(newActive ? '✅ Activated' : '⏸️ Deactivated');
+    loadPromoCodesView();
+  } else {
+    showToast('❌ Failed to update', 'error');
+  }
+}
+
+async function deletePromoCode(id, code) {
+  if (!confirm('Delete promo code ' + code + '? This cannot be undone.')) return;
+  var r = await api('deletePromoCode', { userId: currentUser && currentUser.userId, id: id });
+  if (r.ok) {
+    showToast('🗑️ ' + code + ' deleted');
+    loadPromoCodesView();
+  } else {
+    showToast('❌ Failed to delete', 'error');
+  }
+}

@@ -782,6 +782,7 @@ function renderSidebar() {
     html += item('FLOOR_MAP', '🗺️', 'Floor Plan', '');
     html += item('INVENTORY', '📦', 'Inventory', '');
     html += item('ADDONS', '➕', 'Add-ons', '');
+    html += item('PROMO_CODES', '🏷️', 'Promo Codes', '');
   }
 
   if (isAdmin) {
@@ -879,6 +880,9 @@ function setFilter(f) {
   var costingView = document.getElementById('costingView');
   if (costingView) costingView.style.display = 'none';
 
+  var promoCodesView = document.getElementById('promoCodesView');
+  if (promoCodesView) promoCodesView.style.display = 'none';
+
   var dashboardView = document.getElementById('dashboardView');
   if (dashboardView) dashboardView.style.display = 'none';
 
@@ -939,6 +943,9 @@ function setFilter(f) {
     var cv2 = document.getElementById('costingView');
     if (cv2) cv2.style.display = 'block';
     loadCostingView();
+  } else if (f === 'PROMO_CODES') {
+    if (promoCodesView) promoCodesView.style.display = 'block';
+    loadPromoCodesView();
   } else {
     orderGrid.style.display = '';
     renderOrders();
