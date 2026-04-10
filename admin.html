@@ -1009,6 +1009,10 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
   height:1px; background:var(--mist); margin:6px 12px;
 }
 .main-content { flex:1; min-width:0; overflow-x:hidden }
+/* All section views must fill main-content width */
+.main-content > div[id$="View"], .main-content > div[id="orderGrid"] {
+  width:100%; box-sizing:border-box;
+}
 
 /* Hamburger for mobile */
 .sidebar-toggle {
@@ -1392,8 +1396,6 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
       </div>
     </div>
   </div>
-
-</div>
 
 <!-- ══ SETTINGS VIEW (OWNER only) ══ -->
 <div id="staffView" style="display:none"></div>

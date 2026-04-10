@@ -6,12 +6,27 @@ var _costingIngredients = [];
 var _costingRecipes = [];
 var _activeRecipeId = null;
 
+function _getSB() {
+  if (!_supabaseClient) initRealtime();
+  return _supabaseClient;
+}
+
+
 async function loadCostingView() {
   var view = document.getElementById('costingView');
   if (!view) return;
   view.innerHTML = '<div style="padding:24px;text-align:center;color:var(--timber)">Loading costing data...</div>';
+  // Wait for supabase client if not ready yet
+  if (!_supabaseClient) {
+    initRealtime();
+    await new Promise(function(r){ setTimeout(r, 800); });
+  }
+  if (!_supabaseClient) {
+    view.innerHTML = '<div style="padding:24px;color:var(--terra)">⚠️ Database not connected. Please refresh the page and try again.</div>';
+    return;
+  }
   try {
-    var sb = _supabaseClient;
+    var sb = _getSB();
     var [ingRes, recRes, riRes] = await Promise.all([
       sb.from('costing_ingredients').select('*').order('category').order('name'),
       sb.from('costing_recipes').select('*').order('category').order('name'),
@@ -296,7 +311,7 @@ async function saveCostingIng() {
     category: document.getElementById('cing-cat').value
   };
   if (!payload.name || isNaN(payload.cost_per_unit)) { showToast('Name and cost required'); return; }
-  var sb = _supabaseClient;
+  var sb = _getSB();
   if (id) {
     await sb.from('costing_ingredients').update(payload).eq('id', parseInt(id));
   } else {
@@ -309,7 +324,7 @@ async function saveCostingIng() {
 
 async function deleteCostingIng(id) {
   if (!confirm('Remove this ingredient? It will be removed from all recipes.')) return;
-  await _supabaseClient.from('costing_ingredients').delete().eq('id', id);
+  await _getSB().from('costing_ingredients').delete().eq('id', id);
   await loadCostingView();
   setCostingTab('inventory');
 }
@@ -476,7 +491,7 @@ async function saveCostingRec() {
     selling_price: parseFloat(document.getElementById('crm-price').value)
   };
   if (!payload.name || isNaN(payload.selling_price)) { showToast('Name and price required'); return; }
-  var sb = _supabaseClient;
+  var sb = _getSB();
   var res;
   if (id) {
     res = await sb.from('costing_recipes').update(payload).eq('id', parseInt(id)).select();
@@ -491,7 +506,7 @@ async function saveCostingRec() {
 
 async function deleteCostingRec(id) {
   if (!confirm('Delete this menu item and its recipe?')) return;
-  await _supabaseClient.from('costing_recipes').delete().eq('id', id);
+  await _getSB().from('costing_recipes').delete().eq('id', id);
   _activeRecipeId = null;
   await loadCostingView();
   setCostingTab('recipe');
@@ -533,7 +548,7 @@ function removeRecipeIng(rid, idx) {
 async function saveRecipeIngsToDB(rid) {
   var rec = _costingRecipes.find(function(r){return r.id===rid;});
   if (!rec) return;
-  var sb = _supabaseClient;
+  var sb = _getSB();
   await sb.from('costing_recipe_ingredients').delete().eq('recipe_id', rid);
   var toInsert = rec.ingredients.filter(function(ri){return ri.qty > 0;}).map(function(ri){
     return {recipe_id: rid, ingredient_id: ri.ingredient_id, qty: ri.qty};
@@ -605,7 +620,7 @@ async function updateCostingPrice(rid, val) {
   var rec = _costingRecipes.find(function(r){return r.id===rid;});
   if (rec) {
     rec.selling_price = price;
-    await _supabaseClient.from('costing_recipes').update({selling_price: price}).eq('id', rid);
+    await _getSB().from('costing_recipes').update({selling_price: price}).eq('id', rid);
   }
 }
 
