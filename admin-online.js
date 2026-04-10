@@ -1118,18 +1118,21 @@ function _settingsPayment() {
     var inputId = 's_' + urlKey.toLowerCase();
     var fileId = 'qrfile_' + code.toLowerCase();
     var previewId = 'qrprev_' + code.toLowerCase();
+    // Google Drive URLs don't render in img tags — always show placeholder for Drive URLs
+    var isDrive = url && url.indexOf('drive.google.com') >= 0;
+    var showImg = url && !isDrive;
     return '<div class="s-card">'
       + '<div class="s-card-title">' + title + '</div>'
+      + (isDrive ? '<div style="background:#FEF3C7;border:1px solid #FCD34D;border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:.75rem;color:#92400E">⚠️ Your current QR is stored on Google Drive which can\'t preview here. Use <strong>Upload Image</strong> to move it to the server.</div>' : '')
       + '<div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:12px">'
-      // QR preview
       + '<div style="flex-shrink:0">'
-      + '<img id="' + previewId + '" src="' + (url||'') + '" style="width:80px;height:80px;object-fit:contain;border-radius:8px;border:1.5px solid var(--mist);background:#f8f8f8;display:' + (url?'block':'none') + '">'
-      + '<div id="' + previewId + '_placeholder" style="width:80px;height:80px;border-radius:8px;border:2px dashed var(--mist);display:' + (url?'none':'flex') + ';align-items:center;justify-content:center;font-size:.65rem;color:var(--timber);text-align:center">No QR</div>'
+      + '<img id="' + previewId + '" src="' + (showImg ? url : '') + '" onerror="this.style.display=\'none\';var ph=document.getElementById(\'' + previewId + '_placeholder\');if(ph)ph.style.display=\'flex\';" style="width:80px;height:80px;object-fit:contain;border-radius:8px;border:1.5px solid var(--mist);background:#f8f8f8;display:' + (showImg ? 'block' : 'none') + '">'
+      + '<div id="' + previewId + '_placeholder" style="width:80px;height:80px;border-radius:8px;border:2px dashed var(--mist);display:' + (showImg ? 'none' : 'flex') + ';align-items:center;justify-content:center;font-size:.65rem;color:var(--timber);text-align:center;flex-direction:column">📷<br>' + (isDrive ? 'Drive URL' : 'No QR') + '</div>'
       + '</div>'
-      // URL + upload
       + '<div style="flex:1">'
       + '<div class="s-field" style="margin-bottom:8px"><label>QR Code Image URL</label>'
-      + '<input type="url" id="' + inputId + '" value="' + (url||'') + '" placeholder="https://drive.google.com/..." oninput="updateQrPreview(\'' + previewId + '\',this.value)">'
+      + '<input type="url" id="' + inputId + '" value="' + (url||'') + '" placeholder="https://..." oninput="updateQrPreview(\'' + previewId + '\',this.value)">'
+      + '<div style="font-size:.65rem;color:var(--timber);margin-top:3px">💡 Google Drive URLs may not preview here — use Upload Image for best results.</div>'
       + '</div>'
       + '<input type="file" id="' + fileId + '" accept="image/png,image/jpeg,image/webp" style="display:none" onchange="uploadQrCode(\'' + code + '\',\'' + inputId + '\',\'' + previewId + '\',this)">'
       + '<button onclick="document.getElementById(\'' + fileId + '\').click()" style="padding:7px 14px;background:var(--forest);color:#fff;border:none;border-radius:8px;font-size:.78rem;font-weight:700;cursor:pointer">⬆️ Upload Image</button>'
@@ -1150,11 +1153,15 @@ function _settingsPayment() {
 function updateQrPreview(previewId, url) {
   var img = document.getElementById(previewId);
   var ph = document.getElementById(previewId + '_placeholder');
+  if (!img) return;
   if (url) {
-    img.src = url; img.style.display = 'block';
+    img.src = url;
+    img.style.display = 'block';
     if (ph) ph.style.display = 'none';
+    // onerror on img handles failed loads (e.g. Google Drive CORS blocks)
   } else {
     img.style.display = 'none';
+    img.src = '';
     if (ph) ph.style.display = 'flex';
   }
 }
