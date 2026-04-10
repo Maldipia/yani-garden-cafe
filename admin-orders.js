@@ -152,13 +152,19 @@ function renderOrders() {
       }
       html += '</div>';
     } else {
+      // Show customer's chosen payment method even before it's confirmed
+      var chosenMethod = (o.paymentMethod || '').toUpperCase().trim();
+      var pmLabel = chosenMethod
+        ? ((pmIcons[chosenMethod] || '💰') + ' ' + chosenMethod.charAt(0) + chosenMethod.slice(1).toLowerCase() + ' · Not yet confirmed')
+        : '⏳ No payment yet';
+      var pmClass = chosenMethod ? 'oc-payment pending-method' : 'oc-payment none';
       if (canSetPayment) {
         html += '<div class="oc-payment-row">'
-          + '<div class="oc-payment none">⏳ No payment yet</div>'
+          + '<div class="' + pmClass + '">' + pmLabel + '</div>'
           + '<button class="oc-pm-set" onclick="openPaymentModal(\'' + esc(o.orderId) + '\')">Set Payment</button>'
           + '</div>';
       } else {
-        html += '<div class="oc-payment none">⏳ No payment yet</div>';
+        html += '<div class="' + pmClass + '">' + pmLabel + '</div>';
       }
     }
 
