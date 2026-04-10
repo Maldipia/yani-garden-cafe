@@ -1107,7 +1107,7 @@ function _settingsGeneral() {
     + _sField('s_or_start', 'OR Number Start', s.OR_NUMBER_START, 'number')
     + _sField('s_receipt_footer', 'Receipt Footer Message', s.RECEIPT_FOOTER, 'textarea')
     + '</div>'
-    + '<button class="s-save-btn" onclick="saveGeneralSettings()">💾 Save General Settings</button>';
+    + '<button class="s-save-btn" onclick="saveGeneralSettings(this)">💾 Save General Settings</button>';
 }
 
 function _settingsPayment() {
@@ -1126,7 +1126,7 @@ function _settingsPayment() {
     + qrCard('🏛️ BDO', 'BDO_QR_URL', 'BDO_ACCOUNT', 'BDO Account Number')
     + qrCard('🏛️ BPI', 'BPI_QR_URL', 'BPI_ACCOUNT', 'BPI Account Number')
     + qrCard('🏛️ UnionBank', 'UNIONBANK_QR_URL', 'UNIONBANK_ACCOUNT', 'UnionBank Account Number')
-    + '<button class="s-save-btn" onclick="savePaymentSettings()">💾 Save Payment Settings</button>';
+    + '<button class="s-save-btn" onclick="savePaymentSettings(this)">💾 Save Payment Settings</button>';
 }
 
 function _settingsBranding() {
@@ -1144,7 +1144,7 @@ function _settingsBranding() {
     + _sField('s_logo_url', 'Logo URL', s.LOGO_URL, 'url', '/images/logo.png')
     + '<div style="font-size:.72rem;color:var(--timber);margin-top:-8px">Use a URL to your logo image. Current: <a href="' + (s.LOGO_URL||'') + '" target="_blank" style="color:var(--forest)">' + (s.LOGO_URL||'not set') + '</a></div>'
     + '</div>'
-    + '<button class="s-save-btn" onclick="saveBrandingSettings()">💾 Save Branding</button>';
+    + '<button class="s-save-btn" onclick="saveBrandingSettings(this)">💾 Save Branding</button>';
 }
 
 function _settingsOperations() {
@@ -1168,10 +1168,10 @@ function _settingsOperations() {
     + '<div class="s-toggle-label">Avg Prep Time</div><div class="s-toggle-sub">Used for order tracking ETA</div>'
     + '<div style="display:flex;align-items:center;gap:8px;margin-top:8px"><input type="number" id="s_avg_prep" value="' + (s.AVG_PREP_TIME||'10') + '" min="1" max="120" style="width:70px;padding:8px;border:1.5px solid var(--mist);border-radius:8px;font-size:.95rem;font-weight:700;text-align:center"><span style="font-weight:600">minutes</span></div>'
     + '</div></div>'
-    + '<button class="s-save-btn" onclick="saveOperationsSettings()">💾 Save Operations</button>';
+    + '<button class="s-save-btn" onclick="saveOperationsSettings(this)">💾 Save Operations</button>';
 }
 
-async function saveGeneralSettings() {
+async function saveGeneralSettings(btn) {
   var fields = {
     BUSINESS_NAME: document.getElementById('s_business_name').value,
     TAGLINE: document.getElementById('s_tagline').value,
@@ -1183,10 +1183,10 @@ async function saveGeneralSettings() {
     OR_NUMBER_START: document.getElementById('s_or_start').value,
     RECEIPT_FOOTER: document.getElementById('s_receipt_footer').value,
   };
-  await _saveSettingsMap(fields, 'General settings saved ✅');
+  await _saveSettingsMap(fields, 'General settings saved ✅', btn);
 }
 
-async function savePaymentSettings() {
+async function savePaymentSettings(btn) {
   var fields = {
     GCASH_QR_URL: document.getElementById('s_gcash_qr_url').value,
     GCASH_NUMBER: document.getElementById('s_gcash_number').value,
@@ -1198,19 +1198,19 @@ async function savePaymentSettings() {
     UNIONBANK_QR_URL: document.getElementById('s_unionbank_qr_url').value,
     UNIONBANK_ACCOUNT: document.getElementById('s_unionbank_account').value,
   };
-  await _saveSettingsMap(fields, 'Payment settings saved ✅');
+  await _saveSettingsMap(fields, 'Payment settings saved ✅', btn);
 }
 
-async function saveBrandingSettings() {
+async function saveBrandingSettings(btn) {
   var fields = {
     PRIMARY_COLOR: document.getElementById('s_primary_color').value,
     SECONDARY_COLOR: document.getElementById('s_secondary_color').value,
     LOGO_URL: document.getElementById('s_logo_url').value,
   };
-  await _saveSettingsMap(fields, 'Branding saved ✅');
+  await _saveSettingsMap(fields, 'Branding saved ✅', btn);
 }
 
-async function saveOperationsSettings() {
+async function saveOperationsSettings(btn) {
   var svc = parseFloat(document.getElementById('s_service_charge').value) / 100;
   var fields = {
     ONLINE_ORDERING_ENABLED: String(document.getElementById('s_online_ordering').checked),
@@ -1221,82 +1221,21 @@ async function saveOperationsSettings() {
     SERVICE_CHARGE: String(isNaN(svc) ? 0.10 : svc),
     AVG_PREP_TIME: document.getElementById('s_avg_prep').value,
   };
-  await _saveSettingsMap(fields, 'Operations settings saved ✅');
+  await _saveSettingsMap(fields, 'Operations settings saved ✅', btn);
 }
 
-async function _saveSettingsMap(fields, successMsg) {
-  var btn = event && event.target;
-  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+async function _saveSettingsMap(fields, successMsg, btnEl) {
+  if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Saving…'; }
   var errors = [];
   for (var key in fields) {
     var r = await api('updateSetting', { userId: currentUser.userId, key: key, value: fields[key] });
     if (!r.ok) errors.push(key);
     else _settings[key] = fields[key];
   }
-  if (btn) { btn.disabled = false; btn.textContent = '💾 Save'; }
+  if (btnEl) { btnEl.disabled = false; btnEl.textContent = '💾 Save'; }
   if (errors.length) showToast('Failed to save: ' + errors.join(', '), 'error');
   else showToast(successMsg, 'success');
 }
 
-
-function applyVatToggleUI(enabled, ratePct) {
-  var slider = document.getElementById('vatSlider');
-  var knob = document.getElementById('vatKnob');
-  var rateRow = document.getElementById('vatRateRow');
-  var statusNote = document.getElementById('vatStatusNote');
-  var rateInput = document.getElementById('vatRateInput');
-
-  if (slider) slider.style.background = enabled ? 'var(--forest)' : '#ccc';
-  if (knob) knob.style.left = enabled ? '27px' : '3px';
-  if (rateRow) rateRow.style.display = enabled ? 'block' : 'none';
-  if (statusNote) {
-    statusNote.textContent = enabled ? 'Currently: VAT Registered (12%)' : 'Currently: Non-VAT Registered';
-    statusNote.style.color = enabled ? '#27ae60' : '#e67e22';
-  }
-  if (rateInput && ratePct) rateInput.value = ratePct;
-  renderVatPreview(enabled, ratePct || 12);
-}
-
-function renderVatPreview(enabled, ratePct) {
-  var box = document.getElementById('vatPreview');
-  if (!box) return;
-  var sample = 479, svc = 47.90, total = 526.90;
-  var vatAmt = enabled ? (total * (ratePct / 100) / (1 + ratePct / 100)).toFixed(2) : null;
-  box.innerHTML =
-    '<div style="color:#888;font-size:.7rem;margin-bottom:4px">Receipt preview (sample order ₱526.90):</div>' +
-    'Subtotal:        P 479.00<br>' +
-    'Service Charge:  P  47.90<br>' +
-    (enabled ? '<span style="color:var(--forest);font-weight:700">VAT ('+ratePct+'%, incl.): P  ' + vatAmt + '</span><br>' : '') +
-    '──────────────────────<br>' +
-    '<b>TOTAL:           P 526.90</b><br>' +
-    '<br>' +
-    '<span style="color:#888">' + (enabled ? 'VAT Registered' : 'Non-VAT Registered') + '</span>';
-}
-
-async function handleVatToggle(el) {
-  var enabled = el.checked;
-  var ratePct = parseFloat(document.getElementById('vatRateInput').value) || 12;
-  applyVatToggleUI(enabled, ratePct);
-
-  var r = await api('updateSetting', { userId: currentUser.userId, key: 'VAT_ENABLED', value: String(enabled) });
-  if (!r.ok) {
-    showToast('Failed to save VAT setting', 'error');
-    el.checked = !enabled; // revert
-    applyVatToggleUI(!enabled, ratePct);
-    return;
-  }
-  showToast(enabled ? '✅ VAT enabled — receipts will show VAT breakdown' : '✅ VAT disabled — receipts show Non-VAT Registered', 'success');
-  _settings['VAT_ENABLED'] = String(enabled);
-}
-
-async function handleVatRateChange(el) {
-  var rate = parseFloat(el.value);
-  if (isNaN(rate) || rate < 1 || rate > 30) { showToast('VAT rate must be 1–30%', 'error'); el.value = 12; return; }
-  renderVatPreview(true, rate);
-  var r = await api('updateSetting', { userId: currentUser.userId, key: 'VAT_RATE', value: (rate / 100).toFixed(4) });
-  if (!r.ok) { showToast('Failed to save VAT rate', 'error'); return; }
-  showToast('✅ VAT rate set to ' + rate + '%', 'success');
-  _settings['VAT_RATE'] = (rate / 100).toFixed(4);
-}
 
 // TABLES & RESERVATIONS
