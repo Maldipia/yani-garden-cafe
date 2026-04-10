@@ -2590,7 +2590,12 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
     if (action === 'getCategories') {
       const r = await supaFetch(`${SUPABASE_URL}/rest/v1/menu_categories?select=id,name&order=name.asc`);
       if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to fetch categories' });
-      return res.status(200).json({ ok: true, categories: r.data || [] });
+      // Return Title Case names matching what menu items use (CATEGORY_ID_TO_NAME)
+      const cats = (r.data || []).map(c => ({
+        id: c.id,
+        name: CATEGORY_ID_TO_NAME[c.id] || c.name
+      }));
+      return res.status(200).json({ ok: true, categories: cats });
     }
 
     // ── getSettings ────────────────────────────────────────────────────────
