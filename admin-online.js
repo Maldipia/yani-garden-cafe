@@ -1495,3 +1495,249 @@ async function deletePromoCode(id, code) {
     showToast('❌ Failed to delete', 'error');
   }
 }
+
+// ══════════════════════════════════════════════════════════
+// CUSTOMER DATABASE
+// ══════════════════════════════════════════════════════════
+var _customers = [];
+var _custSearch = '';
+
+async function loadCustomersView() {
+  var el = document.getElementById('customersView');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:20px;color:var(--timber)">Loading customers...</div>';
+  var r = await api('getCustomers', { userId: currentUser && currentUser.userId, search: _custSearch, limit: 100 });
+  if (!r.ok) { el.innerHTML = '<div style="padding:20px;color:#EF4444">❌ ' + (r.error||'Failed') + '</div>'; return; }
+  _customers = r.customers || [];
+  renderCustomersView();
+}
+
+function renderCustomersView() {
+  var el = document.getElementById('customersView');
+  if (!el) return;
+
+  var html = '<div style="padding:16px;max-width:820px">';
+  // Header
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">';
+  html += '<div><div style="font-weight:800;font-size:1.1rem;color:var(--forest-deep)">👥 Customer Database</div>';
+  html += '<div style="font-size:.78rem;color:var(--timber);margin-top:2px">' + _customers.length + ' customers</div></div>';
+  html += '<button onclick="openAddCustomerModal()" style="padding:9px 16px;background:var(--forest);color:#fff;border:none;border-radius:10px;font-size:.82rem;font-weight:700;cursor:pointer;font-family:var(--font-body)">+ Add Customer</button>';
+  html += '</div>';
+
+  // Search
+  html += '<div style="position:relative;margin-bottom:14px">';
+  html += '<input id="custSearchInput" type="text" placeholder="🔍 Search by name or phone..." value="' + esc(_custSearch) + '" '
+    + 'oninput="_custSearch=this.value;renderCustomersFiltered()" '
+    + 'style="width:100%;padding:9px 14px;border:1.5px solid var(--mist);border-radius:10px;font-size:.85rem;box-sizing:border-box;font-family:var(--font-body)">';
+  html += '</div>';
+
+  // Table
+  if (_customers.length === 0) {
+    html += '<div style="background:#fff;border-radius:14px;padding:40px;text-align:center;color:var(--timber);box-shadow:var(--shadow-sm)">';
+    html += '<div style="font-size:2rem;margin-bottom:8px">👥</div>';
+    html += '<div style="font-weight:700">No customers yet</div>';
+    html += '<div style="font-size:.8rem;margin-top:4px">Customers appear here when added manually or after orders</div>';
+    html += '</div>';
+  } else {
+    html += '<div id="custListContainer">';
+    html += renderCustomerRows(_customers);
+    html += '</div>';
+  }
+  html += '</div>';
+  el.innerHTML = html;
+
+  // Customer detail modal
+  if (!document.getElementById('custModal')) {
+    var m = document.createElement('div');
+    m.id = 'custModal';
+    m.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:800;align-items:center;justify-content:center;padding:16px';
+    m.innerHTML = '<div style="background:#fff;border-radius:16px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.2)">'
+      + '<div id="custModalBody"></div>'
+      + '</div>';
+    document.body.appendChild(m);
+  }
+
+  // Add customer modal
+  if (!document.getElementById('addCustModal')) {
+    var m2 = document.createElement('div');
+    m2.id = 'addCustModal';
+    m2.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:800;align-items:center;justify-content:center;padding:16px';
+    m2.innerHTML = '<div style="background:#fff;border-radius:16px;width:100%;max-width:420px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.2)">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">'
+      + '<div style="font-weight:800;font-size:1rem;color:var(--forest-deep)">👤 Add Customer</div>'
+      + '<button onclick="closeAddCustomerModal()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--timber)">&times;</button>'
+      + '</div>'
+      + '<div class="s-field"><label>Full Name <span style="color:#e04444">*</span></label><input id="ac_name" type="text" placeholder="e.g. Maria Santos"></div>'
+      + '<div class="s-field"><label>Phone</label><input id="ac_phone" type="tel" placeholder="e.g. 09171234567"></div>'
+      + '<div class="s-field"><label>Email</label><input id="ac_email" type="email" placeholder="e.g. maria@email.com"></div>'
+      + '<div class="s-field"><label>Notes</label><textarea id="ac_notes" rows="2" placeholder="Birthday, preferences, etc." style="width:100%;padding:8px 10px;border:1.5px solid var(--mist);border-radius:8px;font-size:.85rem;box-sizing:border-box;font-family:var(--font-body);resize:vertical"></textarea></div>'
+      + '<button id="ac_save_btn" onclick="saveNewCustomer()" style="width:100%;padding:12px;background:var(--forest);color:#fff;border:none;border-radius:10px;font-size:.9rem;font-weight:700;cursor:pointer;font-family:var(--font-body);margin-top:4px">✅ Save Customer</button>'
+      + '</div>';
+    document.body.appendChild(m2);
+  }
+}
+
+function renderCustomerRows(list) {
+  if (!list.length) return '<div style="padding:20px;text-align:center;color:var(--timber);font-size:.85rem">No customers match</div>';
+  return list.map(function(c) {
+    var initials = (c.name||'?').split(' ').map(function(w){return w[0];}).slice(0,2).join('').toUpperCase();
+    var totalSpent = parseFloat(c.total_spent||0);
+    var lastVisit = c.last_visit ? new Date(c.last_visit).toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'}) : '—';
+    return '<div onclick="openCustomerDetail(\'' + c.id + '\')" style="background:#fff;border-radius:12px;box-shadow:var(--shadow-sm);padding:14px 16px;margin-bottom:8px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:box-shadow .15s" onmouseover="this.style.boxShadow=\'0 4px 16px rgba(0,0,0,.1)\'" onmouseout="this.style.boxShadow=\'var(--shadow-sm)\'">'
+      + '<div style="width:42px;height:42px;border-radius:50%;background:var(--forest);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.9rem;color:#fff;flex-shrink:0">' + esc(initials) + '</div>'
+      + '<div style="flex:1;min-width:0">'
+      + '<div style="font-weight:700;font-size:.9rem;color:var(--forest-deep)">' + esc(c.name||'Unknown') + '</div>'
+      + '<div style="font-size:.75rem;color:var(--timber);margin-top:2px">' + (c.phone ? '📞 ' + esc(c.phone) : '') + (c.email ? (c.phone?' · ':'') + '✉️ ' + esc(c.email) : '') + '</div>'
+      + '</div>'
+      + '<div style="text-align:right;flex-shrink:0">'
+      + '<div style="font-weight:700;font-size:.82rem;color:var(--terra)">₱' + totalSpent.toLocaleString('en-PH',{minimumFractionDigits:0}) + '</div>'
+      + '<div style="font-size:.68rem;color:var(--timber)">' + (c.total_orders||0) + ' order' + ((c.total_orders||0)===1?'':'s') + '</div>'
+      + '<div style="font-size:.65rem;color:var(--timber);margin-top:1px">Last: ' + lastVisit + '</div>'
+      + '</div>'
+      + '</div>';
+  }).join('');
+}
+
+function renderCustomersFiltered() {
+  var q = (_custSearch||'').toLowerCase().trim();
+  var filtered = q ? _customers.filter(function(c) {
+    return (c.name||'').toLowerCase().includes(q) || (c.phone||'').includes(q) || (c.email||'').toLowerCase().includes(q);
+  }) : _customers;
+  var container = document.getElementById('custListContainer');
+  if (container) container.innerHTML = renderCustomerRows(filtered);
+}
+
+async function openCustomerDetail(id) {
+  var m = document.getElementById('custModal');
+  var body = document.getElementById('custModalBody');
+  if (!m || !body) return;
+  body.innerHTML = '<div style="padding:10px;text-align:center;color:var(--timber)">Loading...</div>';
+  m.style.display = 'flex';
+
+  var r = await api('getCustomer', { userId: currentUser && currentUser.userId, id: id });
+  if (!r.ok) { body.innerHTML = '<div style="color:#EF4444">Failed to load customer</div>'; return; }
+  var c = r.customer || {};
+  var orders = r.orders || [];
+
+  var totalSpent = parseFloat(c.total_spent||0);
+  var firstVisit = c.first_visit ? new Date(c.first_visit).toLocaleDateString('en-PH',{month:'long',day:'numeric',year:'numeric'}) : '—';
+  var lastVisit  = c.last_visit  ? new Date(c.last_visit).toLocaleDateString('en-PH',{month:'long',day:'numeric',year:'numeric'}) : '—';
+
+  body.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">'
+    + '<div style="font-weight:800;font-size:1.05rem;color:var(--forest-deep)">👤 ' + esc(c.name||'') + '</div>'
+    + '<button onclick="document.getElementById(\'custModal\').style.display=\'none\'" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--timber)">&times;</button>'
+    + '</div>'
+    // Stats row
+    + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">'
+    + _cStatBox('Total Spent', '₱' + totalSpent.toLocaleString('en-PH',{minimumFractionDigits:0}))
+    + _cStatBox('Orders', String(c.total_orders||0))
+    + _cStatBox('Avg Order', c.total_orders ? '₱' + Math.round(totalSpent/(c.total_orders||1)).toLocaleString('en-PH') : '—')
+    + '</div>'
+    // Info
+    + '<div style="background:#f8fafc;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:.82rem;display:flex;flex-direction:column;gap:5px">'
+    + (c.phone ? '<div>📞 ' + esc(c.phone) + '</div>' : '')
+    + (c.email ? '<div>✉️ ' + esc(c.email) + '</div>' : '')
+    + '<div style="color:var(--timber)">🗓 First visit: ' + firstVisit + '</div>'
+    + '<div style="color:var(--timber)">🕐 Last visit: ' + lastVisit + '</div>'
+    + (c.notes ? '<div style="color:var(--timber)">📝 ' + esc(c.notes) + '</div>' : '')
+    + '</div>'
+    // Order history
+    + '<div style="font-weight:700;font-size:.85rem;color:var(--forest-deep);margin-bottom:8px">Order History</div>'
+    + (orders.length === 0
+        ? '<div style="font-size:.8rem;color:var(--timber);text-align:center;padding:16px">No orders yet</div>'
+        : orders.slice(0,10).map(function(o) {
+            return '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--mist);font-size:.8rem">'
+              + '<div><span style="font-weight:700;color:var(--forest)">' + esc(o.order_id||o.orderId||'') + '</span>'
+              + ' <span style="color:var(--timber)">' + (o.created_at ? new Date(o.created_at).toLocaleDateString('en-PH',{month:'short',day:'numeric'}) : '') + '</span></div>'
+              + '<div style="font-weight:700">₱' + parseFloat(o.total||o.total_amount||0).toLocaleString('en-PH',{minimumFractionDigits:0}) + '</div>'
+              + '</div>';
+          }).join(''))
+    + (orders.length > 10 ? '<div style="font-size:.72rem;color:var(--timber);margin-top:6px;text-align:center">Showing last 10 orders</div>' : '')
+    // Edit button
+    + '<button onclick="openEditCustomerModal(\'' + c.id + '\')" style="width:100%;margin-top:16px;padding:10px;background:var(--forest);color:#fff;border:none;border-radius:10px;font-size:.85rem;font-weight:700;cursor:pointer;font-family:var(--font-body)">✏️ Edit Customer</button>';
+}
+
+function _cStatBox(label, val) {
+  return '<div style="background:#f0fdf4;border-radius:10px;padding:10px 8px;text-align:center">'
+    + '<div style="font-weight:800;font-size:.95rem;color:var(--forest)">' + val + '</div>'
+    + '<div style="font-size:.65rem;color:var(--timber);margin-top:2px">' + label + '</div>'
+    + '</div>';
+}
+
+function openAddCustomerModal() {
+  var m = document.getElementById('addCustModal');
+  if (m) { m.style.display = 'flex'; document.getElementById('ac_name').focus(); }
+}
+
+function closeAddCustomerModal() {
+  var m = document.getElementById('addCustModal');
+  if (m) m.style.display = 'none';
+  ['ac_name','ac_phone','ac_email','ac_notes'].forEach(function(id){
+    var el = document.getElementById(id); if (el) el.value = '';
+  });
+}
+
+async function saveNewCustomer() {
+  var name  = (document.getElementById('ac_name').value||'').trim();
+  var phone = (document.getElementById('ac_phone').value||'').trim();
+  var email = (document.getElementById('ac_email').value||'').trim();
+  var notes = (document.getElementById('ac_notes').value||'').trim();
+  if (!name) { showToast('Please enter a name', 'error'); return; }
+
+  var btn = document.getElementById('ac_save_btn');
+  btn.disabled = true; btn.textContent = 'Saving...';
+
+  var r = await api('upsertCustomer', { userId: currentUser && currentUser.userId, name, phone: phone||null, email: email||null, notes: notes||null });
+  btn.disabled = false; btn.textContent = '✅ Save Customer';
+
+  if (r.ok) {
+    showToast('✅ Customer ' + (r.action==='created'?'added':'updated') + '!');
+    closeAddCustomerModal();
+    loadCustomersView();
+  } else {
+    showToast('❌ ' + (r.error||'Failed'), 'error');
+  }
+}
+
+async function openEditCustomerModal(id) {
+  var c = null;
+  var r = await api('getCustomer', { userId: currentUser && currentUser.userId, id: id });
+  if (!r.ok) return;
+  c = r.customer;
+  // Close detail modal
+  var dm = document.getElementById('custModal');
+  if (dm) dm.style.display = 'none';
+  // Pre-fill add modal
+  openAddCustomerModal();
+  document.getElementById('ac_name').value  = c.name  || '';
+  document.getElementById('ac_phone').value = c.phone || '';
+  document.getElementById('ac_email').value = c.email || '';
+  document.getElementById('ac_notes').value = c.notes || '';
+  // Store ID for update
+  var btn = document.getElementById('ac_save_btn');
+  btn.onclick = async function() { await updateExistingCustomer(id); };
+}
+
+async function updateExistingCustomer(id) {
+  var name  = (document.getElementById('ac_name').value||'').trim();
+  var phone = (document.getElementById('ac_phone').value||'').trim();
+  var email = (document.getElementById('ac_email').value||'').trim();
+  var notes = (document.getElementById('ac_notes').value||'').trim();
+  if (!name) { showToast('Please enter a name', 'error'); return; }
+
+  var btn = document.getElementById('ac_save_btn');
+  btn.disabled = true; btn.textContent = 'Saving...';
+
+  var r = await api('upsertCustomer', { userId: currentUser && currentUser.userId, id, name, phone: phone||null, email: email||null, notes: notes||null });
+  btn.disabled = false; btn.textContent = '✅ Save Customer';
+  // Reset onclick back to default
+  btn.onclick = saveNewCustomer;
+
+  if (r.ok) {
+    showToast('✅ Customer updated!');
+    closeAddCustomerModal();
+    loadCustomersView();
+  } else {
+    showToast('❌ ' + (r.error||'Failed'), 'error');
+  }
+}
