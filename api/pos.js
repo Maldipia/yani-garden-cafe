@@ -1440,6 +1440,69 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       });
     }
 
+    // ── addItemsToOrder (multi-table: append items to existing order) ──────
+    if (action === 'addItemsToOrder') {
+      const authA = await checkAuth(['OWNER','ADMIN','CASHIER','SERVER']);
+      if (!authA.ok) return res.status(403).json({ ok: false, error: authA.error });
+
+      const orderId = String(body.orderId || '').trim();
+      const newItems = Array.isArray(body.items) ? body.items : [];
+      if (!orderId) return res.status(400).json({ ok: false, error: 'orderId required' });
+      if (!newItems.length) return res.status(400).json({ ok: false, error: 'items required' });
+
+      // Fetch existing order
+      const orderR = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=order_no,table_no,order_type,subtotal,service_charge,total,status`
+      );
+      if (!orderR.ok || !orderR.data.length) return res.status(404).json({ ok: false, error: 'Order not found' });
+      const ord = orderR.data[0];
+      if (['COMPLETED','CANCELLED'].includes(ord.status)) {
+        return res.status(400).json({ ok: false, error: `Cannot add to a ${ord.status} order` });
+      }
+
+      // Build new item rows
+      let addSubtotal = 0;
+      const itemRows = newItems.map(it => {
+        const qty = Math.max(1, parseInt(it.qty) || 1);
+        const price = parseFloat(it.price) || 0;
+        addSubtotal += price * qty;
+        return {
+          order_id:     orderId,
+          order_no:     ord.order_no,
+          table_no:     ord.table_no,
+          item_code:    it.code || 'CUSTOM',
+          item_name:    it.name || 'Item',
+          unit_price:   price,
+          qty,
+          size_choice:  it.size || '',
+          sugar_choice: it.sugarLevel || it.sugar || '',
+          item_notes:   it.notes || '',
+        };
+      });
+
+      // Insert new items
+      const insertR = await supa('POST', 'dine_in_order_items', itemRows);
+      if (!insertR.ok) return res.status(500).json({ ok: false, error: 'Failed to insert items' });
+
+      // Recalculate totals
+      const existSubtotal = parseFloat(ord.subtotal || 0);
+      const newSubtotal   = Math.round((existSubtotal + addSubtotal) * 100) / 100;
+      const svcRate       = ord.order_type === 'TAKE-OUT' ? 0 : SERVICE_CHARGE_RATE;
+      const newSvc        = Math.round(newSubtotal * svcRate * 100) / 100;
+      const newTotal      = Math.round((newSubtotal + newSvc) * 100) / 100;
+
+      await supaFetch(`${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ subtotal: newSubtotal, service_charge: newSvc, total: newTotal })
+      });
+
+      // Log audit
+      await logAudit(authA.userId, 'add_items_to_order', orderId,
+        { added: newItems.length, addSubtotal });
+
+      return res.status(200).json({ ok: true, orderId, added: newItems.length, newTotal });
+    }
+
     // ── editOrderItems ─────────────────────────────────────────────────────
     if (action === 'editOrderItems') {
       const authE = await checkAuth(['OWNER','ADMIN','CASHIER']);

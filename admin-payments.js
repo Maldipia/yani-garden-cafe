@@ -308,9 +308,10 @@ var spTableNo = '';
 var spSelectedCat = 'ALL';
 var spAddingItem = null;
 var spMenuItems = [];
+var spActiveOrderId = null; // tracks if we're adding to an existing order
 
 function openStaffPOS() {
-  spCart = []; spOrderType = 'DINE_IN'; spTableNo = ''; spSelectedCat = 'ALL';
+  spCart = []; spOrderType = 'DINE_IN'; spTableNo = ''; spSelectedCat = 'ALL'; spActiveOrderId = null;
   document.getElementById('spCustomerName').value = '';
   document.getElementById('spNotes').value = '';
   document.getElementById('spFooter').style.display = 'none';
@@ -338,26 +339,55 @@ function spSelectType(type) {
 function spRenderTables() {
   var grid = document.getElementById('spTableGrid');
   if (!grid) return;
-  // Map occupied tables
-  var occupied = {};
+  // Map active orders by table
+  var activeOrders = {};
   allOrders.forEach(function(o) {
-    if (['NEW','PREPARING','READY'].includes(o.status) && !o.isTest && o.tableNo) occupied[String(o.tableNo)] = true;
+    if (['NEW','PREPARING','READY'].includes(o.status) && !o.isTest && o.tableNo) {
+      activeOrders[String(o.tableNo)] = o;
+    }
   });
   var tables = _allTables.length > 0 ? _allTables : [];
   grid.innerHTML = tables.map(function(tbl) {
     var tno = String(tbl.table_number);
     var name = tbl.table_name || ('Table ' + tno);
-    var isOcc = !!occupied[tno];
+    var activeOrder = activeOrders[tno];
     var isActive = spTableNo === tno;
-    var cls = 'sp-tbl-btn' + (isActive ? ' active' : isOcc ? ' occupied' : '');
-    return '<button class="' + cls + '" onclick="spSelectTable(\'' + tno + '\')" title="' + esc(name) + '">' +
-      esc(name) + (isOcc ? '<br><span style="font-size:.58rem">🔴 busy</span>' : '') +
-    '</button>';
+    var cls = 'sp-tbl-btn' + (isActive ? ' active' : activeOrder ? ' occupied' : '');
+    var label = name;
+    if (activeOrder) {
+      label += '<br><span style="font-size:.58rem">🔴 ' + (activeOrder.customerName||'Guest') + '</span>';
+      label += '<br><span style="font-size:.56rem;opacity:.8">+ Add items</span>';
+    }
+    return '<button class="' + cls + '" onclick="spSelectTable(\'' + tno + '\')" title="' + esc(name) + '">'
+      + label + '</button>';
   }).join('');
 }
 
 function spSelectTable(tno) {
   spTableNo = tno;
+  // Check if this table has an active order
+  var activeOrder = null;
+  allOrders.forEach(function(o) {
+    if (['NEW','PREPARING','READY'].includes(o.status) && !o.isTest && String(o.tableNo) === tno) {
+      activeOrder = o;
+    }
+  });
+  spActiveOrderId = activeOrder ? activeOrder.orderId : null;
+
+  // Update mode label
+  var modeEl = document.getElementById('spModeLabel');
+  if (modeEl) {
+    if (spActiveOrderId) {
+      modeEl.innerHTML = '<div style="background:#DBEAFE;color:#1E40AF;border-radius:8px;padding:6px 10px;font-size:.75rem;font-weight:700;margin-bottom:8px">➕ Adding to existing order: ' + spActiveOrderId + '</div>';
+    } else {
+      modeEl.innerHTML = '';
+    }
+  }
+
+  // Update submit button label
+  var btn = document.getElementById('spSubmitBtn');
+  if (btn) btn.textContent = spActiveOrderId ? '➕ Add to Order' : '✅ Place Order';
+
   spRenderTables();
   spUpdateFooter();
 }
@@ -474,17 +504,39 @@ async function submitStaffOrder() {
   if (spOrderType === 'DINE_IN' && !spTableNo) { showToast('Please select a table', 'error'); return; }
 
   var btn = document.getElementById('spSubmitBtn');
-  btn.disabled = true; btn.textContent = '⏳ Placing…';
+  btn.disabled = true;
+  btn.textContent = spActiveOrderId ? '⏳ Adding…' : '⏳ Placing…';
 
+  // MODE: Add to existing order
+  if (spActiveOrderId) {
+    var addItems = spCart.map(function(it) {
+      return { code:it.code, name:it.name, price:it.price, qty:it.qty,
+               size:it.size||null, sugarLevel:it.sugarLevel||null };
+    });
+    var r = await api('addItemsToOrder', {
+      userId: currentUser && currentUser.userId,
+      orderId: spActiveOrderId,
+      items: addItems
+    });
+    btn.disabled = false; btn.textContent = '➕ Add to Order';
+    if (r.ok) {
+      closeStaffPOS();
+      showToast('✅ Added ' + spCart.length + ' item(s) to ' + spActiveOrderId);
+      await loadOrders();
+    } else {
+      showToast('❌ ' + (r.error||'Failed to add items'), 'error');
+    }
+    return;
+  }
+
+  // MODE: New order
   var subtotal = spCart.reduce(function(s,it){ return s + it.price*it.qty; }, 0);
   var svcCharge = spOrderType === 'DINE_IN' ? Math.round(subtotal * 10) / 100 : 0;
   var total = Math.round((subtotal + svcCharge) * 100) / 100;
-
   var items = spCart.map(function(it) {
     return { code:it.code, name:it.name, price:it.price, qty:it.qty,
              size:it.size||null, sugarLevel:it.sugarLevel||null };
   });
-
   var payload = {
     tableNo: spOrderType === 'DINE_IN' ? parseInt(spTableNo) : null,
     tableToken: spOrderType === 'DINE_IN' ? ((_allTables.find(function(t){return String(t.table_number)===spTableNo;})||{}).qr_token || 'staff') : 'takeout',
@@ -497,10 +549,8 @@ async function submitStaffOrder() {
     total: total,
     staffOrder: true
   };
-
   var r = await api('placeOrder', payload);
   btn.disabled = false; btn.textContent = '✅ Place Order';
-
   if (r.ok) {
     closeStaffPOS();
     showToast('✅ Order ' + (r.orderId||'') + ' placed!', 'success');

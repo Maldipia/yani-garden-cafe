@@ -1021,46 +1021,59 @@ function renderFloorMap() {
   var statusColors = { AVAILABLE:'#22c55e', OCCUPIED:'#ef4444', RESERVED:'#f59e0b', MAINTENANCE:'#94a3b8' };
   var statusLabels = { AVAILABLE:'Available', OCCUPIED:'Occupied', RESERVED:'Reserved', MAINTENANCE:'Maintenance' };
 
+  // Auto-detect occupied from active orders in real-time
+  var activeByTable = {};
+  if (typeof allOrders !== 'undefined') {
+    allOrders.forEach(function(o) {
+      if (['NEW','PREPARING','READY'].includes(o.status) && !o.isTest && o.tableNo) {
+        activeByTable[String(o.tableNo)] = o;
+      }
+    });
+  }
+
   var legendHtml = Object.keys(statusColors).map(function(s) {
     return '<span style="display:inline-flex;align-items:center;gap:5px;margin-right:14px;font-size:.75rem">'
       + '<span style="width:12px;height:12px;border-radius:3px;background:' + statusColors[s] + '"></span>' + statusLabels[s] + '</span>';
   }).join('');
 
   var gridHtml = _floorTables.map(function(t) {
-    var st = t.status || 'AVAILABLE';
+    var tno = String(t.table_number);
+    var activeOrder = activeByTable[tno];
+    var st = activeOrder ? 'OCCUPIED' : (t.status || 'AVAILABLE');
     var col = statusColors[st] || '#22c55e';
-    // Find linked reservation
     var linked = _floorReservations.find(function(r) { return r.table_id === t.id; });
-    var resHtml = linked
-      ? '<div style="font-size:.65rem;margin-top:3px;color:#fff;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
-        + '📅 ' + linked.guest_name + '</div>' : '';
 
-    return '<div style="background:' + col + ';border-radius:14px;padding:14px 10px;text-align:center;cursor:pointer;min-width:80px;box-shadow:0 2px 8px rgba(0,0,0,.12);transition:transform .1s" '
-      + 'onclick="openFloorTableMenu(' + t.table_number + ')">'
-      + '<div style="font-size:1.4rem">🪑</div>'
-      + '<div style="font-weight:800;font-size:.85rem;color:#fff;margin-top:2px">'
-      + (t.table_name || 'Table ' + t.table_number) + '</div>'
-      + '<div style="font-size:.65rem;color:#fff;opacity:.9;margin-top:1px">' + statusLabels[st] + '</div>'
-      + resHtml
+    var actionHtml = '';
+    if (activeOrder) {
+      actionHtml = '<div style="font-size:.62rem;color:#fff;opacity:.9;margin-top:3px">' + esc(activeOrder.customerName||'Guest') + '</div>'
+        + '<div style="font-size:.6rem;color:#fff;opacity:.8">₱' + (parseFloat(activeOrder.total)||0).toLocaleString() + '</div>'
+        + '<button onclick="event.stopPropagation();quickFreeTable(' + t.table_number + ')" style="margin-top:6px;background:rgba(255,255,255,.25);color:#fff;border:none;border-radius:6px;padding:3px 8px;font-size:.6rem;font-weight:700;cursor:pointer;width:100%">✓ Free Table</button>';
+    } else if (st === 'AVAILABLE') {
+      actionHtml = '<button onclick="event.stopPropagation();quickOccupyTable(' + t.table_number + ')" style="margin-top:6px;background:rgba(255,255,255,.2);color:#fff;border:none;border-radius:6px;padding:3px 8px;font-size:.6rem;font-weight:700;cursor:pointer;width:100%">● Occupy</button>';
+    }
+    if (linked) {
+      actionHtml += '<div style="font-size:.6rem;margin-top:3px;color:#fff;opacity:.85">📅 ' + esc(linked.guest_name) + '</div>';
+    }
+
+    return '<div style="background:' + col + ';border-radius:14px;padding:12px 8px;text-align:center;cursor:pointer;min-width:82px;box-shadow:0 2px 8px rgba(0,0,0,.12);transition:transform .1s"'
+      + ' onclick="openFloorTableMenu(' + t.table_number + ')">'
+      + '<div style="font-size:1.2rem">🪑</div>'
+      + '<div style="font-weight:800;font-size:.82rem;color:#fff;margin-top:2px">'
+      + esc(t.table_name || 'Table ' + t.table_number) + '</div>'
+      + '<div style="font-size:.62rem;color:#fff;opacity:.9;margin-top:1px">' + statusLabels[st] + '</div>'
+      + actionHtml
       + '</div>';
   }).join('');
 
   // Pending reservations (no table linked)
   var unlinked = _floorReservations.filter(function(r) { return !r.table_id; });
-  var pendingHtml = unlinked.length ? '<div style="margin:20px 0 8px;font-weight:700;font-size:.85rem;color:#92400e">📅 Reservations Awaiting Table Assignment (' + unlinked.length + ')</div>'
+  var pendingHtml = unlinked.length ? '<div style="margin:20px 0 8px;font-weight:700;font-size:.85rem;color:#92400e">📅 Reservations Awaiting Table (' + unlinked.length + ')</div>'
     + unlinked.map(function(r) {
       return '<div style="background:#fef3c7;border:1.5px solid #fbbf24;border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">'
-        + '<div><div style="font-weight:700;font-size:.85rem">' + r.guest_name + ' — ' + r.pax + ' pax</div>'
+        + '<div><div style="font-weight:700;font-size:.85rem">' + esc(r.guest_name) + ' — ' + r.pax + ' pax</div>'
         + '<div style="font-size:.72rem;color:#92400e">' + r.res_date + ' ' + r.res_time + '</div></div>'
-        + '<div style="display:flex;gap:8px">'
-        + _floorTables.filter(function(t){return t.status==='AVAILABLE';}).slice(0,1).length
-          ? '<select id="rlkSel_' + r.res_id + '" style="font-size:.75rem;padding:4px 6px;border-radius:7px;border:1px solid #fbbf24">'
-            + _floorTables.filter(function(t){return t.status==='AVAILABLE';}).map(function(t){
-              return '<option value="' + t.table_number + '">' + (t.table_name||'T'+t.table_number) + '</option>';
-            }).join('') + '</select>'
-          : '<span style="font-size:.72rem;color:#ef4444">No tables free</span>'
         + '<button onclick="assignResTable(\'' + r.res_id + '\')" style="background:#f59e0b;color:#fff;border:none;border-radius:7px;padding:5px 10px;font-size:.75rem;font-weight:700;cursor:pointer">Assign</button>'
-        + '</div></div>';
+        + '</div>';
     }).join('') : '';
 
   el.innerHTML = '<div style="padding:16px 16px 0;max-width:960px">'
@@ -1069,6 +1082,16 @@ function renderFloorMap() {
     + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:10px">' + gridHtml + '</div>'
     + pendingHtml
     + '</div>';
+}
+
+async function quickOccupyTable(tableNo) {
+  var r = await api('setTableStatus', { userId: currentUser && currentUser.userId, tableNumber: tableNo, status: 'OCCUPIED' });
+  if (r.ok) { showToast('Table ' + tableNo + ' → Occupied'); loadFloorMap(); }
+}
+
+async function quickFreeTable(tableNo) {
+  var r = await api('setTableStatus', { userId: currentUser && currentUser.userId, tableNumber: tableNo, status: 'AVAILABLE' });
+  if (r.ok) { showToast('Table ' + tableNo + ' → Available ✅'); loadFloorMap(); }
 }
 
 async function assignResTable(resId) {
