@@ -1066,7 +1066,10 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       let url = `${SUPABASE_URL}/rest/v1/dine_in_orders?order=created_at.desc&limit=${limit}${includeDeleted ? '' : '&is_deleted=eq.false'}&select=*`;
       if (orderId) url += `&order_id=eq.${encodeURIComponent(orderId)}`;
       else if (status === 'ACTIVE') url += `&status=in.(NEW,PREPARING,READY)`;
+      else if (status === 'SCHEDULED') url += `&status=eq.SCHEDULED&is_preorder=eq.true`;
       else if (status && status !== 'ALL') url += `&status=eq.${encodeURIComponent(status)}`;
+      // Always include SCHEDULED pre-orders in ALL/default view so admin sees them
+      else if (!status) url += `&status=in.(SCHEDULED,NEW,PREPARING,READY,COMPLETED,CANCELLED)`;
       if (excludeTest) url += `&is_test=eq.false`;
 
       const ordersR = await supaFetch(url);
@@ -1136,6 +1139,9 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
         createdAt:     o.created_at ? (o.created_at.endsWith('Z') || o.created_at.includes('+') ? o.created_at : o.created_at + '+00:00') : null,
         updatedAt:     o.updated_at,
         isTest:        o.is_test || false,
+        isPreorder:    o.is_preorder || false,
+        scheduledFor:  o.scheduled_for || null,
+        preorderToken: o.preorder_token || null,
         items:         itemsMap[o.order_id] || [],
       }));
 
@@ -1295,6 +1301,159 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
     // ══════════════════════════════════════════════════════════════════════
 
     // ── getLoyaltySettings ─────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════════
+    // PRE-ORDERING SYSTEM
+    // ══════════════════════════════════════════════════════════════════════
+
+    // ── createPreOrder (public — customer-facing) ──────────────────────────
+    if (action === 'createPreOrder') {
+      const { customerName, customerPhone, items, scheduledFor, orderType, notes } = body;
+      if (!customerName || !customerPhone || !items?.length || !scheduledFor) {
+        return res.status(400).json({ ok: false, error: 'customerName, customerPhone, items, and scheduledFor required' });
+      }
+
+      // Validate scheduled time
+      const pickupTime = new Date(scheduledFor);
+      const now = new Date();
+      const diffMins = (pickupTime - now) / 60000;
+
+      const minR = await supaFetch(`${SUPABASE_URL}/rest/v1/settings?key=in.("PREORDER_MIN_ADVANCE","PREORDER_MAX_ADVANCE","PREORDER_ENABLED")&select=key,value`);
+      const minSett = {};
+      (minR.data||[]).forEach(s => { minSett[s.key] = s.value; });
+
+      if (minSett.PREORDER_ENABLED === 'false') return res.status(400).json({ ok: false, error: 'Pre-ordering is currently disabled' });
+      const minAdv = parseInt(minSett.PREORDER_MIN_ADVANCE || '30');
+      const maxAdv = parseInt(minSett.PREORDER_MAX_ADVANCE || '1440');
+      if (diffMins < minAdv) return res.status(400).json({ ok: false, error: `Must order at least ${minAdv} minutes in advance` });
+      if (diffMins > maxAdv) return res.status(400).json({ ok: false, error: `Cannot order more than ${Math.round(maxAdv/60)} hours in advance` });
+
+      // Build order
+      const menuR = await supaFetch(`${SUPABASE_URL}/rest/v1/menu_items?is_active=eq.true&select=item_code,name,base_price,price_short,price_medium,price_tall,has_sizes`);
+      const menuMap = {};
+      (menuR.data||[]).forEach(m => { menuMap[m.item_code] = m; });
+
+      let subtotal = 0;
+      const orderItems = [];
+      for (const it of items) {
+        const menu = menuMap[it.code];
+        if (!menu) return res.status(400).json({ ok: false, error: `Item not found: ${it.code}` });
+        let price = parseFloat(menu.base_price||0);
+        if (menu.has_sizes && it.size) {
+          if (it.size === 'Short') price = parseFloat(menu.price_short||price);
+          else if (it.size === 'Medium') price = parseFloat(menu.price_medium||price);
+          else if (it.size === 'Tall') price = parseFloat(menu.price_tall||price);
+        }
+        const lineTotal = price * (it.qty||1);
+        subtotal += lineTotal;
+        orderItems.push({ code: it.code, name: menu.name, price, qty: it.qty||1, size: it.size||'', sugar: it.sugar||'', lineTotal });
+      }
+
+      const svcRate = parseFloat((await getSetting('SERVICE_CHARGE'))||'0.1');
+      const svc = orderType === 'TAKE-OUT' ? 0 : Math.round(subtotal * svcRate * 100) / 100;
+      const total = subtotal + svc;
+
+      // Generate order ID and token
+      const prefix = (await getSetting('ORDER_PREFIX'))||'YANI';
+      const cntR = await supaFetch(`${SUPABASE_URL}/rest/v1/dine_in_orders?select=order_no&order=order_no.desc&limit=1`);
+      const lastNo = cntR.data?.[0]?.order_no || 1000;
+      const orderNo = lastNo + 1;
+      const orderId = `${prefix}-${orderNo}`;
+      const token = Math.random().toString(36).substring(2,10).toUpperCase();
+
+      // Insert order
+      const orderR = await supaFetch(`${SUPABASE_URL}/rest/v1/dine_in_orders`, {
+        method: 'POST',
+        headers: { 'Prefer': 'return=representation' },
+        body: JSON.stringify({
+          order_id: orderId, order_no: orderNo, status: 'SCHEDULED',
+          order_type: orderType||'TAKE-OUT', source: 'QR',
+          customer_name: customerName, table_no: 'PREORDER',
+          subtotal, service_charge: svc, total,
+          notes: notes||'', is_preorder: true,
+          scheduled_for: pickupTime.toISOString(),
+          preorder_token: token,
+          payment_status: 'PENDING',
+          items_json: JSON.stringify(orderItems)
+        })
+      });
+      if (!orderR.ok) return res.status(500).json({ ok: false, error: 'Failed to create pre-order' });
+
+      // Insert order items
+      const itemRows = orderItems.map(it => ({
+        order_id: orderId, order_no: orderNo, table_no: 'PREORDER',
+        item_code: it.code, item_name: it.name, unit_price: it.price,
+        qty: it.qty, size_choice: it.size||'', sugar_choice: it.sugar||''
+      }));
+      await supaFetch(`${SUPABASE_URL}/rest/v1/dine_in_order_items`, { method: 'POST', body: JSON.stringify(itemRows) });
+
+      auditLog({ orderId, action: 'PREORDER_PLACED', details: { scheduledFor: pickupTime.toISOString(), customerName, total, items: orderItems.length } });
+
+      return res.status(200).json({ ok: true, orderId, token, scheduledFor: pickupTime.toISOString(), total, subtotal, svc });
+    }
+
+    // ── getPreOrders (admin) ───────────────────────────────────────────────
+    if (action === 'getPreOrders') {
+      const auth = await checkAuth(['OWNER','ADMIN','CASHIER','KITCHEN']);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/dine_in_orders?is_preorder=eq.true&status=in.("SCHEDULED","NEW","PREPARING","READY")&order=scheduled_for.asc&select=*&limit=100`
+      );
+      return res.status(200).json({ ok: true, orders: (r.data||[]).map(o => ({
+        orderId: o.order_id, orderNo: o.order_no, status: o.status,
+        customerName: o.customer_name, tableNo: o.table_no,
+        orderType: o.order_type, subtotal: parseFloat(o.subtotal||0),
+        serviceCharge: parseFloat(o.service_charge||0), total: parseFloat(o.total||0),
+        notes: o.notes, scheduledFor: o.scheduled_for,
+        paymentStatus: o.payment_status, paymentMethod: o.payment_method,
+        createdAt: o.created_at, isPreorder: true,
+        items: (() => { try { return JSON.parse(o.items_json||'[]'); } catch { return []; } })()
+      })) });
+    }
+
+    // ── triggerScheduledOrders (called by admin poll + cron) ───────────────
+    if (action === 'triggerScheduledOrders') {
+      const auth = await checkAuth(['OWNER','ADMIN','CASHIER','KITCHEN']);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+
+      const bufferR = await supaFetch(`${SUPABASE_URL}/rest/v1/settings?key=eq.PREORDER_PREP_BUFFER&select=value&limit=1`);
+      const bufferMins = parseInt(bufferR.data?.[0]?.value || '15');
+      const triggerTime = new Date(Date.now() + bufferMins * 60000).toISOString();
+
+      // Find orders due to start
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/dine_in_orders?is_preorder=eq.true&status=eq.SCHEDULED&scheduled_for=lte.${encodeURIComponent(triggerTime)}&select=order_id,customer_name,scheduled_for`
+      );
+      const due = r.data || [];
+      const triggered = [];
+
+      for (const o of due) {
+        await supaFetch(`${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(o.order_id)}`, {
+          method: 'PATCH', body: JSON.stringify({ status: 'NEW', updated_at: new Date().toISOString() })
+        });
+        auditLog({ orderId: o.order_id, action: 'PREORDER_TRIGGERED', details: { scheduledFor: o.scheduled_for, triggeredAt: new Date().toISOString() } });
+        triggered.push(o.order_id);
+      }
+
+      return res.status(200).json({ ok: true, triggered, count: triggered.length });
+    }
+
+    // ── getPreOrderStatus (public — customer tracking) ─────────────────────
+    if (action === 'getPreOrderStatus') {
+      const { orderId, token } = body;
+      if (!orderId || !token) return res.status(400).json({ ok: false, error: 'orderId and token required' });
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&preorder_token=eq.${encodeURIComponent(token)}&select=order_id,status,scheduled_for,customer_name,total,subtotal,service_charge,payment_status,items_json&limit=1`
+      );
+      if (!r.ok || !r.data?.length) return res.status(200).json({ ok: false, error: 'Order not found' });
+      const o = r.data[0];
+      return res.status(200).json({ ok: true, order: {
+        orderId: o.order_id, status: o.status, scheduledFor: o.scheduled_for,
+        customerName: o.customer_name, total: parseFloat(o.total||0),
+        paymentStatus: o.payment_status,
+        items: (() => { try { return JSON.parse(o.items_json||'[]'); } catch { return []; } })()
+      }});
+    }
+
     if (action === 'getLoyaltySettings') {
       const keys = ['LOYALTY_ENABLED','LOYALTY_EARN_RATE','LOYALTY_REDEEM_RATE',
                     'LOYALTY_MIN_REDEEM','LOYALTY_SILVER_THRESHOLD','LOYALTY_GOLD_THRESHOLD','LOYALTY_PLATINUM_THRESHOLD'];

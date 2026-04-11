@@ -127,6 +127,14 @@
     {
       "source": "/api/create-promo-table",
       "destination": "/api/create-promo-table"
+    },
+    {
+      "source": "/preorder",
+      "destination": "/preorder.html"
+    },
+    {
+      "source": "/preorder/",
+      "destination": "/preorder.html"
     }
   ],
   "headers": [

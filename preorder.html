@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Pre-Order — YANI Garden Cafe</title>
+  <style>
+    :root {
+      --forest:#2d5016; --forest-deep:#1a3a2a; --gold:#c67c2a;
+      --mist:#e8e4dc; --timber:#7a6652; --cream:#faf8f4;
+    }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:var(--cream); color:#2d2d2d; min-height:100vh; }
+
+    .header { background:var(--forest-deep); color:#fff; padding:16px 20px; text-align:center; }
+    .header h1 { font-size:1.15rem; font-weight:800; color:#a3d9a5; }
+    .header p  { font-size:.75rem; color:#c8e6c9; margin-top:3px; }
+
+    .container { max-width:560px; margin:0 auto; padding:16px; }
+
+    .section-title { font-size:.7rem; font-weight:700; color:var(--timber); text-transform:uppercase; letter-spacing:.5px; margin:18px 0 8px; }
+
+    /* Menu */
+    .cat-tabs { display:flex; gap:6px; overflow-x:auto; padding-bottom:4px; margin-bottom:10px; }
+    .cat-tab { padding:6px 14px; border-radius:20px; border:1.5px solid var(--mist); background:#fff; font-size:.78rem; font-weight:600; cursor:pointer; white-space:nowrap; flex-shrink:0; }
+    .cat-tab.active { background:var(--forest); color:#fff; border-color:var(--forest); }
+
+    .menu-grid { display:flex; flex-direction:column; gap:8px; margin-bottom:12px; }
+    .menu-item { background:#fff; border-radius:12px; padding:12px 14px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 1px 4px rgba(0,0,0,.07); }
+    .menu-item-info .name { font-weight:700; font-size:.88rem; }
+    .menu-item-info .price { font-size:.78rem; color:var(--timber); margin-top:2px; }
+    .add-btn { width:32px; height:32px; border-radius:50%; background:var(--forest); color:#fff; border:none; font-size:1.2rem; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+
+    /* Cart */
+    .cart-box { background:#fff; border-radius:14px; padding:14px; box-shadow:0 2px 8px rgba(0,0,0,.08); margin-bottom:16px; }
+    .cart-empty { text-align:center; color:var(--timber); font-size:.82rem; padding:16px; }
+    .cart-row { display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid var(--mist); }
+    .cart-row:last-child { border-bottom:none; }
+    .cart-name { flex:1; font-size:.83rem; font-weight:600; }
+    .cart-qty { display:flex; align-items:center; gap:6px; }
+    .qty-btn { width:26px; height:26px; border-radius:50%; border:1.5px solid var(--mist); background:#fff; font-size:.9rem; cursor:pointer; }
+    .cart-price { font-size:.83rem; font-weight:700; color:var(--forest-deep); min-width:60px; text-align:right; }
+
+    .cart-total { display:flex; justify-content:space-between; padding:10px 0 0; font-weight:800; font-size:.95rem; margin-top:6px; }
+
+    /* Form */
+    .form-group { margin-bottom:12px; }
+    .form-label { display:block; font-size:.75rem; font-weight:700; color:var(--timber); margin-bottom:5px; }
+    .form-input, .form-select { width:100%; padding:10px 12px; border:1.5px solid var(--mist); border-radius:10px; font-size:.88rem; font-family:inherit; background:#fff; }
+    .form-input:focus, .form-select:focus { outline:none; border-color:var(--forest); }
+
+    .time-slots { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .time-slot { padding:8px 10px; border:1.5px solid var(--mist); border-radius:10px; font-size:.78rem; text-align:center; cursor:pointer; background:#fff; }
+    .time-slot.active { background:var(--forest); color:#fff; border-color:var(--forest); font-weight:700; }
+
+    .place-btn { width:100%; padding:14px; background:var(--forest); color:#fff; border:none; border-radius:12px; font-size:.95rem; font-weight:800; cursor:pointer; font-family:inherit; margin-top:8px; }
+    .place-btn:disabled { opacity:.5; cursor:not-allowed; }
+
+    /* Confirmation */
+    .confirm-screen { display:none; text-align:center; padding:24px 16px; }
+    .confirm-icon { font-size:3rem; margin-bottom:12px; }
+    .confirm-title { font-size:1.2rem; font-weight:800; color:var(--forest-deep); margin-bottom:8px; }
+    .confirm-card { background:#fff; border-radius:14px; padding:16px; text-align:left; margin:14px 0; box-shadow:0 2px 8px rgba(0,0,0,.08); }
+    .confirm-row { display:flex; justify-content:space-between; padding:5px 0; font-size:.83rem; border-bottom:1px solid var(--mist); }
+    .confirm-row:last-child { border-bottom:none; font-weight:700; font-size:.92rem; }
+    .track-btn { width:100%; padding:12px; background:var(--forest); color:#fff; border:none; border-radius:12px; font-size:.88rem; font-weight:700; cursor:pointer; font-family:inherit; margin-top:12px; }
+
+    .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:#1a3a2a; color:#fff; padding:10px 20px; border-radius:10px; font-size:.83rem; font-weight:600; z-index:999; opacity:0; transition:opacity .25s; pointer-events:none; }
+    .toast.show { opacity:1; }
+
+    /* Size modal */
+    .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:500; align-items:flex-end; justify-content:center; }
+    .modal-overlay.open { display:flex; }
+    .modal-box { background:#fff; border-radius:20px 20px 0 0; width:100%; max-width:480px; padding:20px; }
+    .modal-title { font-weight:800; font-size:.95rem; color:var(--forest-deep); margin-bottom:14px; }
+    .size-option { display:flex; justify-content:space-between; align-items:center; padding:10px 12px; border:1.5px solid var(--mist); border-radius:10px; margin-bottom:8px; cursor:pointer; }
+    .size-option.active { border-color:var(--forest); background:#f0fdf4; }
+    .modal-btn { width:100%; padding:12px; background:var(--forest); color:#fff; border:none; border-radius:10px; font-size:.9rem; font-weight:700; cursor:pointer; font-family:inherit; margin-top:6px; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🌿 YANI Garden Cafe</h1>
+  <p>Pre-Order for Pickup · Amadeo, Cavite</p>
+</div>
+
+<div class="container" id="orderFlow">
+
+  <!-- Step 1: Menu -->
+  <div class="section-title">1. Choose Your Items</div>
+  <div class="cat-tabs" id="catTabs"></div>
+  <div class="menu-grid" id="menuGrid">
+    <div style="text-align:center;padding:20px;color:var(--timber);font-size:.85rem">Loading menu...</div>
+  </div>
+
+  <!-- Step 2: Cart -->
+  <div class="section-title">2. Your Order</div>
+  <div class="cart-box" id="cartBox">
+    <div class="cart-empty">No items yet — add something above!</div>
+  </div>
+
+  <!-- Step 3: Pickup time -->
+  <div class="section-title">3. Choose Pickup Time</div>
+  <div class="form-group">
+    <label class="form-label">Pickup Date & Time <span style="color:#e04444">*</span></label>
+    <input type="datetime-local" class="form-input" id="pickupTime">
+    <div style="font-size:.7rem;color:var(--timber);margin-top:4px">Must be at least 30 minutes from now · Max 24 hours ahead</div>
+  </div>
+
+  <!-- Step 4: Your details -->
+  <div class="section-title">4. Your Details</div>
+  <div class="form-group">
+    <label class="form-label">Name <span style="color:#e04444">*</span></label>
+    <input type="text" class="form-input" id="custName" placeholder="e.g. Maria Santos">
+  </div>
+  <div class="form-group">
+    <label class="form-label">Phone <span style="color:#e04444">*</span></label>
+    <input type="tel" class="form-input" id="custPhone" placeholder="e.g. 09171234567">
+  </div>
+  <div class="form-group">
+    <label class="form-label">Order Type</label>
+    <select class="form-select" id="orderType">
+      <option value="TAKE-OUT">Take-Out (no service charge)</option>
+      <option value="DINE-IN">Dine-In (10% service charge)</option>
+    </select>
+  </div>
+  <div class="form-group">
+    <label class="form-label">Special Instructions</label>
+    <input type="text" class="form-input" id="custNotes" placeholder="Allergies, special requests...">
+  </div>
+
+  <button class="place-btn" id="placeBtn" onclick="placePreOrder()">📅 Schedule Pre-Order</button>
+</div>
+
+<!-- Confirmation screen -->
+<div class="confirm-screen" id="confirmScreen">
+  <div class="confirm-icon">✅</div>
+  <div class="confirm-title">Pre-Order Confirmed!</div>
+  <p style="font-size:.82rem;color:var(--timber);margin-bottom:4px">Your order is scheduled. We'll start preparing it before your pickup time.</p>
+
+  <div class="confirm-card" id="confirmDetails"></div>
+
+  <button class="track-btn" onclick="trackOrder()">📍 Track My Order</button>
+  <button class="track-btn" style="background:#f0f0f0;color:#374151;margin-top:8px" onclick="newOrder()">+ Place Another Order</button>
+</div>
+
+<!-- Size picker modal -->
+<div class="modal-overlay" id="sizeModal">
+  <div class="modal-box">
+    <div class="modal-title" id="sizeModalTitle">Choose Size</div>
+    <div id="sizeOptions"></div>
+    <button class="modal-btn" onclick="closeSizeModal()">Cancel</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+var API = '/api/pos';
+var cart = [];
+var menuItems = [];
+var currentCat = 'ALL';
+var confirmedOrder = null;
+
+function toast(msg) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(function(){ t.classList.remove('show'); }, 3000);
+}
+
+async function init() {
+  // Set min datetime (30 min from now)
+  var now = new Date(Date.now() + 30*60000);
+  var local = new Date(now.getTime() - now.getTimezoneOffset()*60000).toISOString().slice(0,16);
+  var max = new Date(Date.now() + 24*60*60000);
+  var maxLocal = new Date(max.getTime() - max.getTimezoneOffset()*60000).toISOString().slice(0,16);
+  var input = document.getElementById('pickupTime');
+  input.min = local;
+  input.max = maxLocal;
+  input.value = new Date(Date.now() + 60*60000 - new Date().getTimezoneOffset()*60000).toISOString().slice(0,16);
+
+  // Load menu
+  var r = await fetch(API, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action:'getMenu'}) });
+  var data = await r.json();
+  menuItems = (data.items || []).filter(function(i){ return i.available !== false; });
+  renderCats();
+  renderMenu();
+}
+
+function renderCats() {
+  var cats = ['ALL'];
+  menuItems.forEach(function(i){ if (i.category && cats.indexOf(i.category)<0) cats.push(i.category); });
+  document.getElementById('catTabs').innerHTML = cats.map(function(c){
+    return '<button class="cat-tab' + (currentCat===c?' active':'') + '" onclick="setCat(\'' + c + '\')">' + (c==='ALL'?'🍽️ All':c) + '</button>';
+  }).join('');
+}
+
+function setCat(c) { currentCat = c; renderCats(); renderMenu(); }
+
+function renderMenu() {
+  var filtered = menuItems.filter(function(i){ return currentCat==='ALL' || i.category===currentCat; });
+  document.getElementById('menuGrid').innerHTML = filtered.map(function(i){
+    var priceStr = i.hasSizes ? '₱'+i.priceShort+'–₱'+i.priceTall : '₱'+i.price;
+    return '<div class="menu-item">'
+      + '<div class="menu-item-info"><div class="name">' + i.name + '</div><div class="price">' + priceStr + '</div></div>'
+      + '<button class="add-btn" onclick="addItem(\'' + i.code + '\')">+</button>'
+      + '</div>';
+  }).join('') || '<div style="text-align:center;padding:20px;color:var(--timber);font-size:.82rem">No items in this category</div>';
+}
+
+function addItem(code) {
+  var item = menuItems.find(function(i){ return i.code===code; });
+  if (!item) return;
+  if (item.hasSizes) { openSizeModal(item); return; }
+  var price = parseFloat(item.price||0);
+  var existing = cart.find(function(c){ return c.code===code && !c.size; });
+  if (existing) existing.qty++;
+  else cart.push({ code:code, name:item.name, price:price, qty:1, size:'' });
+  renderCart();
+  toast('Added: ' + item.name);
+}
+
+var _pendingSizeItem = null;
+function openSizeModal(item) {
+  _pendingSizeItem = item;
+  document.getElementById('sizeModalTitle').textContent = item.name;
+  var opts = [
+    { label:'Short (12oz)', price: parseFloat(item.priceShort||0), size:'Short' },
+    { label:'Medium (16oz)', price: parseFloat(item.priceMedium||0), size:'Medium' },
+    { label:'Tall (22oz)', price: parseFloat(item.priceTall||0), size:'Tall' },
+  ];
+  document.getElementById('sizeOptions').innerHTML = opts.map(function(o){
+    return '<div class="size-option" onclick="selectSize(\'' + o.size + '\',' + o.price + ')">'
+      + '<span style="font-weight:600">' + o.label + '</span>'
+      + '<span style="font-weight:700;color:var(--forest-deep)">₱' + o.price.toFixed(0) + '</span>'
+      + '</div>';
+  }).join('');
+  document.getElementById('sizeModal').classList.add('open');
+}
+
+function selectSize(size, price) {
+  if (!_pendingSizeItem) return;
+  var item = _pendingSizeItem;
+  var existing = cart.find(function(c){ return c.code===item.code && c.size===size; });
+  if (existing) existing.qty++;
+  else cart.push({ code:item.code, name:item.name, price:price, qty:1, size:size });
+  closeSizeModal();
+  renderCart();
+  toast('Added: ' + item.name + ' (' + size + ')');
+}
+
+function closeSizeModal() {
+  document.getElementById('sizeModal').classList.remove('open');
+  _pendingSizeItem = null;
+}
+
+function renderCart() {
+  var box = document.getElementById('cartBox');
+  if (cart.length === 0) {
+    box.innerHTML = '<div class="cart-empty">No items yet — add something above!</div>';
+    return;
+  }
+  var subtotal = cart.reduce(function(s,c){ return s + c.price*c.qty; },0);
+  var orderType = document.getElementById('orderType').value;
+  var svc = orderType==='DINE-IN' ? subtotal*0.1 : 0;
+  var total = subtotal + svc;
+
+  var rows = cart.map(function(c,idx){
+    return '<div class="cart-row">'
+      + '<div class="cart-name">' + c.name + (c.size?' <span style="font-size:.7rem;color:var(--timber)">(' + c.size + ')</span>':'') + '</div>'
+      + '<div class="cart-qty">'
+      + '<button class="qty-btn" onclick="changeQty(' + idx + ',-1)">−</button>'
+      + '<span style="font-size:.82rem;font-weight:700;min-width:18px;text-align:center">' + c.qty + '</span>'
+      + '<button class="qty-btn" onclick="changeQty(' + idx + ',1)">+</button>'
+      + '</div>'
+      + '<div class="cart-price">₱' + (c.price*c.qty).toFixed(2) + '</div>'
+      + '</div>';
+  }).join('');
+
+  rows += '<div class="cart-total">'
+    + '<span>Subtotal</span><span>₱' + subtotal.toFixed(2) + '</span></div>';
+  if (svc > 0) rows += '<div style="display:flex;justify-content:space-between;font-size:.78rem;color:var(--timber);padding:3px 0"><span>Service Charge (10%)</span><span>₱' + svc.toFixed(2) + '</span></div>';
+  rows += '<div style="display:flex;justify-content:space-between;font-weight:800;font-size:1rem;padding:8px 0 0;border-top:2px solid var(--mist);margin-top:6px"><span>TOTAL</span><span>₱' + total.toFixed(2) + '</span></div>';
+
+  box.innerHTML = rows;
+}
+
+function changeQty(idx, delta) {
+  cart[idx].qty += delta;
+  if (cart[idx].qty <= 0) cart.splice(idx, 1);
+  renderCart();
+}
+
+document.addEventListener('change', function(e) {
+  if (e.target.id === 'orderType') renderCart();
+});
+
+async function placePreOrder() {
+  var name   = document.getElementById('custName').value.trim();
+  var phone  = document.getElementById('custPhone').value.trim();
+  var time   = document.getElementById('pickupTime').value;
+  var type   = document.getElementById('orderType').value;
+  var notes  = document.getElementById('custNotes').value.trim();
+
+  if (cart.length === 0) { toast('Please add items to your order'); return; }
+  if (!name)  { toast('Please enter your name'); return; }
+  if (!phone) { toast('Please enter your phone number'); return; }
+  if (!time)  { toast('Please choose a pickup time'); return; }
+
+  var pickupDate = new Date(time);
+  var now = new Date();
+  var diffMins = (pickupDate - now) / 60000;
+  if (diffMins < 30) { toast('Please choose a time at least 30 minutes from now'); return; }
+  if (diffMins > 1440) { toast('Cannot order more than 24 hours in advance'); return; }
+
+  var btn = document.getElementById('placeBtn');
+  btn.disabled = true; btn.textContent = 'Scheduling...';
+
+  var items = cart.map(function(c){ return { code:c.code, qty:c.qty, size:c.size||'' }; });
+
+  try {
+    var r = await fetch(API, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        action: 'createPreOrder',
+        customerName: name, customerPhone: phone,
+        items: items, scheduledFor: pickupDate.toISOString(),
+        orderType: type, notes: notes
+      })
+    });
+    var data = await r.json();
+    if (data.ok) {
+      confirmedOrder = data;
+      showConfirmation(data, name, phone, pickupDate, type);
+    } else {
+      toast('❌ ' + (data.error||'Failed to place order'));
+      btn.disabled = false; btn.textContent = '📅 Schedule Pre-Order';
+    }
+  } catch(e) {
+    toast('❌ Network error — please try again');
+    btn.disabled = false; btn.textContent = '📅 Schedule Pre-Order';
+  }
+}
+
+function showConfirmation(data, name, phone, pickupDate, type) {
+  var pickupStr = pickupDate.toLocaleString('en-PH', { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit', hour12:true });
+  var svc = type==='DINE-IN' ? data.svc : 0;
+
+  document.getElementById('orderFlow').style.display = 'none';
+  var cs = document.getElementById('confirmScreen');
+  cs.style.display = 'block';
+
+  document.getElementById('confirmDetails').innerHTML =
+    '<div class="confirm-row"><span>Order ID</span><span style="font-weight:700;color:var(--forest-deep)">' + data.orderId + '</span></div>'
+    + '<div class="confirm-row"><span>Name</span><span>' + name + '</span></div>'
+    + '<div class="confirm-row"><span>Phone</span><span>' + phone + '</span></div>'
+    + '<div class="confirm-row"><span>Pickup</span><span style="font-weight:700">' + pickupStr + '</span></div>'
+    + '<div class="confirm-row"><span>Type</span><span>' + type.replace('-',' ') + '</span></div>'
+    + (svc > 0 ? '<div class="confirm-row"><span>Service Charge</span><span>₱' + parseFloat(data.svc||0).toFixed(2) + '</span></div>' : '')
+    + '<div class="confirm-row"><span>TOTAL</span><span>₱' + parseFloat(data.total).toFixed(2) + '</span></div>'
+    + '<div style="margin-top:10px;padding:8px 10px;background:#f0fdf4;border-radius:8px;font-size:.75rem;color:#065F46">'
+    + '💡 Please pay at the counter when you pick up. We\'ll start preparing your order before your scheduled time.'
+    + '</div>';
+}
+
+function trackOrder() {
+  if (confirmedOrder) {
+    window.location.href = '/track?order=' + confirmedOrder.orderId + '&token=' + confirmedOrder.token;
+  }
+}
+
+function newOrder() {
+  cart = [];
+  confirmedOrder = null;
+  document.getElementById('orderFlow').style.display = 'block';
+  document.getElementById('confirmScreen').style.display = 'none';
+  document.getElementById('placeBtn').disabled = false;
+  document.getElementById('placeBtn').textContent = '📅 Schedule Pre-Order';
+  renderCart();
+  window.scrollTo(0,0);
+}
+
+init();
+</script>
+</body>
+</html>

@@ -144,6 +144,7 @@ var currentUser = {
 var POS_SESSION_KEY = (window.POS_SESSION_KEY || 'pos_session_token'); // localStorage key
 
 var STATUS_CONFIG = {
+  SCHEDULED: { icon:'⏰', label:'Scheduled', badge:'scheduled', actions:['cancel'] },
   NEW:       { icon:'🔔', label:'New',       badge:'new',       actions:['start','cancel'] },
   PREPARING: { icon:'👨‍🍳', label:'Preparing', badge:'preparing', actions:['ready','cancel'] },
   READY:     { icon:'✨', label:'Ready',     badge:'ready',     actions:['complete','cancel'] },
@@ -496,6 +497,20 @@ async function loadOrders() {
   renderStats();
   renderFilters();
   if (changed) renderOrders(); // Only re-render cards if something changed
+
+  // PRE-ORDER TRIGGER: check if any scheduled orders need to start kitchen
+  // Runs silently every poll cycle — fires API only if pre-orders exist
+  if (typeof _lastPreorderCheck === 'undefined') window._lastPreorderCheck = 0;
+  var now = Date.now();
+  if (now - _lastPreorderCheck > 60000) { // check every 60 seconds max
+    window._lastPreorderCheck = now;
+    api('triggerScheduledOrders', { userId: currentUser && currentUser.userId }).then(function(r) {
+      if (r.ok && r.count > 0) {
+        showToast('🔔 ' + r.count + ' pre-order(s) sent to kitchen!');
+        loadOrders(); // reload to show new NEW orders
+      }
+    }).catch(function(){});
+  }
 }
 
 // Load menu into cache for Edit Order modal (called once after login)
@@ -711,17 +726,19 @@ function _sRow(icon, label, val, color) {
 
 function renderFilters() {
   // Only order-status chips — section navigation is now in the sidebar
-  var counts = { ALL:0, ACTIVE:0, NEW:0, PREPARING:0, READY:0, COMPLETED:0, CANCELLED:0, PLATFORM:0, DELETED:0 };
+  var counts = { ALL:0, ACTIVE:0, NEW:0, PREPARING:0, READY:0, COMPLETED:0, CANCELLED:0, PLATFORM:0, DELETED:0, SCHEDULED:0 };
   allOrders.forEach(function(o) {
     counts.ALL++;
     if (!o.isTest) counts[o.status] = (counts[o.status] || 0) + 1;
     if (!o.isTest && (o.status === 'NEW' || o.status === 'PREPARING' || o.status === 'READY')) counts.ACTIVE++;
     if (o.platform) counts.PLATFORM++;
     if (o.isDeleted || o.status === 'DELETED') counts.DELETED++;
+    if (o.isPreorder && o.status === 'SCHEDULED') counts.SCHEDULED++;
   });
 
   var chips = [
     { key:'ACTIVE',    label:'🔥 Active',      count:counts.ACTIVE },
+    { key:'SCHEDULED', label:'⏰ Scheduled',    count:counts.SCHEDULED },
     { key:'NEW',       label:'🔔 New',          count:counts.NEW },
     { key:'PREPARING', label:'👨‍🍳 Preparing', count:counts.PREPARING },
     { key:'READY',     label:'✨ Ready',         count:counts.READY },
@@ -736,7 +753,7 @@ function renderFilters() {
   if (window._filterHash === newHash) return;
   window._filterHash = newHash;
 
-  var isOrderView = ['ACTIVE','NEW','PREPARING','READY','COMPLETED','PLATFORM','ALL','CANCELLED','DELETED'].indexOf(currentFilter) >= 0;
+  var isOrderView = ['ACTIVE','NEW','PREPARING','READY','COMPLETED','PLATFORM','ALL','CANCELLED','DELETED','SCHEDULED'].indexOf(currentFilter) >= 0;
   var fb = document.getElementById('filterBar');
   if (fb) fb.style.display = isOrderView ? '' : 'none';
 

@@ -7,13 +7,14 @@ function renderOrders() {
     if (currentFilter === 'ACTIVE') return !o.isTest && (o.status === 'NEW' || o.status === 'PREPARING' || o.status === 'READY');
     if (currentFilter === 'PLATFORM') return !!o.platform;
     if (currentFilter === 'DELETED') return !!(o.isDeleted || o.status === 'DELETED');
+    if (currentFilter === 'SCHEDULED') return o.isPreorder && o.status === 'SCHEDULED';
     // For status-based filters (NEW/PREPARING/READY/COMPLETED/CANCELLED), hide test orders
     if (['NEW','PREPARING','READY'].includes(currentFilter)) return !o.isTest && o.status === currentFilter;
     return o.status === currentFilter;
   });
 
-  // Sort: NEW first, then PREPARING, then READY, newest first within status
-  var statusOrder = { NEW:0, PREPARING:1, READY:2, COMPLETED:3, CANCELLED:4 };
+  // Sort: SCHEDULED first (by pickup time), then NEW/PREPARING/READY, newest first within status
+  var statusOrder = { SCHEDULED:-1, NEW:0, PREPARING:1, READY:2, COMPLETED:3, CANCELLED:4 };
   filtered.sort(function(a,b) {
     var sa = statusOrder[a.status] || 9, sb = statusOrder[b.status] || 9;
     if (sa !== sb) return sa - sb;
@@ -57,6 +58,13 @@ function renderOrders() {
     
     html += '<span class="oc-status-badge ' + cfg.badge + '">' + cfg.icon + ' ' + cfg.label + '</span>';
     if (o.isTest) html += '<span style="background:#f59e0b;color:#fff;font-size:.6rem;padding:2px 5px;border-radius:4px;font-weight:700;margin-left:4px">🧪 TEST</span>';
+    if (o.isPreorder && o.scheduledFor) {
+      var pickupPH = '';
+      try {
+        pickupPH = new Date(o.scheduledFor).toLocaleString('en-PH', { timeZone:'Asia/Manila', month:'short', day:'numeric', hour:'numeric', minute:'2-digit', hour12:true });
+      } catch(e) {}
+      html += '<span style="background:#EDE9FE;color:#5B21B6;font-size:.6rem;padding:2px 6px;border-radius:4px;font-weight:700;margin-left:4px">⏰ Pickup: ' + pickupPH + '</span>';
+    }
     html += '</div>';
 
     // Platform ref (if exists)
