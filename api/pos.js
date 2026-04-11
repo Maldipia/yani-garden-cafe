@@ -2433,34 +2433,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       return res.status(200).json({ ok: true });
     }
 
-    if (action === 'getCustomers') {
-      const authGC = await checkAdminAuth();
-      if (!authGC.ok) return res.status(403).json({ ok: false, error: authGC.error });
-      const r = await supaFetch(
-        `${SUPABASE_URL}/rest/v1/online_orders?order=created_at.asc&limit=500&select=customer_phone,customer_name,created_at,total_amount,order_ref`
-      );
-      const rows = r.ok ? r.data : [];
-      const custMap = {};
-      rows.forEach(o => {
-        const phone = o.customer_phone || 'Unknown';
-        if (!custMap[phone]) {
-          custMap[phone] = {
-            phone,
-            customerName:   o.customer_name,
-            firstOrderDate: o.created_at,
-            lastOrderDate:  o.created_at,
-            totalOrders:    0,
-            totalSpend:     0,
-          };
-        }
-        custMap[phone].lastOrderDate  = o.created_at;
-        custMap[phone].totalOrders   += 1;
-        custMap[phone].totalSpend    += parseFloat(o.total_amount || 0);
-      });
-      const customers = Object.values(custMap)
-        .sort((a, b) => new Date(b.lastOrderDate) - new Date(a.lastOrderDate));
-      return res.status(200).json({ ok: true, customers });
-    }
+    // getCustomers moved to customers table section below
 
     // ── getAnalytics ───────────────────────────────────────────────────────
     if (action === 'getAnalytics') {
@@ -3315,6 +3288,32 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
 
     // ── getRefunds ─────────────────────────────────────────────────────────
     // ── getPromoCodes ──────────────────────────────────────────────────────
+    // ── sendSalesReport ────────────────────────────────────────────────────
+    if (action === 'sendSalesReport') {
+      const auth = await checkAuth(['OWNER','ADMIN']);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      const { toEmail, dateFrom, dateTo, reportHtml, subject } = body;
+      if (!toEmail) return res.status(400).json({ ok: false, error: 'toEmail required' });
+      if (!reportHtml) return res.status(400).json({ ok: false, error: 'reportHtml required' });
+      try {
+        const resp = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            from: `YANI Garden Cafe <${FROM_EMAIL}>`,
+            to: [toEmail],
+            subject: subject || `📊 YANI Sales Report — ${dateFrom} to ${dateTo}`,
+            html: reportHtml,
+          }),
+        });
+        const result = await resp.json();
+        if (!resp.ok) return res.status(500).json({ ok: false, error: result.message || 'Email failed' });
+        return res.status(200).json({ ok: true, emailId: result.id });
+      } catch(e) {
+        return res.status(500).json({ ok: false, error: e.message });
+      }
+    }
+
     if (action === 'getPromoCodes') {
       const auth = await checkAuth(['ADMIN','OWNER']);
       if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
