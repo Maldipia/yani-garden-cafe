@@ -215,6 +215,13 @@ function renderOrders() {
       html += '<button class="oc-btn oc-btn-print" onclick="printReceipt(\'' + o.orderId + '\')">🖨️ Print Receipt</button>';
     }
 
+    // Split Bill button (ADMIN/OWNER/CASHIER, active or completed orders)
+    var canSplit = (currentUser.role === 'ADMIN' || currentUser.role === 'OWNER' || currentUser.role === 'CASHIER');
+    if (canSplit && o.status !== 'CANCELLED') {
+      html += '<button class="oc-btn" style="background:#F0FDF4;color:#166534;border:1px solid #86EFAC;margin-top:4px;width:calc(100% - 32px);margin-left:16px;font-size:.75rem;" '
+        + 'onclick="openSplitBill(\'' + o.orderId + '\')">✂️ Split Bill</button>';
+    }
+
     // Resend Receipt by Email (ADMIN/OWNER/CASHIER, completed orders)
     var canResend = (currentUser.role !== 'KITCHEN');
     if (canResend && o.status === 'COMPLETED') {

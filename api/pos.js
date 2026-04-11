@@ -1289,6 +1289,22 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
     // ── setPaymentMethod ──────────────────────────────────────────────────
     // Admin/Cashier/Owner sets how an order was paid.
     // method can be single (CASH) or split (GCASH+CASH, CARD+GCASH, etc.)
+    // ── saveSplitBill ──────────────────────────────────────────────────────
+    if (action === 'saveSplitBill') {
+      const auth = await checkAuth(['OWNER','ADMIN','CASHIER']);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      const { orderId, splitData } = body;
+      if (!orderId || !splitData) return res.status(400).json({ ok: false, error: 'orderId and splitData required' });
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}`,
+        { method: 'PATCH', body: JSON.stringify({ split_data: splitData }) }
+      );
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to save split data' });
+      await logAudit({ orderId, action: 'SPLIT_BILL', actorId: body.userId,
+        newValue: `split:${splitData.type}:${splitData.pax}pax`, details: splitData });
+      return res.status(200).json({ ok: true });
+    }
+
     if (action === 'setPaymentMethod') {
       const authP = await checkAuth(['OWNER','ADMIN','CASHIER']);
       if (!authP.ok) return res.status(403).json({ ok: false, error: authP.error });
