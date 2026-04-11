@@ -783,6 +783,7 @@ function renderSidebar() {
     html += item('INVENTORY', '📦', 'Inventory', '');
     html += item('ADDONS', '➕', 'Add-ons', '');
     html += item('PROMO_CODES', '🏷️', 'Promo Codes', '');
+    html += item('LOYALTY', '⭐', 'Loyalty Points', '');
     html += item('CUSTOMERS', '👥', 'Customers', '');
   }
 
@@ -884,6 +885,9 @@ function setFilter(f) {
   var promoCodesView = document.getElementById('promoCodesView');
   if (promoCodesView) promoCodesView.style.display = 'none';
 
+  var loyaltyView = document.getElementById('loyaltyView');
+  if (loyaltyView) loyaltyView.style.display = 'none';
+
   var customersView = document.getElementById('customersView');
   if (customersView) customersView.style.display = 'none';
 
@@ -950,6 +954,9 @@ function setFilter(f) {
   } else if (f === 'PROMO_CODES') {
     if (promoCodesView) promoCodesView.style.display = 'block';
     loadPromoCodesView();
+  } else if (f === 'LOYALTY') {
+    if (loyaltyView) loyaltyView.style.display = 'block';
+    loadLoyaltyView();
   } else if (f === 'CUSTOMERS') {
     if (customersView) customersView.style.display = 'block';
     loadCustomersView();

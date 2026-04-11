@@ -1290,6 +1290,193 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
     // Admin/Cashier/Owner sets how an order was paid.
     // method can be single (CASH) or split (GCASH+CASH, CARD+GCASH, etc.)
     // ── saveSplitBill ──────────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════════
+    // LOYALTY POINTS SYSTEM
+    // ══════════════════════════════════════════════════════════════════════
+
+    // ── getLoyaltySettings ─────────────────────────────────────────────────
+    if (action === 'getLoyaltySettings') {
+      const keys = ['LOYALTY_ENABLED','LOYALTY_EARN_RATE','LOYALTY_REDEEM_RATE',
+                    'LOYALTY_MIN_REDEEM','LOYALTY_SILVER_THRESHOLD','LOYALTY_GOLD_THRESHOLD','LOYALTY_PLATINUM_THRESHOLD'];
+      const r = await supaFetch(`${SUPABASE_URL}/rest/v1/settings?key=in.(${keys.map(k=>`"${k}"`).join(',')})&select=key,value`);
+      const settings = {};
+      (r.data||[]).forEach(s => { settings[s.key] = s.value; });
+      return res.status(200).json({ ok: true, settings });
+    }
+
+    // ── lookupLoyalty (by phone — public, used at POS checkout) ───────────
+    if (action === 'lookupLoyalty') {
+      const { phone } = body;
+      if (!phone) return res.status(400).json({ ok: false, error: 'phone required' });
+      const clean = phone.replace(/\D/g,'');
+      const r = await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts?phone=eq.${encodeURIComponent(clean)}&select=*&limit=1`);
+      if (!r.ok || !r.data?.length) return res.status(200).json({ ok: false, error: 'No loyalty account found for this number' });
+      return res.status(200).json({ ok: true, account: r.data[0] });
+    }
+
+    // ── getLoyaltyAccounts (admin list) ───────────────────────────────────
+    if (action === 'getLoyaltyAccounts') {
+      const auth = await checkAuth(['OWNER','ADMIN','CASHIER']);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      const { search, limit = 100 } = body;
+      let url = `${SUPABASE_URL}/rest/v1/loyalty_accounts?select=*&order=total_points_earned.desc&limit=${limit}`;
+      if (search) url += `&or=(name.ilike.*${encodeURIComponent(search)}*,phone.ilike.*${encodeURIComponent(search)}*)`;
+      const r = await supaFetch(url);
+      return res.status(200).json({ ok: true, accounts: r.data || [] });
+    }
+
+    // ── getLoyaltyAccount (single + transaction history) ──────────────────
+    if (action === 'getLoyaltyAccount') {
+      const auth = await checkAuth(['OWNER','ADMIN','CASHIER']);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      const { id, phone } = body;
+      let accR;
+      if (id) accR = await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts?id=eq.${encodeURIComponent(id)}&select=*&limit=1`);
+      else if (phone) accR = await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts?phone=eq.${encodeURIComponent(phone.replace(/\D/g,''))}&select=*&limit=1`);
+      else return res.status(400).json({ ok: false, error: 'id or phone required' });
+      if (!accR.ok || !accR.data?.length) return res.status(200).json({ ok: false, error: 'Account not found' });
+      const account = accR.data[0];
+      const txR = await supaFetch(`${SUPABASE_URL}/rest/v1/points_transactions?account_id=eq.${encodeURIComponent(account.id)}&order=created_at.desc&limit=50`);
+      return res.status(200).json({ ok: true, account, transactions: txR.data || [] });
+    }
+
+    // ── createLoyaltyAccount ──────────────────────────────────────────────
+    if (action === 'createLoyaltyAccount') {
+      const auth = await checkAuth(['OWNER','ADMIN','CASHIER']);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      const { name, phone, email } = body;
+      if (!name || !phone) return res.status(400).json({ ok: false, error: 'name and phone required' });
+      const clean = phone.replace(/\D/g,'');
+      const existing = await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts?phone=eq.${encodeURIComponent(clean)}&select=id&limit=1`);
+      if (existing.data?.length) return res.status(200).json({ ok: false, error: 'Phone already registered' });
+      const r = await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts`, {
+        method: 'POST',
+        body: JSON.stringify({ name, phone: clean, email: email||null, points_balance:0, total_points_earned:0, total_points_redeemed:0, tier:'BRONZE', total_spent:0, visit_count:0 }),
+        headers: { 'Prefer': 'return=representation' }
+      });
+      if (!r.ok) return res.status(500).json({ ok: false, error: r.data?.message || 'Failed to create account' });
+      return res.status(200).json({ ok: true, account: r.data[0] });
+    }
+
+    // ── earnPoints (called after order completion) ─────────────────────────
+    if (action === 'earnPoints') {
+      const auth = await checkAuth(['OWNER','ADMIN','CASHIER']);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      const { accountId, orderId, orderTotal, description } = body;
+      if (!accountId || !orderTotal) return res.status(400).json({ ok: false, error: 'accountId and orderTotal required' });
+
+      // Get earn rate from settings
+      const rateR = await supaFetch(`${SUPABASE_URL}/rest/v1/settings?key=eq.LOYALTY_EARN_RATE&select=value&limit=1`);
+      const earnRate = parseFloat(rateR.data?.[0]?.value || '1');
+      const pointsEarned = Math.floor(parseFloat(orderTotal) * earnRate);
+      if (pointsEarned <= 0) return res.status(200).json({ ok: true, pointsEarned: 0 });
+
+      // Get current balance
+      const accR = await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts?id=eq.${encodeURIComponent(accountId)}&select=points_balance,total_points_earned,total_spent,visit_count&limit=1`);
+      if (!accR.ok || !accR.data?.length) return res.status(404).json({ ok: false, error: 'Account not found' });
+      const acc = accR.data[0];
+      const balBefore = acc.points_balance;
+      const balAfter = balBefore + pointsEarned;
+      const newTotalEarned = (acc.total_points_earned||0) + pointsEarned;
+      const newTotalSpent = (acc.total_spent||0) + parseFloat(orderTotal);
+      const newVisits = (acc.visit_count||0) + 1;
+
+      // Determine tier
+      const tierThresholds = await supaFetch(`${SUPABASE_URL}/rest/v1/settings?key=in.("LOYALTY_SILVER_THRESHOLD","LOYALTY_GOLD_THRESHOLD","LOYALTY_PLATINUM_THRESHOLD")&select=key,value`);
+      const th = {};
+      (tierThresholds.data||[]).forEach(s => { th[s.key] = parseInt(s.value); });
+      let tier = 'BRONZE';
+      if (newTotalEarned >= (th.LOYALTY_PLATINUM_THRESHOLD||40000)) tier = 'PLATINUM';
+      else if (newTotalEarned >= (th.LOYALTY_GOLD_THRESHOLD||15000)) tier = 'GOLD';
+      else if (newTotalEarned >= (th.LOYALTY_SILVER_THRESHOLD||5000)) tier = 'SILVER';
+
+      // Update account
+      await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts?id=eq.${encodeURIComponent(accountId)}`, {
+        method: 'PATCH', body: JSON.stringify({ points_balance: balAfter, total_points_earned: newTotalEarned, total_spent: newTotalSpent, visit_count: newVisits, tier, last_visit: new Date().toISOString(), updated_at: new Date().toISOString() })
+      });
+
+      // Log transaction
+      await supaFetch(`${SUPABASE_URL}/rest/v1/points_transactions`, {
+        method: 'POST', body: JSON.stringify({ account_id: accountId, order_id: orderId||null, type: 'EARN', points: pointsEarned, balance_before: balBefore, balance_after: balAfter, description: description || `Earned from order ${orderId||''}`, processed_by: body.userId })
+      });
+
+      // Update order with points earned
+      if (orderId) {
+        await supaFetch(`${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}`, {
+          method: 'PATCH', body: JSON.stringify({ loyalty_account_id: accountId, points_earned: pointsEarned })
+        });
+      }
+
+      return res.status(200).json({ ok: true, pointsEarned, balanceBefore: balBefore, balanceAfter: balAfter, tier });
+    }
+
+    // ── redeemPoints ──────────────────────────────────────────────────────
+    if (action === 'redeemPoints') {
+      const auth = await checkAuth(['OWNER','ADMIN','CASHIER']);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      const { accountId, pointsToRedeem, orderId } = body;
+      if (!accountId || !pointsToRedeem) return res.status(400).json({ ok: false, error: 'accountId and pointsToRedeem required' });
+
+      // Get settings
+      const settR = await supaFetch(`${SUPABASE_URL}/rest/v1/settings?key=in.("LOYALTY_REDEEM_RATE","LOYALTY_MIN_REDEEM")&select=key,value`);
+      const sett = {};
+      (settR.data||[]).forEach(s => { sett[s.key] = s.value; });
+      const redeemRate = parseInt(sett.LOYALTY_REDEEM_RATE || '100'); // points per ₱1
+      const minRedeem = parseInt(sett.LOYALTY_MIN_REDEEM || '500');
+
+      if (pointsToRedeem < minRedeem) return res.status(400).json({ ok: false, error: `Minimum ${minRedeem} points to redeem` });
+
+      const accR = await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts?id=eq.${encodeURIComponent(accountId)}&select=points_balance,total_points_redeemed&limit=1`);
+      if (!accR.ok || !accR.data?.length) return res.status(404).json({ ok: false, error: 'Account not found' });
+      const acc = accR.data[0];
+      if (acc.points_balance < pointsToRedeem) return res.status(400).json({ ok: false, error: `Insufficient points. Balance: ${acc.points_balance}` });
+
+      const discountAmount = Math.floor(pointsToRedeem / redeemRate * 100) / 100;
+      const balBefore = acc.points_balance;
+      const balAfter  = balBefore - pointsToRedeem;
+
+      // Update account
+      await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts?id=eq.${encodeURIComponent(accountId)}`, {
+        method: 'PATCH', body: JSON.stringify({ points_balance: balAfter, total_points_redeemed: (acc.total_points_redeemed||0) + pointsToRedeem, updated_at: new Date().toISOString() })
+      });
+
+      // Log transaction
+      await supaFetch(`${SUPABASE_URL}/rest/v1/points_transactions`, {
+        method: 'POST', body: JSON.stringify({ account_id: accountId, order_id: orderId||null, type: 'REDEEM', points: -pointsToRedeem, balance_before: balBefore, balance_after: balAfter, description: `Redeemed ${pointsToRedeem} pts = ₱${discountAmount} off`, processed_by: body.userId })
+      });
+
+      // Update order
+      if (orderId) {
+        await supaFetch(`${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}`, {
+          method: 'PATCH', body: JSON.stringify({ loyalty_account_id: accountId, points_redeemed: pointsToRedeem, points_discount: discountAmount })
+        });
+      }
+
+      return res.status(200).json({ ok: true, pointsRedeemed: pointsToRedeem, discountAmount, balanceBefore: balBefore, balanceAfter: balAfter });
+    }
+
+    // ── adjustPoints (manual adjustment by OWNER) ─────────────────────────
+    if (action === 'adjustPoints') {
+      const auth = await checkAuth(['OWNER','ADMIN']);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      const { accountId, points, reason } = body;
+      if (!accountId || points === undefined) return res.status(400).json({ ok: false, error: 'accountId and points required' });
+
+      const accR = await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts?id=eq.${encodeURIComponent(accountId)}&select=points_balance&limit=1`);
+      if (!accR.ok || !accR.data?.length) return res.status(404).json({ ok: false, error: 'Account not found' });
+      const balBefore = accR.data[0].points_balance;
+      const balAfter  = Math.max(0, balBefore + parseInt(points));
+
+      await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts?id=eq.${encodeURIComponent(accountId)}`, {
+        method: 'PATCH', body: JSON.stringify({ points_balance: balAfter, updated_at: new Date().toISOString() })
+      });
+      await supaFetch(`${SUPABASE_URL}/rest/v1/points_transactions`, {
+        method: 'POST', body: JSON.stringify({ account_id: accountId, type: 'ADJUST', points: parseInt(points), balance_before: balBefore, balance_after: balAfter, description: reason || 'Manual adjustment', processed_by: body.userId })
+      });
+
+      return res.status(200).json({ ok: true, balanceBefore: balBefore, balanceAfter: balAfter });
+    }
+
     if (action === 'saveSplitBill') {
       const auth = await checkAuth(['OWNER','ADMIN','CASHIER']);
       if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });

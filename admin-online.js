@@ -1787,3 +1787,315 @@ async function updateExistingCustomer(id) {
     showToast('❌ ' + (r.error||'Failed'), 'error');
   }
 }
+
+// ══════════════════════════════════════════════════════════
+// LOYALTY POINTS SYSTEM
+// ══════════════════════════════════════════════════════════
+var _loyaltyAccounts = [];
+var _loyaltySearch   = '';
+var _loyaltySettings = {};
+
+async function loadLoyaltyView() {
+  var el = document.getElementById('loyaltyView');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:20px;color:var(--timber)">Loading loyalty data...</div>';
+
+  var [r1, r2] = await Promise.all([
+    api('getLoyaltyAccounts', { userId: currentUser && currentUser.userId, limit: 200 }),
+    api('getLoyaltySettings')
+  ]);
+
+  _loyaltyAccounts = r1.accounts || [];
+  _loyaltySettings = r2.settings || {};
+  renderLoyaltyView();
+}
+
+function renderLoyaltyView() {
+  var el = document.getElementById('loyaltyView');
+  if (!el) return;
+
+  var earnRate   = parseFloat(_loyaltySettings.LOYALTY_EARN_RATE || '1');
+  var redeemRate = parseInt(_loyaltySettings.LOYALTY_REDEEM_RATE || '100');
+  var minRedeem  = parseInt(_loyaltySettings.LOYALTY_MIN_REDEEM  || '500');
+  var enabled    = _loyaltySettings.LOYALTY_ENABLED !== 'false';
+
+  var tierColors = { BRONZE:'#CD7F32', SILVER:'#94a3b8', GOLD:'#F59E0B', PLATINUM:'#7C3AED' };
+  var tierBg     = { BRONZE:'#FEF3E2', SILVER:'#F1F5F9', GOLD:'#FFFBEB', PLATINUM:'#F5F3FF' };
+
+  // Stats
+  var total   = _loyaltyAccounts.length;
+  var bronze  = _loyaltyAccounts.filter(function(a){ return a.tier==='BRONZE'; }).length;
+  var silver  = _loyaltyAccounts.filter(function(a){ return a.tier==='SILVER'; }).length;
+  var gold    = _loyaltyAccounts.filter(function(a){ return a.tier==='GOLD'; }).length;
+  var plat    = _loyaltyAccounts.filter(function(a){ return a.tier==='PLATINUM'; }).length;
+  var totalPts = _loyaltyAccounts.reduce(function(s,a){ return s + (a.points_balance||0); }, 0);
+
+  var html = '<div style="padding:16px;max-width:860px">';
+
+  // Header
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">';
+  html += '<div><div style="font-weight:800;font-size:1.1rem;color:var(--forest-deep)">⭐ Loyalty Points</div>';
+  html += '<div style="font-size:.78rem;color:var(--timber);margin-top:2px">' + total + ' members · ₱1 = ' + earnRate + ' pt · ' + redeemRate + ' pts = ₱1</div></div>';
+  html += '<div style="display:flex;gap:8px">';
+  html += '<button onclick="openLoyaltySettings()" style="padding:8px 14px;background:#f8f8f4;color:var(--forest-deep);border:1.5px solid var(--mist);border-radius:10px;font-size:.8rem;font-weight:700;cursor:pointer">⚙️ Settings</button>';
+  html += '<button onclick="openAddLoyaltyModal()" style="padding:9px 16px;background:var(--forest);color:#fff;border:none;border-radius:10px;font-size:.82rem;font-weight:700;cursor:pointer;font-family:var(--font-body)">+ Enroll Member</button>';
+  html += '</div></div>';
+
+  // Stats row
+  html += '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px">';
+  html += _lyStatCard('Total Members', total, '#1a3a2a');
+  html += _lyStatCard('🥉 Bronze', bronze, '#CD7F32');
+  html += _lyStatCard('🥈 Silver', silver, '#64748b');
+  html += _lyStatCard('🥇 Gold', gold, '#D97706');
+  html += _lyStatCard('💎 Platinum', plat, '#7C3AED');
+  html += '</div>';
+
+  // Search
+  html += '<div style="position:relative;margin-bottom:14px">';
+  html += '<input id="loyaltySearchInput" type="text" placeholder="🔍 Search by name or phone..." value="' + esc(_loyaltySearch) + '" '
+    + 'oninput="_loyaltySearch=this.value;renderLoyaltyFiltered()" '
+    + 'style="width:100%;padding:9px 14px;border:1.5px solid var(--mist);border-radius:10px;font-size:.85rem;box-sizing:border-box;font-family:var(--font-body)">';
+  html += '</div>';
+
+  // Members list
+  if (_loyaltyAccounts.length === 0) {
+    html += '<div style="background:#fff;border-radius:14px;padding:40px;text-align:center;color:var(--timber);box-shadow:var(--shadow-sm)">';
+    html += '<div style="font-size:2rem;margin-bottom:8px">⭐</div>';
+    html += '<div style="font-weight:700">No loyalty members yet</div>';
+    html += '<div style="font-size:.8rem;margin-top:4px">Enroll your first customer to get started</div></div>';
+  } else {
+    html += '<div id="loyaltyListContainer">' + renderLoyaltyRows(_loyaltyAccounts) + '</div>';
+  }
+
+  html += '</div>';
+  el.innerHTML = html;
+
+  // Ensure modals exist
+  _ensureLoyaltyModals();
+}
+
+function _lyStatCard(label, val, color) {
+  return '<div style="background:#fff;border-radius:12px;box-shadow:var(--shadow-sm);padding:14px;text-align:center">'
+    + '<div style="font-weight:800;font-size:1.2rem;color:' + color + '">' + val + '</div>'
+    + '<div style="font-size:.68rem;color:var(--timber);margin-top:3px">' + label + '</div></div>';
+}
+
+function renderLoyaltyRows(list) {
+  if (!list.length) return '<div style="padding:20px;text-align:center;color:var(--timber);font-size:.85rem">No members match</div>';
+  var tierColors = { BRONZE:'#CD7F32', SILVER:'#64748b', GOLD:'#D97706', PLATINUM:'#7C3AED' };
+  var tierIcons  = { BRONZE:'🥉', SILVER:'🥈', GOLD:'🥇', PLATINUM:'💎' };
+  return list.map(function(a) {
+    var tc = tierColors[a.tier] || '#CD7F32';
+    var ti = tierIcons[a.tier]  || '🥉';
+    var lastVisit = a.last_visit ? new Date(a.last_visit).toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'}) : '—';
+    return '<div onclick="openLoyaltyDetail(\'' + a.id + '\')" style="background:#fff;border-radius:12px;box-shadow:var(--shadow-sm);padding:14px 16px;margin-bottom:8px;display:flex;align-items:center;gap:14px;cursor:pointer">'
+      + '<div style="width:42px;height:42px;border-radius:50%;background:' + tc + ';display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0">' + ti + '</div>'
+      + '<div style="flex:1;min-width:0">'
+      + '<div style="font-weight:700;font-size:.9rem;color:var(--forest-deep)">' + esc(a.name) + '</div>'
+      + '<div style="font-size:.75rem;color:var(--timber);margin-top:2px">📞 ' + esc(a.phone) + (a.email ? ' · ✉️ ' + esc(a.email) : '') + '</div>'
+      + '</div>'
+      + '<div style="text-align:right;flex-shrink:0">'
+      + '<div style="font-weight:800;font-size:.95rem;color:' + tc + '">' + (a.points_balance||0).toLocaleString() + ' pts</div>'
+      + '<div style="font-size:.68rem;color:var(--timber)">' + a.tier + ' · ' + (a.visit_count||0) + ' visits</div>'
+      + '<div style="font-size:.65rem;color:var(--timber)">Last: ' + lastVisit + '</div>'
+      + '</div></div>';
+  }).join('');
+}
+
+function renderLoyaltyFiltered() {
+  var q = (_loyaltySearch||'').toLowerCase().trim();
+  var filtered = q ? _loyaltyAccounts.filter(function(a) {
+    return (a.name||'').toLowerCase().includes(q) || (a.phone||'').includes(q);
+  }) : _loyaltyAccounts;
+  var c = document.getElementById('loyaltyListContainer');
+  if (c) c.innerHTML = renderLoyaltyRows(filtered);
+}
+
+async function openLoyaltyDetail(id) {
+  var m = document.getElementById('loyaltyDetailModal');
+  var body = document.getElementById('loyaltyDetailBody');
+  if (!m || !body) return;
+  body.innerHTML = '<div style="padding:10px;text-align:center;color:var(--timber)">Loading...</div>';
+  m.style.display = 'flex';
+
+  var r = await api('getLoyaltyAccount', { userId: currentUser && currentUser.userId, id: id });
+  if (!r.ok) { body.innerHTML = '<div style="color:#EF4444">Failed to load</div>'; return; }
+  var a = r.account;
+  var txs = r.transactions || [];
+  var tierColors = { BRONZE:'#CD7F32', SILVER:'#64748b', GOLD:'#D97706', PLATINUM:'#7C3AED' };
+  var tc = tierColors[a.tier] || '#CD7F32';
+  var redeemRate = parseInt(_loyaltySettings.LOYALTY_REDEEM_RATE || '100');
+  var minRedeem  = parseInt(_loyaltySettings.LOYALTY_MIN_REDEEM || '500');
+  var redeemValue = Math.floor((a.points_balance||0) / redeemRate * 100) / 100;
+
+  body.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">'
+    + '<div style="font-weight:800;font-size:1rem;color:var(--forest-deep)">⭐ ' + esc(a.name) + '</div>'
+    + '<button onclick="document.getElementById(\'loyaltyDetailModal\').style.display=\'none\'" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--timber)">&times;</button>'
+    + '</div>'
+    // Tier badge + points
+    + '<div style="background:' + tc + ';color:#fff;border-radius:10px;padding:14px 16px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">'
+    + '<div><div style="font-size:.72rem;opacity:.85">' + a.tier + ' MEMBER</div><div style="font-size:1.8rem;font-weight:800">' + (a.points_balance||0).toLocaleString() + '<span style="font-size:.9rem;font-weight:400"> pts</span></div>'
+    + '<div style="font-size:.72rem;opacity:.85;margin-top:2px">Worth ₱' + redeemValue.toFixed(2) + ' in discounts</div></div>'
+    + '<div style="text-align:right;font-size:.72rem;opacity:.85"><div>' + (a.visit_count||0) + ' visits</div><div>₱' + parseFloat(a.total_spent||0).toLocaleString() + ' spent</div></div>'
+    + '</div>'
+    // Info
+    + '<div style="background:#f8fafc;border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:.8rem;display:flex;flex-direction:column;gap:4px">'
+    + '<div>📞 ' + esc(a.phone) + '</div>'
+    + (a.email ? '<div>✉️ ' + esc(a.email) + '</div>' : '')
+    + '<div style="color:var(--timber)">Total earned: ' + (a.total_points_earned||0).toLocaleString() + ' pts</div>'
+    + '<div style="color:var(--timber)">Total redeemed: ' + (a.total_points_redeemed||0).toLocaleString() + ' pts</div>'
+    + '</div>'
+    // Action buttons
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">'
+    + '<button onclick="openEarnPointsModal(\'' + a.id + '\')" style="padding:10px;background:#D1FAE5;color:#065F46;border:none;border-radius:10px;font-size:.8rem;font-weight:700;cursor:pointer">➕ Add Points</button>'
+    + (a.points_balance >= minRedeem
+        ? '<button onclick="openRedeemModal(\'' + a.id + '\',' + a.points_balance + ')" style="padding:10px;background:#FEF3C7;color:#92400E;border:none;border-radius:10px;font-size:.8rem;font-weight:700;cursor:pointer">💰 Redeem Points</button>'
+        : '<div style="padding:10px;background:#f3f4f6;color:#9ca3af;border-radius:10px;font-size:.75rem;text-align:center">Need ' + minRedeem + ' pts to redeem</div>')
+    + '</div>'
+    // Transaction history
+    + '<div style="font-weight:700;font-size:.83rem;color:var(--forest-deep);margin-bottom:8px">Transaction History</div>'
+    + (txs.length === 0
+        ? '<div style="font-size:.8rem;color:var(--timber);text-align:center;padding:12px">No transactions yet</div>'
+        : txs.slice(0,15).map(function(tx) {
+            var isEarn = tx.type === 'EARN';
+            var isRedeem = tx.type === 'REDEEM';
+            var col = isEarn ? '#059669' : isRedeem ? '#DC2626' : '#6b7280';
+            var sign = isEarn ? '+' : '';
+            return '<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--mist);font-size:.78rem">'
+              + '<div><div style="font-weight:600;color:' + col + '">' + tx.type + '</div>'
+              + '<div style="color:var(--timber);font-size:.7rem">' + esc(tx.description||'') + '</div>'
+              + '<div style="color:var(--timber);font-size:.65rem">' + new Date(tx.created_at).toLocaleDateString('en-PH',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) + '</div></div>'
+              + '<div style="text-align:right"><div style="font-weight:700;color:' + col + '">' + sign + tx.points + ' pts</div>'
+              + '<div style="font-size:.65rem;color:var(--timber)">Bal: ' + tx.balance_after + '</div></div>'
+              + '</div>';
+          }).join(''));
+}
+
+function openAddLoyaltyModal() {
+  var m = document.getElementById('addLoyaltyModal');
+  if (m) { m.style.display = 'flex'; document.getElementById('ly_name').focus(); }
+}
+
+function closeAddLoyaltyModal() {
+  var m = document.getElementById('addLoyaltyModal');
+  if (m) m.style.display = 'none';
+  ['ly_name','ly_phone','ly_email'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
+}
+
+async function saveNewLoyaltyMember() {
+  var name  = (document.getElementById('ly_name').value||'').trim();
+  var phone = (document.getElementById('ly_phone').value||'').trim();
+  var email = (document.getElementById('ly_email').value||'').trim();
+  if (!name)  { showToast('Enter member name', 'error'); return; }
+  if (!phone) { showToast('Enter phone number', 'error'); return; }
+
+  var btn = document.getElementById('ly_save_btn');
+  btn.disabled = true; btn.textContent = 'Saving...';
+
+  var r = await api('createLoyaltyAccount', { userId: currentUser && currentUser.userId, name, phone, email: email||null });
+  btn.disabled = false; btn.textContent = '✅ Enroll Member';
+
+  if (r.ok) {
+    showToast('✅ ' + name + ' enrolled!');
+    closeAddLoyaltyModal();
+    loadLoyaltyView();
+  } else {
+    showToast('❌ ' + (r.error||'Failed'), 'error');
+  }
+}
+
+function openEarnPointsModal(accountId) {
+  document.getElementById('loyaltyDetailModal').style.display = 'none';
+  var pts = prompt('Add how many points? (Manual adjustment)');
+  if (!pts || isNaN(parseInt(pts))) return;
+  var reason = prompt('Reason (optional):') || 'Manual adjustment';
+  api('adjustPoints', { userId: currentUser && currentUser.userId, accountId: accountId, points: parseInt(pts), reason: reason })
+    .then(function(r) {
+      if (r.ok) { showToast('✅ Points updated! New balance: ' + r.balanceAfter); loadLoyaltyView(); }
+      else showToast('❌ ' + (r.error||'Failed'), 'error');
+    });
+}
+
+function openRedeemModal(accountId, balance) {
+  var redeemRate = parseInt(_loyaltySettings.LOYALTY_REDEEM_RATE || '100');
+  var minRedeem  = parseInt(_loyaltySettings.LOYALTY_MIN_REDEEM || '500');
+  var maxDiscount = Math.floor(balance / redeemRate * 100) / 100;
+  var pts = prompt('Redeem how many points? (Balance: ' + balance + ' pts = ₱' + maxDiscount + ')\nMinimum: ' + minRedeem + ' pts');
+  if (!pts || isNaN(parseInt(pts))) return;
+  var toRedeem = parseInt(pts);
+  if (toRedeem < minRedeem) { showToast('Minimum ' + minRedeem + ' points', 'error'); return; }
+  if (toRedeem > balance) { showToast('Insufficient points', 'error'); return; }
+  var orderId = prompt('Order ID to apply to (optional, e.g. YANI-1234):') || null;
+  api('redeemPoints', { userId: currentUser && currentUser.userId, accountId: accountId, pointsToRedeem: toRedeem, orderId: orderId||null })
+    .then(function(r) {
+      if (r.ok) {
+        showToast('✅ Redeemed ' + toRedeem + ' pts = ₱' + r.discountAmount + ' off');
+        document.getElementById('loyaltyDetailModal').style.display = 'none';
+        loadLoyaltyView();
+      } else showToast('❌ ' + (r.error||'Failed'), 'error');
+    });
+}
+
+function openLoyaltySettings() {
+  var sett = _loyaltySettings;
+  var html = '<div style="padding:16px;max-width:400px;margin:auto">'
+    + '<div style="font-weight:800;font-size:.95rem;color:var(--forest-deep);margin-bottom:14px">⚙️ Loyalty Settings</div>'
+    + '<div class="s-field"><label>Earn Rate (pts per ₱1 spent)</label><input id="ly_earn_rate" type="number" min="0.1" step="0.1" value="' + (sett.LOYALTY_EARN_RATE||'1') + '"></div>'
+    + '<div class="s-field"><label>Redeem Rate (pts per ₱1 discount)</label><input id="ly_redeem_rate" type="number" min="1" value="' + (sett.LOYALTY_REDEEM_RATE||'100') + '"></div>'
+    + '<div class="s-field"><label>Minimum Points to Redeem</label><input id="ly_min_redeem" type="number" min="100" value="' + (sett.LOYALTY_MIN_REDEEM||'500') + '"></div>'
+    + '<div class="s-field"><label>Silver Tier Threshold (total pts earned)</label><input id="ly_silver" type="number" value="' + (sett.LOYALTY_SILVER_THRESHOLD||'5000') + '"></div>'
+    + '<div class="s-field"><label>Gold Tier Threshold</label><input id="ly_gold" type="number" value="' + (sett.LOYALTY_GOLD_THRESHOLD||'15000') + '"></div>'
+    + '<div class="s-field"><label>Platinum Tier Threshold</label><input id="ly_plat" type="number" value="' + (sett.LOYALTY_PLATINUM_THRESHOLD||'40000') + '"></div>'
+    + '<button onclick="saveLoyaltySettings(this)" style="width:100%;padding:11px;background:var(--forest);color:#fff;border:none;border-radius:10px;font-size:.88rem;font-weight:700;cursor:pointer;font-family:var(--font-body);margin-top:4px">💾 Save Settings</button>'
+    + '</div>';
+  showModal('Loyalty Settings', html);
+}
+
+async function saveLoyaltySettings(btn) {
+  btn.disabled = true; btn.textContent = 'Saving...';
+  var keys = [
+    ['LOYALTY_EARN_RATE', document.getElementById('ly_earn_rate').value],
+    ['LOYALTY_REDEEM_RATE', document.getElementById('ly_redeem_rate').value],
+    ['LOYALTY_MIN_REDEEM', document.getElementById('ly_min_redeem').value],
+    ['LOYALTY_SILVER_THRESHOLD', document.getElementById('ly_silver').value],
+    ['LOYALTY_GOLD_THRESHOLD', document.getElementById('ly_gold').value],
+    ['LOYALTY_PLATINUM_THRESHOLD', document.getElementById('ly_plat').value],
+  ];
+  var promises = keys.map(function(kv) {
+    return api('updateSetting', { userId: currentUser && currentUser.userId, key: kv[0], value: kv[1] });
+  });
+  await Promise.all(promises);
+  btn.disabled = false; btn.textContent = '💾 Save Settings';
+  showToast('✅ Loyalty settings saved');
+  closeModal();
+  loadLoyaltyView();
+}
+
+function _ensureLoyaltyModals() {
+  // Detail modal
+  if (!document.getElementById('loyaltyDetailModal')) {
+    var m = document.createElement('div');
+    m.id = 'loyaltyDetailModal';
+    m.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:800;align-items:center;justify-content:center;padding:16px';
+    m.innerHTML = '<div style="background:#fff;border-radius:16px;width:100%;max-width:460px;max-height:90vh;overflow-y:auto;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.2)">'
+      + '<div id="loyaltyDetailBody"></div></div>';
+    document.body.appendChild(m);
+  }
+  // Add member modal
+  if (!document.getElementById('addLoyaltyModal')) {
+    var m2 = document.createElement('div');
+    m2.id = 'addLoyaltyModal';
+    m2.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:800;align-items:center;justify-content:center;padding:16px';
+    m2.innerHTML = '<div style="background:#fff;border-radius:16px;width:100%;max-width:400px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.2)">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'
+      + '<div style="font-weight:800;font-size:1rem;color:var(--forest-deep)">⭐ Enroll New Member</div>'
+      + '<button onclick="closeAddLoyaltyModal()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--timber)">&times;</button>'
+      + '</div>'
+      + '<div class="s-field"><label>Full Name <span style="color:#e04444">*</span></label><input id="ly_name" type="text" placeholder="e.g. Maria Santos"></div>'
+      + '<div class="s-field"><label>Phone <span style="color:#e04444">*</span></label><input id="ly_phone" type="tel" placeholder="e.g. 09171234567"></div>'
+      + '<div class="s-field"><label>Email (optional)</label><input id="ly_email" type="email" placeholder="e.g. maria@email.com"></div>'
+      + '<button id="ly_save_btn" onclick="saveNewLoyaltyMember()" style="width:100%;padding:12px;background:var(--forest);color:#fff;border:none;border-radius:10px;font-size:.9rem;font-weight:700;cursor:pointer;font-family:var(--font-body);margin-top:4px">✅ Enroll Member</button>'
+      + '</div>';
+    document.body.appendChild(m2);
+  }
+}
