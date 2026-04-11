@@ -1153,6 +1153,39 @@ function _settingsPayment() {
     + '<button class="s-save-btn" onclick="savePaymentSettings(this)">💾 Save Payment Settings</button>';
 }
 
+async function uploadLogoImage(fileInput) {
+  var statusEl = document.getElementById('logoUploadStatus');
+  var file = fileInput.files[0];
+  if (!file) return;
+  if (file.size > 2 * 1024 * 1024) { statusEl.textContent = '❌ Max 2MB'; statusEl.style.color = '#e04444'; return; }
+
+  statusEl.textContent = 'Uploading...';
+  statusEl.style.color = 'var(--timber)';
+
+  var formData = new FormData();
+  formData.append('file', file);
+  formData.append('folder', 'logos');
+  formData.append('filename', 'logo_' + Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9._-]/g, '_'));
+
+  try {
+    var resp = await fetch('/api/upload-image', { method: 'POST', body: formData });
+    var result = await resp.json();
+    if (!resp.ok || !result.url) throw new Error(result.error || 'Upload failed');
+
+    // Update preview + URL field
+    var urlEl = document.getElementById('s_logo_url');
+    var preview = document.getElementById('logoPreview');
+    if (urlEl) urlEl.value = result.url;
+    if (preview) { preview.src = result.url; preview.style.display = 'block'; }
+
+    statusEl.textContent = '✅ Uploaded!';
+    statusEl.style.color = '#059669';
+  } catch(e) {
+    statusEl.textContent = '❌ ' + e.message;
+    statusEl.style.color = '#e04444';
+  }
+}
+
 function updateQrPreview(previewId, url) {
   var img = document.getElementById(previewId);
   var ph = document.getElementById(previewId + '_placeholder');
@@ -1219,8 +1252,21 @@ function _settingsBranding() {
     + '<div id="s_color_preview" style="background:var(--forest);color:#fff;padding:10px 16px;border-radius:8px;font-weight:700;text-align:center">' + (s.BUSINESS_NAME||'Your Cafe') + '</div>'
     + '</div></div>'
     + '<div class="s-card"><div class="s-card-title">🖼️ Logo</div>'
-    + _sField('s_logo_url', 'Logo URL', s.LOGO_URL, 'url', '/images/logo.png')
-    + '<div style="font-size:.72rem;color:var(--timber);margin-top:-8px">Use a URL to your logo image. Current: <a href="' + (s.LOGO_URL||'') + '" target="_blank" style="color:var(--forest)">' + (s.LOGO_URL||'not set') + '</a></div>'
+    + '<div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:12px">'
+    + '<div style="flex-shrink:0">'
+    + (s.LOGO_URL ? '<img id="logoPreview" src="' + s.LOGO_URL + '" onerror="this.style.display=\'none\'" style="width:80px;height:80px;object-fit:contain;border-radius:8px;border:1.5px solid var(--mist);background:#f8f8f8">'
+                  : '<div id="logoPreview" style="width:80px;height:80px;border-radius:8px;border:2px dashed var(--mist);display:flex;align-items:center;justify-content:center;font-size:.65rem;color:var(--timber);text-align:center">No Logo</div>')
+    + '</div>'
+    + '<div style="flex:1">'
+    + '<div style="font-size:.72rem;font-weight:600;color:var(--timber);text-transform:uppercase;margin-bottom:6px">Logo Image URL</div>'
+    + '<input id="s_logo_url" type="text" value="' + (s.LOGO_URL||'') + '" placeholder="/images/logo.png" style="width:100%;padding:7px 10px;border:1.5px solid var(--mist);border-radius:8px;font-size:.82rem;box-sizing:border-box;font-family:var(--font-body);margin-bottom:8px" oninput="document.getElementById(\'logoPreview\').src=this.value">'
+    + '<div style="display:flex;align-items:center;gap:10px">'
+    + '<label style="padding:7px 14px;background:var(--forest);color:#fff;border-radius:8px;font-size:.78rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px">'
+    + '📤 Upload Logo<input type="file" accept="image/*" onchange="uploadLogoImage(this)" style="display:none"></label>'
+    + '<span id="logoUploadStatus" style="font-size:.72rem;color:var(--timber)"></span>'
+    + '</div>'
+    + '<div style="font-size:.68rem;color:var(--timber);margin-top:6px">PNG or JPG recommended. Appears on receipts and the POS header.</div>'
+    + '</div></div>'
     + '</div>'
     + '<button class="s-save-btn" onclick="saveBrandingSettings(this)">💾 Save Branding</button>';
 }
