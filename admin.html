@@ -1451,6 +1451,9 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
     </div>
   </div>
 
+<!-- ══ CUSTOMERS VIEW ══ -->
+<div id="customersView" style="display:none;padding:0 0 100px"></div>
+
 <!-- ══ PROMO CODES VIEW ══ -->
 <div id="promoCodesView" style="display:none;padding:0 0 100px"></div>
 
@@ -1567,10 +1570,36 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
           <option value="INACTIVE">INACTIVE (hidden from menu)</option>
         </select>
       </div>
+      <!-- ── MENU SCHEDULING ── -->
+      <div style="margin-bottom:20px;background:#f8fafc;border-radius:10px;padding:12px 14px;border:1.5px solid var(--mist)">
+        <label style="font-size:.75rem;font-weight:700;color:var(--timber);display:block;margin-bottom:8px">⏰ SCHEDULE <span style="font-size:.65rem;font-weight:400;opacity:.7">(optional — leave blank = always available)</span></label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+          <div>
+            <div style="font-size:.68rem;color:var(--timber);margin-bottom:3px">Available From</div>
+            <input type="time" id="menuEditAvailFrom" style="width:100%;padding:7px 10px;border:1.5px solid var(--mist);border-radius:7px;font-size:.85rem;font-family:var(--font-body);box-sizing:border-box">
+          </div>
+          <div>
+            <div style="font-size:.68rem;color:var(--timber);margin-bottom:3px">Available Until</div>
+            <input type="time" id="menuEditAvailUntil" style="width:100%;padding:7px 10px;border:1.5px solid var(--mist);border-radius:7px;font-size:.85rem;font-family:var(--font-body);box-sizing:border-box">
+          </div>
+        </div>
+        <div style="font-size:.68rem;color:var(--timber);margin-bottom:5px">Days Available <span style="opacity:.7">(tap to toggle — none selected = all days)</span></div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap">
+          <button type="button" class="menu-day-btn" data-day="MON" onclick="toggleDayBtn(this)" style="padding:4px 8px;border-radius:6px;border:1.5px solid var(--mist);background:#fff;font-size:.7rem;font-weight:600;cursor:pointer">Mon</button>
+          <button type="button" class="menu-day-btn" data-day="TUE" onclick="toggleDayBtn(this)" style="padding:4px 8px;border-radius:6px;border:1.5px solid var(--mist);background:#fff;font-size:.7rem;font-weight:600;cursor:pointer">Tue</button>
+          <button type="button" class="menu-day-btn" data-day="WED" onclick="toggleDayBtn(this)" style="padding:4px 8px;border-radius:6px;border:1.5px solid var(--mist);background:#fff;font-size:.7rem;font-weight:600;cursor:pointer">Wed</button>
+          <button type="button" class="menu-day-btn" data-day="THU" onclick="toggleDayBtn(this)" style="padding:4px 8px;border-radius:6px;border:1.5px solid var(--mist);background:#fff;font-size:.7rem;font-weight:600;cursor:pointer">Thu</button>
+          <button type="button" class="menu-day-btn" data-day="FRI" onclick="toggleDayBtn(this)" style="padding:4px 8px;border-radius:6px;border:1.5px solid var(--mist);background:#fff;font-size:.7rem;font-weight:600;cursor:pointer">Fri</button>
+          <button type="button" class="menu-day-btn" data-day="SAT" onclick="toggleDayBtn(this)" style="padding:4px 8px;border-radius:6px;border:1.5px solid var(--mist);background:#fff;font-size:.7rem;font-weight:600;cursor:pointer">Sat</button>
+          <button type="button" class="menu-day-btn" data-day="SUN" onclick="toggleDayBtn(this)" style="padding:4px 8px;border-radius:6px;border:1.5px solid var(--mist);background:#fff;font-size:.7rem;font-weight:600;cursor:pointer">Sun</button>
+          <button type="button" onclick="clearMenuSchedule()" style="padding:4px 8px;border-radius:6px;border:1.5px solid #fca5a5;background:#fef2f2;color:#b91c1c;font-size:.65rem;font-weight:600;cursor:pointer">✕ Clear</button>
+        </div>
+      </div>
       <div style="display:flex;gap:10px">
         <button id="menuEditSaveBtn" onclick="saveMenuItemEdit()" style="flex:1;padding:13px;background:var(--forest);color:#fff;border:none;border-radius:8px;font-size:.9rem;font-weight:700;cursor:pointer;font-family:var(--font-body)">Save Changes</button>
         <button onclick="closeMenuEditModal()" style="padding:13px 18px;background:var(--mist-light);color:var(--timber);border:none;border-radius:8px;font-size:.9rem;font-weight:600;cursor:pointer;font-family:var(--font-body)">Cancel</button>
       </div>
+
     </div>
   </div>
 </div>

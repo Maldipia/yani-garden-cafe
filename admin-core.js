@@ -783,6 +783,7 @@ function renderSidebar() {
     html += item('INVENTORY', '📦', 'Inventory', '');
     html += item('ADDONS', '➕', 'Add-ons', '');
     html += item('PROMO_CODES', '🏷️', 'Promo Codes', '');
+    html += item('CUSTOMERS', '👥', 'Customers', '');
   }
 
   if (isAdmin) {
@@ -883,6 +884,9 @@ function setFilter(f) {
   var promoCodesView = document.getElementById('promoCodesView');
   if (promoCodesView) promoCodesView.style.display = 'none';
 
+  var customersView = document.getElementById('customersView');
+  if (customersView) customersView.style.display = 'none';
+
   var dashboardView = document.getElementById('dashboardView');
   if (dashboardView) dashboardView.style.display = 'none';
 
@@ -946,6 +950,9 @@ function setFilter(f) {
   } else if (f === 'PROMO_CODES') {
     if (promoCodesView) promoCodesView.style.display = 'block';
     loadPromoCodesView();
+  } else if (f === 'CUSTOMERS') {
+    if (customersView) customersView.style.display = 'block';
+    loadCustomersView();
   } else {
     orderGrid.style.display = '';
     renderOrders();

@@ -121,6 +121,7 @@ function renderMenuMgrGrid() {
       +     '<span class="mm-row-cat">' + esc(catLabel) + '</span>'
       +     '<span class="mm-row-price">' + priceDisplay + '</span>'
       +     statusBadge
+      +     getScheduleBadge(item)
       +   '</div>'
       + '</div>'
       + '<button class="mm-pill ' + pillClass + '" onclick="quickToggleItem(\'' + esc(item.code) + '\',' + (isActive ? 'true' : 'false') + ')" title="' + (isActive ? 'Set Unavailable' : 'Set Available') + '"></button>'
@@ -253,6 +254,18 @@ function openEditItemModal(itemCode) {
   // Show local Vercel image if available, otherwise use stored URL
   var localPath = getLocalMenuImgPath(item.code);
   previewMenuImage(localPath || item.image || '');
+  // Populate schedule fields
+  var fromEl = document.getElementById('menuEditAvailFrom');
+  var untilEl = document.getElementById('menuEditAvailUntil');
+  if (fromEl) fromEl.value = item.availableFrom || '';
+  if (untilEl) untilEl.value = item.availableUntil || '';
+  document.querySelectorAll('.menu-day-btn').forEach(function(b) {
+    var active = item.availableDays && item.availableDays.includes(b.dataset.day);
+    b.classList.toggle('active', !!active);
+    b.style.background = active ? 'var(--forest)' : '#fff';
+    b.style.color = active ? '#fff' : '';
+    b.style.borderColor = active ? 'var(--forest)' : '';
+  });
   document.getElementById('menuEditOverlay').style.display = 'block';
 }
 
@@ -274,6 +287,7 @@ function openAddItemModal() {
   document.getElementById('menuEditHasSizes').onchange = function() {
     document.getElementById('menuEditSizePrices').style.display = this.checked ? '' : 'none';
   };
+  clearMenuSchedule();
   previewMenuImage('');
   document.getElementById('menuEditOverlay').style.display = 'block';
 }
@@ -518,6 +532,19 @@ async function saveMenuItemEdit() {
   var payload = { name:name, category:category, price:price, hasSizes:hasSizes, hasSugar:hasSugar,
     priceShort:priceShort, priceMedium:priceMedium, priceTall:priceTall, image:image, status:status,
     userId: currentUser && currentUser.userId };
+  // Menu scheduling
+  var fromEl = document.getElementById('menuEditAvailFrom');
+  var untilEl = document.getElementById('menuEditAvailUntil');
+  if (fromEl && untilEl) {
+    payload.availableFrom  = fromEl.value  || null;
+    payload.availableUntil = untilEl.value || null;
+  }
+  var dayBtns = document.querySelectorAll('.menu-day-btn.active');
+  if (dayBtns.length > 0 && dayBtns.length < 7) {
+    payload.availableDays = Array.from(dayBtns).map(function(b){ return b.dataset.day; });
+  } else {
+    payload.availableDays = null; // all days
+  }
   if (!isNew) {
     payload.itemId = itemId;
   } else if (itemId) {
@@ -540,4 +567,37 @@ async function saveMenuItemEdit() {
     uploadStatus.style.color = '#B5443A';
     uploadStatus.textContent = '❌ Failed: ' + (result.error || 'Unknown error');
   }
+}
+
+// ── Menu Schedule Helpers ──────────────────────────────────────────────────
+function toggleDayBtn(btn) {
+  var active = btn.classList.toggle('active');
+  btn.style.background   = active ? 'var(--forest)' : '#fff';
+  btn.style.color        = active ? '#fff' : '';
+  btn.style.borderColor  = active ? 'var(--forest)' : '';
+}
+
+function clearMenuSchedule() {
+  var fromEl = document.getElementById('menuEditAvailFrom');
+  var untilEl = document.getElementById('menuEditAvailUntil');
+  if (fromEl) fromEl.value = '';
+  if (untilEl) untilEl.value = '';
+  document.querySelectorAll('.menu-day-btn').forEach(function(b) {
+    b.classList.remove('active');
+    b.style.background = '#fff';
+    b.style.color = '';
+    b.style.borderColor = '';
+  });
+}
+
+function getScheduleBadge(item) {
+  if (!item.availableFrom && !item.availableUntil && !item.availableDays) return '';
+  var parts = [];
+  if (item.availableFrom && item.availableUntil) {
+    parts.push(item.availableFrom.slice(0,5) + '–' + item.availableUntil.slice(0,5));
+  }
+  if (item.availableDays && item.availableDays.length) {
+    parts.push(item.availableDays.join(','));
+  }
+  return '<span style="display:inline-block;margin-top:3px;font-size:.6rem;background:#DBEAFE;color:#1E40AF;border-radius:5px;padding:1px 6px;font-weight:700">⏰ ' + parts.join(' ') + '</span>';
 }

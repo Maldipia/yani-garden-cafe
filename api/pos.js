@@ -567,23 +567,42 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
         return res.status(200).json({ ok: true, items: menuCache.public, cached: true });
       }
       const r = await supaFetch(
-        `${SUPABASE_URL}/rest/v1/menu_items?is_active=eq.true&order=name.asc&select=item_code,name,base_price,has_sizes,has_sugar_levels,price_short,price_medium,price_tall,image_path,category_id,is_signature`
+        `${SUPABASE_URL}/rest/v1/menu_items?is_active=eq.true&order=name.asc&select=item_code,name,base_price,has_sizes,has_sugar_levels,price_short,price_medium,price_tall,image_path,category_id,is_signature,available_from,available_until,available_days`
       );
       if (!r.ok) return res.status(502).json({ ok: false, error: 'Failed to load menu' });
-      const items = r.data.map(m => ({
-        code:        m.item_code,
-        name:        m.name,
-        price:       m.base_price,
-        hasSizes:    m.has_sizes,
-        hasSugar:    m.has_sugar_levels,
-        priceShort:  m.price_short,
-        priceMedium: m.price_medium,
-        priceTall:   m.price_tall,
-        image:       m.image_path || '',
-        category:    getCategoryName(m.category_id),
-        isSignature: !!m.is_signature,
-        available:   true,
-      }));
+
+      // Current PHT time for schedule filtering
+      const nowPHT = new Date(Date.now() + 8*3600000);
+      const curTime = nowPHT.getUTCHours().toString().padStart(2,'0') + ':' + nowPHT.getUTCMinutes().toString().padStart(2,'0');
+      const curDay = ['SUN','MON','TUE','WED','THU','FRI','SAT'][nowPHT.getUTCDay()];
+
+      const items = r.data.map(m => {
+        // Schedule check
+        let available = true;
+        if (m.available_from && m.available_until) {
+          available = curTime >= m.available_from && curTime <= m.available_until;
+        }
+        if (available && m.available_days && m.available_days.length > 0) {
+          available = m.available_days.includes(curDay);
+        }
+        return {
+          code:           m.item_code,
+          name:           m.name,
+          price:          m.base_price,
+          hasSizes:       m.has_sizes,
+          hasSugar:       m.has_sugar_levels,
+          priceShort:     m.price_short,
+          priceMedium:    m.price_medium,
+          priceTall:      m.price_tall,
+          image:          m.image_path || '',
+          category:       getCategoryName(m.category_id),
+          isSignature:    !!m.is_signature,
+          available,
+          availableFrom:  m.available_from || null,
+          availableUntil: m.available_until || null,
+          availableDays:  m.available_days || null,
+        };
+      });
       menuCache.public = items;
       menuCache.ts = now;
       return res.status(200).json({ ok: true, items });
@@ -598,24 +617,27 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
         return res.status(200).json({ ok: true, items: menuCache.admin, cached: true });
       }
       const r = await supaFetch(
-        `${SUPABASE_URL}/rest/v1/menu_items?order=name.asc&select=item_code,name,base_price,has_sizes,has_sugar_levels,price_short,price_medium,price_tall,image_path,category_id,is_active,is_signature`
+        `${SUPABASE_URL}/rest/v1/menu_items?order=name.asc&select=item_code,name,base_price,has_sizes,has_sugar_levels,price_short,price_medium,price_tall,image_path,category_id,is_active,is_signature,available_from,available_until,available_days`
       );
       if (!r.ok) return res.status(502).json({ ok: false, error: 'Failed to load menu' });
       const items = r.data.map(m => ({
-        code:        m.item_code,
-        name:        m.name,
-        price:       m.base_price,
-        hasSizes:    m.has_sizes,
-        hasSugar:    m.has_sugar_levels,
-        priceShort:  m.price_short,
-        priceMedium: m.price_medium,
-        priceTall:   m.price_tall,
-        image:       m.image_path || '',
-        category:    getCategoryName(m.category_id),
-        active:      m.is_active,
-        available:   m.is_active,
-        status:      m.is_active ? 'ACTIVE' : 'INACTIVE',
-        isSignature: !!m.is_signature,
+        code:           m.item_code,
+        name:           m.name,
+        price:          m.base_price,
+        hasSizes:       m.has_sizes,
+        hasSugar:       m.has_sugar_levels,
+        priceShort:     m.price_short,
+        priceMedium:    m.price_medium,
+        priceTall:      m.price_tall,
+        image:          m.image_path || '',
+        category:       getCategoryName(m.category_id),
+        active:         m.is_active,
+        available:      m.is_active,
+        status:         m.is_active ? 'ACTIVE' : 'INACTIVE',
+        isSignature:    !!m.is_signature,
+        availableFrom:  m.available_from || null,
+        availableUntil: m.available_until || null,
+        availableDays:  m.available_days || null,
       }));
       menuCache.admin = items;
       menuCache.ts = now;
@@ -678,6 +700,10 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       if (body.image     !== undefined) updates.image_path        = body.image || null;
       if (body.status      !== undefined) updates.is_active         = (body.status || 'ACTIVE').toUpperCase() === 'ACTIVE';
       if (body.isSignature !== undefined) updates.is_signature      = !!body.isSignature;
+      // Menu scheduling fields
+      if (body.availableFrom  !== undefined) updates.available_from  = body.availableFrom  || null;
+      if (body.availableUntil !== undefined) updates.available_until = body.availableUntil || null;
+      if (body.availableDays  !== undefined) updates.available_days  = (body.availableDays && body.availableDays.length) ? body.availableDays : null;
       if (Object.keys(updates).length === 0) return res.status(200).json({ ok: true });
 
       const r = await supa('PATCH', 'menu_items', updates, { item_code: `eq.${body.itemId}` });
@@ -2659,6 +2685,82 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
         name: CATEGORY_ID_TO_NAME[c.id] || c.name
       }));
       return res.status(200).json({ ok: true, categories: cats });
+    }
+
+    // ── getCustomers ───────────────────────────────────────────────────────
+    if (action === 'getCustomers') {
+      const auth = await checkAuth(['ADMIN','OWNER']);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      const limit = Math.min(parseInt(body.limit) || 100, 500);
+      const search = body.search ? body.search.trim() : '';
+      let url = `${SUPABASE_URL}/rest/v1/customers?order=last_visit.desc.nullsfirst&limit=${limit}&select=*`;
+      if (search) url += `&or=(name.ilike.*${encodeURIComponent(search)}*,phone.ilike.*${encodeURIComponent(search)}*)`;
+      const r = await supaFetch(url);
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to fetch customers' });
+      return res.status(200).json({ ok: true, customers: r.data || [] });
+    }
+
+    // ── getCustomer ────────────────────────────────────────────────────────
+    if (action === 'getCustomer') {
+      const auth = await checkAuth(['ADMIN','OWNER','CASHIER']);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      const { id, phone } = body;
+      let url;
+      if (id) url = `${SUPABASE_URL}/rest/v1/customers?id=eq.${encodeURIComponent(id)}&select=*&limit=1`;
+      else if (phone) url = `${SUPABASE_URL}/rest/v1/customers?phone=eq.${encodeURIComponent(phone)}&select=*&limit=1`;
+      else return res.status(400).json({ ok: false, error: 'id or phone required' });
+      const r = await supaFetch(url);
+      if (!r.ok || !r.data.length) return res.status(404).json({ ok: false, error: 'Customer not found' });
+      // Get order history
+      const ordR = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/dine_in_orders?customer_id=eq.${r.data[0].id}&order=created_at.desc&limit=20&select=order_id,created_at,total,status,discount_type`
+      );
+      return res.status(200).json({ ok: true, customer: r.data[0], orders: ordR.data || [] });
+    }
+
+    // ── upsertCustomer ─────────────────────────────────────────────────────
+    if (action === 'upsertCustomer') {
+      const auth = await checkAuth(['ADMIN','OWNER','CASHIER']);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      const { name, phone, email, notes } = body;
+      if (!name) return res.status(400).json({ ok: false, error: 'name required' });
+      // Check if customer exists by phone
+      let existing = null;
+      if (phone) {
+        const ex = await supaFetch(`${SUPABASE_URL}/rest/v1/customers?phone=eq.${encodeURIComponent(phone)}&select=id&limit=1`);
+        if (ex.ok && ex.data.length) existing = ex.data[0];
+      }
+      if (existing) {
+        // Update
+        const upd = { name, updated_at: new Date().toISOString() };
+        if (email !== undefined) upd.email = email;
+        if (notes !== undefined) upd.notes = notes;
+        await supaFetch(`${SUPABASE_URL}/rest/v1/customers?id=eq.${existing.id}`, { method: 'PATCH', body: JSON.stringify(upd) });
+        return res.status(200).json({ ok: true, id: existing.id, action: 'updated' });
+      }
+      // Create
+      const payload = { name, phone: phone||null, email: email||null, notes: notes||null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+      const r = await supaFetch(`${SUPABASE_URL}/rest/v1/customers`, { method: 'POST', body: JSON.stringify(payload), headers: { 'Prefer': 'return=representation' } });
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to create customer' });
+      return res.status(200).json({ ok: true, id: r.data[0]?.id, action: 'created' });
+    }
+
+    // ── updateCustomerStats ────────────────────────────────────────────────
+    if (action === 'updateCustomerStats') {
+      const { customerId, orderId, total } = body;
+      if (!customerId) return res.status(400).json({ ok: false, error: 'customerId required' });
+      const cur = await supaFetch(`${SUPABASE_URL}/rest/v1/customers?id=eq.${encodeURIComponent(customerId)}&select=total_orders,total_spent`);
+      if (!cur.ok || !cur.data.length) return res.status(404).json({ ok: false, error: 'Customer not found' });
+      const c = cur.data[0];
+      const upd = {
+        total_orders: (parseInt(c.total_orders)||0) + 1,
+        total_spent: Math.round(((parseFloat(c.total_spent)||0) + (parseFloat(total)||0)) * 100) / 100,
+        last_visit: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      await supaFetch(`${SUPABASE_URL}/rest/v1/customers?id=eq.${encodeURIComponent(customerId)}`, { method: 'PATCH', body: JSON.stringify(upd) });
+      if (orderId) await supaFetch(`${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}`, { method: 'PATCH', body: JSON.stringify({ customer_id: customerId }) });
+      return res.status(200).json({ ok: true });
     }
 
     // ── getSettings ────────────────────────────────────────────────────────
