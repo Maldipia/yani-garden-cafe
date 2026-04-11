@@ -1300,7 +1300,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
         { method: 'PATCH', body: JSON.stringify({ split_data: splitData }) }
       );
       if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to save split data' });
-      await logAudit({ orderId, action: 'SPLIT_BILL', actorId: body.userId,
+      await auditLog({ orderId, action: 'SPLIT_BILL', actor: { userId: body.userId },
         newValue: `split:${splitData.type}:${splitData.pax}pax`, details: splitData });
       return res.status(200).json({ ok: true });
     }
