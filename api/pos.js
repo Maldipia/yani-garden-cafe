@@ -1204,6 +1204,61 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
         }
       }
 
+      // AUTO-EARN LOYALTY POINTS when order is completed
+      if (newStatus === 'COMPLETED') {
+        try {
+          const loyaltyEnabled = await getSetting('LOYALTY_ENABLED');
+          if (loyaltyEnabled !== 'false') {
+            // Get full order to find total + loyalty_account_id
+            const fullOrder = await supaFetch(
+              `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=total,discounted_total,loyalty_account_id,points_earned,customer_name,table_no,is_test&limit=1`
+            );
+            const ord = fullOrder.data?.[0];
+            if (ord && !ord.is_test && ord.loyalty_account_id && !ord.points_earned) {
+              const orderTotal = parseFloat(ord.discounted_total || ord.total || 0);
+              const rateR = await supaFetch(`${SUPABASE_URL}/rest/v1/settings?key=eq.LOYALTY_EARN_RATE&select=value&limit=1`);
+              const earnRate = parseFloat(rateR.data?.[0]?.value || '1');
+              const pointsEarned = Math.floor(orderTotal * earnRate);
+              if (pointsEarned > 0) {
+                const accR = await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts?id=eq.${encodeURIComponent(ord.loyalty_account_id)}&select=points_balance,total_points_earned,total_spent,visit_count&limit=1`);
+                if (accR.ok && accR.data?.length) {
+                  const acc = accR.data[0];
+                  const balBefore = acc.points_balance || 0;
+                  const balAfter  = balBefore + pointsEarned;
+                  const newTotalEarned = (acc.total_points_earned || 0) + pointsEarned;
+                  const newTotalSpent  = (acc.total_spent || 0) + orderTotal;
+                  const newVisits      = (acc.visit_count || 0) + 1;
+                  // Tier calculation
+                  const thR = await supaFetch(`${SUPABASE_URL}/rest/v1/settings?key=in.("LOYALTY_SILVER_THRESHOLD","LOYALTY_GOLD_THRESHOLD","LOYALTY_PLATINUM_THRESHOLD")&select=key,value`);
+                  const th = {};
+                  (thR.data||[]).forEach(s => { th[s.key] = parseInt(s.value); });
+                  let tier = 'BRONZE';
+                  if (newTotalEarned >= (th.LOYALTY_PLATINUM_THRESHOLD||40000)) tier = 'PLATINUM';
+                  else if (newTotalEarned >= (th.LOYALTY_GOLD_THRESHOLD||15000)) tier = 'GOLD';
+                  else if (newTotalEarned >= (th.LOYALTY_SILVER_THRESHOLD||5000)) tier = 'SILVER';
+                  // Update account
+                  await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts?id=eq.${encodeURIComponent(ord.loyalty_account_id)}`, {
+                    method: 'PATCH', body: JSON.stringify({ points_balance: balAfter, total_points_earned: newTotalEarned, total_spent: newTotalSpent, visit_count: newVisits, tier, last_visit: new Date().toISOString(), updated_at: new Date().toISOString() })
+                  });
+                  // Log transaction
+                  await supaFetch(`${SUPABASE_URL}/rest/v1/points_transactions`, {
+                    method: 'POST', body: JSON.stringify({ account_id: ord.loyalty_account_id, order_id: orderId, type: 'EARN', points: pointsEarned, balance_before: balBefore, balance_after: balAfter, description: `Earned from order ${orderId}`, processed_by: userId })
+                  });
+                  // Mark points earned on order
+                  await supaFetch(`${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}`, {
+                    method: 'PATCH', body: JSON.stringify({ points_earned: pointsEarned })
+                  });
+                  auditLog({ orderId, action: 'LOYALTY_POINTS_EARNED', details: { accountId: ord.loyalty_account_id, pointsEarned, balAfter, tier } });
+                }
+              }
+            }
+          }
+        } catch(loyaltyErr) {
+          // Never fail the order completion because of loyalty error
+          console.error('Loyalty auto-earn error:', loyaltyErr.message);
+        }
+      }
+
       return res.status(200).json({ ok: true, orderId, status: newStatus });
     }
 
