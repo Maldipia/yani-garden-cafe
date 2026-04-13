@@ -1927,21 +1927,24 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       const insertR = await supa('POST', 'dine_in_order_items', itemRows);
       if (!insertR.ok) return res.status(500).json({ ok: false, error: 'Failed to insert items' });
 
-      // Recalculate totals
-      const existSubtotal = parseFloat(ord.subtotal || 0);
-      const newSubtotal   = Math.round((existSubtotal + addSubtotal) * 100) / 100;
-      const svcRate       = ord.order_type === 'TAKE-OUT' ? 0 : SERVICE_CHARGE_RATE;
-      const newSvc        = Math.round(newSubtotal * svcRate * 100) / 100;
-      const newTotal      = Math.round((newSubtotal + newSvc) * 100) / 100;
+      // Recalculate totals from ALL items in DB (not from stored subtotal — prevents compounding errors)
+      const allItemsR = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/dine_in_order_items?order_id=eq.${encodeURIComponent(orderId)}&select=unit_price,qty`
+      );
+      const trueSubtotal = allItemsR.ok
+        ? Math.round((allItemsR.data || []).reduce((s, i) => s + parseFloat(i.unit_price||0) * parseInt(i.qty||1), 0) * 100) / 100
+        : Math.round((parseFloat(ord.subtotal || 0) + addSubtotal) * 100) / 100;
+
+      const svcRate  = ord.order_type === 'TAKE-OUT' ? 0 : SERVICE_CHARGE_RATE;
+      const newSvc   = Math.round(trueSubtotal * svcRate * 100) / 100;
+      const newTotal = Math.round((trueSubtotal + newSvc) * 100) / 100;
 
       await supaFetch(`${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}`, {
         method: 'PATCH',
-        body: JSON.stringify({ subtotal: newSubtotal, service_charge: newSvc, total: newTotal })
+        body: JSON.stringify({ subtotal: trueSubtotal, service_charge: newSvc, total: newTotal })
       });
 
-      // Log audit
-      await logAudit(authA.userId, 'add_items_to_order', orderId,
-        { added: newItems.length, addSubtotal });
+      await auditLog({ orderId, action: 'ITEMS_ADDED', actor: { userId: authA.userId }, details: { added: newItems.length, addSubtotal, trueSubtotal, newTotal } });
 
       return res.status(200).json({ ok: true, orderId, added: newItems.length, newTotal });
     }
