@@ -843,27 +843,38 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
         menuR.data.forEach(m => { menuMap[m.item_code] = m; });
       }
 
-      // Build order items with prices
+      // Fetch addon prices from DB — never trust client-sent addon prices
+      const addonR2 = await supaFetch(`${SUPABASE_URL}/rest/v1/menu_addons?is_active=eq.true&select=addon_code,price`);
+      const addonMapForOrder = {};
+      if (addonR2.ok && Array.isArray(addonR2.data)) {
+        addonR2.data.forEach(a => { addonMapForOrder[a.addon_code] = parseFloat(a.price) || 0; });
+      }
+
       const orderItems = [];
       let subtotal = 0;
       for (const item of items) {
         const menuItem = menuMap[item.code];
         if (!menuItem) continue; // skip unknown items
-        let unitPrice = menuItem.base_price;
+        let unitPrice = parseFloat(menuItem.base_price) || 0;
         if (menuItem.has_sizes && item.size) {
           const sizeKey = { SHORT: 'price_short', MEDIUM: 'price_medium', TALL: 'price_tall' }[String(item.size).toUpperCase()];
-          if (sizeKey && menuItem[sizeKey] != null) unitPrice = menuItem[sizeKey];
+          if (sizeKey && menuItem[sizeKey] != null) unitPrice = parseFloat(menuItem[sizeKey]);
         }
         const qty = Math.max(1, parseInt(item.qty) || 1);
-        subtotal += unitPrice * qty;
-        // Collect addons for this item
+        // Addons: validate prices from DB, not client
         const itemAddons = Array.isArray(item.addons) ? item.addons : [];
-        const addonPrice = itemAddons.reduce((sum, a) => sum + (parseFloat(a.price) || 0), 0);
-        unitPrice += addonPrice; // addons already baked into the unit price from frontend
+        const addonPrice = itemAddons.reduce((sum, a) => {
+          const code = a.code || a.addon_code || '';
+          // Use DB addon price if available, fall back to 0 (never trust client addon price)
+          const dbAddonPrice = addonMapForOrder[code] !== undefined ? addonMapForOrder[code] : 0;
+          return sum + dbAddonPrice;
+        }, 0);
+        const finalUnitPrice = unitPrice + addonPrice;
+        subtotal += finalUnitPrice * qty;
         orderItems.push({
           item_code:    item.code,
           item_name:    menuItem.name,
-          unit_price:   unitPrice,
+          unit_price:   finalUnitPrice,
           qty,
           size_choice:  item.size || '',
           sugar_choice: item.sugarLevel || item.sugar || '',
