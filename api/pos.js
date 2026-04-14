@@ -369,6 +369,11 @@ const menuCache = { public: null, admin: null, ts: 0 };
 const MENU_CACHE_TTL = 5 * 60 * 1000;
 function invalidateMenuCache() { menuCache.public = null; menuCache.admin = null; menuCache.ts = 0; }
 
+// ── Settings cache (2-minute TTL) — settings rarely change ──────────────
+const _settingsCache = { data: null, ts: 0 };
+const SETTINGS_CACHE_TTL = 2 * 60 * 1000;
+function invalidateSettingsCache() { _settingsCache.data = null; _settingsCache.ts = 0; }
+
 // ── Admin role guard ──────────────────────────────────────────────────────
 // Verifies that body.userId belongs to an active ADMIN or OWNER staff user.
 const VALID_USER_ID = /^USR_\d{3,6}$/;
@@ -2614,26 +2619,21 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       const pin = String(body.pin || '').trim();
       if (!pin || pin.length < 4) return res.status(400).json({ ok: false, error: 'PIN is required' });
 
-      // ── IP-based brute-force protection ──────────────────────────────
-      // 10 wrong PINs per IP in 5 minutes → 429 blocked
+      // ── Rate-limit check + staff fetch run in PARALLEL (saves ~600ms) ─────
       const loginIp = (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim();
       const loginKey = `pin_brute:${loginIp}`;
-      try {
-        const pinRlR = await fetch(
-          `${SUPABASE_URL}/rest/v1/rpc/upsert_rate_limit`,
+
+      const [rlResult, r] = await Promise.all([
+        fetch(`${SUPABASE_URL}/rest/v1/rpc/upsert_rate_limit`,
           { method:'POST', headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json'},
             body: JSON.stringify({ p_key: loginKey, p_window: 300, p_limit: 10 }) }
-        );
-        if (pinRlR.ok && await pinRlR.json() === false) {
-          return res.status(429).json({ ok:false, error:'Too many failed attempts. Try again in 5 minutes.' });
-        }
-      } catch(rlErr) { console.error('PIN rate limit:', rlErr.message); /* fail open */ }
+        ).then(async res2 => { try { return await res2.json(); } catch { return true; } }).catch(() => true),
+        supaFetch(`${SUPABASE_URL}/rest/v1/staff_users?active=eq.true&select=user_id,username,display_name,role,pin_hash,failed_attempts,locked_until`)
+      ]);
 
-      // Fetch all active staff — we need to bcrypt.compare against each hash
-      // (bcrypt cannot reverse-lookup; we must compare, not query by hash)
-      const r = await supaFetch(
-        `${SUPABASE_URL}/rest/v1/staff_users?active=eq.true&select=user_id,username,display_name,role,pin_hash,failed_attempts,locked_until`
-      );
+      if (rlResult === false) {
+        return res.status(429).json({ ok:false, error:'Too many failed attempts. Try again in 5 minutes.' });
+      }
       if (!r.ok || !r.data) return res.status(500).json({ ok: false, error: 'Auth service error' });
 
       // Find matching user — try each active staff member
@@ -2656,23 +2656,24 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
         return res.status(200).json({ ok: false, error: 'Account locked. Try again in 15 minutes.' });
       }
 
-      // PIN correct — reset rate limit + update last_login
-      try {
-        // Reset PIN brute-force counter on success
-        await fetch(`${SUPABASE_URL}/rest/v1/rpc/upsert_rate_limit`,
-          { method:'POST', headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json'},
-            body: JSON.stringify({ p_key: loginKey, p_window: 1, p_limit: 9999 }) });
-      } catch(_) {}
-      await supa('PATCH', 'staff_users', {
-        last_login:      new Date().toISOString(),
-        failed_attempts: 0,
-        locked_until:    null,
-      }, { user_id: `eq.${matchedUser.user_id}` });
-
-      // Issue JWT token — 8h expiry covers a full cafe shift
+      // Issue JWT token immediately — don't block on DB writes
       let token = null;
       try { token = await signToken(matchedUser.user_id, matchedUser.role, matchedUser.display_name); }
-      catch (_) { /* token generation failure non-fatal — client still works via legacy path */ }
+      catch (_) { /* non-fatal */ }
+
+      // Fire-and-forget post-login writes — PARALLEL, not awaited
+      // User gets their response immediately; DB updates happen in background
+      Promise.all([
+        fetch(`${SUPABASE_URL}/rest/v1/rpc/upsert_rate_limit`,
+          { method:'POST', headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json'},
+            body: JSON.stringify({ p_key: loginKey, p_window: 1, p_limit: 9999 }) }
+        ).catch(() => {}),
+        supa('PATCH', 'staff_users', {
+          last_login:      new Date().toISOString(),
+          failed_attempts: 0,
+          locked_until:    null,
+        }, { user_id: `eq.${matchedUser.user_id}` }).catch(() => {})
+      ]).catch(() => {});
 
       return res.status(200).json({
         ok: true,
@@ -3169,9 +3170,15 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
 
     // ── getSettings ────────────────────────────────────────────────────────
     if (action === 'getSettings') {
+      const now2 = Date.now();
+      if (_settingsCache.data && (now2 - _settingsCache.ts) < SETTINGS_CACHE_TTL) {
+        return res.status(200).json({ ok: true, settings: _settingsCache.data, cached: true });
+      }
       const r = await supaFetch(`${SUPABASE_URL}/rest/v1/settings?order=key.asc&select=key,value,description`);
       if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to fetch settings' });
-      return res.status(200).json({ ok: true, settings: r.data || [] });
+      _settingsCache.data = r.data || [];
+      _settingsCache.ts = now2;
+      return res.status(200).json({ ok: true, settings: _settingsCache.data });
     }
 
     // ── updateSetting ──────────────────────────────────────────────────────
@@ -3193,6 +3200,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
         { method: 'PATCH', body: JSON.stringify({ value: String(value), updated_at: new Date().toISOString() }) }
       );
       if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to update setting' });
+      invalidateSettingsCache();
       return res.status(200).json({ ok: true, key, value });
     }
 
