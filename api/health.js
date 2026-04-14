@@ -158,11 +158,11 @@ export default async function handler(req, res) {
         message: `Database is unreachable: ${supabaseHealth.error || 'Unknown error'}`,
         impact: 'All orders and menu will not work'
       });
-    } else if (supabaseHealth.latency > 3000) {
+    } else if (supabaseHealth.latency > 4500) {
       alerts.push({
         level: 'WARN',
         source: 'Supabase',
-        message: `Database is slow (${supabaseHealth.latency}ms)`,
+        message: `Database responding slowly (${supabaseHealth.latency}ms — normal is under 2000ms)`,
         impact: 'POS and ordering may be sluggish'
       });
     }
