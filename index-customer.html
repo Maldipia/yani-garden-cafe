@@ -1907,6 +1907,10 @@ async function placeOrder() {
   var btn = document.getElementById('placeOrderBtn');
   if (btn) { btn.disabled = true; btn.textContent = 'Placing Order...'; }
 
+  // Guard: if already placing, ignore second tap entirely
+  if (state._placingOrder) return;
+  state._placingOrder = true;
+
   var items = state.cart.map(function(c) {
     return {
       code: c.code,
@@ -1936,9 +1940,11 @@ async function placeOrder() {
     openPage('receipt');
     renderReceiptPage();
   } else if (result.timeout) {
+    state._placingOrder = false;
     if (btn) { btn.disabled = false; btn.textContent = 'Place Order — ' + peso(total); }
     toast('⏱ Taking too long — your order may have gone through. Please show this to staff and they will check.', 6000);
   } else {
+    state._placingOrder = false;
     toast('Order failed: ' + (result.error || 'Please try again'));
     if (btn) { btn.disabled = false; btn.textContent = 'Place Order — ' + peso(total); }
   }

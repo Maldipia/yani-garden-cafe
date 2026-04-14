@@ -902,6 +902,21 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
 
       if (total <= 0) return res.status(400).json({ ok: false, error: 'Order total must be greater than zero' });
 
+      // ── Duplicate order prevention ─────────────────────────────────────────
+      // Reject if same table + customer + total was placed within the last 15 seconds
+      // Catches: double-tap, slow-response retries, network retry storms
+      if (!isStaffOrder && tableNo !== '0') {
+        const dedupeWindow = new Date(Date.now() - 15000).toISOString();
+        const dupeR = await supaFetch(
+          `${SUPABASE_URL}/rest/v1/dine_in_orders?table_no=eq.${encodeURIComponent(tableNo)}&customer_name=eq.${encodeURIComponent(customerName)}&total=eq.${total}&status=in.(NEW,PREPARING,READY)&is_deleted=eq.false&created_at=gte.${encodeURIComponent(dedupeWindow)}&select=order_id&limit=1`
+        );
+        if (dupeR.ok && dupeR.data && dupeR.data.length > 0) {
+          const existingId = dupeR.data[0].order_id;
+          // Return the existing order instead of creating a new one
+          return res.status(200).json({ ok: true, orderId: existingId, duplicate: true, message: 'Order already placed' });
+        }
+      }
+
       // Generate order ID using sequence — with self-healing retry on duplicate key
       const TEST_TABLES = ['T99', '0', 'T0'];
       // Only specific programmatic test names — NOT 'guest' (real customers don't enter names)
