@@ -1090,12 +1090,36 @@ const API_URL = '/api/pos';
 const SERVICE_CHARGE_RATE = 0.10; // 10% for dine-in
 
 // ── TABLE TOKENS ────────────────────────────────────────
-const TABLE_TOKENS = {
+// TABLE_TOKENS: loaded dynamically from DB on page load (see initTableTokens)
+// Hardcoded fallback only used if DB fetch fails
+const TABLE_TOKENS_FALLBACK = {
   '1': 'b36e8426', '2': 'c331ce3e', '3': '60e9fc3d',
   '4': 'a1765c4b', '5': '8d07a408', '6': '8239ded5',
   '7': 'f9612bc6', '8': '28027fc0', '9': '9e4c1053',
-  '10': '662937dc'
+  '10': '662937dc', '11': '59fbd67f'
 };
+let TABLE_TOKENS = { ...TABLE_TOKENS_FALLBACK };
+
+async function initTableTokens() {
+  try {
+    var r = await fetch('/api/pos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'getTableStatus' })
+    });
+    var data = await r.json();
+    if (data.ok && data.tables && data.tables.length) {
+      var fresh = {};
+      data.tables.forEach(function(t) {
+        if (t.table_number && t.qr_token) fresh[String(t.table_number)] = t.qr_token;
+      });
+      TABLE_TOKENS = fresh;
+    }
+  } catch(e) {
+    // Keep fallback tokens — no disruption to ordering
+    console.warn('Table token refresh failed, using cached tokens');
+  }
+}
 
 // ── PAYMENT QR CODES ────────────────────────────────────
 const PAYMENT_METHODS = [
@@ -1254,15 +1278,18 @@ function updateStickyOffsets() {
     cats.style.top = hh + 'px';
   }
 }
-window.addEventListener('DOMContentLoaded', function() {
+window.addEventListener('DOMContentLoaded', async function() {
   updateStickyOffsets();
   window.addEventListener('resize', updateStickyOffsets);
-  // Parse URL params
+  // Parse URL params first
   var params = new URLSearchParams(window.location.search);
   state.tableNo = params.get('table') || '';
   state.token = params.get('token') || '';
 
-  // Validate table
+  // Refresh table tokens from DB (handles added/changed tables dynamically)
+  await initTableTokens();
+
+  // Validate table token
   if (state.tableNo && TABLE_TOKENS[state.tableNo]) {
     if (state.token !== TABLE_TOKENS[state.tableNo]) {
       document.getElementById('headerTable').textContent = '⚠️ Invalid Table';
@@ -1271,9 +1298,9 @@ window.addEventListener('DOMContentLoaded', function() {
     }
     document.getElementById('headerTable').textContent = 'Table ' + state.tableNo;
   } else if (state.tableNo) {
-    document.getElementById('headerTable').textContent = '⚠️ Invalid Table';
-    toast('Invalid table. Please scan a valid QR code.');
-    return;
+    // Table not found in DB — show warning but allow ordering (graceful degradation)
+    document.getElementById('headerTable').textContent = 'Table ' + state.tableNo;
+    console.warn('Table ' + state.tableNo + ' not found in token map');
   } else {
     document.getElementById('headerTable').textContent = 'Walk-in Order';
   }
@@ -1349,7 +1376,7 @@ async function api(action, data) {
   try {
     var body = Object.assign({ action: action }, data || {});
     if (!body.tableNo) body.tableNo = state.tableNo || '1';
-    if (!body.token) body.token = state.token || TABLE_TOKENS['1'];
+    if (!body.token) body.token = state.token || '';
 
     var controller = new AbortController();
     var timeoutId = setTimeout(function() { controller.abort(); }, 30000);
@@ -1924,7 +1951,7 @@ async function placeOrder() {
 
   var result = await api('placeOrder', {
     tableNo: state.tableNo || '1',
-    token: state.token || TABLE_TOKENS['1'],
+    token: state.token || '',
     customerName: state.customerName,
     notes: state.orderNotes,
     orderType: state.orderType.toUpperCase(),
