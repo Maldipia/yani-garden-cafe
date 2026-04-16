@@ -799,7 +799,8 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
           for (const item of items) {
             const dbItem = menuMap[item.code];
             if (!dbItem) continue; // unknown code — let DB handle
-            const sentPrice = parseFloat(item.price) || 0;
+            const sentPriceRaw = item.price;
+            const sentPrice = parseFloat(sentPriceRaw);
             const size = (item.size || '').toLowerCase();
             // Determine valid base price based on size
             let validBase = parseFloat(dbItem.base_price) || 0;
@@ -814,8 +815,9 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
               addonTotal += addonMap[addonCode] || parseFloat(addon.price) || 0;
             }
             const validPrice = validBase + addonTotal;
-            // Allow 1 peso tolerance for floating point
-            if (Math.abs(sentPrice - validPrice) > 1.01) {
+            // Only reject if client sent a nonzero price AND it doesn't match
+            // If price is missing/0/null — skip check, server will use DB price anyway
+            if (!isNaN(sentPrice) && sentPrice > 0 && Math.abs(sentPrice - validPrice) > 1.01) {
               return res.status(400).json({
                 ok: false,
                 error: `Invalid price for ${item.code}: sent ₱${sentPrice}, expected ₱${validPrice}`
@@ -1555,7 +1557,8 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       if (!phone) return res.status(400).json({ ok: false, error: 'phone required' });
       const clean = phone.replace(/\D/g,'');
       const r = await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts?phone=eq.${encodeURIComponent(clean)}&select=*&limit=1`);
-      if (!r.ok || !r.data?.length) return res.status(200).json({ ok: false, error: 'No loyalty account found for this number' });
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Loyalty lookup failed' });
+      if (!r.data?.length) return res.status(200).json({ ok: true, found: false, account: null });
       return res.status(200).json({ ok: true, account: r.data[0] });
     }
 
