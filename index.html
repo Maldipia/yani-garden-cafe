@@ -10,7 +10,7 @@ if (window.location.hostname === 'admin.yanigardencafe.com') {
   window.location.replace('/admin.html');
 } else {
   // Otherwise load the customer ordering page
-  window.location.replace('/index-customer.html');
+  window.location.replace('/index-customer.html' + window.location.search + window.location.hash);
 }
 </script>
 </head>
