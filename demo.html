@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TYG POS Demo — Try It Live</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,300&display=swap" rel="stylesheet">
+<style>
+:root{
+  --forest:#0a1a12;--forest2:#112418;--forest3:#1a3426;
+  --green:#2d6a3f;--leaf:#4a9960;--leaf2:#6dbf7e;
+  --gold:#c8873a;--gold2:#e8a855;
+  --cream:#f5f0e8;--mist:#c8e6c9;
+  --white:#fff;--dim:#2a3e2e;--dim2:#1a2e20;
+  --red:#e05252;--orange:#e8953a;--blue:#4a7ab5;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',sans-serif;background:var(--forest);color:var(--white);min-height:100vh;overflow-x:hidden}
+
+/* ── HEADER ─────────────────────────── */
+.demo-header{
+  background:var(--forest2);
+  border-bottom:1px solid var(--dim);
+  padding:12px 20px;
+  display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;z-index:100;
+}
+.demo-brand{display:flex;align-items:center;gap:10px}
+.demo-logo{width:36px;height:36px;background:var(--gold);border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:800;font-size:14px;color:var(--forest)}
+.demo-title{font-family:'Syne',sans-serif;font-weight:700;font-size:15px;color:var(--white)}
+.demo-subtitle{font-size:11px;color:var(--mist);opacity:.7}
+.demo-badge{background:var(--leaf);color:var(--forest);font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;letter-spacing:.3px}
+
+/* ── TABS ────────────────────────────── */
+.tabs{display:flex;gap:0;background:var(--forest2);border-bottom:1px solid var(--dim);padding:0 20px;overflow-x:auto}
+.tab{padding:14px 20px;font-size:13px;font-weight:600;color:var(--mist);opacity:.6;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .2s;user-select:none}
+.tab.active{color:var(--white);opacity:1;border-bottom-color:var(--gold)}
+.tab:hover:not(.active){opacity:.9}
+.tab-icon{margin-right:6px}
+
+/* ── PANES ───────────────────────────── */
+.pane{display:none;animation:fadeIn .3s ease}
+.pane.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── CUSTOMER PANE ───────────────────── */
+.customer-wrap{max-width:420px;margin:0 auto;padding:16px 12px 40px}
+.cafe-header{text-align:center;padding:20px 0 12px}
+.cafe-header h1{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;color:var(--leaf2)}
+.cafe-header p{font-size:12px;color:var(--mist);opacity:.7;margin-top:3px}
+.table-badge{display:inline-flex;align-items:center;gap:6px;background:var(--forest3);border:1px solid var(--dim);border-radius:20px;padding:5px 12px;font-size:12px;font-weight:600;color:var(--mist);margin:8px auto 16px;width:fit-content}
+
+.cat-scroll{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:14px;scrollbar-width:none}
+.cat-scroll::-webkit-scrollbar{display:none}
+.cat-btn{padding:6px 14px;background:var(--forest3);border:1px solid var(--dim);border-radius:20px;font-size:12px;font-weight:600;color:var(--mist);cursor:pointer;white-space:nowrap;transition:all .15s;flex-shrink:0}
+.cat-btn.active{background:var(--leaf);color:var(--forest);border-color:var(--leaf)}
+
+.menu-list{display:flex;flex-direction:column;gap:8px}
+.menu-item{background:var(--forest2);border:1px solid var(--dim);border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:all .15s}
+.menu-item:hover{border-color:var(--leaf);background:var(--forest3)}
+.menu-item-img{width:50px;height:50px;border-radius:8px;object-fit:cover;background:var(--forest3);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+.menu-item-info{flex:1}
+.menu-item-name{font-weight:600;font-size:14px;color:var(--white)}
+.menu-item-cat{font-size:11px;color:var(--mist);opacity:.6;margin-top:2px}
+.menu-item-price{font-weight:700;font-size:14px;color:var(--gold2);text-align:right}
+.sig-badge{display:inline-block;background:var(--gold);color:var(--forest);font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;margin-left:5px;vertical-align:middle}
+
+/* Cart bar */
+.cart-bar{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--leaf);color:var(--forest);font-weight:700;font-size:14px;padding:14px 24px;border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.35);cursor:pointer;display:none;align-items:center;gap:12px;z-index:200;max-width:380px;width:calc(100% - 40px);transition:all .2s}
+.cart-bar.visible{display:flex}
+.cart-bar-count{background:var(--forest);color:var(--white);border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;flex-shrink:0}
+.cart-bar-total{margin-left:auto;font-size:15px}
+
+/* Cart modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:300;display:none;align-items:flex-end;justify-content:center;padding:0}
+.modal-overlay.open{display:flex;animation:fadeIn .2s ease}
+.modal-box{background:var(--forest2);border-radius:20px 20px 0 0;width:100%;max-width:420px;padding:20px;max-height:80vh;overflow-y:auto}
+.modal-title{font-family:'Syne',sans-serif;font-weight:700;font-size:16px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center}
+.modal-close{background:var(--dim);border:none;color:var(--mist);width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center}
+.cart-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--dim)}
+.cart-row:last-of-type{border-bottom:none}
+.cart-row-name{flex:1;font-size:13px;font-weight:600}
+.cart-row-sub{font-size:11px;color:var(--mist);opacity:.6;margin-top:2px}
+.cart-qty{display:flex;align-items:center;gap:6px}
+.qty-btn{width:26px;height:26px;border-radius:50%;background:var(--dim);border:none;color:var(--white);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:background .1s}
+.qty-btn:hover{background:var(--green)}
+.cart-row-price{font-weight:700;font-size:13px;min-width:55px;text-align:right;color:var(--gold2)}
+.cart-total-row{display:flex;justify-content:space-between;padding:12px 0 0;font-size:15px;font-weight:700;border-top:2px solid var(--dim)}
+.cart-svc{display:flex;justify-content:space-between;font-size:12px;color:var(--mist);opacity:.6;padding:4px 0}
+.name-input{width:100%;background:var(--forest3);border:1.5px solid var(--dim);border-radius:10px;padding:10px 12px;font-family:'DM Sans',sans-serif;font-size:14px;color:var(--white);margin:10px 0;outline:none;transition:border .15s}
+.name-input:focus{border-color:var(--leaf)}
+.name-input::placeholder{color:var(--mist);opacity:.4}
+.place-btn{width:100%;padding:14px;background:var(--leaf);color:var(--forest);border:none;border-radius:12px;font-family:'Syne',sans-serif;font-size:15px;font-weight:700;cursor:pointer;margin-top:8px;transition:all .15s}
+.place-btn:hover{background:var(--leaf2)}
+.place-btn:disabled{opacity:.5;cursor:not-allowed}
+
+/* Size/Sugar modal */
+.option-row{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border:1.5px solid var(--dim);border-radius:10px;margin-bottom:8px;cursor:pointer;transition:all .15s}
+.option-row:hover,.option-row.selected{border-color:var(--leaf);background:var(--forest3)}
+.option-row.selected::after{content:'✓';color:var(--leaf);font-weight:800}
+.option-label{font-size:14px;font-weight:500}
+.option-price{font-size:13px;color:var(--gold2);font-weight:600}
+.next-btn{width:100%;padding:12px;background:var(--leaf);color:var(--forest);border:none;border-radius:10px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:14px;margin-top:6px}
+
+/* Order confirmed */
+.confirm-screen{text-align:center;padding:30px 16px}
+.confirm-icon{font-size:56px;margin-bottom:16px;animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+.confirm-title{font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:var(--leaf2)}
+.confirm-oid{font-size:24px;font-weight:800;color:var(--gold2);margin:8px 0}
+.status-card{background:var(--forest2);border:1px solid var(--dim);border-radius:14px;padding:16px;margin:16px 0;text-align:left}
+.status-steps{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+.status-step{display:flex;align-items:center;gap:10px;font-size:13px;opacity:.4;transition:opacity .3s}
+.status-step.done{opacity:1;color:var(--leaf2)}
+.status-step.active{opacity:1;color:var(--gold2)}
+.status-dot{width:10px;height:10px;border-radius:50%;background:var(--dim);flex-shrink:0;transition:background .3s}
+.status-step.done .status-dot{background:var(--leaf)}
+.status-step.active .status-dot{background:var(--gold2);animation:pulse 1s infinite}
+.new-order-btn{background:var(--forest3);border:1px solid var(--dim);color:var(--mist);border-radius:10px;padding:10px 20px;cursor:pointer;font-family:'DM Sans',sans-serif;margin-top:14px;font-size:13px;font-weight:600;transition:all .15s}
+.new-order-btn:hover{border-color:var(--leaf);color:var(--white)}
+
+/* ── KITCHEN PANE ────────────────────── */
+.kitchen-wrap{padding:16px}
+.kitchen-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.kitchen-header h2{font-family:'Syne',sans-serif;font-size:18px;font-weight:800}
+.kitchen-live{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--leaf2)}
+.live-dot{width:8px;height:8px;border-radius:50%;background:var(--leaf2);animation:pulse 1.5s infinite}
+.kitchen-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+.k-card{background:var(--forest2);border-radius:14px;border:1.5px solid var(--dim);overflow:hidden;transition:all .3s}
+.k-card.new-in{animation:slideIn .4s ease}
+@keyframes slideIn{from{opacity:0;transform:translateY(-12px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+.k-card-header{padding:12px 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--dim)}
+.k-oid{font-family:'Syne',sans-serif;font-weight:700;font-size:14px}
+.k-status{font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px}
+.k-status.NEW{background:#FEF3C7;color:#92400E}
+.k-status.PREPARING{background:#DBEAFE;color:#1E40AF}
+.k-status.READY{background:#D1FAE5;color:#065F46}
+.k-card-body{padding:12px 14px}
+.k-meta{font-size:12px;color:var(--mist);opacity:.7;margin-bottom:8px}
+.k-items{display:flex;flex-direction:column;gap:6px}
+.k-item{display:flex;align-items:center;gap:8px;font-size:13px}
+.k-item-check{width:18px;height:18px;border-radius:4px;border:1.5px solid var(--dim);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
+.k-item-check.checked{background:var(--leaf);border-color:var(--leaf)}
+.k-item-name{flex:1}
+.k-item-detail{font-size:11px;color:var(--mist);opacity:.6}
+.k-card-footer{padding:10px 14px;border-top:1px solid var(--dim);display:flex;gap:8px}
+.k-btn{flex:1;padding:8px;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:12px;font-family:'DM Sans',sans-serif;transition:all .15s}
+.k-btn.start{background:var(--leaf);color:var(--forest)}
+.k-btn.ready{background:var(--gold);color:var(--forest)}
+.k-btn.cancel{background:var(--forest3);color:var(--red);border:1px solid var(--dim)}
+.k-empty{text-align:center;padding:60px 20px;color:var(--mist);opacity:.4}
+.k-empty-icon{font-size:48px;margin-bottom:12px}
+
+/* ── ADMIN PANE ──────────────────────── */
+.admin-wrap{padding:16px;max-width:900px;margin:0 auto}
+.admin-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px}
+.admin-header h2{font-family:'Syne',sans-serif;font-size:18px;font-weight:800}
+.stat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:18px}
+@media(min-width:600px){.stat-grid{grid-template-columns:repeat(4,1fr)}}
+.stat-card{background:var(--forest2);border:1px solid var(--dim);border-radius:12px;padding:14px}
+.stat-val{font-family:'Syne',sans-serif;font-size:26px;font-weight:800}
+.stat-val.gold{color:var(--gold2)}
+.stat-val.green{color:var(--leaf2)}
+.stat-label{font-size:11px;color:var(--mist);opacity:.6;margin-top:2px}
+.filter-row{display:flex;gap:8px;overflow-x:auto;margin-bottom:14px;scrollbar-width:none}
+.filter-row::-webkit-scrollbar{display:none}
+.filter-chip{padding:6px 14px;background:var(--forest3);border:1px solid var(--dim);border-radius:20px;font-size:12px;font-weight:600;color:var(--mist);cursor:pointer;white-space:nowrap;transition:all .15s;flex-shrink:0}
+.filter-chip.active{background:var(--leaf);color:var(--forest);border-color:var(--leaf)}
+.orders-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.a-card{background:var(--forest2);border:1.5px solid var(--dim);border-radius:12px;overflow:hidden;transition:all .2s}
+.a-card.new-in{animation:slideIn .4s ease}
+.a-card-top{padding:12px 14px;border-bottom:1px solid var(--dim);display:flex;justify-content:space-between;align-items:flex-start}
+.a-oid{font-family:'Syne',sans-serif;font-weight:800;font-size:13px}
+.a-status{font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px}
+.a-status.NEW{background:#FEF3C7;color:#92400E}
+.a-status.PREPARING{background:#DBEAFE;color:#1E40AF}
+.a-status.READY{background:#D1FAE5;color:#065F46}
+.a-status.COMPLETED{background:var(--dim);color:var(--mist)}
+.a-status.CANCELLED{background:#FEE2E2;color:#991B1B}
+.a-card-body{padding:12px 14px;font-size:12px}
+.a-meta{color:var(--mist);opacity:.6;margin-bottom:8px;display:flex;justify-content:space-between}
+.a-items{display:flex;flex-direction:column;gap:4px;margin-bottom:8px}
+.a-item{display:flex;justify-content:space-between;font-size:12px}
+.a-item-name{color:var(--mist)}
+.a-item-price{color:var(--gold2);font-weight:600}
+.a-total{display:flex;justify-content:space-between;font-weight:700;font-size:13px;border-top:1px solid var(--dim);padding-top:8px}
+.a-card-footer{padding:8px 14px;border-top:1px solid var(--dim);display:flex;gap:6px}
+.a-btn{flex:1;padding:7px;border:none;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s}
+.a-btn.start{background:var(--leaf);color:var(--forest)}
+.a-btn.ready{background:var(--gold);color:var(--forest)}
+.a-btn.complete{background:var(--leaf2);color:var(--forest)}
+.a-btn.cancel{background:var(--forest3);border:1px solid var(--dim);color:var(--red)}
+.a-empty{text-align:center;padding:50px;color:var(--mist);opacity:.4}
+
+/* ── INTRO / LANDING ─────────────────── */
+.intro-wrap{padding:24px 20px 40px;max-width:640px;margin:0 auto}
+.intro-hero{text-align:center;padding:30px 0 20px}
+.intro-hero h1{font-family:'Syne',sans-serif;font-size:32px;font-weight:800;line-height:1.1}
+.intro-hero h1 span{color:var(--gold2)}
+.intro-hero p{font-size:15px;color:var(--mist);opacity:.8;margin-top:12px;line-height:1.6}
+.how-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:24px 0}
+.how-card{background:var(--forest2);border:1px solid var(--dim);border-radius:12px;padding:16px;text-align:center}
+.how-card .num{font-family:'Syne',sans-serif;font-size:24px;font-weight:800;color:var(--gold2)}
+.how-card .lbl{font-size:12px;color:var(--mist);opacity:.7;margin-top:4px}
+.how-card .icon{font-size:28px;margin-bottom:8px}
+.cta-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:20px}
+.cta-big{padding:14px 28px;background:var(--leaf);color:var(--forest);font-family:'Syne',sans-serif;font-weight:700;font-size:15px;border:none;border-radius:12px;cursor:pointer;transition:all .15s}
+.cta-big:hover{background:var(--leaf2)}
+.cta-outline{padding:14px 28px;background:transparent;color:var(--mist);font-family:'Syne',sans-serif;font-weight:600;font-size:15px;border:1.5px solid var(--dim);border-radius:12px;cursor:pointer;transition:all .15s}
+.cta-outline:hover{border-color:var(--leaf);color:var(--white)}
+.features-mini{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:24px}
+.feat{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--mist);opacity:.8}
+.feat::before{content:'✓';color:var(--leaf2);font-weight:800;flex-shrink:0}
+
+/* toast */
+.toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--forest2);color:var(--white);padding:10px 20px;border-radius:10px;font-size:13px;font-weight:600;z-index:999;opacity:0;transition:opacity .25s;pointer-events:none;border:1px solid var(--leaf);white-space:nowrap}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="demo-header">
+  <div class="demo-brand">
+    <div class="demo-logo">TYG</div>
+    <div>
+      <div class="demo-title">TYG POS System</div>
+      <div class="demo-subtitle">Interactive Demo</div>
+    </div>
+  </div>
+  <span class="demo-badge">🟢 Live Demo</span>
+</div>
+
+<!-- TABS -->
+<div class="tabs" id="tabBar">
+  <div class="tab active" onclick="switchTab('intro')" id="tab-intro"><span class="tab-icon">🏠</span>Overview</div>
+  <div class="tab" onclick="switchTab('customer')" id="tab-customer"><span class="tab-icon">📱</span>Customer Order</div>
+  <div class="tab" onclick="switchTab('kitchen')" id="tab-kitchen"><span class="tab-icon">👨‍🍳</span>Kitchen Display <span id="kitchen-badge" style="display:none;background:var(--red);color:#fff;font-size:10px;padding:2px 6px;border-radius:10px;margin-left:4px"></span></div>
+  <div class="tab" onclick="switchTab('admin')" id="tab-admin"><span class="tab-icon">📊</span>Admin Dashboard</div>
+</div>
+
+<!-- ══ INTRO PANE ════════════════════════════════════ -->
+<div class="pane active" id="pane-intro">
+<div class="intro-wrap">
+  <div class="intro-hero">
+    <h1>Subukan ang <span>TYG POS</span><br>ngayon — libre.</h1>
+    <p>I-try ang buong sistema — mag-order bilang customer, panoorin sa kitchen, at i-manage sa admin dashboard. Real-time. Walang fake.</p>
+  </div>
+
+  <div class="how-cards">
+    <div class="how-card">
+      <div class="icon">📱</div>
+      <div class="num">1</div>
+      <div class="lbl">Mag-order bilang Customer</div>
+    </div>
+    <div class="how-card">
+      <div class="icon">👨‍🍳</div>
+      <div class="num">2</div>
+      <div class="lbl">Panoorin sa Kitchen Screen</div>
+    </div>
+    <div class="how-card">
+      <div class="icon">📊</div>
+      <div class="num">3</div>
+      <div class="lbl">I-manage sa Admin Dashboard</div>
+    </div>
+  </div>
+
+  <div class="cta-row">
+    <button class="cta-big" onclick="switchTab('customer')">📱 Subukan Mag-Order</button>
+    <button class="cta-outline" onclick="switchTab('admin')">📊 Tingnan ang Dashboard</button>
+  </div>
+
+  <div class="features-mini" style="margin-top:30px">
+    <div class="feat">QR-based ordering</div>
+    <div class="feat">Real-time kitchen display</div>
+    <div class="feat">GCash + 4 banks</div>
+    <div class="feat">BIR receipts</div>
+    <div class="feat">Loyalty points</div>
+    <div class="feat">Split billing</div>
+    <div class="feat">Pre-ordering (24hrs)</div>
+    <div class="feat">Analytics dashboard</div>
+    <div class="feat">Inventory tracking</div>
+    <div class="feat">Table floor map</div>
+    <div class="feat">Promo codes</div>
+    <div class="feat">4 staff roles</div>
+  </div>
+
+  <div style="margin-top:32px;background:var(--forest2);border:1px solid var(--dim);border-radius:14px;padding:20px;text-align:center">
+    <div style="font-family:'Syne',sans-serif;font-size:17px;font-weight:700;color:var(--gold2)">Gusto mo ito para sa café mo?</div>
+    <div style="font-size:13px;color:var(--mist);opacity:.7;margin:8px 0 16px">₱499/buwan · FREE setup · 30-day trial · walang contract</div>
+    <a href="https://www.facebook.com/people/TYG-Business-Solutions" target="_blank" style="display:inline-block;background:var(--gold);color:var(--forest);font-weight:700;font-size:14px;padding:11px 24px;border-radius:10px;text-decoration:none">💬 I-message kami sa Facebook</a>
+  </div>
+</div>
+</div>
+
+<!-- ══ CUSTOMER PANE ════════════════════════════════ -->
+<div class="pane" id="pane-customer">
+<div class="customer-wrap">
+
+  <!-- Menu View -->
+  <div id="customer-menu-view">
+    <div class="cafe-header">
+      <h1>🌿 YANI Garden Cafe</h1>
+      <p>Amadeo, Cavite</p>
+    </div>
+    <div class="table-badge">🪑 Table 3 &nbsp;·&nbsp; Demo Mode</div>
+
+    <div class="cat-scroll" id="catScroll"></div>
+    <div class="menu-list" id="menuList"></div>
+  </div>
+
+  <!-- Confirm Screen -->
+  <div id="customer-confirm-view" style="display:none">
+    <div class="confirm-screen">
+      <div class="confirm-icon">✅</div>
+      <div class="confirm-title">Order Placed!</div>
+      <div class="confirm-oid" id="confirm-oid"></div>
+      <div style="font-size:13px;color:var(--mist);opacity:.7">Your order has been sent to the kitchen!</div>
+
+      <div class="status-card">
+        <div style="font-size:12px;font-weight:700;color:var(--mist);margin-bottom:8px">ORDER STATUS</div>
+        <div class="status-steps">
+          <div class="status-step done" id="ss-new"><div class="status-dot"></div>🔔 Order received</div>
+          <div class="status-step" id="ss-prep"><div class="status-dot"></div>👨‍🍳 Being prepared</div>
+          <div class="status-step" id="ss-ready"><div class="status-dot"></div>✨ Ready for pickup</div>
+          <div class="status-step" id="ss-done"><div class="status-dot"></div>🎉 Completed</div>
+        </div>
+      </div>
+
+      <div style="font-size:12px;color:var(--mist);opacity:.5">Status updates every 5 seconds in real system</div>
+      <button class="new-order-btn" onclick="resetOrder()">+ Place Another Order</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- Cart bar -->
+<div class="cart-bar" id="cartBar" onclick="openCart()">
+  <div class="cart-bar-count" id="cartCount">0</div>
+  <span id="cartBarLabel">View Order</span>
+  <div class="cart-bar-total" id="cartBarTotal">₱0</div>
+</div>
+
+<!-- Size Modal -->
+<div class="modal-overlay" id="sizeModal">
+  <div class="modal-box">
+    <div class="modal-title"><span id="sizeModalTitle">Choose Size</span><button class="modal-close" onclick="closeSizeModal()">✕</button></div>
+    <div id="sizeOptions"></div>
+    <button class="next-btn" id="sizeNextBtn" onclick="goToSugar()">Next →</button>
+  </div>
+</div>
+
+<!-- Sugar Modal -->
+<div class="modal-overlay" id="sugarModal">
+  <div class="modal-box">
+    <div class="modal-title"><span id="sugarModalTitle">Sugar Level</span><button class="modal-close" onclick="closeSugarModal()">✕</button></div>
+    <div id="sugarOptions"></div>
+    <button class="next-btn" onclick="addSelectedToCart()">Add to Cart ✓</button>
+  </div>
+</div>
+
+<!-- Cart Modal -->
+<div class="modal-overlay" id="cartModal">
+  <div class="modal-box">
+    <div class="modal-title">Your Order<button class="modal-close" onclick="closeCart()">✕</button></div>
+    <div id="cartItems"></div>
+    <div class="cart-svc" id="cartSvcRow"><span>Service charge (10%)</span><span id="cartSvcAmt">₱0</span></div>
+    <div class="cart-total-row"><span>Total</span><span id="cartTotalAmt" style="color:var(--gold2)">₱0</span></div>
+    <input class="name-input" id="custName" placeholder="Your name (required)" maxlength="40">
+    <button class="place-btn" id="placeBtn" onclick="placeOrder()">Place Order</button>
+  </div>
+</div>
+
+</div><!-- /customer pane -->
+
+<!-- ══ KITCHEN PANE ══════════════════════════════════ -->
+<div class="pane" id="pane-kitchen">
+<div class="kitchen-wrap">
+  <div class="kitchen-header">
+    <h2>👨‍🍳 Kitchen Display</h2>
+    <div class="kitchen-live"><div class="live-dot"></div>Live</div>
+  </div>
+  <div class="kitchen-grid" id="kitchenGrid">
+    <div class="k-empty" id="kitchen-empty">
+      <div class="k-empty-icon">☕</div>
+      <div>No active orders</div>
+      <div style="font-size:12px;margin-top:6px">Go to <strong>Customer Order</strong> and place an order to see it here</div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ══ ADMIN PANE ══════════════════════════════════════ -->
+<div class="pane" id="pane-admin">
+<div class="admin-wrap">
+  <div class="admin-header">
+    <h2>📊 Admin Dashboard</h2>
+    <div style="font-size:12px;color:var(--mist);opacity:.6">Demo Mode · Table 3</div>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat-card">
+      <div class="stat-val gold" id="stat-sales">₱0</div>
+      <div class="stat-label">Today's Sales</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val green" id="stat-orders">0</div>
+      <div class="stat-label">Orders</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" id="stat-active">0</div>
+      <div class="stat-label">Active Now</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" id="stat-avg">₱0</div>
+      <div class="stat-label">Avg Order</div>
+    </div>
+  </div>
+
+  <div class="filter-row" id="adminFilters">
+    <div class="filter-chip active" onclick="setFilter('ALL',this)">All</div>
+    <div class="filter-chip" onclick="setFilter('NEW',this)">🔔 New</div>
+    <div class="filter-chip" onclick="setFilter('PREPARING',this)">👨‍🍳 Preparing</div>
+    <div class="filter-chip" onclick="setFilter('READY',this)">✨ Ready</div>
+    <div class="filter-chip" onclick="setFilter('COMPLETED',this)">🎉 Completed</div>
+  </div>
+
+  <div class="orders-grid" id="adminGrid">
+    <div class="a-empty" id="admin-empty">
+      <div style="font-size:40px;margin-bottom:10px">📋</div>
+      <div>No orders yet</div>
+      <div style="font-size:12px;margin-top:6px">Place an order in <strong>Customer Order</strong></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── DEMO DATA ─────────────────────────────────────────────
+const MENU = [
+  {code:'H001',name:'Hot Americano',cat:'Hot',price:129,sizes:false,sugar:true,emoji:'☕',sig:false},
+  {code:'H002',name:'Café Latte',cat:'Hot',price:149,sizes:false,sugar:true,emoji:'☕',sig:false},
+  {code:'H003',name:"Yani's Hot Chocolate",cat:'Hot',price:179,sizes:false,sugar:true,emoji:'🍫',sig:true},
+  {code:'C001',name:'Iced Dark Cacao Ovaltine',cat:'Cold',price:150,sizes:true,sugar:true,emoji:'🥤',sig:true,priceShort:150,priceMedium:170,priceTall:179},
+  {code:'C002',name:'Hazelnut Frappe',cat:'Cold',price:150,sizes:true,sugar:true,emoji:'🥤',sig:false,priceShort:150,priceMedium:170,priceTall:199},
+  {code:'C003',name:'Milky Melon Frappe',cat:'Cold',price:150,sizes:true,sugar:true,emoji:'🥤',sig:false,priceShort:150,priceMedium:170,priceTall:199},
+  {code:'C004',name:'Coconut Milk',cat:'Cold',price:150,sizes:true,sugar:false,emoji:'🥥',sig:false,priceShort:150,priceMedium:170,priceTall:199},
+  {code:'P001',name:'Banana Bread Loaf',cat:'Pastry',price:180,sizes:false,sugar:false,emoji:'🍞',sig:false},
+  {code:'P002',name:'Buco Melt Pie',cat:'Pastry',price:149,sizes:false,sugar:false,emoji:'🥧',sig:true},
+  {code:'M001',name:"Yani's Chicken Inasal",cat:'Meal',price:199,sizes:false,sugar:false,emoji:'🍗',sig:true},
+  {code:'M002',name:'Chicken Sandwich',cat:'Meal',price:159,sizes:false,sugar:false,emoji:'🥪',sig:false},
+];
+const SIZES=[{label:'Short (12oz)',key:'Short'},{label:'Medium (16oz)',key:'Medium'},{label:'Tall (22oz)',key:'Tall'}];
+const SUGARS=[{id:'grounded',label:'Grounded',pct:'25%'},{id:'yani',label:'YANI',pct:'50%',def:true},{id:'comfort',label:'Comfort',pct:'75%'},{id:'full',label:'Full Sweet',pct:'100%'}];
+const CATS=['All','Hot','Cold','Pastry','Meal'];
+
+// ── STATE ─────────────────────────────────────────────────
+let cart=[];
+let currentCat='All';
+let pendingItem=null;
+let pendingSize=null;
+let pendingSugar=null;
+let orders=[];
+let orderCounter=3100;
+let adminFilter='ALL';
+
+function peso(n){return '₱'+parseFloat(n).toFixed(2).replace(/\.00$/,'')}
+function toast(msg,dur=2500){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),dur);
+}
+
+// ── TAB SWITCHING ─────────────────────────────────────────
+function switchTab(tab){
+  document.querySelectorAll('.pane').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('pane-'+tab).classList.add('active');
+  document.getElementById('tab-'+tab).classList.add('active');
+  if(tab==='kitchen') renderKitchen();
+  if(tab==='admin'){renderAdmin();updateStats();}
+}
+
+// ── MENU RENDERING ────────────────────────────────────────
+function renderMenu(){
+  // cats
+  const cs=document.getElementById('catScroll');
+  cs.innerHTML=CATS.map(c=>`<button class="cat-btn${c===currentCat?' active':''}" onclick="setCat('${c}')">${c}</button>`).join('');
+  // items
+  const items=currentCat==='All'?MENU:MENU.filter(i=>i.cat===currentCat);
+  const ml=document.getElementById('menuList');
+  ml.innerHTML=items.map(item=>{
+    const priceStr=item.sizes?`₱${item.priceShort}–₱${item.priceTall}`:`₱${item.price}`;
+    return `<div class="menu-item" onclick="startAdd('${item.code}')">
+      <div class="menu-item-img">${item.emoji}</div>
+      <div class="menu-item-info">
+        <div class="menu-item-name">${item.name}${item.sig?'<span class="sig-badge">★ Signature</span>':''}</div>
+        <div class="menu-item-cat">${item.cat}</div>
+      </div>
+      <div class="menu-item-price">${priceStr}</div>
+    </div>`;
+  }).join('');
+}
+
+function setCat(c){currentCat=c;renderMenu();}
+
+// ── ADD ITEM FLOW ─────────────────────────────────────────
+function startAdd(code){
+  pendingItem=MENU.find(i=>i.code===code);
+  pendingSize=null;pendingSugar=null;
+  if(pendingItem.sizes){openSizeModal();}
+  else if(pendingItem.sugar){openSugarModal();}
+  else{addToCartDirect();}
+}
+
+function openSizeModal(){
+  document.getElementById('sizeModalTitle').textContent=pendingItem.name;
+  const prices={Short:pendingItem.priceShort,Medium:pendingItem.priceMedium,Tall:pendingItem.priceTall};
+  document.getElementById('sizeOptions').innerHTML=SIZES.map(s=>
+    `<div class="option-row${s.key==='Medium'?' selected':''}" onclick="selectSize('${s.key}',${prices[s.key]},this)">
+      <span class="option-label">${s.label}</span>
+      <span class="option-price">₱${prices[s.key]}</span>
+    </div>`).join('');
+  pendingSize={key:'Medium',price:pendingItem.priceMedium};
+  document.getElementById('sizeModal').classList.add('open');
+}
+function closeSizeModal(){document.getElementById('sizeModal').classList.remove('open')}
+function selectSize(key,price,el){
+  pendingSize={key,price};
+  document.querySelectorAll('#sizeOptions .option-row').forEach(r=>r.classList.remove('selected'));
+  el.classList.add('selected');
+}
+function goToSugar(){
+  if(!pendingSize)return toast('Please choose a size');
+  closeSizeModal();
+  if(pendingItem.sugar) openSugarModal();
+  else {pendingSugar=null;addToCartDirect();}
+}
+
+function openSugarModal(){
+  const title=pendingItem.name+(pendingSize?` · ${pendingSize.key}`:'');
+  document.getElementById('sugarModalTitle').textContent=title;
+  document.getElementById('sugarOptions').innerHTML=SUGARS.map(s=>
+    `<div class="option-row${s.def?' selected':''}" onclick="selectSugar('${s.id}','${s.label}',this)">
+      <span class="option-label">${s.label} <span style="opacity:.5;font-size:12px">${s.pct}</span></span>
+    </div>`).join('');
+  pendingSugar=SUGARS.find(s=>s.def);
+  document.getElementById('sugarModal').classList.add('open');
+}
+function closeSugarModal(){document.getElementById('sugarModal').classList.remove('open')}
+function selectSugar(id,label,el){
+  pendingSugar={id,label};
+  document.querySelectorAll('#sugarOptions .option-row').forEach(r=>r.classList.remove('selected'));
+  el.classList.add('selected');
+}
+function addSelectedToCart(){
+  if(!pendingSugar)return toast('Please choose sugar level');
+  closeSugarModal();
+  addToCartDirect();
+}
+
+function addToCartDirect(){
+  const price=pendingSize?pendingSize.price:pendingItem.price;
+  const sizeLabel=pendingSize?pendingSize.key:'';
+  const sugarLabel=pendingSugar?pendingSugar.label:'';
+  const key=pendingItem.code+sizeLabel+sugarLabel;
+  const ex=cart.find(c=>c.key===key);
+  if(ex){ex.qty++;}
+  else{cart.push({key,code:pendingItem.code,name:pendingItem.name,price,qty:1,size:sizeLabel,sugar:sugarLabel,emoji:pendingItem.emoji});}
+  toast(`✓ Added: ${pendingItem.name}`);
+  updateCartBar();
+}
+
+// ── CART ──────────────────────────────────────────────────
+function updateCartBar(){
+  const total=cart.reduce((s,c)=>s+c.price*c.qty,0);
+  const count=cart.reduce((s,c)=>s+c.qty,0);
+  const bar=document.getElementById('cartBar');
+  document.getElementById('cartCount').textContent=count;
+  document.getElementById('cartBarTotal').textContent=peso(total*1.1);
+  if(count>0)bar.classList.add('visible');else bar.classList.remove('visible');
+}
+
+function openCart(){
+  renderCartItems();
+  document.getElementById('cartModal').classList.add('open');
+}
+function closeCart(){document.getElementById('cartModal').classList.remove('open')}
+
+function renderCartItems(){
+  const subtotal=cart.reduce((s,c)=>s+c.price*c.qty,0);
+  const svc=subtotal*0.1;
+  const total=subtotal+svc;
+  document.getElementById('cartItems').innerHTML=cart.map((c,i)=>`
+    <div class="cart-row">
+      <div style="font-size:18px;width:28px">${c.emoji}</div>
+      <div class="cart-row-name">
+        ${c.name}
+        <div class="cart-row-sub">${[c.size,c.sugar].filter(Boolean).join(' · ')}</div>
+      </div>
+      <div class="cart-qty">
+        <button class="qty-btn" onclick="changeQty(${i},-1)">−</button>
+        <span style="font-size:13px;font-weight:700;min-width:16px;text-align:center">${c.qty}</span>
+        <button class="qty-btn" onclick="changeQty(${i},1)">+</button>
+      </div>
+      <div class="cart-row-price">${peso(c.price*c.qty)}</div>
+    </div>`).join('');
+  document.getElementById('cartSvcAmt').textContent=peso(svc);
+  document.getElementById('cartTotalAmt').textContent=peso(total);
+}
+
+function changeQty(i,d){
+  cart[i].qty+=d;
+  if(cart[i].qty<=0)cart.splice(i,1);
+  updateCartBar();
+  renderCartItems();
+}
+
+function placeOrder(){
+  const name=document.getElementById('custName').value.trim();
+  if(!name)return toast('Please enter your name');
+  if(cart.length===0)return toast('Add items first');
+  const btn=document.getElementById('placeBtn');
+  btn.disabled=true;btn.textContent='Placing...';
+  setTimeout(()=>{
+    const subtotal=cart.reduce((s,c)=>s+c.price*c.qty,0);
+    const svc=Math.round(subtotal*0.1*100)/100;
+    const total=Math.round((subtotal+svc)*100)/100;
+    const oid='DEMO-'+orderCounter++;
+    const order={
+      id:oid,
+      customer:name,
+      table:'3',
+      status:'NEW',
+      items:[...cart],
+      subtotal,svc,total,
+      time:new Date(),
+      type:'DINE-IN'
+    };
+    orders.push(order);
+    cart=[];
+    closeCart();
+    updateCartBar();
+    showConfirm(oid);
+    updateKitchenBadge();
+    btn.disabled=false;btn.textContent='Place Order';
+  },600);
+}
+
+function showConfirm(oid){
+  document.getElementById('customer-menu-view').style.display='none';
+  document.getElementById('customer-confirm-view').style.display='block';
+  document.getElementById('confirm-oid').textContent=oid;
+  // Reset steps
+  ['ss-prep','ss-ready','ss-done'].forEach(id=>{
+    const el=document.getElementById(id);
+    el.classList.remove('done','active');
+  });
+  // Animate status
+  setTimeout(()=>{
+    const p=document.getElementById('ss-prep');
+    p.classList.add('active');
+    const order=orders.find(o=>o.id===oid);
+    if(order) order.status='PREPARING';
+    updateKitchenBadge();
+  },3000);
+  setTimeout(()=>{
+    const p=document.getElementById('ss-prep');
+    const r=document.getElementById('ss-ready');
+    p.classList.remove('active');p.classList.add('done');
+    r.classList.add('active');
+    const order=orders.find(o=>o.id===oid);
+    if(order) order.status='READY';
+    updateKitchenBadge();
+  },7000);
+}
+
+function resetOrder(){
+  document.getElementById('customer-menu-view').style.display='block';
+  document.getElementById('customer-confirm-view').style.display='none';
+  document.getElementById('custName').value='';
+  renderMenu();
+}
+
+// ── KITCHEN ───────────────────────────────────────────────
+function renderKitchen(){
+  const active=orders.filter(o=>['NEW','PREPARING','READY'].includes(o.status));
+  const grid=document.getElementById('kitchenGrid');
+  document.getElementById('kitchen-empty').style.display=active.length?'none':'block';
+  grid.innerHTML=(active.length?'':'<div class="k-empty" id="kitchen-empty" style="display:block"><div class="k-empty-icon">☕</div><div>No active orders</div><div style="font-size:12px;margin-top:6px">Go to <strong>Customer Order</strong> and place an order</div></div>');
+  active.forEach(o=>{
+    const card=document.createElement('div');
+    card.className='k-card new-in';
+    card.id='k-'+o.id;
+    const elapsed=Math.round((new Date()-o.time)/1000);
+    const elStr=elapsed<60?elapsed+'s ago':Math.floor(elapsed/60)+'m ago';
+    card.innerHTML=`
+      <div class="k-card-header">
+        <div class="k-oid">${o.id}</div>
+        <span class="k-status ${o.status}">${o.status==='NEW'?'🔔 NEW':o.status==='PREPARING'?'👨‍🍳 PREPARING':'✨ READY'}</span>
+      </div>
+      <div class="k-card-body">
+        <div class="k-meta">Table ${o.table} · ${o.customer} · ${elStr}</div>
+        <div class="k-items">
+          ${o.items.map((it,i)=>`<div class="k-item">
+            <div class="k-item-check${it.prepared?' checked':''}" onclick="togglePrep('${o.id}',${i},this)">
+              ${it.prepared?'✓':''}
+            </div>
+            <div>
+              <div class="k-item-name">${it.name}</div>
+              <div class="k-item-detail">${[it.size,it.sugar].filter(Boolean).join(' · ') || 'No options'} × ${it.qty}</div>
+            </div>
+          </div>`).join('')}
+        </div>
+      </div>
+      <div class="k-card-footer">
+        ${o.status==='NEW'?`<button class="k-btn start" onclick="kAction('${o.id}','PREPARING')">☕ START</button>`:''}
+        ${o.status==='PREPARING'?`<button class="k-btn ready" onclick="kAction('${o.id}','READY')">✨ READY</button>`:''}
+        ${o.status==='READY'?`<button class="k-btn ready" onclick="kAction('${o.id}','COMPLETED')">🙏 COMPLETE</button>`:''}
+        <button class="k-btn cancel" onclick="kAction('${o.id}','CANCELLED')">✕</button>
+      </div>`;
+    grid.appendChild(card);
+  });
+}
+
+function togglePrep(oid,idx,el){
+  const order=orders.find(o=>o.id===oid);
+  if(!order)return;
+  order.items[idx].prepared=!order.items[idx].prepared;
+  el.classList.toggle('checked');
+  el.textContent=order.items[idx].prepared?'✓':'';
+  if(order.items.every(it=>it.prepared)&&order.status==='PREPARING'){
+    order.status='READY';
+    toast('✨ All items ready!');
+    renderKitchen();updateAdmin();updateStats();
+  }
+}
+
+function kAction(oid,status){
+  const order=orders.find(o=>o.id===oid);
+  if(order){order.status=status;toast(`Order ${oid} → ${status}`);}
+  renderKitchen();updateAdmin();updateStats();updateKitchenBadge();
+}
+
+function updateKitchenBadge(){
+  const n=orders.filter(o=>['NEW','PREPARING'].includes(o.status)).length;
+  const b=document.getElementById('kitchen-badge');
+  if(n>0){b.style.display='inline';b.textContent=n;}
+  else{b.style.display='none';}
+}
+
+// ── ADMIN ─────────────────────────────────────────────────
+function setFilter(f,el){
+  adminFilter=f;
+  document.querySelectorAll('.filter-chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  renderAdmin();
+}
+
+function renderAdmin(){
+  const filtered=adminFilter==='ALL'?orders:orders.filter(o=>o.status===adminFilter);
+  const grid=document.getElementById('adminGrid');
+  document.getElementById('admin-empty').style.display=orders.length?'none':'block';
+  grid.innerHTML=(orders.length?'':'<div class="a-empty" id="admin-empty" style="display:block"><div style="font-size:40px;margin-bottom:10px">📋</div><div>Place an order in Customer tab</div></div>');
+  [...filtered].reverse().forEach(o=>{
+    const card=document.createElement('div');
+    card.className='a-card new-in';
+    const time=o.time.toLocaleTimeString('en-PH',{hour:'numeric',minute:'2-digit',hour12:true,timeZone:'Asia/Manila'});
+    card.innerHTML=`
+      <div class="a-card-top">
+        <div>
+          <div class="a-oid">${o.id}</div>
+          <div style="font-size:11px;color:var(--mist);opacity:.6;margin-top:2px">Table ${o.table} · ${time}</div>
+        </div>
+        <span class="a-status ${o.status}">${statusLabel(o.status)}</span>
+      </div>
+      <div class="a-card-body">
+        <div class="a-meta"><span>${o.customer}</span><span>${o.type}</span></div>
+        <div class="a-items">
+          ${o.items.map(it=>`<div class="a-item">
+            <span class="a-item-name">${it.name}${it.size?' ('+it.size+')':''}</span>
+            <span class="a-item-price">${peso(it.price)}</span>
+          </div>`).join('')}
+        </div>
+        <div class="a-total"><span>Total</span><span style="color:var(--gold2)">${peso(o.total)}</span></div>
+      </div>
+      ${['NEW','PREPARING','READY'].includes(o.status)?`
+      <div class="a-card-footer">
+        ${o.status==='NEW'?`<button class="a-btn start" onclick="aAction('${o.id}','PREPARING')">☕ Start</button>`:''}
+        ${o.status==='PREPARING'?`<button class="a-btn ready" onclick="aAction('${o.id}','READY')">✨ Ready</button>`:''}
+        ${o.status==='READY'?`<button class="a-btn complete" onclick="aAction('${o.id}','COMPLETED')">🙏 Complete</button>`:''}
+        <button class="a-btn cancel" onclick="aAction('${o.id}','CANCELLED')">✕ Cancel</button>
+      </div>`:''}`;
+    grid.appendChild(card);
+  });
+}
+
+function aAction(oid,status){
+  const order=orders.find(o=>o.id===oid);
+  if(order){order.status=status;toast(`${oid} → ${status}`);}
+  renderAdmin();renderKitchen();updateStats();updateKitchenBadge();
+}
+
+function updateAdmin(){renderAdmin();}
+
+function statusLabel(s){
+  return {NEW:'🔔 NEW',PREPARING:'👨‍🍳 PREPARING',READY:'✨ READY',COMPLETED:'🎉 COMPLETED',CANCELLED:'❌ CANCELLED'}[s]||s;
+}
+
+function updateStats(){
+  const completed=orders.filter(o=>o.status==='COMPLETED');
+  const active=orders.filter(o=>['NEW','PREPARING','READY'].includes(o.status));
+  const totalSales=completed.reduce((s,o)=>s+o.total,0);
+  const avg=completed.length?totalSales/completed.length:0;
+  document.getElementById('stat-sales').textContent=peso(totalSales);
+  document.getElementById('stat-orders').textContent=orders.length;
+  document.getElementById('stat-active').textContent=active.length;
+  document.getElementById('stat-avg').textContent=avg>0?peso(avg):'₱0';
+}
+
+// ── INIT ─────────────────────────────────────────────────
+renderMenu();
+updateStats();
+</script>
+</body>
+</html>

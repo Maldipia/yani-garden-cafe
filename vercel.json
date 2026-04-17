@@ -135,6 +135,14 @@
     {
       "source": "/preorder/",
       "destination": "/preorder.html"
+    },
+    {
+      "source": "/demo",
+      "destination": "/demo.html"
+    },
+    {
+      "source": "/demo/",
+      "destination": "/demo.html"
     }
   ],
   "headers": [
