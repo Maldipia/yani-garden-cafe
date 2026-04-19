@@ -578,6 +578,12 @@ a { color: var(--terra); text-decoration: none }
   background: var(--white);
 }
 .order-type-btn.active { border-color: var(--forest); background: rgba(49,76,71,.06) }
+.order-type-btn.dine-in-btn.active { border-color: var(--forest); background: rgba(26,58,42,.08) }
+.order-type-btn.dine-in-btn.active .ot-label { color: var(--forest) }
+.order-type-btn.take-out-btn.active { border-color: #c2550a; background: rgba(194,85,10,.07) }
+.order-type-btn.take-out-btn.active .ot-icon { filter: none }
+.order-type-btn.take-out-btn.active .ot-label { color: #c2550a }
+.order-type-btn.take-out-btn.active .ot-sub { color: #c2550a }
 .order-type-btn .ot-icon { font-size: 1.3rem; margin-bottom: 4px }
 .order-type-btn .ot-label { font-weight: 700; font-size: .82rem }
 .order-type-btn .ot-sub { font-size: .68rem; color: var(--timber); margin-top: 2px }
@@ -1832,10 +1838,10 @@ function renderCheckoutPage() {
 
   var html = '<div class="mb-16"><div class="opt-label">Order Type</div>' +
     '<div class="order-type-group">' +
-      '<button class="order-type-btn' + (state.orderType==='dine-in'?' active':'') + '" onclick="setOrderType(\'dine-in\')">' +
+      '<button class="order-type-btn dine-in-btn' + (state.orderType==='dine-in'?' active':'') + '" onclick="setOrderType(\'dine-in\')">' +
         '<div class="ot-icon">🍽️</div><div class="ot-label">Dine-In</div><div class="ot-sub">+10% service charge</div>' +
       '</button>' +
-      '<button class="order-type-btn' + (state.orderType==='take-out'?' active':'') + '" onclick="setOrderType(\'take-out\')">' +
+      '<button class="order-type-btn take-out-btn' + (state.orderType==='take-out'?' active':'') + '" onclick="setOrderType(\'take-out\')">' +
         '<div class="ot-icon">🥡</div><div class="ot-label">Take-Out</div><div class="ot-sub">No service charge</div>' +
       '</button>' +
     '</div></div>';
