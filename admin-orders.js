@@ -94,19 +94,35 @@ function renderOrders() {
     if (o.items && o.items.length) {
       o.items.forEach(function(it) {
         if (it.prepared) preparedCount++;
-        var opts = [];
-        if (it.size) opts.push(capitalize(it.size));
-        if (it.sugar) opts.push(capitalize(it.sugar));
         var lineTotal = (it.price || 0) * (it.qty || 1);
         orderTotal += lineTotal;
         var prepIcon = it.prepared ? '✅' : '⬜';
         var prepStyle = it.prepared ? 'opacity:.5;text-decoration:line-through;' : '';
+
+        // Color-coded size pill
+        var sizeColors = { short:'#2c6e9e', medium:'#2d6a3f', tall:'#065f46' };
+        var sizeBgs    = { short:'#dbeafe', medium:'#dcfce7', tall:'#d1fae5' };
+        var sizeKey = it.size ? it.size.toLowerCase() : '';
+        var sizePill = it.size
+          ? '<span style="background:' + (sizeBgs[sizeKey]||'#e5e7eb') + ';color:' + (sizeColors[sizeKey]||'#374151') + ';border-radius:6px;padding:2px 7px;font-size:.7rem;font-weight:800;margin-right:4px">' + capitalize(it.size) + '</span>'
+          : '';
+
+        // Color-coded sugar pill
+        var sugarColors = { grounded:'#2d6a3f', yani:'#8a5220', comfort:'#b85a10', full:'#b91c1c' };
+        var sugarBgs    = { grounded:'#dcfce7', yani:'#fef3c7', comfort:'#ffedd5', full:'#fee2e2' };
+        var sugarKey = it.sugar ? it.sugar.toLowerCase() : '';
+        var sugarPill = it.sugar
+          ? '<span style="background:' + (sugarBgs[sugarKey]||'#e5e7eb') + ';color:' + (sugarColors[sugarKey]||'#374151') + ';border-radius:6px;padding:2px 7px;font-size:.7rem;font-weight:800">' + capitalize(it.sugar) + '</span>'
+          : '';
+
+        var pillsHtml = (sizePill || sugarPill) ? '<div style="margin-top:3px">' + sizePill + sugarPill + '</div>' : '';
+
         html += '<div class="oc-item" data-item-id="' + (it.id||'') + '" style="' + prepStyle + 'cursor:pointer;user-select:none;" title="' + (it.prepared ? 'Tap to unmark' : 'Tap to mark prepared') + '" onclick="adminTogglePrep(this,\'' + esc(o.orderId) + '\',' + (it.id||0) + ',' + (it.prepared ? 1 : 0) + ')">' +
           '<span style="font-size:1.3rem;margin-right:6px;flex-shrink:0;line-height:1;">' + prepIcon + '</span>' +
           '<div class="oc-item-qty">' + (it.qty || 1) + '×</div>' +
           '<div class="oc-item-info">' +
             '<div class="oc-item-name">' + esc(it.name) + '</div>' +
-            (opts.length ? '<div class="oc-item-opts">' + esc(opts.join(' · ')) + '</div>' : '') +
+            pillsHtml +
             (it.addons && it.addons.length ? '<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px">' + it.addons.map(function(a){ return '<span style="background:#dcfce7;color:#14532d;border:1.5px solid #86efac;border-radius:6px;padding:2px 8px;font-size:.75rem;font-weight:800">➕ ' + esc(a.name) + ' +₱' + parseFloat(a.price||0).toFixed(0) + '</span>'; }).join('') + '</div>' : '') +
             (it.notes ? '<div class="oc-item-notes">"' + esc(it.notes) + '"</div>' : '') +
           '</div>' +
