@@ -985,9 +985,147 @@ a { color: var(--terra); text-decoration: none }
 .mb-20 { margin-bottom: 20px }
 .mt-16 { margin-top: 16px }
 .sr-only { position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0) }
+
+/* ══════════════════════════════════════════════════════════
+   YANI INTRO SPLASH
+   ══════════════════════════════════════════════════════════ */
+#yaniSplash {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: #1a2e1e;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 32px 48px;
+  overflow: hidden;
+  transition: opacity .7s ease;
+}
+#yaniSplash.fade-out {
+  opacity: 0;
+  pointer-events: none;
+}
+#yaniSplash .splash-bg {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 20% 20%, rgba(200,135,58,.12) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 80%, rgba(74,153,96,.10) 0%, transparent 60%);
+  pointer-events: none;
+}
+#yaniSplash .splash-logo {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(200,135,58,.5);
+  box-shadow: 0 0 32px rgba(200,135,58,.2);
+  margin-bottom: 24px;
+  animation: splashFadeUp .8s ease both;
+}
+#yaniSplash .splash-name {
+  font-family: 'Crimson Pro', Georgia, serif;
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: #c8873a;
+  margin-bottom: 28px;
+  animation: splashFadeUp .9s ease .1s both;
+}
+#yaniSplash .splash-rule {
+  width: 40px;
+  height: 1.5px;
+  background: rgba(200,135,58,.5);
+  margin: 0 auto 28px;
+  animation: splashFadeUp .9s ease .15s both;
+}
+#yaniSplash .splash-story {
+  font-family: 'Crimson Pro', Georgia, serif;
+  font-size: 1.08rem;
+  line-height: 1.85;
+  color: rgba(245,240,232,.82);
+  text-align: center;
+  max-width: 340px;
+  animation: splashFadeUp 1s ease .25s both;
+}
+#yaniSplash .splash-story em {
+  color: rgba(245,240,232,.5);
+  font-style: italic;
+  font-size: .92rem;
+}
+#yaniSplash .splash-story .splash-highlight {
+  color: #e8c98a;
+  font-weight: 600;
+}
+#yaniSplash .splash-story .splash-para {
+  margin-bottom: 14px;
+}
+#yaniSplash .splash-story .splash-para:last-child {
+  margin-bottom: 0;
+}
+#yaniSplash .splash-btn {
+  margin-top: 36px;
+  padding: 13px 36px;
+  background: transparent;
+  border: 1.5px solid rgba(200,135,58,.6);
+  border-radius: 40px;
+  color: #e8c98a;
+  font-family: 'Crimson Pro', Georgia, serif;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all .2s;
+  animation: splashFadeUp 1s ease .6s both;
+}
+#yaniSplash .splash-btn:hover,
+#yaniSplash .splash-btn:active {
+  background: rgba(200,135,58,.15);
+  border-color: #c8873a;
+  color: #fff;
+}
+#yaniSplash .splash-skip {
+  position: absolute;
+  top: 18px;
+  right: 20px;
+  font-size: .72rem;
+  color: rgba(245,240,232,.3);
+  cursor: pointer;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  padding: 6px 8px;
+  transition: color .2s;
+}
+#yaniSplash .splash-skip:hover { color: rgba(245,240,232,.6); }
+@keyframes splashFadeUp {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 </style>
 </head>
 <body>
+
+<!-- ═══════════════════ YANI INTRO SPLASH ═══════════════════ -->
+<div id="yaniSplash">
+  <div class="splash-bg"></div>
+  <button class="splash-skip" onclick="dismissSplash()">Skip</button>
+  <img class="splash-logo" src="/images/logo.png" alt="YANI" onerror="this.style.display='none'">
+  <div class="splash-name">Yani Garden Cafe</div>
+  <div class="splash-rule"></div>
+  <div class="splash-story">
+    <div class="splash-para">YANI is still growing. Still learning. <span class="splash-highlight">Still building.</span></div>
+    <div class="splash-para">Behind this place is a family—<br>hands-on, intentional, present in every detail.</div>
+    <div class="splash-para">Some things were built. Some were tested.<br>Some failed—then perfected.<br><em>Our sauces. Our combinations. Our process.</em></div>
+    <div class="splash-para">YANI is not just a café.<br><span class="splash-highlight">It's a place where flavors are created.</span></div>
+    <div class="splash-para">From our coffee… to our sauces… to every plate we serve—<br>there's a process behind it.</div>
+    <div class="splash-para">Everything here is made with care.<br>And because of that, it takes time.</div>
+    <div class="splash-para"><em>Thank you for your patience.<br>You're part of this story now.</em></div>
+  </div>
+  <button class="splash-btn" onclick="dismissSplash()">See Our Menu →</button>
+</div>
+
 <!-- ═══════════════════ HEADER ═══════════════════ -->
 <div class="header">
   <div class="header-brand"><img class="header-logo" src="/images/logo.png" alt="<span class="brand-name">Yani Garden Cafe</span>"></div>
@@ -1334,7 +1472,31 @@ function updateStickyOffsets() {
     cats.style.top = hh + 'px';
   }
 }
+// ── SPLASH SCREEN ───────────────────────────────────────
+function dismissSplash() {
+  var splash = document.getElementById('yaniSplash');
+  if (!splash) return;
+  splash.classList.add('fade-out');
+  setTimeout(function() {
+    splash.style.display = 'none';
+  }, 700);
+  // Remember for this session — won't show again on refresh
+  try { sessionStorage.setItem('yani_intro_seen', '1'); } catch(e) {}
+}
+
+function initSplash() {
+  // Show splash every new QR scan session
+  // Only skip if already seen this session (e.g. page refresh)
+  var seen = false;
+  try { seen = sessionStorage.getItem('yani_intro_seen') === '1'; } catch(e) {}
+  if (seen) {
+    var splash = document.getElementById('yaniSplash');
+    if (splash) splash.style.display = 'none';
+  }
+}
+
 window.addEventListener('DOMContentLoaded', async function() {
+  initSplash();
   updateStickyOffsets();
   window.addEventListener('resize', updateStickyOffsets);
   // Parse URL params first
