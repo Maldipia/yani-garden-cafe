@@ -496,6 +496,56 @@ a { color: var(--terra); text-decoration: none }
   border-color: var(--forest);
   background: rgba(49,76,71,.06);
 }
+/* ── SIZE color coding ─────────── */
+.opt-btn.size-short.selected  { border-color: #6baed6; background: rgba(107,174,214,.08); }
+.opt-btn.size-short.selected .opt-btn-radio { border-color: #6baed6; }
+.opt-btn.size-short.selected .opt-btn-radio::after { background: #6baed6; }
+.opt-btn.size-short.selected .opt-btn-main { color: #2c6e9e; }
+
+.opt-btn.size-medium.selected { border-color: #4a9960; background: rgba(74,153,96,.08); }
+.opt-btn.size-medium.selected .opt-btn-radio { border-color: #4a9960; }
+.opt-btn.size-medium.selected .opt-btn-radio::after { background: #4a9960; }
+.opt-btn.size-medium.selected .opt-btn-main { color: #2d6a3f; }
+
+.opt-btn.size-tall.selected   { border-color: #1a3a2a; background: rgba(26,58,42,.10); }
+.opt-btn.size-tall.selected   { border-color: #065f46; background: rgba(6,95,70,.08); }
+.opt-btn.size-tall.selected .opt-btn-radio { border-color: #065f46; }
+.opt-btn.size-tall.selected .opt-btn-radio::after { background: #065f46; }
+.opt-btn.size-tall.selected .opt-btn-main { color: #065f46; }
+
+/* ── SUGAR level color coding ─── */
+.opt-btn.sugar-grounded.selected { border-color: #74c476; background: rgba(116,196,118,.08); }
+.opt-btn.sugar-grounded.selected .opt-btn-radio { border-color: #74c476; }
+.opt-btn.sugar-grounded.selected .opt-btn-radio::after { background: #74c476; }
+.opt-btn.sugar-grounded.selected .opt-btn-main { color: #2d6a3f; }
+
+.opt-btn.sugar-yani.selected    { border-color: #c8873a; background: rgba(200,135,58,.08); }
+.opt-btn.sugar-yani.selected .opt-btn-radio { border-color: #c8873a; }
+.opt-btn.sugar-yani.selected .opt-btn-radio::after { background: #c8873a; }
+.opt-btn.sugar-yani.selected .opt-btn-main { color: #8a5220; }
+
+.opt-btn.sugar-comfort.selected  { border-color: #e8953a; background: rgba(232,149,58,.08); }
+.opt-btn.sugar-comfort.selected .opt-btn-radio { border-color: #e8953a; }
+.opt-btn.sugar-comfort.selected .opt-btn-radio::after { background: #e8953a; }
+.opt-btn.sugar-comfort.selected .opt-btn-main { color: #b85a10; }
+
+.opt-btn.sugar-full.selected     { border-color: #e05252; background: rgba(224,82,82,.08); }
+.opt-btn.sugar-full.selected .opt-btn-radio { border-color: #e05252; }
+.opt-btn.sugar-full.selected .opt-btn-radio::after { background: #e05252; }
+.opt-btn.sugar-full.selected .opt-btn-main { color: #b91c1c; }
+
+/* Size pill indicators */
+.size-pip { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; vertical-align:middle; flex-shrink:0; }
+.size-pip.short  { background:#6baed6; }
+.size-pip.medium { background:#4a9960; }
+.size-pip.tall   { background:#065f46; }
+
+/* Sugar gradient bar */
+.sugar-bar { display:inline-block; width:14px; height:14px; border-radius:3px; margin-right:6px; vertical-align:middle; flex-shrink:0; }
+.sugar-bar.grounded { background:#74c476; }
+.sugar-bar.yani     { background:#c8873a; }
+.sugar-bar.comfort  { background:#e8953a; }
+.sugar-bar.full     { background:#e05252; }
 .opt-btn-radio {
   width: 22px;
   height: 22px;
@@ -1567,9 +1617,11 @@ function showSizeSelector(item) {
   sizes.forEach(function(s) {
     var sel = s.default ? ' selected' : '';
     var def = s.default ? '<span class="opt-btn-default">DEFAULT</span>' : '';
-    html += '<button class="opt-btn' + sel + '" data-size="' + s.key + '" data-price="' + s.price + '" onclick="selectSize(this)">' +
+    var sizeClass = 'size-' + s.key.toLowerCase();
+    var pipColor = s.key==='Short'?'#6baed6':s.key==='Medium'?'#4a9960':'#065f46';
+    html += '<button class="opt-btn ' + sizeClass + sel + '" data-size="' + s.key + '" data-price="' + s.price + '" onclick="selectSize(this)">' +
       '<div class="opt-btn-radio"></div>' +
-      '<div class="opt-btn-text"><div class="opt-btn-main">' + s.label + ' (' + s.oz + ')' + def + '</div></div>' +
+      '<div class="opt-btn-text"><div class="opt-btn-main"><span class="size-pip ' + s.key.toLowerCase() + '"></span>' + s.label + ' (' + s.oz + ')' + def + '</div></div>' +
       '<div class="opt-btn-price">' + peso(s.price) + '</div>' +
     '</button>';
   });
@@ -1623,10 +1675,11 @@ function showSugarSelector(item, sizeKey, sizeLabel, price) {
   SUGAR_LEVELS.forEach(function(s) {
     var sel = s.default ? ' selected' : '';
     var def = s.default ? '<span class="opt-btn-default">SIGNATURE</span>' : '';
-    html += '<button class="opt-btn' + sel + '" data-sugar="' + s.id + '" onclick="selectSugar(this)">' +
+    var sugarClass = 'sugar-' + s.id;
+    html += '<button class="opt-btn ' + sugarClass + sel + '" data-sugar="' + s.id + '" onclick="selectSugar(this)">' +
       '<div class="opt-btn-radio"></div>' +
       '<div class="opt-btn-text">' +
-        '<div class="opt-btn-main">' + s.icon + ' ' + s.label + ' (' + s.pct + ')' + def + '</div>' +
+        '<div class="opt-btn-main"><span class="sugar-bar ' + s.id + '"></span>' + s.label + ' (' + s.pct + ')' + def + '</div>' +
         '<div class="opt-btn-sub">' + s.desc + '</div>' +
       '</div>' +
     '</button>';
