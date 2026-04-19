@@ -1350,14 +1350,16 @@ async function saveBrandingSettings(btn) {
     PRIMARY_COLOR: document.getElementById('s_primary_color').value,
     SECONDARY_COLOR: document.getElementById('s_secondary_color').value,
     LOGO_URL: document.getElementById('s_logo_url').value,
-    WELCOME_ENABLED:      String(document.getElementById('s_welcome_enabled').checked),
-    WELCOME_TITLE:        document.getElementById('s_welcome_title').value,
-    WELCOME_STORY:        document.getElementById('s_welcome_story').value,
-    WELCOME_TAGLINE:      document.getElementById('s_welcome_tagline').value,
-    WELCOME_GUIDE:        document.getElementById('s_welcome_guide').value,
-    WELCOME_BUTTON:       document.getElementById('s_welcome_button').value,
-    WELCOME_AUTO_SECONDS: document.getElementById('s_welcome_auto').value,
   };
+  // Welcome Screen fields — null-safe in case elements aren't rendered yet
+  var _g = function(id) { var el = document.getElementById(id); return el || null; };
+  if (_g('s_welcome_enabled'))      fields.WELCOME_ENABLED      = String(_g('s_welcome_enabled').checked);
+  if (_g('s_welcome_title'))        fields.WELCOME_TITLE        = _g('s_welcome_title').value;
+  if (_g('s_welcome_story'))        fields.WELCOME_STORY        = _g('s_welcome_story').value;
+  if (_g('s_welcome_tagline'))      fields.WELCOME_TAGLINE      = _g('s_welcome_tagline').value;
+  if (_g('s_welcome_guide'))        fields.WELCOME_GUIDE        = _g('s_welcome_guide').value;
+  if (_g('s_welcome_button'))       fields.WELCOME_BUTTON       = _g('s_welcome_button').value;
+  if (_g('s_welcome_auto'))         fields.WELCOME_AUTO_SECONDS = _g('s_welcome_auto').value;
   await _saveSettingsMap(fields, 'Branding saved ✅', btn);
 }
 
