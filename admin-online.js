@@ -1268,6 +1268,16 @@ function _settingsBranding() {
     + '<div style="font-size:.68rem;color:var(--timber);margin-top:6px">PNG or JPG recommended. Appears on receipts and the POS header.</div>'
     + '</div></div>'
     + '</div>'
+    + '<div class="s-card"><div class="s-card-title">🌿 Welcome Screen</div>'
+    + '<div style="font-size:.75rem;color:var(--timber);margin-bottom:14px">This intro screen appears when a customer first scans a table QR. Edit the story, tagline and guide anytime — no code needed.</div>'
+    + _sToggle('s_welcome_enabled', 'Welcome Screen Enabled', 'Show intro story before the menu', _settings.WELCOME_ENABLED !== 'false')
+    + _sField('s_welcome_title', 'Title', _settings.WELCOME_TITLE, 'text', 'e.g. Welcome to YANI Garden Cafe')
+    + '<div class="s-field"><label>Story <span style="font-size:.68rem;opacity:.6">(main paragraph)</span></label><textarea id="s_welcome_story" rows="4" style="width:100%;padding:8px 10px;border:1.5px solid var(--mist);border-radius:8px;font-size:.82rem;font-family:var(--font-body);resize:vertical">' + (_settings.WELCOME_STORY||'') + '</textarea></div>'
+    + _sField('s_welcome_tagline', 'Tagline', _settings.WELCOME_TAGLINE, 'text', 'e.g. Thank you for being here today. 🌿')
+    + '<div class="s-field"><label>Guide Text <span style="font-size:.68rem;opacity:.6">(how to order tip)</span></label><textarea id="s_welcome_guide" rows="2" style="width:100%;padding:8px 10px;border:1.5px solid var(--mist);border-radius:8px;font-size:.82rem;font-family:var(--font-body);resize:vertical">' + (_settings.WELCOME_GUIDE||'') + '</textarea></div>'
+    + _sField('s_welcome_button', 'Button Text', _settings.WELCOME_BUTTON, 'text', 'e.g. See Our Menu →')
+    + '<div class="s-field"><label>Auto-advance <span style="font-size:.68rem;opacity:.6">(seconds, 0 = wait for tap)</span></label><input type="number" id="s_welcome_auto" value="' + (_settings.WELCOME_AUTO_SECONDS||'0') + '" min="0" max="30" style="width:80px;padding:8px;border:1.5px solid var(--mist);border-radius:8px;font-size:.95rem;font-weight:700;text-align:center"> <span style="font-size:.75rem;color:var(--timber)">0 = customer taps the button</span></div>'
+    + '</div>'
     + '<button class="s-save-btn" onclick="saveBrandingSettings(this)">💾 Save Branding</button>';
 }
 
@@ -1340,6 +1350,13 @@ async function saveBrandingSettings(btn) {
     PRIMARY_COLOR: document.getElementById('s_primary_color').value,
     SECONDARY_COLOR: document.getElementById('s_secondary_color').value,
     LOGO_URL: document.getElementById('s_logo_url').value,
+    WELCOME_ENABLED:      String(document.getElementById('s_welcome_enabled').checked),
+    WELCOME_TITLE:        document.getElementById('s_welcome_title').value,
+    WELCOME_STORY:        document.getElementById('s_welcome_story').value,
+    WELCOME_TAGLINE:      document.getElementById('s_welcome_tagline').value,
+    WELCOME_GUIDE:        document.getElementById('s_welcome_guide').value,
+    WELCOME_BUTTON:       document.getElementById('s_welcome_button').value,
+    WELCOME_AUTO_SECONDS: document.getElementById('s_welcome_auto').value,
   };
   await _saveSettingsMap(fields, 'Branding saved ✅', btn);
 }

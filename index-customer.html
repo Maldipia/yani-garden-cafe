@@ -1112,18 +1112,16 @@ a { color: var(--terra); text-decoration: none }
   <div class="splash-bg"></div>
   <button class="splash-skip" onclick="dismissSplash()">Skip</button>
   <img class="splash-logo" src="/images/logo.png" alt="YANI" onerror="this.style.display='none'">
-  <div class="splash-name">Yani Garden Cafe</div>
+  <div class="splash-name" id="splashTitle">Yani Garden Cafe</div>
   <div class="splash-rule"></div>
-  <div class="splash-story">
-    <div class="splash-para">YANI is still growing. Still learning. <span class="splash-highlight">Still building.</span></div>
-    <div class="splash-para">Behind this place is a family—<br>hands-on, intentional, present in every detail.</div>
-    <div class="splash-para">Some things were built. Some were tested.<br>Some failed—then perfected.<br><em>Our sauces. Our combinations. Our process.</em></div>
-    <div class="splash-para">YANI is not just a café.<br><span class="splash-highlight">It's a place where flavors are created.</span></div>
-    <div class="splash-para">From our coffee… to our sauces… to every plate we serve—<br>there's a process behind it.</div>
-    <div class="splash-para">Everything here is made with care.<br>And because of that, it takes time.</div>
-    <div class="splash-para"><em>Thank you for your patience.<br>You're part of this story now.</em></div>
+  <div class="splash-story" id="splashStory">
+    <div class="splash-para" id="splashStoryText">Loading…</div>
+    <div class="splash-para"><em id="splashTagline"></em></div>
   </div>
-  <button class="splash-btn" onclick="dismissSplash()">See Our Menu →</button>
+  <div id="splashGuideWrap" style="margin-top:20px;padding:12px 20px;background:rgba(255,255,255,.05);border-radius:12px;max-width:320px;display:none">
+    <div id="splashGuideText" style="font-size:.8rem;color:rgba(245,240,232,.55);text-align:center;line-height:1.6"></div>
+  </div>
+  <button class="splash-btn" id="splashBtn" onclick="dismissSplash()">See Our Menu →</button>
 </div>
 
 <!-- ═══════════════════ HEADER ═══════════════════ -->
@@ -1492,7 +1490,50 @@ function initSplash() {
   if (seen) {
     var splash = document.getElementById('yaniSplash');
     if (splash) splash.style.display = 'none';
+    return;
   }
+  // Load welcome content from DB settings (via /api/config)
+  fetch('/api/pos', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'getSettings' })
+  }).then(function(r){ return r.json(); }).then(function(d) {
+    if (!d.ok) return;
+    var cfg = {};
+    (d.settings || []).forEach(function(s){ cfg[s.key] = s.value; });
+    // If WELCOME_ENABLED is false, skip splash entirely
+    if (cfg.WELCOME_ENABLED === 'false') {
+      var el = document.getElementById('yaniSplash');
+      if (el) el.style.display = 'none';
+      return;
+    }
+    // Apply title
+    var titleEl = document.getElementById('splashTitle');
+    if (titleEl && cfg.WELCOME_TITLE) titleEl.textContent = cfg.WELCOME_TITLE;
+    // Apply story
+    var storyEl = document.getElementById('splashStoryText');
+    if (storyEl && cfg.WELCOME_STORY) storyEl.textContent = cfg.WELCOME_STORY;
+    // Apply tagline
+    var tagEl = document.getElementById('splashTagline');
+    if (tagEl && cfg.WELCOME_TAGLINE) tagEl.textContent = cfg.WELCOME_TAGLINE;
+    // Apply guide text
+    var guideWrap = document.getElementById('splashGuideWrap');
+    var guideEl   = document.getElementById('splashGuideText');
+    if (guideEl && cfg.WELCOME_GUIDE) {
+      guideEl.textContent = cfg.WELCOME_GUIDE;
+      if (guideWrap) guideWrap.style.display = 'block';
+    }
+    // Apply button text
+    var btnEl = document.getElementById('splashBtn');
+    if (btnEl && cfg.WELCOME_BUTTON) btnEl.textContent = cfg.WELCOME_BUTTON;
+    // Auto-advance if set
+    var secs = parseInt(cfg.WELCOME_AUTO_SECONDS || '0', 10);
+    if (secs > 0) {
+      setTimeout(function(){ dismissSplash(); }, secs * 1000);
+    }
+  }).catch(function(){
+    // If fetch fails, splash still shows with default HTML fallback text
+  });
 }
 
 window.addEventListener('DOMContentLoaded', async function() {
