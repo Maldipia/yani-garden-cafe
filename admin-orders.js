@@ -107,12 +107,14 @@ function renderOrders() {
           ? '<span style="background:' + (sizeBgs[sizeKey]||'#e5e7eb') + ';color:' + (sizeColors[sizeKey]||'#374151') + ';border-radius:6px;padding:2px 7px;font-size:.7rem;font-weight:800;margin-right:4px">' + capitalize(it.size) + '</span>'
           : '';
 
-        // Color-coded sugar pill
+        // Color-coded sugar pill with percentage
         var sugarColors = { grounded:'#2d6a3f', yani:'#8a5220', comfort:'#b85a10', full:'#b91c1c' };
         var sugarBgs    = { grounded:'#dcfce7', yani:'#fef3c7', comfort:'#ffedd5', full:'#fee2e2' };
+        var sugarPcts   = { grounded:'25%', yani:'50%', comfort:'75%', full:'100%' };
         var sugarKey = it.sugar ? it.sugar.toLowerCase() : '';
+        var sugarPct = sugarPcts[sugarKey] || '';
         var sugarPill = it.sugar
-          ? '<span style="background:' + (sugarBgs[sugarKey]||'#e5e7eb') + ';color:' + (sugarColors[sugarKey]||'#374151') + ';border-radius:6px;padding:2px 7px;font-size:.7rem;font-weight:800">' + capitalize(it.sugar) + '</span>'
+          ? '<span style="background:' + (sugarBgs[sugarKey]||'#e5e7eb') + ';color:' + (sugarColors[sugarKey]||'#374151') + ';border-radius:6px;padding:2px 7px;font-size:.7rem;font-weight:800">' + capitalize(it.sugar) + (sugarPct ? ' <span style="font-size:.6rem;opacity:.7;font-weight:600">' + sugarPct + '</span>' : '') + '</span>'
           : '';
 
         var pillsHtml = (sizePill || sugarPill) ? '<div style="margin-top:3px">' + sizePill + sugarPill + '</div>' : '';
