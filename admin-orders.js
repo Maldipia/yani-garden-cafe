@@ -77,11 +77,12 @@ function renderOrders() {
     var tableLabel = isPlatform ? '📦 ' + esc(o.platform) : '🪑 Table ' + esc(String(o.tableNo || '?'));
     var typeIcon = isPlatform ? '🚴' : (o.orderType==='TAKE-OUT'?'🥡':'🍽️');
     var typeLabel = isPlatform ? 'Rider Pickup' : esc(o.orderType || '');
+    var typeBg    = isPlatform ? '#7c3aed' : (o.orderType==='TAKE-OUT' ? '#c2550a' : '#065f46');
     
     html += '<div class="oc-meta">' +
       '<div class="oc-meta-item">' + tableLabel + '</div>' +
       (o.customer ? '<div class="oc-meta-item">👤 ' + esc(o.customer) + '</div>' : '') +
-      '<div class="oc-meta-item">' + typeIcon + ' ' + typeLabel + '</div>' +
+      '<div class="oc-meta-item"><span style="background:' + typeBg + ';color:#fff;padding:2px 8px;border-radius:20px;font-size:.65rem;font-weight:800;letter-spacing:.3px">' + typeIcon + ' ' + typeLabel + '</span></div>' +
       '<div class="oc-meta-item">🕐 ' + esc(time) + '</div>' +
       '<div class="oc-meta-item" style="opacity:.6">' + esc(elapsed) + '</div>' +
     '</div>';
