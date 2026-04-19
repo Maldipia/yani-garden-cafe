@@ -1196,35 +1196,43 @@ async function uploadWelcomeBgImage(fileInput) {
   }
   if (statusEl) { statusEl.textContent = 'Uploading…'; statusEl.style.color = 'var(--timber)'; }
 
-  var formData = new FormData();
-  formData.append('file', file);
-  formData.append('folder', 'welcome-bg');
-  formData.append('filename', 'welcome_bg_' + Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9._-]/g, '_'));
+  // Read file as base64 — /api/upload-image expects {image, ext, code}
+  var reader = new FileReader();
+  reader.onload = async function(e) {
+    try {
+      var ext = file.name.split('.').pop().toLowerCase() || 'jpg';
+      var resp = await fetch('/api/upload-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: e.target.result, ext: ext, code: 'WELCOME_BG' })
+      });
+      var result = await resp.json();
+      if (!resp.ok || !result.path) throw new Error(result.error || 'Upload failed');
 
-  try {
-    var resp = await fetch('/api/upload-image', { method: 'POST', body: formData });
-    var result = await resp.json();
-    if (!resp.ok || !result.url) throw new Error(result.error || 'Upload failed');
-
-    var urlEl   = document.getElementById('s_welcome_bg_url');
-    var preview = document.getElementById('welcomeBgPreview');
-    if (urlEl) urlEl.value = result.url;
-    if (preview) {
-      if (preview.tagName === 'IMG') {
-        preview.src = result.url;
-      } else {
-        // Replace placeholder div with actual img
-        var img = document.createElement('img');
-        img.id = 'welcomeBgPreview';
-        img.src = result.url;
-        img.style.cssText = 'width:72px;height:72px;object-fit:cover;border-radius:8px;border:1.5px solid var(--mist);opacity:.8';
-        preview.parentNode.replaceChild(img, preview);
+      var url = result.path;
+      var urlEl   = document.getElementById('s_welcome_bg_url');
+      var preview = document.getElementById('welcomeBgPreview');
+      if (urlEl) urlEl.value = url;
+      if (preview) {
+        if (preview.tagName === 'IMG') {
+          preview.src = url;
+        } else {
+          var img = document.createElement('img');
+          img.id = 'welcomeBgPreview';
+          img.src = url;
+          img.style.cssText = 'width:72px;height:72px;object-fit:cover;border-radius:8px;border:1.5px solid var(--mist);opacity:.8';
+          preview.parentNode.replaceChild(img, preview);
+        }
       }
+      if (statusEl) { statusEl.textContent = '✅ Uploaded!'; statusEl.style.color = '#059669'; }
+    } catch(err) {
+      if (statusEl) { statusEl.textContent = '❌ ' + err.message; statusEl.style.color = '#e04444'; }
     }
-    if (statusEl) { statusEl.textContent = '✅ Uploaded!'; statusEl.style.color = '#059669'; }
-  } catch(e) {
-    if (statusEl) { statusEl.textContent = '❌ ' + e.message; statusEl.style.color = '#e04444'; }
-  }
+  };
+  reader.onerror = function() {
+    if (statusEl) { statusEl.textContent = '❌ Could not read file'; statusEl.style.color = '#e04444'; }
+  };
+  reader.readAsDataURL(file);
 }
 
 function updateQrPreview(previewId, url) {
