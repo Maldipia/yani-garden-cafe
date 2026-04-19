@@ -1007,14 +1007,30 @@ a { color: var(--terra); text-decoration: none }
   opacity: 0;
   pointer-events: none;
 }
-/* Subtle dual-glow background */
+/* Background — optional uploaded image + dark overlay + blur */
 #yaniSplash .splash-bg {
   position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+#yaniSplash .splash-bg-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(6px) brightness(.35) saturate(.8);
+  transform: scale(1.06); /* avoid blur edge artifacts */
+  display: none;
+}
+#yaniSplash .splash-bg-img.loaded { display: block; }
+#yaniSplash .splash-bg-glow {
+  position: absolute;
   inset: 0;
   background:
     radial-gradient(ellipse 60% 40% at 15% 10%, rgba(200,135,58,.10) 0%, transparent 70%),
     radial-gradient(ellipse 50% 50% at 85% 90%, rgba(74,153,96,.08) 0%, transparent 70%);
-  pointer-events: none;
 }
 /* Inner content card — max width keeps it tight on wide screens */
 #yaniSplash .splash-inner {
@@ -1149,7 +1165,10 @@ a { color: var(--terra); text-decoration: none }
 
 <!-- ═══════════════════ YANI INTRO SPLASH ═══════════════════ -->
 <div id="yaniSplash">
-  <div class="splash-bg"></div>
+  <div class="splash-bg">
+    <img class="splash-bg-img" id="splashBgImg" src="" alt="" onload="this.classList.add('loaded')">
+    <div class="splash-bg-glow"></div>
+  </div>
   <button class="splash-skip" onclick="dismissSplash()">Skip</button>
   <div class="splash-inner">
     <img class="splash-logo" src="/images/logo.png" alt="YANI" onerror="this.style.display='none'">
@@ -1561,6 +1580,11 @@ function initSplash() {
     }
     var btnEl = document.getElementById('splashBtn');
     if (btnEl && cfg.WELCOME_BUTTON) btnEl.textContent = cfg.WELCOME_BUTTON;
+    // Background image
+    if (cfg.WELCOME_BG_URL) {
+      var bgImg = document.getElementById('splashBgImg');
+      if (bgImg) bgImg.src = cfg.WELCOME_BG_URL;
+    }
     var secs = parseInt(cfg.WELCOME_AUTO_SECONDS || '0', 10);
     if (secs > 0) setTimeout(function(){ dismissSplash(); }, secs * 1000);
   }

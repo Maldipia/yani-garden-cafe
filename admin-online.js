@@ -1186,6 +1186,47 @@ async function uploadLogoImage(fileInput) {
   }
 }
 
+async function uploadWelcomeBgImage(fileInput) {
+  var statusEl = document.getElementById('welcomeBgStatus');
+  var file = fileInput.files[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) {
+    if (statusEl) { statusEl.textContent = '❌ Max 5MB'; statusEl.style.color = '#e04444'; }
+    return;
+  }
+  if (statusEl) { statusEl.textContent = 'Uploading…'; statusEl.style.color = 'var(--timber)'; }
+
+  var formData = new FormData();
+  formData.append('file', file);
+  formData.append('folder', 'welcome-bg');
+  formData.append('filename', 'welcome_bg_' + Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9._-]/g, '_'));
+
+  try {
+    var resp = await fetch('/api/upload-image', { method: 'POST', body: formData });
+    var result = await resp.json();
+    if (!resp.ok || !result.url) throw new Error(result.error || 'Upload failed');
+
+    var urlEl   = document.getElementById('s_welcome_bg_url');
+    var preview = document.getElementById('welcomeBgPreview');
+    if (urlEl) urlEl.value = result.url;
+    if (preview) {
+      if (preview.tagName === 'IMG') {
+        preview.src = result.url;
+      } else {
+        // Replace placeholder div with actual img
+        var img = document.createElement('img');
+        img.id = 'welcomeBgPreview';
+        img.src = result.url;
+        img.style.cssText = 'width:72px;height:72px;object-fit:cover;border-radius:8px;border:1.5px solid var(--mist);opacity:.8';
+        preview.parentNode.replaceChild(img, preview);
+      }
+    }
+    if (statusEl) { statusEl.textContent = '✅ Uploaded!'; statusEl.style.color = '#059669'; }
+  } catch(e) {
+    if (statusEl) { statusEl.textContent = '❌ ' + e.message; statusEl.style.color = '#e04444'; }
+  }
+}
+
 function updateQrPreview(previewId, url) {
   var img = document.getElementById(previewId);
   var ph = document.getElementById(previewId + '_placeholder');
@@ -1277,6 +1318,14 @@ function _settingsBranding() {
     + '<div class="s-field"><label>Guide Text <span style="font-size:.68rem;opacity:.6">(how to order tip)</span></label><textarea id="s_welcome_guide" rows="2" style="width:100%;padding:8px 10px;border:1.5px solid var(--mist);border-radius:8px;font-size:.82rem;font-family:var(--font-body);resize:vertical">' + (_settings.WELCOME_GUIDE||'') + '</textarea></div>'
     + _sField('s_welcome_button', 'Button Text', _settings.WELCOME_BUTTON, 'text', 'e.g. See Our Menu →')
     + '<div class="s-field"><label>Auto-advance <span style="font-size:.68rem;opacity:.6">(seconds, 0 = wait for tap)</span></label><input type="number" id="s_welcome_auto" value="' + (_settings.WELCOME_AUTO_SECONDS||'0') + '" min="0" max="30" style="width:80px;padding:8px;border:1.5px solid var(--mist);border-radius:8px;font-size:.95rem;font-weight:700;text-align:center"> <span style="font-size:.75rem;color:var(--timber)">0 = customer taps the button</span></div>'
+    + '<div class="s-field"><label>Background Image <span style="font-size:.68rem;opacity:.6">(optional — subtle overlay behind story text)</span></label>'
+    + '<div style="display:flex;align-items:flex-start;gap:12px;margin-top:4px">'
+    + '<div style="flex-shrink:0">' + (_settings.WELCOME_BG_URL ? '<img id="welcomeBgPreview" src="' + (_settings.WELCOME_BG_URL||'') + '" style="width:72px;height:72px;object-fit:cover;border-radius:8px;border:1.5px solid var(--mist);opacity:.8">' : '<div id="welcomeBgPreview" style="width:72px;height:72px;border-radius:8px;border:2px dashed var(--mist);display:flex;align-items:center;justify-content:center;font-size:.62rem;color:var(--timber);text-align:center">No image</div>') + '</div>'
+    + '<div style="flex:1"><input id="s_welcome_bg_url" type="text" value="' + (_settings.WELCOME_BG_URL||'') + '" placeholder="Paste URL or upload →" style="width:100%;padding:7px 10px;border:1.5px solid var(--mist);border-radius:8px;font-size:.78rem;box-sizing:border-box;font-family:var(--font-body);margin-bottom:8px">'
+    + '<div style="display:flex;align-items:center;gap:8px"><label style="padding:7px 12px;background:var(--forest);color:#fff;border-radius:8px;font-size:.75rem;font-weight:700;cursor:pointer">📤 Upload<input type="file" accept="image/*" onchange="uploadWelcomeBgImage(this)" style="display:none"></label>'
+    + '<span id="welcomeBgStatus" style="font-size:.72rem;color:var(--timber)"></span></div>'
+    + '<div style="font-size:.67rem;color:var(--timber);margin-top:5px">Shown behind story with dark overlay + blur. PNG/JPG, max 5MB.</div>'
+    + '</div></div></div>'
     + '</div>'
     + '<button class="s-save-btn" onclick="saveBrandingSettings(this)">💾 Save Branding</button>';
 }
@@ -1360,6 +1409,7 @@ async function saveBrandingSettings(btn) {
   if (_g('s_welcome_guide'))        fields.WELCOME_GUIDE        = _g('s_welcome_guide').value;
   if (_g('s_welcome_button'))       fields.WELCOME_BUTTON       = _g('s_welcome_button').value;
   if (_g('s_welcome_auto'))         fields.WELCOME_AUTO_SECONDS = _g('s_welcome_auto').value;
+  if (_g('s_welcome_bg_url'))       fields.WELCOME_BG_URL       = _g('s_welcome_bg_url').value;
   await _saveSettingsMap(fields, 'Branding saved ✅', btn);
 }
 
