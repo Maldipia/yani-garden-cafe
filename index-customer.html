@@ -993,83 +993,119 @@ a { color: var(--terra); text-decoration: none }
   position: fixed;
   inset: 0;
   z-index: 9999;
-  background: #1a2e1e;
+  background: #111e14;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 40px 32px 48px;
-  overflow: hidden;
-  transition: opacity .7s ease;
+  padding: 0 28px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  transition: opacity .6s ease;
 }
 #yaniSplash.fade-out {
   opacity: 0;
   pointer-events: none;
 }
+/* Subtle dual-glow background */
 #yaniSplash .splash-bg {
-  position: absolute;
+  position: fixed;
   inset: 0;
   background:
-    radial-gradient(ellipse at 20% 20%, rgba(200,135,58,.12) 0%, transparent 60%),
-    radial-gradient(ellipse at 80% 80%, rgba(74,153,96,.10) 0%, transparent 60%);
+    radial-gradient(ellipse 60% 40% at 15% 10%, rgba(200,135,58,.10) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 50% at 85% 90%, rgba(74,153,96,.08) 0%, transparent 70%);
   pointer-events: none;
 }
+/* Inner content card — max width keeps it tight on wide screens */
+#yaniSplash .splash-inner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 360px;
+  padding: 48px 0 52px;
+  text-align: center;
+}
+/* Logo */
 #yaniSplash .splash-logo {
-  width: 72px;
-  height: 72px;
+  width: 76px;
+  height: 76px;
   border-radius: 50%;
   object-fit: cover;
-  border: 2px solid rgba(200,135,58,.5);
-  box-shadow: 0 0 32px rgba(200,135,58,.2);
-  margin-bottom: 24px;
-  animation: splashFadeUp .8s ease both;
+  border: 2px solid rgba(200,135,58,.45);
+  box-shadow: 0 0 28px rgba(200,135,58,.18), 0 2px 12px rgba(0,0,0,.4);
+  margin-bottom: 20px;
+  animation: splashFadeUp .7s ease both;
 }
+/* Cafe name */
 #yaniSplash .splash-name {
   font-family: 'Crimson Pro', Georgia, serif;
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 600;
-  letter-spacing: 4px;
+  letter-spacing: 5px;
   text-transform: uppercase;
   color: #c8873a;
-  margin-bottom: 28px;
-  animation: splashFadeUp .9s ease .1s both;
+  margin-bottom: 20px;
+  animation: splashFadeUp .8s ease .08s both;
 }
+/* Gold divider */
 #yaniSplash .splash-rule {
-  width: 40px;
+  width: 36px;
   height: 1.5px;
-  background: rgba(200,135,58,.5);
+  background: linear-gradient(90deg, transparent, rgba(200,135,58,.7), transparent);
   margin: 0 auto 28px;
-  animation: splashFadeUp .9s ease .15s both;
+  animation: splashFadeUp .8s ease .12s both;
 }
+/* Story block */
 #yaniSplash .splash-story {
   font-family: 'Crimson Pro', Georgia, serif;
-  font-size: 1.08rem;
-  line-height: 1.85;
-  color: rgba(245,240,232,.82);
-  text-align: center;
-  max-width: 340px;
-  animation: splashFadeUp 1s ease .25s both;
+  font-size: 1.1rem;
+  line-height: 1.9;
+  color: rgba(245,240,232,.78);
+  animation: splashFadeUp .9s ease .22s both;
+  width: 100%;
 }
-#yaniSplash .splash-story em {
-  color: rgba(245,240,232,.5);
-  font-style: italic;
-  font-size: .92rem;
+/* Each paragraph gets breathing room */
+#yaniSplash .splash-story p {
+  margin: 0 0 16px 0;
+  padding: 0;
 }
-#yaniSplash .splash-story .splash-highlight {
-  color: #e8c98a;
-  font-weight: 600;
-}
-#yaniSplash .splash-story .splash-para {
-  margin-bottom: 14px;
-}
-#yaniSplash .splash-story .splash-para:last-child {
+#yaniSplash .splash-story p:last-child {
   margin-bottom: 0;
 }
+/* Tagline — softer, italic */
+#yaniSplash .splash-tagline {
+  margin-top: 24px;
+  font-family: 'Crimson Pro', Georgia, serif;
+  font-size: .95rem;
+  font-style: italic;
+  color: rgba(245,240,232,.45);
+  letter-spacing: .3px;
+  animation: splashFadeUp .9s ease .32s both;
+}
+/* Guide tip — subtle pill */
+#yaniSplash .splash-guide {
+  margin-top: 22px;
+  padding: 10px 16px;
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 10px;
+  font-family: 'Quicksand', sans-serif;
+  font-size: .75rem;
+  font-weight: 500;
+  color: rgba(245,240,232,.38);
+  line-height: 1.6;
+  animation: splashFadeUp .9s ease .38s both;
+  display: none; /* shown via JS only if guide text exists */
+}
+/* CTA button */
 #yaniSplash .splash-btn {
   margin-top: 36px;
-  padding: 13px 36px;
+  padding: 13px 40px;
   background: transparent;
-  border: 1.5px solid rgba(200,135,58,.6);
+  border: 1.5px solid rgba(200,135,58,.55);
   border-radius: 40px;
   color: #e8c98a;
   font-family: 'Crimson Pro', Georgia, serif;
@@ -1078,29 +1114,33 @@ a { color: var(--terra); text-decoration: none }
   letter-spacing: 1px;
   cursor: pointer;
   transition: all .2s;
-  animation: splashFadeUp 1s ease .6s both;
+  animation: splashFadeUp .9s ease .55s both;
 }
 #yaniSplash .splash-btn:hover,
 #yaniSplash .splash-btn:active {
-  background: rgba(200,135,58,.15);
+  background: rgba(200,135,58,.14);
   border-color: #c8873a;
   color: #fff;
 }
+/* Skip — tiny top-right */
 #yaniSplash .splash-skip {
-  position: absolute;
-  top: 18px;
-  right: 20px;
-  font-size: .72rem;
-  color: rgba(245,240,232,.3);
+  position: fixed;
+  top: 16px;
+  right: 18px;
+  font-family: 'Quicksand', sans-serif;
+  font-size: .68rem;
+  font-weight: 600;
+  color: rgba(245,240,232,.22);
   cursor: pointer;
-  letter-spacing: .5px;
+  letter-spacing: .8px;
   text-transform: uppercase;
   padding: 6px 8px;
   transition: color .2s;
+  z-index: 2;
 }
-#yaniSplash .splash-skip:hover { color: rgba(245,240,232,.6); }
+#yaniSplash .splash-skip:hover { color: rgba(245,240,232,.55); }
 @keyframes splashFadeUp {
-  from { opacity: 0; transform: translateY(18px); }
+  from { opacity: 0; transform: translateY(16px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 </style>
@@ -1111,17 +1151,17 @@ a { color: var(--terra); text-decoration: none }
 <div id="yaniSplash">
   <div class="splash-bg"></div>
   <button class="splash-skip" onclick="dismissSplash()">Skip</button>
-  <img class="splash-logo" src="/images/logo.png" alt="YANI" onerror="this.style.display='none'">
-  <div class="splash-name" id="splashTitle">Yani Garden Cafe</div>
-  <div class="splash-rule"></div>
-  <div class="splash-story" id="splashStory">
-    <div class="splash-para" id="splashStoryText">Loading…</div>
-    <div class="splash-para"><em id="splashTagline"></em></div>
+  <div class="splash-inner">
+    <img class="splash-logo" src="/images/logo.png" alt="YANI" onerror="this.style.display='none'">
+    <div class="splash-name" id="splashTitle">Yani Garden Cafe</div>
+    <div class="splash-rule"></div>
+    <div class="splash-story" id="splashStoryText"></div>
+    <div class="splash-tagline" id="splashTagline"></div>
+    <div class="splash-guide" id="splashGuideWrap">
+      <span id="splashGuideText"></span>
+    </div>
+    <button class="splash-btn" id="splashBtn" onclick="dismissSplash()">See Our Menu →</button>
   </div>
-  <div id="splashGuideWrap" style="margin-top:20px;padding:12px 20px;background:rgba(255,255,255,.05);border-radius:12px;max-width:320px;display:none">
-    <div id="splashGuideText" style="font-size:.8rem;color:rgba(245,240,232,.55);text-align:center;line-height:1.6"></div>
-  </div>
-  <button class="splash-btn" id="splashBtn" onclick="dismissSplash()">See Our Menu →</button>
 </div>
 
 <!-- ═══════════════════ HEADER ═══════════════════ -->
@@ -1502,8 +1542,15 @@ function initSplash() {
     }
     var titleEl = document.getElementById('splashTitle');
     if (titleEl && cfg.WELCOME_TITLE) titleEl.textContent = cfg.WELCOME_TITLE;
+    // Render story: split on double-newline for paragraphs,
+    // single newline becomes <br> within a paragraph
     var storyEl = document.getElementById('splashStoryText');
-    if (storyEl && cfg.WELCOME_STORY) storyEl.textContent = cfg.WELCOME_STORY;
+    if (storyEl && cfg.WELCOME_STORY) {
+      var paras = cfg.WELCOME_STORY.split(/\n\n+/);
+      storyEl.innerHTML = paras.map(function(p) {
+        return '<p>' + p.replace(/\n/g, '<br>') + '</p>';
+      }).join('');
+    }
     var tagEl = document.getElementById('splashTagline');
     if (tagEl && cfg.WELCOME_TAGLINE) tagEl.textContent = cfg.WELCOME_TAGLINE;
     var guideWrap = document.getElementById('splashGuideWrap');
