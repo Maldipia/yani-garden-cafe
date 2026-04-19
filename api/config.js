@@ -13,6 +13,8 @@ const SAFE_KEYS = [
   'GCASH_QR_URL','INSTAPAY_QR_URL','BDO_QR_URL','BPI_QR_URL','UNIONBANK_QR_URL',
   'BDO_ACCOUNT','BPI_ACCOUNT','UNIONBANK_ACCOUNT',
   'ADMIN_PHONE','GCASH_NUMBER','MAYA_NUMBER','RECEIPT_EMAIL','SUPABASE_ANON_KEY',
+  'WELCOME_ENABLED','WELCOME_TITLE','WELCOME_STORY','WELCOME_TAGLINE',
+  'WELCOME_GUIDE','WELCOME_BUTTON','WELCOME_AUTO_SECONDS',
 ];
 
 // Cache for 5 min — config rarely changes
@@ -33,7 +35,7 @@ module.exports = async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ ok: false, error: 'GET only' });
 
   // Serve from cache
-  if (_cache && Date.now() - _cacheAt < 5 * 60 * 1000) {
+  if (_cache && Date.now() - _cacheAt < 60 * 1000) { // 60s cache — edits show within 1 minute
     return res.status(200).json({ ok: true, config: _cache, cached: true });
   }
 

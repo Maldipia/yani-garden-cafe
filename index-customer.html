@@ -1483,8 +1483,7 @@ function dismissSplash() {
 }
 
 function initSplash() {
-  // Show splash every new QR scan session
-  // Only skip if already seen this session (e.g. page refresh)
+  // Skip if already seen this session (e.g. page refresh)
   var seen = false;
   try { seen = sessionStorage.getItem('yani_intro_seen') === '1'; } catch(e) {}
   if (seen) {
@@ -1492,48 +1491,48 @@ function initSplash() {
     if (splash) splash.style.display = 'none';
     return;
   }
-  // Load welcome content from DB settings (via /api/config)
-  fetch('/api/pos', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'getSettings' })
-  }).then(function(r){ return r.json(); }).then(function(d) {
-    if (!d.ok) return;
-    var cfg = {};
-    (d.settings || []).forEach(function(s){ cfg[s.key] = s.value; });
-    // If WELCOME_ENABLED is false, skip splash entirely
+  // Apply welcome content from APP_CONFIG (loaded by loadAppConfig on startup —
+  // no extra fetch needed, uses /api/config which is already cached)
+  function _applySplashConfig(cfg) {
+    if (!cfg) return;
     if (cfg.WELCOME_ENABLED === 'false') {
       var el = document.getElementById('yaniSplash');
       if (el) el.style.display = 'none';
       return;
     }
-    // Apply title
     var titleEl = document.getElementById('splashTitle');
     if (titleEl && cfg.WELCOME_TITLE) titleEl.textContent = cfg.WELCOME_TITLE;
-    // Apply story
     var storyEl = document.getElementById('splashStoryText');
     if (storyEl && cfg.WELCOME_STORY) storyEl.textContent = cfg.WELCOME_STORY;
-    // Apply tagline
     var tagEl = document.getElementById('splashTagline');
     if (tagEl && cfg.WELCOME_TAGLINE) tagEl.textContent = cfg.WELCOME_TAGLINE;
-    // Apply guide text
     var guideWrap = document.getElementById('splashGuideWrap');
     var guideEl   = document.getElementById('splashGuideText');
     if (guideEl && cfg.WELCOME_GUIDE) {
       guideEl.textContent = cfg.WELCOME_GUIDE;
       if (guideWrap) guideWrap.style.display = 'block';
     }
-    // Apply button text
     var btnEl = document.getElementById('splashBtn');
     if (btnEl && cfg.WELCOME_BUTTON) btnEl.textContent = cfg.WELCOME_BUTTON;
-    // Auto-advance if set
     var secs = parseInt(cfg.WELCOME_AUTO_SECONDS || '0', 10);
-    if (secs > 0) {
-      setTimeout(function(){ dismissSplash(); }, secs * 1000);
+    if (secs > 0) setTimeout(function(){ dismissSplash(); }, secs * 1000);
+  }
+
+  // APP_CONFIG is set by loadAppConfig() which runs at DOMContentLoaded.
+  // Since loadAppConfig fires first and /api/config is fast (5-min cache),
+  // APP_CONFIG is ready by the time the user reads the splash.
+  // Poll briefly in case config hasn't loaded yet (cold start race).
+  var _attempts = 0;
+  function _waitAndApply() {
+    if (APP_CONFIG && APP_CONFIG.WELCOME_TITLE) {
+      _applySplashConfig(APP_CONFIG);
+    } else if (_attempts < 20) {
+      _attempts++;
+      setTimeout(_waitAndApply, 100); // retry every 100ms up to 2s
     }
-  }).catch(function(){
-    // If fetch fails, splash still shows with default HTML fallback text
-  });
+    // After 2s give up — hardcoded HTML fallback shows as-is
+  }
+  _waitAndApply();
 }
 
 window.addEventListener('DOMContentLoaded', async function() {
