@@ -2007,12 +2007,24 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
 
       // Discount is handled below — editOrderItems recalculates discount proportionally
 
+      // Fetch existing items to preserve their 'prepared' state
+      const existItemsR = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/dine_in_order_items?order_id=eq.${encodeURIComponent(orderId)}&select=item_code,size_choice,sugar_choice,item_notes,prepared`
+      );
+      const existItems = existItemsR.ok ? (existItemsR.data || []) : [];
+
       // Recalculate totals
       let subtotal = 0;
       const itemRows = items.map(it => {
         const qty = Math.max(1, parseInt(it.qty) || 1);
         const price = parseFloat(it.price) || 0;
         subtotal += price * qty;
+        // Carry over prepared state if this item already existed (match on code+size+sugar)
+        const existMatch = existItems.find(e =>
+          e.item_code === (it.code || 'CUSTOM') &&
+          (e.size_choice || '') === (it.size || '') &&
+          (e.sugar_choice || '') === (it.sugar || '')
+        );
         return {
           order_id:     orderId,
           order_no:     order_no,
@@ -2024,6 +2036,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
           size_choice:  it.size || '',
           sugar_choice: it.sugar || '',
           item_notes:   it.notes || '',
+          prepared:     existMatch ? (existMatch.prepared || false) : false,
         };
       });
 
@@ -2034,7 +2047,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       const vatAmt2     = vatEnabled2 ? Math.round(preTax2 * (vatRate2 / (1 + vatRate2)) * 100) / 100 : 0;
       const total       = Math.round(preTax2 * 100) / 100;
 
-      // Delete old items and insert new ones
+      // Delete old items and insert new ones (prepared state preserved above)
       await supa('DELETE', 'dine_in_order_items', null, { order_id: `eq.${orderId}` });
       if (itemRows.length > 0) await supa('POST', 'dine_in_order_items', itemRows);
 
