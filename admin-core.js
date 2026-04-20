@@ -811,7 +811,7 @@ function renderSidebar() {
     html += item('SHEETS', '📊', 'Sheets Sync', '');
     if (isOwner) html += item('SHIFT', '📋', 'Shift Summary', '');
     if (isOwner) html += item('LOGS', '📜', 'Activity Logs', '');
-    if (isOwner) html += item('COSTING', '🧮', 'Menu Costing', '');
+    if (isAdmin) html += item('COSTING', '🧮', 'Menu Costing', '');
   }
 
   if (isOwner) {
