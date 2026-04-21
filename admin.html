@@ -1006,6 +1006,23 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
   text-align:center; line-height:1.6;
 }
 .sidebar-badge:empty { display:none }
+/* Blinking badge for urgent notifications */
+.sidebar-badge.pulse {
+  animation: badgePulse 1s ease-in-out infinite;
+  box-shadow: 0 0 0 0 rgba(203,105,76,.7);
+}
+@keyframes badgePulse {
+  0%   { box-shadow: 0 0 0 0 rgba(203,105,76,.7); background:var(--terra); }
+  50%  { box-shadow: 0 0 0 6px rgba(203,105,76,0); background:#e05545; }
+  100% { box-shadow: 0 0 0 0 rgba(203,105,76,0); background:var(--terra); }
+}
+.sidebar-item.has-urgent {
+  animation: sidebarUrgent 1.5s ease-in-out infinite;
+}
+@keyframes sidebarUrgent {
+  0%,100% { background: transparent; }
+  50%     { background: rgba(203,105,76,.12); }
+}
 .sidebar-divider {
   height:1px; background:var(--mist); margin:6px 12px;
 }

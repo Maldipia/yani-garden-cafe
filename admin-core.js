@@ -128,6 +128,28 @@ function playNewOrderAlert() {
 }
 
 var pendingPayCount = 0;
+
+function playOnlineOrderAlert() {
+  try {
+    if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    var ctx = _audioCtx;
+    function tone(freq, start, dur, vol) {
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.type = 'sine'; osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0, ctx.currentTime + start);
+      gain.gain.linearRampToValueAtTime(vol, ctx.currentTime + start + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
+      osc.start(ctx.currentTime + start);
+      osc.stop(ctx.currentTime + start + dur + 0.1);
+    }
+    // 3 ascending tones — distinct from regular order sound
+    tone(660,  0,    0.25, 0.3);
+    tone(880,  0.15, 0.25, 0.3);
+    tone(1320, 0.3,  0.5,  0.35);
+  } catch(e) {}
+}
 var payFilter = 'PENDING';
 var allOnlineOrders = [];
 var onlineOrderPendingCount = 0;
@@ -419,9 +441,18 @@ async function _refreshOnlineCount() {
     var data = await resp.json();
     if (data.ok && data.orders) {
       allOnlineOrders = data.orders;
-      onlineOrderPendingCount = data.orders.filter(function(o) {
+      var newCount = data.orders.filter(function(o) {
         return o.status === 'PENDING' || o.payment_status === 'SUBMITTED';
       }).length;
+      // Play alert if count increased (new online order arrived)
+      if (newCount > onlineOrderPendingCount) {
+        playOnlineOrderAlert();
+        // Show toast if not already on Online Orders tab
+        if (currentFilter !== 'ONLINE_ORDERS') {
+          showToast('🛵 New online order received!', 'warning');
+        }
+      }
+      onlineOrderPendingCount = newCount;
       renderFilters(); // Update badge count on tab
     }
   } catch(e) {}
@@ -770,10 +801,12 @@ function renderSidebar() {
   var isAdmin = role === 'ADMIN' || role === 'OWNER';
   var isOwner = role === 'OWNER';
 
-  function item(key, icon, label, badge) {
+  function item(key, icon, label, badge, urgent) {
     var active = currentFilter === key ? ' active' : '';
-    var b = badge ? '<span class="sidebar-badge">' + badge + '</span>' : '';
-    return '<button class="sidebar-item' + active + '" onclick="setFilter(\'' + key + '\');closeSidebarMobile()">' +
+    var urgentClass = (urgent && badge) ? ' has-urgent' : '';
+    var badgeClass = (urgent && badge) ? ' pulse' : '';
+    var b = badge ? '<span class="sidebar-badge' + badgeClass + '">' + badge + '</span>' : '';
+    return '<button class="sidebar-item' + active + urgentClass + '" onclick="setFilter(\'' + key + '\');closeSidebarMobile()">' +
       '<span class="sidebar-icon">' + icon + '</span>' +
       '<span class="sidebar-label">' + label + '</span>' + b + '</button>';
   }
@@ -787,7 +820,7 @@ function renderSidebar() {
   html += '<div class="sidebar-section-label">Operations</div>';
   html += item('ACTIVE', '🔥', 'Order Queue', '');
   if (role !== 'KITCHEN') html += item('PAYMENTS', '💳', 'Payments', pendingPayCount || '');
-  html += item('ONLINE_ORDERS', '🛵', 'Online Orders', onlineOrderPendingCount || '');
+  html += item('ONLINE_ORDERS', '🛵', 'Online Orders', onlineOrderPendingCount || '', onlineOrderPendingCount > 0);
   if (isOwner) html += item('REFUNDS', '↩️', 'Refunds', '');
   if (isOwner) html += item('CASH', '💵', 'Cash Sessions', '');
 
