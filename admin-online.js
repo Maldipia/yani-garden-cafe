@@ -1114,10 +1114,23 @@ function _settingsPayment() {
   var s = _settings;
   var url = s.PAYMENT_IMAGE_URL || '';
   var showImg = !!url;
+  var mode = s.CARD_PAYMENT_MODE || 'qr';
+  var isPaymongo = mode === 'paymongo';
   var previewHtml = showImg
     ? '<img id="payImgPreview" src="' + url + '" onerror="this.style.display=\'none\'" style="width:90px;height:90px;object-fit:contain;border-radius:8px;border:1.5px solid var(--mist);background:#f8f8f8">'
     : '<div id="payImgPreview" style="width:90px;height:90px;border-radius:8px;border:2px dashed var(--mist);display:flex;align-items:center;justify-content:center;font-size:.65rem;color:var(--timber);text-align:center">No<br>image</div>';
   return '<div class="s-card">'
+    + '<div class="s-card-title">💳 Payment Mode</div>'
+    + '<div style="font-size:.75rem;color:var(--timber);margin-bottom:14px">Choose how customers pay for Online QR Payment orders.</div>'
+    + '<div style="display:flex;gap:10px;margin-bottom:4px">'
+    + '<button onclick="setPaymentMode(\'qr\')" style="flex:1;padding:12px;border-radius:10px;border:2px solid ' + (!isPaymongo ? 'var(--forest)' : 'var(--mist)') + ';background:' + (!isPaymongo ? 'var(--forest)' : 'transparent') + ';color:' + (!isPaymongo ? '#fff' : 'var(--timber)') + ';font-weight:700;font-size:.82rem;cursor:pointer;transition:all .2s">'
+    + '🖼️ QR Image<br><span style="font-size:.7rem;font-weight:400;opacity:.8">Upload your own QR</span></button>'
+    + '<button onclick="setPaymentMode(\'paymongo\')" style="flex:1;padding:12px;border-radius:10px;border:2px solid ' + (isPaymongo ? 'var(--forest)' : 'var(--mist)') + ';background:' + (isPaymongo ? 'var(--forest)' : 'transparent') + ';color:' + (isPaymongo ? '#fff' : 'var(--timber)') + ';font-weight:700;font-size:.82rem;cursor:pointer;transition:all .2s">'
+    + '💳 PayMongo<br><span style="font-size:.7rem;font-weight:400;opacity:.8">Card / GCash / Maya</span></button>'
+    + '</div>'
+    + '<div style="font-size:.7rem;color:var(--timber);margin-bottom:0">Current: <strong>' + (isPaymongo ? '💳 PayMongo — card, GCash, Maya via secure checkout' : '🖼️ QR Image — customer scans and uploads proof') + '</strong></div>'
+    + '</div>'
+    + '<div class="s-card">'
     + '<div class="s-card-title">💳 Payment Image</div>'
     + '<div style="font-size:.75rem;color:var(--timber);margin-bottom:14px">Upload once — customers see this full-width when they pay at checkout. Replace anytime.</div>'
     + '<div style="display:flex;gap:14px;align-items:flex-start">'
@@ -1365,6 +1378,17 @@ async function saveGeneralSettings(btn) {
     RECEIPT_FOOTER: document.getElementById('s_receipt_footer').value,
   };
   await _saveSettingsMap(fields, 'General settings saved ✅', btn);
+}
+
+async function setPaymentMode(mode) {
+  var r = await api('updateSetting', { userId: currentUser.userId, key: 'CARD_PAYMENT_MODE', value: mode });
+  if (r.ok) {
+    _settings.CARD_PAYMENT_MODE = mode;
+    showToast(mode === 'paymongo' ? '💳 Switched to PayMongo' : '🖼️ Switched to QR Image', 'success');
+    switchSettingsTab('payment');
+  } else {
+    showToast('Failed to switch: ' + (r.error || '?'), 'error');
+  }
 }
 
 async function savePaymentSettings(btn) {

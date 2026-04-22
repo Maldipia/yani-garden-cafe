@@ -2491,57 +2491,62 @@ async function selectPayment(method) {
       '<button class="btn-primary mt-16" onclick="closePage(\'payment\');openPage(\'status\');startStatusPolling()">Track Your Order →</button>';
 
   } else if (method === 'card') {
-    // Create PayMongo payment link
-    var body = document.getElementById('paymentBody');
-    body.innerHTML = '<div class="status-card" style="text-align:center">' +
-      '<div style="font-size:2rem;margin-bottom:10px">💳</div>' +
-      '<div style="font-weight:700;font-size:1rem;margin-bottom:6px">Setting up secure payment…</div>' +
-      '<div style="font-size:.82rem;color:var(--timber)">Please wait</div>' +
-      '<div style="margin-top:14px;width:32px;height:32px;border:3px solid var(--mist);border-top-color:var(--forest);border-radius:50%;animation:spin .8s linear infinite;margin:16px auto 0"></div>' +
-    '</div>';
-
-    try {
-      var pmResp = await fetch('/api/paymongo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'createPaymentLink',
-          orderId: state.orderId,
-          amount: state.orderTotal,
-          description: 'YANI Garden Cafe — Table ' + state.tableNo,
-          customerName: state.customerName || 'Guest',
-        })
-      });
-      var pmData = await pmResp.json();
-
-      if (!pmData.ok || !pmData.checkoutUrl) {
-        throw new Error(pmData.error || 'Could not create payment link');
-      }
-
-      // Show pay button linking to PayMongo checkout
-      body.innerHTML = '<div class="status-card" style="text-align:center">' +
-        '<div style="font-size:1.8rem;margin-bottom:8px">💳</div>' +
-        '<div style="font-weight:700;font-size:1rem;margin-bottom:4px">Pay Securely Online</div>' +
-        '<div style="font-size:1.3rem;font-weight:700;color:var(--terra);margin:10px 0">' + peso(state.orderTotal) + '</div>' +
-        '<div style="font-size:.78rem;color:var(--timber);margin-bottom:16px">' + esc(state.orderId) + ' · Table ' + esc(state.tableNo) + '</div>' +
-        '<a href="' + pmData.checkoutUrl + '" target="_blank" rel="noopener" style="display:block;background:var(--forest);color:#fff;padding:14px;border-radius:12px;font-weight:700;font-size:.95rem;text-decoration:none;margin-bottom:12px">💳 Pay Now via Card / GCash / Maya</a>' +
-        '<div style="font-size:.72rem;color:var(--timber);margin-bottom:16px">🔒 Secured by PayMongo · Your card details are never stored</div>' +
-        '<div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:12px;font-size:.78rem;color:#166534">After paying, tap the button below to track your order.</div>' +
-      '</div>' +
-      '<button class="btn-primary mt-16" onclick="closePage(\'payment\');openPage(\'status\');startStatusPolling()">I\'ve Paid — Track My Order →</button>';
-
-    } catch(err) {
-      body.innerHTML = '<div class="status-card" style="text-align:center">' +
-        '<div style="font-size:2rem;margin-bottom:8px">⚠️</div>' +
-        '<div style="font-weight:700;color:var(--terra)">Payment setup failed</div>' +
-        '<div style="font-size:.82rem;color:var(--timber);margin-top:6px">' + esc(err.message) + '</div>' +
-        '<div style="font-size:.78rem;color:var(--timber);margin-top:10px">Please ask staff for assistance or choose another payment method.</div>' +
-      '</div>' +
-      '<button class="btn-outline mt-16" onclick="renderPaymentPage()">← Try Another Method</button>';
+    // Route based on CARD_PAYMENT_MODE setting from DB
+    var payMode = (window.APP_CONFIG && window.APP_CONFIG.CARD_PAYMENT_MODE) || 'qr';
+    if (payMode === 'paymongo') {
+      await showPaymongoPayment();
+    } else {
+      showQRPayment();
     }
 
   } else {
     showQRPayment();
+  }
+}
+
+async function showPaymongoPayment() {
+  var body = document.getElementById('paymentBody');
+  body.innerHTML = '<div class="status-card" style="text-align:center">' +
+    '<div style="font-size:2rem;margin-bottom:10px">💳</div>' +
+    '<div style="font-weight:700;font-size:1rem;margin-bottom:6px">Setting up secure payment…</div>' +
+    '<div style="font-size:.82rem;color:var(--timber)">Please wait</div>' +
+    '<div style="margin-top:16px;width:32px;height:32px;border:3px solid var(--mist);border-top-color:var(--forest);border-radius:50%;animation:spin .8s linear infinite;margin:16px auto 0"></div>' +
+  '</div>';
+
+  try {
+    var pmResp = await fetch('/api/paymongo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'createPaymentLink',
+        orderId: state.orderId,
+        amount: state.orderTotal,
+        description: 'YANI Garden Cafe — Table ' + state.tableNo,
+        customerName: state.customerName || 'Guest',
+      })
+    });
+    var pmData = await pmResp.json();
+    if (!pmData.ok || !pmData.checkoutUrl) throw new Error(pmData.error || 'Could not create payment link');
+
+    body.innerHTML = '<div class="status-card" style="text-align:center">' +
+      '<div style="font-size:1.8rem;margin-bottom:8px">💳</div>' +
+      '<div style="font-weight:700;font-size:1rem;margin-bottom:4px">Pay Securely Online</div>' +
+      '<div style="font-size:1.3rem;font-weight:700;color:var(--terra);margin:10px 0">' + peso(state.orderTotal) + '</div>' +
+      '<div style="font-size:.78rem;color:var(--timber);margin-bottom:16px">' + esc(state.orderId) + ' · Table ' + esc(state.tableNo) + '</div>' +
+      '<a href="' + pmData.checkoutUrl + '" target="_blank" rel="noopener" style="display:block;background:var(--forest);color:#fff;padding:14px;border-radius:12px;font-weight:700;font-size:.95rem;text-decoration:none;margin-bottom:12px">💳 Pay Now — Card / GCash / Maya</a>' +
+      '<div style="font-size:.72rem;color:var(--timber);margin-bottom:16px">🔒 Secured by PayMongo · Card details never stored</div>' +
+      '<div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:12px;font-size:.78rem;color:#166534">After paying, tap below to track your order.</div>' +
+    '</div>' +
+    '<button class="btn-primary mt-16" onclick="closePage(\'payment\');openPage(\'status\');startStatusPolling()">I\'ve Paid — Track My Order →</button>';
+
+  } catch(err) {
+    body.innerHTML = '<div class="status-card" style="text-align:center">' +
+      '<div style="font-size:2rem;margin-bottom:8px">⚠️</div>' +
+      '<div style="font-weight:700;color:var(--terra)">Payment setup failed</div>' +
+      '<div style="font-size:.82rem;color:var(--timber);margin-top:6px">' + esc(err.message) + '</div>' +
+      '<div style="font-size:.78rem;color:var(--timber);margin-top:10px">Please ask staff for another payment method.</div>' +
+    '</div>' +
+    '<button class="btn-outline mt-16" onclick="renderPaymentPage()">← Try Another Method</button>';
   }
 }
 
