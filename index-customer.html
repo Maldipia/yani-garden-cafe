@@ -1376,8 +1376,6 @@ async function initTableTokens() {
 const PAYMENT_METHODS = [
   { id:'gcash', name:'GCash', icon:'💚', acctName:(window.ACCOUNT_NAME||(window.ACCOUNT_NAME||'LEGERYN PIA')), acctNum:'', img:'/images/pay-gcash.jpg' },
   { id:'instapay', name:'InstaPay', icon:'🏦', acctName:(window.ACCOUNT_NAME||(window.ACCOUNT_NAME||'LEGERYN PIA')), acctNum:'', img:'/images/pay-instapay.jpg' },
-  { id:'bdo', name:'BDO', icon:'🔵', acctName:(window.ACCOUNT_NAME||(window.ACCOUNT_NAME||'LEGERYN PIA')), acctNum:(window.BDO_ACCOUNT||'0126-000-62617'), img:'/images/pay-bdo.jpg' },
-  { id:'bpi', name:'BPI', icon:'🔴', acctName:(window.ACCOUNT_NAME||(window.ACCOUNT_NAME||'LEGERYN PIA')), acctNum:(window.BPI_ACCOUNT||'1539-235-628'), img:'/images/pay-bpi.png' },
   { id:'unionbank', name:'UnionBank', icon:'🟠', acctName:(window.ACCOUNT_NAME||(window.ACCOUNT_NAME||'LEGERYN PIA')), acctNum:(window.UNIONBANK_ACCOUNT||'1093-2100-0528'), img:'/images/pay-unionbank.jpg' }
 ];
 
@@ -2560,8 +2558,6 @@ function showQRPayment() {
     var methods = [
       { id:'gcash', badge:'G', cls:'gcash', label:'GCash', desc:'Scan with GCash app' },
       { id:'instapay', badge:'IP', cls:'instapay', label:'InstaPay', desc:'Any InstaPay-enabled bank' },
-      { id:'bdo', badge:'BDO', cls:'bdo', label:'BDO', desc:'BDO bank transfer' },
-      { id:'bpi', badge:'BPI', cls:'bpi', label:'BPI', desc:'BPI bank transfer' },
       { id:'unionbank', badge:'UB', cls:'union', label:'UnionBank', desc:'UnionBank transfer' }
     ];
 
