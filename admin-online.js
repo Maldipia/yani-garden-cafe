@@ -1115,20 +1115,30 @@ function _settingsPayment() {
   var url = s.PAYMENT_IMAGE_URL || '';
   var showImg = !!url;
   var mode = s.CARD_PAYMENT_MODE || 'qr';
+  var isQR       = mode === 'qr';
   var isPaymongo = mode === 'paymongo';
   var previewHtml = showImg
     ? '<img id="payImgPreview" src="' + url + '" onerror="this.style.display=\'none\'" style="width:90px;height:90px;object-fit:contain;border-radius:8px;border:1.5px solid var(--mist);background:#f8f8f8">'
     : '<div id="payImgPreview" style="width:90px;height:90px;border-radius:8px;border:2px dashed var(--mist);display:flex;align-items:center;justify-content:center;font-size:.65rem;color:var(--timber);text-align:center">No<br>image</div>';
+  function toggleRow(label, sub, icon, isOn, onMode, offMode) {
+    var bg   = isOn ? 'var(--forest)' : '#ccc';
+    var knob = isOn ? 'translateX(20px)' : 'translateX(2px)';
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid var(--mist-light)">'
+      + '<div>'
+      + '<div style="font-weight:700;font-size:.88rem;color:var(--ink)">' + icon + ' ' + label + '</div>'
+      + '<div style="font-size:.72rem;color:var(--timber);margin-top:2px">' + sub + '</div>'
+      + '</div>'
+      + '<div onclick="setPaymentMode(\'' + (isOn ? offMode : onMode) + '\')" style="width:44px;height:24px;border-radius:12px;background:' + bg + ';cursor:pointer;position:relative;transition:background .2s;flex-shrink:0">'
+      + '<div style="position:absolute;top:2px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.2);transition:transform .2s;transform:' + knob + '"></div>'
+      + '</div>'
+      + '</div>';
+  }
+
   return '<div class="s-card">'
     + '<div class="s-card-title">💳 Payment Mode</div>'
-    + '<div style="font-size:.75rem;color:var(--timber);margin-bottom:14px">Choose how customers pay for Online QR Payment orders.</div>'
-    + '<div style="display:flex;gap:10px;margin-bottom:4px">'
-    + '<button onclick="setPaymentMode(\'qr\')" style="flex:1;padding:12px;border-radius:10px;border:2px solid ' + (!isPaymongo ? 'var(--forest)' : 'var(--mist)') + ';background:' + (!isPaymongo ? 'var(--forest)' : 'transparent') + ';color:' + (!isPaymongo ? '#fff' : 'var(--timber)') + ';font-weight:700;font-size:.82rem;cursor:pointer;transition:all .2s">'
-    + '🖼️ QR Image<br><span style="font-size:.7rem;font-weight:400;opacity:.8">Upload your own QR</span></button>'
-    + '<button onclick="setPaymentMode(\'paymongo\')" style="flex:1;padding:12px;border-radius:10px;border:2px solid ' + (isPaymongo ? 'var(--forest)' : 'var(--mist)') + ';background:' + (isPaymongo ? 'var(--forest)' : 'transparent') + ';color:' + (isPaymongo ? '#fff' : 'var(--timber)') + ';font-weight:700;font-size:.82rem;cursor:pointer;transition:all .2s">'
-    + '💳 PayMongo<br><span style="font-size:.7rem;font-weight:400;opacity:.8">Card / GCash / Maya</span></button>'
-    + '</div>'
-    + '<div style="font-size:.7rem;color:var(--timber);margin-bottom:0">Current: <strong>' + (isPaymongo ? '💳 PayMongo — card, GCash, Maya via secure checkout' : '🖼️ QR Image — customer scans and uploads proof') + '</strong></div>'
+    + '<div style="font-size:.75rem;color:var(--timber);margin-bottom:16px">Only one can be active. Tap the toggle to switch. Changes take effect immediately.</div>'
+    + toggleRow('QR Image', 'Customer scans your uploaded QR and uploads payment proof', '🖼️', isQR, 'qr', 'paymongo')
+    + toggleRow('PayMongo', 'Secure online checkout — Credit/Debit Card, GCash, Maya', '💳', isPaymongo, 'paymongo', 'qr')
     + '</div>'
     + '<div class="s-card">'
     + '<div class="s-card-title">💳 Payment Image</div>'
