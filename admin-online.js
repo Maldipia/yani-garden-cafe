@@ -1112,45 +1112,25 @@ function _settingsGeneral() {
 
 function _settingsPayment() {
   var s = _settings;
-  function qrCard(title, code, urlKey, accountKey, accountLabel) {
-    var url = s[urlKey] || '';
-    var acc = accountKey ? (s[accountKey] || '') : '';
-    var inputId = 's_' + urlKey.toLowerCase();
-    var fileId = 'qrfile_' + code.toLowerCase();
-    var previewId = 'qrprev_' + code.toLowerCase();
-    // Google Drive URLs don't render in img tags — only warn for actual Drive URLs
-    var isDrive = url && url.indexOf('drive.google.com') >= 0;
-    var isSupabase = url && url.indexOf('supabase.co') >= 0;
-    var isLocal = url && (url.startsWith('/images/') || url.startsWith('/api/'));
-    isDrive = isDrive && !isSupabase && !isLocal; // don't warn if already migrated
-    var showImg = url && !isDrive;
-    return '<div class="s-card">'
-      + '<div class="s-card-title">' + title + '</div>'
-      + (isDrive ? '<div id="drivewarn_' + code.toLowerCase() + '" style="background:#FEF3C7;border:1px solid #FCD34D;border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:.75rem;color:#92400E">⚠️ Your current QR is stored on Google Drive which can\'t preview here. Use <strong>Upload Image</strong> to move it to the server.</div>' : '')
-      + '<div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:12px">'
-      + '<div style="flex-shrink:0">'
-      + '<img id="' + previewId + '" src="' + (showImg ? url : '') + '" onerror="this.style.display=\'none\';var ph=document.getElementById(\'' + previewId + '_placeholder\');if(ph)ph.style.display=\'flex\';" style="width:80px;height:80px;object-fit:contain;border-radius:8px;border:1.5px solid var(--mist);background:#f8f8f8;display:' + (showImg ? 'block' : 'none') + '">'
-      + '<div id="' + previewId + '_placeholder" style="width:80px;height:80px;border-radius:8px;border:2px dashed var(--mist);display:' + (showImg ? 'none' : 'flex') + ';align-items:center;justify-content:center;font-size:.65rem;color:var(--timber);text-align:center;flex-direction:column">📷<br>' + (isDrive ? 'Drive URL' : 'No QR') + '</div>'
-      + '</div>'
-      + '<div style="flex:1">'
-      + '<div class="s-field" style="margin-bottom:8px"><label>QR Code Image URL</label>'
-      + '<input type="url" id="' + inputId + '" value="' + (url||'') + '" placeholder="https://..." oninput="updateQrPreview(\'' + previewId + '\',this.value)">'
-
-      + '</div>'
-      + '<input type="file" id="' + fileId + '" accept="image/png,image/jpeg,image/webp" style="display:none" onchange="uploadQrCode(\'' + code + '\',\'' + inputId + '\',\'' + previewId + '\',this)">'
-      + '<button onclick="document.getElementById(\'' + fileId + '\').click()" style="padding:7px 14px;background:var(--forest);color:#fff;border:none;border-radius:8px;font-size:.78rem;font-weight:700;cursor:pointer">⬆️ Upload Image</button>'
-      + '<span id="' + fileId + '_status" style="font-size:.72rem;color:var(--timber);margin-left:8px"></span>'
-      + '</div>'
-      + '</div>'
-      + (accountKey ? '<div class="s-field"><label>' + (accountLabel||'Account Number') + '</label><input type="text" id="s_' + accountKey.toLowerCase() + '" value="' + acc + '"></div>' : '')
-      + '</div>';
-  }
-  return qrCard('📱 GCash', 'GCASH', 'GCASH_QR_URL', 'GCASH_NUMBER', 'GCash Number')
-    + qrCard('🏦 InstaPay', 'INSTAPAY', 'INSTAPAY_QR_URL', null, null)
-    + qrCard('🏛️ BDO', 'BDO', 'BDO_QR_URL', 'BDO_ACCOUNT', 'BDO Account Number')
-    + qrCard('🏛️ BPI', 'BPI', 'BPI_QR_URL', 'BPI_ACCOUNT', 'BPI Account Number')
-    + qrCard('🏛️ UnionBank', 'UNIONBANK', 'UNIONBANK_QR_URL', 'UNIONBANK_ACCOUNT', 'UnionBank Account Number')
-    + '<button class="s-save-btn" onclick="savePaymentSettings(this)">💾 Save Payment Settings</button>';
+  var url = s.PAYMENT_IMAGE_URL || '';
+  var showImg = !!url;
+  var previewHtml = showImg
+    ? '<img id="payImgPreview" src="' + url + '" onerror="this.style.display=\'none\'" style="width:90px;height:90px;object-fit:contain;border-radius:8px;border:1.5px solid var(--mist);background:#f8f8f8">'
+    : '<div id="payImgPreview" style="width:90px;height:90px;border-radius:8px;border:2px dashed var(--mist);display:flex;align-items:center;justify-content:center;font-size:.65rem;color:var(--timber);text-align:center">No<br>image</div>';
+  return '<div class="s-card">'
+    + '<div class="s-card-title">💳 Payment Image</div>'
+    + '<div style="font-size:.75rem;color:var(--timber);margin-bottom:14px">Upload once — customers see this full-width when they pay at checkout. Replace anytime.</div>'
+    + '<div style="display:flex;gap:14px;align-items:flex-start">'
+    + '<div style="flex-shrink:0">' + previewHtml + '</div>'
+    + '<div style="flex:1">'
+    + '<input type="url" id="s_payment_image_url" value="' + url + '" placeholder="Paste URL or upload →" style="width:100%;padding:7px 10px;border:1.5px solid var(--mist);border-radius:8px;font-size:.78rem;box-sizing:border-box;font-family:var(--font-body);margin-bottom:8px">'
+    + '<div style="display:flex;align-items:center;gap:8px">'
+    + '<label style="padding:7px 14px;background:var(--forest);color:#fff;border-radius:8px;font-size:.78rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:5px">⬆️ Upload Image<input type="file" accept="image/png,image/jpeg,image/webp" onchange="uploadPaymentImage(this)" style="display:none"></label>'
+    + '<span id="payImgStatus" style="font-size:.72rem;color:var(--timber)"></span>'
+    + '</div>'
+    + '<div style="font-size:.67rem;color:var(--timber);margin-top:6px">PNG/JPG/WEBP · Max 5MB · Shown full-width to customers at checkout</div>'
+    + '</div></div></div>'
+    + '<button class="s-save-btn" onclick="savePaymentSettings(this)">💾 Save</button>';
 }
 
 async function uploadLogoImage(fileInput) {
@@ -1388,18 +1368,53 @@ async function saveGeneralSettings(btn) {
 }
 
 async function savePaymentSettings(btn) {
-  var fields = {
-    GCASH_QR_URL: document.getElementById('s_gcash_qr_url').value,
-    GCASH_NUMBER: document.getElementById('s_gcash_number').value,
-    INSTAPAY_QR_URL: document.getElementById('s_instapay_qr_url').value,
-    BDO_QR_URL: document.getElementById('s_bdo_qr_url').value,
-    BDO_ACCOUNT: document.getElementById('s_bdo_account').value,
-    BPI_QR_URL: document.getElementById('s_bpi_qr_url').value,
-    BPI_ACCOUNT: document.getElementById('s_bpi_account').value,
-    UNIONBANK_QR_URL: document.getElementById('s_unionbank_qr_url').value,
-    UNIONBANK_ACCOUNT: document.getElementById('s_unionbank_account').value,
+  var urlEl = document.getElementById('s_payment_image_url');
+  if (!urlEl) return;
+  var fields = { PAYMENT_IMAGE_URL: urlEl.value };
+  await _saveSettingsMap(fields, 'Payment image saved ✅', btn);
+}
+
+async function uploadPaymentImage(fileInput) {
+  var statusEl = document.getElementById('payImgStatus');
+  var file = fileInput.files[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { if(statusEl){statusEl.textContent='❌ Max 5MB';statusEl.style.color='#e04444';} return; }
+  if (statusEl) { statusEl.textContent = 'Uploading…'; statusEl.style.color = 'var(--timber)'; }
+
+  var reader = new FileReader();
+  reader.onload = async function(e) {
+    try {
+      var ext = file.name.split('.').pop().toLowerCase() || 'jpg';
+      var resp = await fetch('/api/upload-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: e.target.result, ext: ext, code: 'PAYMENT_IMAGE' })
+      });
+      var result = await resp.json();
+      if (!resp.ok || !result.path) throw new Error(result.error || 'Upload failed');
+      var url = result.path;
+      var urlEl = document.getElementById('s_payment_image_url');
+      if (urlEl) urlEl.value = url;
+      // Update preview
+      var prev = document.getElementById('payImgPreview');
+      if (prev) {
+        if (prev.tagName === 'IMG') { prev.src = url; }
+        else {
+          var img = document.createElement('img');
+          img.id = 'payImgPreview';
+          img.src = url;
+          img.style.cssText = 'width:90px;height:90px;object-fit:contain;border-radius:8px;border:1.5px solid var(--mist);background:#f8f8f8';
+          prev.parentNode.replaceChild(img, prev);
+        }
+      }
+      // Auto-save to DB immediately
+      await _saveSettingsMap({ PAYMENT_IMAGE_URL: url }, 'Payment image saved ✅');
+      if (statusEl) { statusEl.textContent = '✅ Saved!'; statusEl.style.color = '#059669'; }
+    } catch(err) {
+      if (statusEl) { statusEl.textContent = '❌ ' + err.message; statusEl.style.color = '#e04444'; }
+    }
   };
-  await _saveSettingsMap(fields, 'Payment settings saved ✅', btn);
+  reader.readAsDataURL(file);
 }
 
 async function saveBrandingSettings(btn) {

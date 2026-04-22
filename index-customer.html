@@ -2551,48 +2551,31 @@ function showQRPayment() {
 
   function renderMethodsTab() {
     var h = '';
+    var payImgUrl = (window.APP_CONFIG && window.APP_CONFIG.PAYMENT_IMAGE_URL) || '';
 
-    h += '<div style="font-size:.78rem;color:var(--timber);text-align:center;margin-bottom:16px">Tap a payment method to see its QR code</div>';
+    if (payImgUrl) {
+      h += '<div style="border-radius:14px;overflow:hidden;border:1.5px solid var(--mist);background:#f5f5f7;margin-bottom:16px">'
+        + '<img src="' + payImgUrl + '" alt="Payment details" style="width:100%;display:block" '
+        + 'onerror="this.parentElement.innerHTML=\'<div style=\"padding:24px;text-align:center;color:var(--timber)\">⚠️ Payment image unavailable. Please ask staff.</div>\'">'
+        + '</div>';
+    } else {
+      h += '<div style="padding:24px;text-align:center;background:var(--mist-light);border-radius:14px;margin-bottom:16px;font-size:.82rem;color:var(--timber)">'
+        + '⚠️ No payment image set. Please ask staff for payment details.</div>';
+    }
 
-    // Build accordion items
-    var methods = [
-      { id:'gcash', badge:'G', cls:'gcash', label:'GCash', desc:'Scan with GCash app' },
-      { id:'instapay', badge:'IP', cls:'instapay', label:'InstaPay', desc:'Any InstaPay-enabled bank' },
-      { id:'unionbank', badge:'UB', cls:'union', label:'UnionBank', desc:'UnionBank transfer' }
-    ];
+    h += '<div class="pay-cta-banner" onclick="switchPayTab(\'upload\')">'
+      + '<strong>📤 Already Paid? Upload Your Proof</strong>'
+      + '<span>Submit your payment screenshot for fast verification</span>'
+      + '</div>';
 
-    methods.forEach(function(m) {
-      var pm = PAYMENT_METHODS.find(function(p){return p.id===m.id});
-      h += '<div class="pay-accord" id="payAccord_' + m.id + '" onclick="togglePayAccord(\'' + m.id + '\')">' +
-        '<div class="pay-accord-header">' +
-          '<div class="pay-card-badge ' + m.cls + '">' + m.badge + '</div>' +
-          '<div class="pay-accord-info"><strong>' + m.label + '</strong><span>' + esc(pm.acctName) + (pm.acctNum ? ' · ' + pm.acctNum : '') + '</span></div>' +
-          '<div class="pay-accord-arrow">▾</div>' +
-        '</div>' +
-        '<div class="pay-accord-body" id="payBody_' + m.id + '">' +
-          '<div class="pay-card-qr"><img src="' + pm.img + '" alt="' + m.label + ' QR" onerror="this.parentElement.innerHTML=\'<div style=padding:20px;color:var(--timber)>QR unavailable</div>\'"></div>' +
-          (pm.acctNum ? '<div style="text-align:center;margin-top:8px"><span style="font-size:.82rem;color:var(--timber)">' + esc(pm.acctNum) + '</span> <button class="pay-card-copy" onclick="event.stopPropagation();copyAcct(\'' + pm.acctNum + '\',this)">📋 Copy</button></div>' : '') +
-          '<div style="font-size:.72rem;color:var(--timber);text-align:center;margin-top:6px">' + m.desc + '</div>' +
-        '</div>' +
-      '</div>';
-    });
-
-    // CTA to switch to upload
-    h += '<div class="pay-cta-banner" onclick="switchPayTab(\'upload\')">' +
-      '<strong>📤 Already Paid? Upload Your Proof</strong>' +
-      '<span>Submit your payment screenshot for fast verification</span>' +
-    '</div>';
-
-    // Skip option
-    h += '<div style="margin-top:20px;padding:16px;background:var(--mist-light);border-radius:var(--r-md);text-align:center">' +
-      '<div style="font-size:1.2rem;margin-bottom:6px">☕</div>' +
-      '<div style="font-size:.82rem;font-weight:600;color:var(--forest);margin-bottom:4px">Your order is being prepared</div>' +
-      '<div style="font-size:.75rem;color:var(--timber);line-height:1.5">Please complete your payment above.<br>Once verified, your order will be served to your table.</div>' +
-    '</div>';
+    h += '<div style="margin-top:16px;padding:14px;background:var(--mist-light);border-radius:var(--r-md);text-align:center">'
+      + '<div style="font-size:1.1rem;margin-bottom:6px">☕</div>'
+      + '<div style="font-size:.82rem;font-weight:600;color:var(--forest);margin-bottom:4px">Your order is being prepared</div>'
+      + '<div style="font-size:.75rem;color:var(--timber);line-height:1.5">Scan the QR above, send the exact amount, then tap Upload Proof.</div>'
+      + '</div>';
 
     return h;
   }
-
   function renderUploadTab() {
     var h = '';
 
