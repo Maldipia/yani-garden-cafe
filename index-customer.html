@@ -2476,31 +2476,70 @@ function renderPaymentPage() {
 async function selectPayment(method) {
   state.paymentMethod = method;
 
-  if (method === 'card' || method === 'cash') {
-    var isCash = method === 'cash';
-    var label  = method === 'card' ? 'Card' : 'Cash';
-
+  if (method === 'cash') {
     var body = document.getElementById('paymentBody');
-    var cashNote = isCash
-      ? '<div style="margin-top:16px;background:#FFFBEB;border:1.5px solid #F59E0B;border-radius:14px;padding:16px;text-align:center">' +
-          '<div style="font-size:1.5rem;margin-bottom:8px">☕</div>' +
-          '<div style="font-size:.9rem;font-weight:700;color:#92400E;margin-bottom:6px">Sit back and relax!</div>' +
-          '<div style="font-size:.82rem;color:#78350F;line-height:1.7">' +
-            'One of our team members will come to your table shortly to collect your cash payment. ' +
-            'Your order will be processed right after. Thank you for dining with us!' +
-          '</div>' +
-        '</div>'
-      : '<div style="margin-top:14px;background:#F0FDF4;border:1.5px solid #86EFAC;border-radius:14px;padding:14px;text-align:center;font-size:.82rem;color:#166534;line-height:1.6">' +
-          '💳 Our team will bring a card terminal to your table in just a moment.<br>Sit tight — we\'ll have you sorted in no time!' +
-        '</div>';
-
     body.innerHTML = '<div class="status-card">' +
-      '<div class="status-icon">' + (method==='card'?'💳':'💵') + '</div>' +
-      '<div class="status-title">' + label + ' Payment</div>' +
-      cashNote +
+      '<div class="status-icon">💵</div>' +
+      '<div class="status-title">Cash Payment</div>' +
+      '<div style="margin-top:16px;background:#FFFBEB;border:1.5px solid #F59E0B;border-radius:14px;padding:16px;text-align:center">' +
+        '<div style="font-size:1.5rem;margin-bottom:8px">☕</div>' +
+        '<div style="font-size:.9rem;font-weight:700;color:#92400E;margin-bottom:6px">Sit back and relax!</div>' +
+        '<div style="font-size:.82rem;color:#78350F;line-height:1.7">One of our team members will come to your table shortly to collect your cash payment.</div>' +
+      '</div>' +
       '<div class="status-order-id" style="margin-top:14px">' + esc(state.orderId) + '</div>' +
       '<div style="font-size:1.1rem;font-weight:700;color:var(--terra);margin-top:4px">' + peso(state.orderTotal) + '</div></div>' +
       '<button class="btn-primary mt-16" onclick="closePage(\'payment\');openPage(\'status\');startStatusPolling()">Track Your Order →</button>';
+
+  } else if (method === 'card') {
+    // Create PayMongo payment link
+    var body = document.getElementById('paymentBody');
+    body.innerHTML = '<div class="status-card" style="text-align:center">' +
+      '<div style="font-size:2rem;margin-bottom:10px">💳</div>' +
+      '<div style="font-weight:700;font-size:1rem;margin-bottom:6px">Setting up secure payment…</div>' +
+      '<div style="font-size:.82rem;color:var(--timber)">Please wait</div>' +
+      '<div style="margin-top:14px;width:32px;height:32px;border:3px solid var(--mist);border-top-color:var(--forest);border-radius:50%;animation:spin .8s linear infinite;margin:16px auto 0"></div>' +
+    '</div>';
+
+    try {
+      var pmResp = await fetch('/api/paymongo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'createPaymentLink',
+          orderId: state.orderId,
+          amount: state.orderTotal,
+          description: 'YANI Garden Cafe — Table ' + state.tableNo,
+          customerName: state.customerName || 'Guest',
+        })
+      });
+      var pmData = await pmResp.json();
+
+      if (!pmData.ok || !pmData.checkoutUrl) {
+        throw new Error(pmData.error || 'Could not create payment link');
+      }
+
+      // Show pay button linking to PayMongo checkout
+      body.innerHTML = '<div class="status-card" style="text-align:center">' +
+        '<div style="font-size:1.8rem;margin-bottom:8px">💳</div>' +
+        '<div style="font-weight:700;font-size:1rem;margin-bottom:4px">Pay Securely Online</div>' +
+        '<div style="font-size:1.3rem;font-weight:700;color:var(--terra);margin:10px 0">' + peso(state.orderTotal) + '</div>' +
+        '<div style="font-size:.78rem;color:var(--timber);margin-bottom:16px">' + esc(state.orderId) + ' · Table ' + esc(state.tableNo) + '</div>' +
+        '<a href="' + pmData.checkoutUrl + '" target="_blank" rel="noopener" style="display:block;background:var(--forest);color:#fff;padding:14px;border-radius:12px;font-weight:700;font-size:.95rem;text-decoration:none;margin-bottom:12px">💳 Pay Now via Card / GCash / Maya</a>' +
+        '<div style="font-size:.72rem;color:var(--timber);margin-bottom:16px">🔒 Secured by PayMongo · Your card details are never stored</div>' +
+        '<div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:12px;font-size:.78rem;color:#166534">After paying, tap the button below to track your order.</div>' +
+      '</div>' +
+      '<button class="btn-primary mt-16" onclick="closePage(\'payment\');openPage(\'status\');startStatusPolling()">I\'ve Paid — Track My Order →</button>';
+
+    } catch(err) {
+      body.innerHTML = '<div class="status-card" style="text-align:center">' +
+        '<div style="font-size:2rem;margin-bottom:8px">⚠️</div>' +
+        '<div style="font-weight:700;color:var(--terra)">Payment setup failed</div>' +
+        '<div style="font-size:.82rem;color:var(--timber);margin-top:6px">' + esc(err.message) + '</div>' +
+        '<div style="font-size:.78rem;color:var(--timber);margin-top:10px">Please ask staff for assistance or choose another payment method.</div>' +
+      '</div>' +
+      '<button class="btn-outline mt-16" onclick="renderPaymentPage()">← Try Another Method</button>';
+    }
+
   } else {
     showQRPayment();
   }
