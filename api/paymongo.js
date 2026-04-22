@@ -63,6 +63,24 @@ export default async function handler(req, res) {
   // ── Webhook from PayMongo ─────────────────────────────────
   // PayMongo calls this URL directly — no action param
   if (req.method === 'POST' && req.headers['paymongo-signature']) {
+    // Verify webhook signature
+    const WEBHOOK_SECRET = process.env.PAYMONGO_WEBHOOK_SECRET || '';
+    const sigHeader = req.headers['paymongo-signature'] || '';
+    if (WEBHOOK_SECRET && sigHeader) {
+      // PayMongo signature format: t=timestamp,te=hash,li=hash
+      const rawBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+      const parts   = Object.fromEntries(sigHeader.split(',').map(p => p.split('=')));
+      const timestamp = parts.t || '';
+      const toSign    = timestamp + '.' + rawBody;
+      const crypto    = await import('crypto');
+      const expected  = crypto.createHmac('sha256', WEBHOOK_SECRET).update(toSign).digest('hex');
+      const received  = parts.te || parts.li || '';
+      if (received && expected !== received) {
+        console.warn('PayMongo webhook signature mismatch');
+        return res.status(400).json({ error: 'Invalid signature' });
+      }
+    }
+
     const event = req.body;
     const type  = event?.data?.attributes?.type;
     const attrs = event?.data?.attributes?.data?.attributes || {};
