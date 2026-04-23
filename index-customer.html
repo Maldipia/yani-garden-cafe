@@ -2159,150 +2159,24 @@ function cartQty(idx, delta) {
 // ══════════════════════════════════════════════════════════
 // CHECKOUT PAGE
 // ══════════════════════════════════════════════════════════
-function _yaniPadHTML() {
-  var s = '';
-  var btn = 'padding:16px;font-size:1.3rem;font-weight:700;background:#F9FAFB;border:1.5px solid var(--mist);border-radius:10px;cursor:pointer;-webkit-tap-highlight-color:transparent;color:var(--forest-deep);font-family:var(--font-body)';
-  ['1','2','3','4','5','6','7','8','9','','0',''].forEach(function(d) {
-    if (!d) { s += '<div></div>'; return; }
-    s += '<button type="button" onclick="_yaniTap(' + "'" + d + "'" + ')" style="' + btn + '">' + d + '</button>';
-  });
-  return s;
+function _yaniCheck() {
+  var input = document.getElementById('yaniCardInput');
+  if (!input) return;
+  var digits = input.value.replace(/\D/g,'').substring(0,4);
+  state._yaniDigits = digits;
+  if (digits.length === 4) validateYaniCard();
+  else { state.yaniCardValid=false; state._yaniCardStatus=''; renderCheckoutPage(); }
 }
 
-function renderCheckoutPage() {
-  var subtotal = getCartSubtotal();
-
-  var html = '<div class="mb-16"><div class="opt-label">Order Type</div>' +
-    '<div class="order-type-group">' +
-      '<button class="order-type-btn dine-in-btn' + (state.orderType==='dine-in'?' active':'') + '" onclick="setOrderType(\'dine-in\')">' +
-        '<div class="ot-icon">🍽️</div><div class="ot-label">Dine-In</div><div class="ot-sub">+10% service charge</div>' +
-      '</button>' +
-      '<button class="order-type-btn take-out-btn' + (state.orderType==='take-out'?' active':'') + '" onclick="setOrderType(\'take-out\')">' +
-        '<div class="ot-icon">🥡</div><div class="ot-label">Take-Out</div><div class="ot-sub">No service charge</div>' +
-      '</button>' +
-    '</div></div>';
-
-  // Items summary
-  html += '<div class="mb-16" style="background:var(--white);border-radius:var(--r-md);padding:14px;box-shadow:var(--shadow-sm)">';
-  state.cart.forEach(function(c) {
-    var meta = '';
-    if (c.sizeLabel) meta += c.sizeLabel;
-    if (c.sugarLabel) meta += (meta ? ' | ' : '') + c.sugarLabel;
-    if (c.addons && c.addons.length) meta += (meta ? ' | ' : '') + c.addons.map(function(a){return '+'+a.name;}).join(', ');
-    html += '<div class="summary-row"><span>' + esc(c.name) + (meta ? '<br><small style="color:var(--timber)">' + esc(meta) + '</small>' : '') + ' × ' + c.qty + '</span><span>' + peso(c.price * c.qty) + '</span></div>';
-  });
-
-  var svc = state.orderType === 'dine-in' ? Math.round(subtotal * SERVICE_CHARGE_RATE * 100) / 100 : 0;
-  var total = subtotal + svc;
-
-  html += '<div class="divider"></div>' +
-    '<div class="summary-row"><span>Subtotal</span><span>' + peso(subtotal) + '</span></div>';
-  if (svc > 0) html += '<div class="summary-row"><span>Service Charge (10%)</span><span>' + peso(svc) + '</span></div>';
-  html += '<div class="summary-row total"><span>Total</span><span class="sr-val">' + peso(total) + '</span></div>';
-  html += '</div>';
-
-  // Optional fields
-  html += '<div class="form-group"><label class="form-label">Your Name <span style="color:#e04444">*</span></label>' +
-    '<input class="form-input" id="custName" placeholder="e.g. Juan" value="' + esc(state.customerName) + '"></div>' +
-    '<div class="form-group"><label class="form-label">Special Instructions (optional)</label>' +
-    '<textarea class="form-textarea" id="custNotes" placeholder="e.g. Extra hot, no ice...">' + esc(state.orderNotes) + '</textarea></div>';
-
-  // Yani Card discount (optional)
-  var yaniDisc = 0;
-  if (state.yaniCardValid && state.yaniCardNumber) {
-    yaniDisc = Math.round(total * 0.10 * 100) / 100;
-    total = Math.max(0, total - yaniDisc);
-  }
-  var yaniStatus = state._yaniCardStatus || '';
-  // Build tap-pad display
-  var padDigits = state._yaniDigits || '';
-  var padDisplay = padDigits + '____'.slice(padDigits.length);
-  var padColor = state.yaniCardValid ? '#065F46' : 'var(--forest-deep)';
-
-  html += '<div class="form-group" style="background:var(--white);border-radius:var(--r-md);padding:14px;box-shadow:var(--shadow-sm)">'
-    + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">'
-    + '<span style="font-size:1rem">💳</span>'
-    + '<label class="form-label" style="margin:0;font-weight:700">Yani Card <span style="font-weight:400;color:var(--timber);font-size:.78rem">(optional — 10% off)</span></label>'
-    + '</div>'
-    + '<div style="font-size:.78rem;color:var(--timber);margin-bottom:10px">Enter the 4-digit number on your card:</div>'
-    + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'
-    + '<div style="flex:1;background:#F9FAFB;border:2px solid ' + (state.yaniCardValid ? '#065F46' : 'var(--mist)') + ';border-radius:10px;padding:12px 16px;text-align:center">'
-    + '<span style="font-size:.75rem;color:#9CA3AF;font-weight:500">YANI-</span>'
-    + '<span style="font-size:1.6rem;font-weight:900;font-family:monospace;color:' + padColor + ';letter-spacing:4px">' + padDisplay + '</span>'
-    + '</div>'
-    + '<button onclick="_yaniClear()" style="padding:12px 16px;background:#F3F4F6;border:1.5px solid var(--mist);border-radius:10px;font-size:1.1rem;cursor:pointer;-webkit-tap-highlight-color:transparent">⌫</button>'
-    + '</div>'
-    + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px">'
-    + _yaniPadHTML()
-    + '</div>'
-    + (yaniStatus ? '<div style="font-size:.82rem;margin-top:4px;font-weight:600;color:' + (state.yaniCardValid?'#065F46':'#B5443A') + '">' + esc(yaniStatus) + '</div>' : '')
-    + (state.yaniCardValid && yaniDisc > 0 ? '<div style="margin-top:10px;background:#F0FDF4;border-radius:8px;padding:10px 14px;font-size:.85rem;color:#065F46;font-weight:700">🎉 10% discount — you save ' + peso(yaniDisc) + '!</div>' : '')
-    + '</div>';
-
-  if (state.yaniCardValid && yaniDisc > 0) {
-    html += '<div style="background:var(--white);border-radius:var(--r-md);padding:12px 14px;box-shadow:var(--shadow-sm);margin-bottom:8px">'
-      + '<div class="summary-row"><span>Yani Card Discount (10%)</span><span style="color:#065F46;font-weight:700">−' + peso(yaniDisc) + '</span></div>'
-      + '<div class="summary-row total"><span>Total After Discount</span><span class="sr-val">' + peso(total) + '</span></div>'
-      + '</div>';
-  }
-
-  // Payment method — required before placing
-  var pmOpts = [{k:'cash',ico:'💵',lbl:'Cash'},{k:'gcash',ico:'📱',lbl:'GCash/QR'},{k:'card',ico:'💳',lbl:'Card'}];
-  var pmHtml = '<div class="form-group"><label class="form-label" style="font-weight:700;font-size:.88rem">Mode of Payment <span style="color:#e04444">*</span></label><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:6px">';
-  pmOpts.forEach(function(pm){
-    var sel = state.checkoutPayMethod === pm.k;
-    pmHtml += '<button onclick="setCheckoutPay(\'' + pm.k + '\')" style="padding:10px 4px;font-size:.8rem;border-radius:10px;border:' + (sel?'2px solid var(--forest);background:var(--forest);color:#fff':'1.5px solid var(--mist);background:var(--white);color:var(--forest-deep)') + ';cursor:pointer;font-family:var(--font-body)">' + pm.ico + '<br>' + pm.lbl + '</button>';
-  });
-  pmHtml += '</div></div>';
-  html += pmHtml;
-
-  var gcash = state.checkoutPayMethod === 'gcash';
-  var btnLabel = gcash ? 'Pay via GCash — ' + peso(total) : 'Place Order — ' + peso(total);
-  // Store discounted total for placeOrder to use
-  state._checkoutTotal = total;
-  state._checkoutYaniDisc = yaniDisc;
-  var btnDis = !state.checkoutPayMethod ? ' disabled style="opacity:.45;cursor:not-allowed"' : '';
-  html += '<button class="btn-primary" id="placeOrderBtn" onclick="placeOrder()"' + btnDis + '>' + btnLabel + '</button>';
-
-  document.getElementById('checkoutBody').innerHTML = html;
-}
-
-function setOrderType(type) {
-  state.orderType = type;
-  renderCheckoutPage();
-}
-function setCheckoutPay(method) {
-  state.checkoutPayMethod = method;
-  renderCheckoutPage();
-}
-
-// ══════════════════════════════════════════════════════════
-// YANI CARD TAP PAD
-// ══════════════════════════════════════════════════════════
-function _yaniTap(d) {
-  if (!state._yaniDigits) state._yaniDigits = '';
-  if (state._yaniDigits.length >= 4) return;
-  state._yaniDigits += d;
-  state.yaniCardNumber = '';
-  state.yaniCardValid  = false;
-  state._yaniCardStatus = '';
-  renderCheckoutPage();
-  if (state._yaniDigits.length === 4) validateYaniCard(); // auto-validate on 4th digit
-}
-function _yaniClear() {
-  state._yaniDigits    = (state._yaniDigits || '').slice(0, -1);
-  state.yaniCardNumber = '';
-  state.yaniCardValid  = false;
-  state._yaniCardStatus = '';
-  renderCheckoutPage();
-}
 
 async function validateYaniCard() {
-  var digits  = state._yaniDigits || '';
-  var cardNum = digits ? 'YANI-' + digits.padStart(4,'0') : '';
+  var input = document.getElementById('yaniCardInput');
+  var digits = input ? input.value.replace(/\D/g,'').substring(0,4) : (state._yaniDigits || '');
+  state._yaniDigits = digits;
+  var cardNum = digits.length === 4 ? 'YANI-' + digits : '';
   state.yaniCardNumber = cardNum;
-  if (!cardNum) { state.yaniCardValid=false; state._yaniCardStatus=''; renderCheckoutPage(); return; }
-  state._yaniCardStatus = '⏳ Checking card…';
+  if (!cardNum) { state.yaniCardValid=false; state._yaniCardStatus='⚠️ Enter 4 digits'; renderCheckoutPage(); return; }
+  state._yaniCardStatus = '⏳ Checking…';
   state.yaniCardValid = false;
   renderCheckoutPage();
   try {
