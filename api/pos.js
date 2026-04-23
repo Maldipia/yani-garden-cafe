@@ -2573,7 +2573,10 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
 
     // ── changePin ──────────────────────────────────────────────────────────
     if (action === 'changePin') {
-      // Requires a valid JWT — all roles can change their own PIN, OWNER/ADMIN can change any
+      // REQUIRES VALID JWT — no legacy body.userId fallback allowed for PIN changes
+      if (!jwtUser) {
+        return res.status(403).json({ ok: false, error: 'A valid login token is required to change PINs' });
+      }
       const authCP = await checkAuth(['OWNER','ADMIN','CASHIER','KITCHEN']);
       if (!authCP.ok) return res.status(403).json({ ok: false, error: authCP.error });
 
@@ -2596,10 +2599,10 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       }
       const targetUser = targetR.data[0];
 
-      // Auth check: use the AUTHENTICATED JWT user's role — NOT body.userId (that was exploitable)
-      // authCP contains the validated JWT user
-      const requesterId = authCP.userId;          // from validated JWT — cannot be spoofed
-      const requesterRole = authCP.role;          // from validated JWT — cannot be spoofed
+      // Auth check: use jwtUser directly (guaranteed valid JWT from check above)
+      // NEVER use body.userId for role lookup — that was the original exploit
+      const requesterId = jwtUser.userId;         // from validated JWT — cannot be spoofed
+      const requesterRole = jwtUser.role;         // from validated JWT — cannot be spoofed
       let authorized = false;
 
       if (requesterRole === 'OWNER' || requesterRole === 'ADMIN') {
