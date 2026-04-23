@@ -2596,25 +2596,20 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       }
       const targetUser = targetR.data[0];
 
-      // Auth check:
-      // 1. OWNER/ADMIN changing any PIN (including their own) — always allowed, no currentPin needed
-      // 2. CASHIER/KITCHEN changing their own PIN — must provide currentPin
-      const requesterId = String(body.userId || '').trim();
+      // Auth check: use the AUTHENTICATED JWT user's role — NOT body.userId (that was exploitable)
+      // authCP contains the validated JWT user
+      const requesterId = authCP.userId;          // from validated JWT — cannot be spoofed
+      const requesterRole = authCP.role;          // from validated JWT — cannot be spoofed
       let authorized = false;
-      let requesterRole = null;
-
-      if (requesterId) {
-        const reqR = await supaFetch(
-          `${SUPABASE_URL}/rest/v1/staff_users?user_id=eq.${encodeURIComponent(requesterId)}&active=eq.true&select=role`
-        );
-        if (reqR.ok && reqR.data?.length) requesterRole = reqR.data[0].role;
-      }
 
       if (requesterRole === 'OWNER' || requesterRole === 'ADMIN') {
-        // OWNER/ADMIN can change any PIN — no current PIN required
+        // Only OWNER/ADMIN (verified via JWT) can change any PIN without currentPin
         authorized = true;
       } else if (currentPin) {
-        // Non-admin (or no userId sent) changing their own PIN — verify current PIN
+        // Non-admin changing their own PIN — must provide current PIN AND target must be themselves
+        if (targetUserId !== requesterId) {
+          return res.status(403).json({ ok: false, error: 'You can only change your own PIN' });
+        }
         authorized = await bcrypt.compare(currentPin, targetUser.pin_hash);
         if (!authorized) return res.status(403).json({ ok: false, error: 'Current PIN is incorrect' });
       }
