@@ -931,6 +931,15 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       const isTest = TEST_TABLES.includes(tableNo.toUpperCase()) ||
                      TEST_NAMES.includes(customerName.toLowerCase());
 
+      // Yani Card discount — declared here so accessible after the for loop
+      const yaniCardNum  = String(body.yaniCardNumber || '').trim().toUpperCase();
+      const yaniDiscount = (body.discountType === 'YANI_CARD' && yaniCardNum)
+        ? Math.round(total * 0.10 * 100) / 100
+        : 0;
+      const yaniTotal    = yaniDiscount > 0
+        ? Math.max(0, Math.round((total - yaniDiscount) * 100) / 100)
+        : null;
+
       let orderR, orderId, orderNo;
       for (let attempt = 0; attempt < 3; attempt++) {
         const seqR = await supaFetch(
@@ -945,15 +954,6 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
           if (pfxR.ok && pfxR.data && pfxR.data[0]) tenantPrefix = pfxR.data[0].value || ORDER_PREFIX;
         } catch(_) {}
         orderId = `${tenantPrefix}-${orderNo}`;
-
-        // Apply Yani Card discount at placement time if customer used one
-        const yaniCardNum  = String(body.yaniCardNumber || '').trim().toUpperCase();
-        const yaniDiscount = (body.discountType === 'YANI_CARD' && yaniCardNum)
-          ? Math.round(total * 0.10 * 100) / 100
-          : 0;
-        const yaniTotal    = yaniDiscount > 0
-          ? Math.max(0, Math.round((total - yaniDiscount) * 100) / 100)
-          : null;
 
         const orderRow = {
           order_id:          orderId,
