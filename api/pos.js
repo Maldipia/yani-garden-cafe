@@ -99,7 +99,7 @@ function buildReceiptHTML({ order, items, isBIR }) {
   const discountRow = (order.discount_amount > 0) ? `
     <tr>
       <td colspan="2" style="text-align:right;padding:4px 0;font-size:13px">
-        ${order.discount_type || 'Discount'}${order.discount_pax > 0 ? ` (${order.discount_pax} pax)` : ''}:
+        ${order.discount_type === 'YANI_CARD' ? '🌿 Yani Card (10%)' : order.discount_type === 'PWD' ? 'PWD Discount' : order.discount_type === 'SENIOR' ? 'Senior Discount' : (order.discount_type || 'Discount')}${order.discount_pax > 0 ? ` (${order.discount_pax} pax)` : ''}:
       </td>
       <td colspan="2" style="text-align:right;padding:4px 0;font-size:13px;color:#DC2626">
         -${fmt(order.discount_amount)}
@@ -946,20 +946,37 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
         } catch(_) {}
         orderId = `${tenantPrefix}-${orderNo}`;
 
+        // Apply Yani Card discount at placement time if customer used one
+        const yaniCardNum  = String(body.yaniCardNumber || '').trim().toUpperCase();
+        const yaniDiscount = (body.discountType === 'YANI_CARD' && yaniCardNum)
+          ? Math.round(total * 0.10 * 100) / 100
+          : 0;
+        const yaniTotal    = yaniDiscount > 0
+          ? Math.max(0, Math.round((total - yaniDiscount) * 100) / 100)
+          : null;
+
         const orderRow = {
-          order_id:       orderId,
-          order_no:       orderNo,
-          table_no:       tableNo,
-          customer_name:  customerName,
-          status:         'NEW',
-          order_type:     orderType,
-          subtotal:       subtotal,
-          service_charge: svcCharge,
-          vat_amount:     vatAmt,
-          total:          total,
-          notes:          notes,
-          source:         'QR',
-          is_test:        isTest,
+          order_id:          orderId,
+          order_no:          orderNo,
+          table_no:          tableNo,
+          customer_name:     customerName,
+          status:            'NEW',
+          order_type:        orderType,
+          subtotal:          subtotal,
+          service_charge:    svcCharge,
+          vat_amount:        vatAmt,
+          total:             total,
+          notes:             notes,
+          source:            'QR',
+          is_test:           isTest,
+          ...(yaniDiscount > 0 ? {
+            discount_type:    'YANI_CARD',
+            discount_pct:     10,
+            discount_amount:  yaniDiscount,
+            discounted_total: yaniTotal,
+            discount_note:    'Yani Card: ' + yaniCardNum,
+            payment_method:   'YANI_CARD',
+          } : {}),
         };
         orderR = await supa('POST', 'dine_in_orders', orderRow);
         if (orderR.ok) break; // success
