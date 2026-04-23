@@ -491,7 +491,7 @@ function openAddCardsModal() {
   m.innerHTML = '<div style="background:#fff;border-radius:16px;width:100%;max-width:380px;padding:24px">'
     + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">'
     + '<h3 style="font-size:1rem;font-weight:800;color:var(--forest-deep);margin:0">➕ Add New Cards</h3>'
-    + '<button onclick="document.getElementById('addCardsModal').remove()" style="background:var(--mist-light);border:none;border-radius:8px;padding:6px 12px;cursor:pointer">✕</button>'
+    + '<button onclick="document.getElementById(\'addCardsModal\').remove()" style="background:var(--mist-light);border:none;border-radius:8px;padding:6px 12px;cursor:pointer">✕</button>'
     + '</div>'
     + '<div style="background:var(--mist-light);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:.82rem;color:var(--timber)">'
     + 'Next card will be: <strong style="color:var(--forest-deep)">YANI-' + String(nextNum).padStart(4,'0') + '</strong>'
@@ -509,7 +509,7 @@ function openAddCardsModal() {
     + '<input type="radio" name="addCardsTier" value="mix"> Mix (50/50)</label>'
     + '</div>'
     + '<div style="display:flex;gap:8px">'
-    + '<button onclick="document.getElementById('addCardsModal').remove()" style="flex:1;padding:10px;background:var(--mist-light);border:none;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;color:var(--timber)">Cancel</button>'
+    + '<button onclick="document.getElementById(\'addCardsModal\').remove()" style="flex:1;padding:10px;background:var(--mist-light);border:none;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;color:var(--timber)">Cancel</button>'
     + '<button onclick="_submitAddCards(' + nextNum + ')" style="flex:1;padding:10px;background:var(--forest);color:#fff;border:none;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer">Create Cards</button>'
     + '</div>'
     + '</div>';
