@@ -1084,6 +1084,22 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
   width:100%; box-sizing:border-box;
 }
 
+.yani-pad-btn {
+  padding: 14px;
+  font-size: 1.3rem;
+  font-weight: 700;
+  background: var(--mist-light);
+  border: 1.5px solid var(--mist);
+  border-radius: 10px;
+  cursor: pointer;
+  color: var(--forest-deep);
+  font-family: var(--font-body);
+  transition: background .1s;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+.yani-pad-btn:active { background: var(--forest); color: #fff; }
+
 /* Hamburger for mobile */
 .sidebar-toggle {
   display:none; background:none; border:none; cursor:pointer;
@@ -1868,16 +1884,31 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
       <!-- Yani Card number (for YANI_CARD) -->
       <div id="coYaniCardSection" style="display:none;margin-bottom:10px">
         <label style="font-size:.78rem;font-weight:600;color:var(--forest-mid);display:block;margin-bottom:4px">Card Number <span style="color:#e04444">*</span></label>
-        <div style="display:flex;gap:8px;margin-bottom:6px;align-items:center">
-          <span style="font-size:.88rem;font-weight:700;color:var(--timber);white-space:nowrap">YANI-</span>
-          <input type="text" id="coYaniCardNumber" placeholder="1001"
-            inputmode="numeric"
-            autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-            style="flex:1;padding:9px 12px;border:1.5px solid var(--mist);border-radius:8px;font-size:1.1rem;font-family:var(--font-body);font-weight:700;box-sizing:border-box">
-          <button type="button" onclick="coValidateYaniCard()"
-            style="padding:9px 16px;background:var(--forest);color:#fff;border:none;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;white-space:nowrap">Check</button>
+        <!-- Card number display -->
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <div style="flex:1;background:var(--mist-light);border:2px solid var(--mist);border-radius:8px;padding:10px 14px;font-size:1.2rem;font-weight:800;font-family:monospace;letter-spacing:2px;color:var(--forest-deep);min-height:44px">
+            <span style="color:#9CA3AF;font-weight:400;font-size:.8rem">YANI-</span><span id="coCardDisplay">____</span>
+          </div>
+          <button type="button" onclick="coCardClear()"
+            style="padding:10px 14px;background:var(--mist-light);border:1.5px solid var(--mist);border-radius:8px;font-size:1rem;cursor:pointer">⌫</button>
         </div>
-        <div id="coYaniCardStatus" style="font-size:.78rem;margin-top:4px;min-height:18px"></div>
+        <!-- Tap pad -->
+        <div id="coCardPad" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px">
+          <button type="button" onclick="coCardTap('1')" class="yani-pad-btn">1</button>
+          <button type="button" onclick="coCardTap('2')" class="yani-pad-btn">2</button>
+          <button type="button" onclick="coCardTap('3')" class="yani-pad-btn">3</button>
+          <button type="button" onclick="coCardTap('4')" class="yani-pad-btn">4</button>
+          <button type="button" onclick="coCardTap('5')" class="yani-pad-btn">5</button>
+          <button type="button" onclick="coCardTap('6')" class="yani-pad-btn">6</button>
+          <button type="button" onclick="coCardTap('7')" class="yani-pad-btn">7</button>
+          <button type="button" onclick="coCardTap('8')" class="yani-pad-btn">8</button>
+          <button type="button" onclick="coCardTap('9')" class="yani-pad-btn">9</button>
+          <div></div>
+          <button type="button" onclick="coCardTap('0')" class="yani-pad-btn">0</button>
+          <div></div>
+        </div>
+        <input type="hidden" id="coYaniCardNumber" value="">
+        <div id="coYaniCardStatus" style="font-size:.82rem;margin-top:4px;min-height:20px;font-weight:600"></div>
       </div>
 
       <!-- ID Photo upload -->

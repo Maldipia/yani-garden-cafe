@@ -2159,6 +2159,16 @@ function cartQty(idx, delta) {
 // ══════════════════════════════════════════════════════════
 // CHECKOUT PAGE
 // ══════════════════════════════════════════════════════════
+function _yaniPadHTML() {
+  var s = '';
+  var btn = 'padding:16px;font-size:1.3rem;font-weight:700;background:#F9FAFB;border:1.5px solid var(--mist);border-radius:10px;cursor:pointer;-webkit-tap-highlight-color:transparent;color:var(--forest-deep);font-family:var(--font-body)';
+  ['1','2','3','4','5','6','7','8','9','','0',''].forEach(function(d) {
+    if (!d) { s += '<div></div>'; return; }
+    s += '<button type="button" onclick="_yaniTap(' + "'" + d + "'" + ')" style="' + btn + '">' + d + '</button>';
+  });
+  return s;
+}
+
 function renderCheckoutPage() {
   var subtotal = getCartSubtotal();
 
@@ -2204,20 +2214,29 @@ function renderCheckoutPage() {
     total = Math.max(0, total - yaniDisc);
   }
   var yaniStatus = state._yaniCardStatus || '';
+  // Build tap-pad display
+  var padDigits = state._yaniDigits || '';
+  var padDisplay = padDigits + '____'.slice(padDigits.length);
+  var padColor = state.yaniCardValid ? '#065F46' : 'var(--forest-deep)';
+
   html += '<div class="form-group" style="background:var(--white);border-radius:var(--r-md);padding:14px;box-shadow:var(--shadow-sm)">'
-    + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'
+    + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">'
     + '<span style="font-size:1rem">💳</span>'
     + '<label class="form-label" style="margin:0;font-weight:700">Yani Card <span style="font-weight:400;color:var(--timber);font-size:.78rem">(optional — 10% off)</span></label>'
     + '</div>'
-    + '<div style="display:flex;gap:8px">'
-    + '<input class="form-input" id="yaniCardInput" placeholder="e.g. YANI-1001" value="' + esc(state.yaniCardNumber) + '" '
-    + 'style="flex:1;font-family:monospace;text-transform:uppercase;letter-spacing:.5px" '
-    + 'oninput="state.yaniCardNumber=this.value.toUpperCase().trim();state.yaniCardValid=false;state._yaniCardStatus=\'\';renderCheckoutPage();">'
-    + '<button onclick="validateYaniCard()" style="padding:10px 14px;background:var(--forest);color:#fff;border:none;border-radius:var(--r-sm);font-size:.8rem;font-weight:700;cursor:pointer;white-space:nowrap">Check</button>'
+    + '<div style="font-size:.78rem;color:var(--timber);margin-bottom:10px">Enter the 4-digit number on your card:</div>'
+    + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'
+    + '<div style="flex:1;background:#F9FAFB;border:2px solid ' + (state.yaniCardValid ? '#065F46' : 'var(--mist)') + ';border-radius:10px;padding:12px 16px;text-align:center">'
+    + '<span style="font-size:.75rem;color:#9CA3AF;font-weight:500">YANI-</span>'
+    + '<span style="font-size:1.6rem;font-weight:900;font-family:monospace;color:' + padColor + ';letter-spacing:4px">' + padDisplay + '</span>'
     + '</div>'
-    + (yaniStatus ? '<div style="font-size:.78rem;margin-top:6px;color:' + (state.yaniCardValid?'#065F46':'#B5443A') + '">' + esc(yaniStatus) + '</div>' : '')
-    + (state.yaniCardValid && yaniDisc > 0 ? '<div style="margin-top:8px;background:#F0FDF4;border-radius:8px;padding:8px 12px;font-size:.8rem;color:#065F46;font-weight:700">🎉 10% discount applied — you save ' + peso(yaniDisc) + '</div>' : '')
-    + '<div style="font-size:.7rem;color:var(--timber);margin-top:8px;font-style:italic">⚠️ Card must be presented to the cashier for verification</div>'
+    + '<button onclick="_yaniClear()" style="padding:12px 16px;background:#F3F4F6;border:1.5px solid var(--mist);border-radius:10px;font-size:1.1rem;cursor:pointer;-webkit-tap-highlight-color:transparent">⌫</button>'
+    + '</div>'
+    + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px">'
+    + _yaniPadHTML()
+    + '</div>'
+    + (yaniStatus ? '<div style="font-size:.82rem;margin-top:4px;font-weight:600;color:' + (state.yaniCardValid?'#065F46':'#B5443A') + '">' + esc(yaniStatus) + '</div>' : '')
+    + (state.yaniCardValid && yaniDisc > 0 ? '<div style="margin-top:10px;background:#F0FDF4;border-radius:8px;padding:10px 14px;font-size:.85rem;color:#065F46;font-weight:700">🎉 10% discount — you save ' + peso(yaniDisc) + '!</div>' : '')
     + '</div>';
 
   if (state.yaniCardValid && yaniDisc > 0) {
@@ -2258,10 +2277,29 @@ function setCheckoutPay(method) {
 }
 
 // ══════════════════════════════════════════════════════════
-// YANI CARD VALIDATION
+// YANI CARD TAP PAD
 // ══════════════════════════════════════════════════════════
+function _yaniTap(d) {
+  if (!state._yaniDigits) state._yaniDigits = '';
+  if (state._yaniDigits.length >= 4) return;
+  state._yaniDigits += d;
+  state.yaniCardNumber = '';
+  state.yaniCardValid  = false;
+  state._yaniCardStatus = '';
+  renderCheckoutPage();
+  if (state._yaniDigits.length === 4) validateYaniCard(); // auto-validate on 4th digit
+}
+function _yaniClear() {
+  state._yaniDigits    = (state._yaniDigits || '').slice(0, -1);
+  state.yaniCardNumber = '';
+  state.yaniCardValid  = false;
+  state._yaniCardStatus = '';
+  renderCheckoutPage();
+}
+
 async function validateYaniCard() {
-  var cardNum = (document.getElementById('yaniCardInput') || {value:''}).value.trim().toUpperCase();
+  var digits  = state._yaniDigits || '';
+  var cardNum = digits ? 'YANI-' + digits.padStart(4,'0') : '';
   state.yaniCardNumber = cardNum;
   if (!cardNum) { state.yaniCardValid=false; state._yaniCardStatus=''; renderCheckoutPage(); return; }
   state._yaniCardStatus = '⏳ Checking card…';

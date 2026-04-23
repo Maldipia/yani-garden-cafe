@@ -10,6 +10,7 @@ var coIdUploading   = false;
 function openCheckoutModal(orderId) {
   // Pause order polling while modal open — stops re-renders stealing input focus
   if (typeof _pollPause === 'function') _pollPause(true);
+  setTimeout(coLoadYaniCards, 300); // pre-warm dropdown
   coOrderId = orderId; coPayMethod = null; coDiscType = null; coIdImageData = null;
 
   var order = allOrders.find(function(o){ return o.orderId === orderId; });
@@ -109,7 +110,10 @@ function coSelectDisc(type) {
   document.getElementById('coPromoSection').style.display     = (type==='PROMO') ? '' : 'none';
   document.getElementById('coIdPhotoSection').style.display   = isPWD ? '' : 'none';
   var yaniSec = document.getElementById('coYaniCardSection');
-  if (yaniSec) yaniSec.style.display = (type==='YANI_CARD') ? '' : 'none';
+  if (yaniSec) {
+    yaniSec.style.display = (type === 'YANI_CARD') ? '' : 'none';
+    if (type === 'YANI_CARD') coLoadYaniCards();
+  }
   coCalcDiscount();
   coUpdateConfirmBtn();
 }
@@ -149,70 +153,69 @@ function coCalcDiscount() {
   document.getElementById('coDiscResult').style.display = '';
 }
 
-// Validate Yani Card number and check balance
-async function coValidateYaniCard() {
-  var input  = document.getElementById('coYaniCardNumber');
+// Load active Yani Cards into the dropdown — called when section opens
+async function coLoadYaniCards() {
+  var sel = document.getElementById('coYaniCardNumber');
   var status = document.getElementById('coYaniCardStatus');
-  if (!input || !status) return;
-  // Accept just the number (e.g. 1001) or full card (YANI-1001)
-  var raw = input.value.trim();
-  if (!raw) {
-    status.textContent = '';
-    status.style.color = '';
-    status.dataset.valid = 'false';
-    coUpdateConfirmBtn();
-    return;
-  }
-  // Auto-prepend YANI- if user typed just the number
-  var cardNum = /^\d+$/.test(raw) ? 'YANI-' + raw.padStart(4,'0') : raw.toUpperCase();
-  // Guard
-  if (!/^YANI-\d{4,}$/.test(cardNum)) {
-    status.textContent = '⚠️ Enter the 4-digit card number (e.g. 1001)';
-    status.style.color = '#92400E';
-    status.dataset.valid = 'false';
-    coUpdateConfirmBtn();
-    return;
-  }
-
-  status.textContent = '⏳ Checking card…';
-  status.style.color = 'var(--timber)';
-  status.dataset.valid = 'false';
-  coUpdateConfirmBtn();
-
+  if (!sel) return;
+  sel.innerHTML = '<option value="">⏳ Loading cards…</option>';
   try {
-    var r = await fetch('/api/card', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ action: 'lookupCard', card_number: cardNum })
-    });
+    var r = await fetch('/api/card', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ action:'listCards', pin:'2026' }) });
     var d = await r.json();
-    if (!d.ok) {
-      status.textContent = '❌ Card not found';
-      status.style.color = '#B5443A';
-      status.dataset.valid = 'false';
+    var active = (d.cards || []).filter(function(c){ return c.status === 'ACTIVE'; });
+    if (!active.length) {
+      sel.innerHTML = '<option value="">No active cards — activate one first</option>';
+      return;
+    }
+    sel.innerHTML = '<option value="">— Select card —</option>'
+      + active.map(function(c){
+          var name = c.holder_name ? ' · ' + c.holder_name : '';
+          return '<option value="' + c.card_number + '">'
+            + c.card_number + name + ' · ₱' + parseFloat(c.balance).toFixed(2) + '</option>';
+        }).join('');
+  } catch(e) {
+    sel.innerHTML = '<option value="">Error — try refreshing</option>';
+  }
+}
+
+// Auto-validates when staff selects a card from dropdown
+async function coValidateYaniCard() {
+  var sel    = document.getElementById('coYaniCardNumber');
+  var status = document.getElementById('coYaniCardStatus');
+  if (!sel || !status) return;
+  var cardNum = sel.value;
+  status.dataset.valid   = 'false';
+  status.dataset.cardNum = '';
+  if (!cardNum) {
+    status.textContent = '';
+    coUpdateConfirmBtn(); return;
+  }
+  status.textContent = '⏳ Checking…';
+  status.style.color = 'var(--timber)';
+  try {
+    var r = await fetch('/api/card', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ action:'lookupCard', card_number: cardNum }) });
+    var d = await r.json();
+    if (!d.ok || !d.card) {
+      status.textContent = '❌ Card not found'; status.style.color = '#B5443A';
+    } else if (d.card.status !== 'ACTIVE') {
+      status.textContent = '❌ Card ' + d.card.status; status.style.color = '#B5443A';
     } else {
-      var card = d.card;
-      if (card.status !== 'ACTIVE') {
-        status.textContent = '❌ Card is ' + card.status + ' — cannot use';
-        status.style.color = '#B5443A';
-        status.dataset.valid = 'false';
-      } else {
-        var bal = parseFloat(card.balance || 0);
-        var holder = card.holder_name ? ' · ' + card.holder_name : '';
-        status.textContent = '✅ Valid' + holder + ' · Balance: ₱' + bal.toFixed(2);
-        status.style.color = '#065F46';
-        status.dataset.valid = 'true';
-        status.dataset.balance = bal;
-        status.dataset.cardNum = cardNum;
-      }
+      var bal = parseFloat(d.card.balance || 0);
+      status.textContent = '✅ ' + (d.card.holder_name || cardNum) + ' · Balance: ₱' + bal.toFixed(2);
+      status.style.color = '#065F46';
+      status.dataset.valid   = 'true';
+      status.dataset.cardNum = cardNum;
+      status.dataset.balance = bal;
     }
   } catch(e) {
-    status.textContent = '❌ Error checking card';
-    status.style.color = '#B5443A';
-    status.dataset.valid = 'false';
+    status.textContent = '❌ Error checking card'; status.style.color = '#B5443A';
   }
   coCalcDiscount();
   coUpdateConfirmBtn();
 }
+
 
 function coHandleIdPhoto(ev) {
   var file = ev.target.files[0];
@@ -266,8 +269,7 @@ async function confirmCheckout() {
       var discPayload = { userId: currentUser && currentUser.userId, orderId: coOrderId };
 
       if (coDiscType === 'YANI_CARD') {
-        var _rawCard = document.getElementById('coYaniCardNumber').value.trim();
-        var cardNum = /^\d+$/.test(_rawCard) ? 'YANI-' + _rawCard.padStart(4,'0') : _rawCard.toUpperCase();
+        var cardNum = (document.getElementById('coYaniCardStatus').dataset.cardNum || document.getElementById('coYaniCardNumber').value || '').trim().toUpperCase();
         discPayload.discountType = 'YANI_CARD';
         discPayload.yaniCardNumber = cardNum;
         discPayload.promoPct = 10;
