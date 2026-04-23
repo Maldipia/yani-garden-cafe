@@ -834,6 +834,7 @@ function renderSidebar() {
     html += item('ADDONS', '➕', 'Add-ons', '');
     html += item('PROMO_CODES', '🏷️', 'Promo Codes', '');
     html += item('LOYALTY', '⭐', 'Loyalty Points', '');
+    html += item('YANI_CARDS', '💳', 'Yani Cards', '');
     html += item('CUSTOMERS', '👥', 'Customers', '');
   }
 
@@ -938,6 +939,9 @@ function setFilter(f) {
   var loyaltyView = document.getElementById('loyaltyView');
   if (loyaltyView) loyaltyView.style.display = 'none';
 
+  var yaniCardsView = document.getElementById('yaniCardsView');
+  if (yaniCardsView) yaniCardsView.style.display = 'none';
+
   var customersView = document.getElementById('customersView');
   if (customersView) customersView.style.display = 'none';
 
@@ -1007,6 +1011,9 @@ function setFilter(f) {
   } else if (f === 'LOYALTY') {
     if (loyaltyView) loyaltyView.style.display = 'block';
     loadLoyaltyView();
+  } else if (f === 'YANI_CARDS') {
+    if (yaniCardsView) yaniCardsView.style.display = 'block';
+    loadYaniCardsView();
   } else if (f === 'CUSTOMERS') {
     if (customersView) customersView.style.display = 'block';
     loadCustomersView();
