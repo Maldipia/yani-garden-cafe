@@ -1863,10 +1863,14 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
       <!-- Yani Card number (for YANI_CARD) -->
       <div id="coYaniCardSection" style="display:none;margin-bottom:10px">
         <label style="font-size:.78rem;font-weight:600;color:var(--forest-mid);display:block;margin-bottom:4px">Card Number <span style="color:#e04444">*</span></label>
-        <input type="text" id="coYaniCardNumber" placeholder="e.g. YANI-1001"
-          oninput="this.value=this.value.toUpperCase()" onchange="coValidateYaniCard()"
-          style="width:100%;padding:9px 12px;border:1.5px solid var(--mist);border-radius:8px;font-size:.95rem;font-family:var(--font-body);text-align:center;letter-spacing:1px;box-sizing:border-box">
-        <div id="coYaniCardStatus" style="font-size:.78rem;margin-top:5px;min-height:18px"></div>
+        <div style="display:flex;gap:8px;margin-bottom:6px">
+          <input type="text" id="coYaniCardNumber" placeholder="e.g. YANI-1001"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();coValidateYaniCard();}"
+            style="flex:1;padding:9px 12px;border:1.5px solid var(--mist);border-radius:8px;font-size:.95rem;font-family:var(--font-body);text-transform:uppercase;letter-spacing:1px;box-sizing:border-box">
+          <button type="button" onclick="coValidateYaniCard()"
+            style="padding:9px 16px;background:var(--forest);color:#fff;border:none;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;white-space:nowrap">Check Card</button>
+        </div>
+        <div id="coYaniCardStatus" style="font-size:.78rem;margin-top:4px;min-height:18px"></div>
       </div>
 
       <!-- ID Photo upload -->

@@ -139,8 +139,24 @@ async function coValidateYaniCard() {
   var input  = document.getElementById('coYaniCardNumber');
   var status = document.getElementById('coYaniCardStatus');
   if (!input || !status) return;
+  // Always sync the input to uppercase on validation
   var cardNum = input.value.trim().toUpperCase();
-  if (!cardNum) { status.textContent = ''; status.dataset.valid = 'false'; coUpdateConfirmBtn(); return; }
+  input.value = cardNum;
+  if (!cardNum) {
+    status.textContent = '';
+    status.style.color = '';
+    status.dataset.valid = 'false';
+    coUpdateConfirmBtn();
+    return;
+  }
+  // Guard: must look like a card number before hitting API
+  if (cardNum.length < 5) {
+    status.textContent = '⚠️ Enter full card number (e.g. YANI-1001)';
+    status.style.color = '#92400E';
+    status.dataset.valid = 'false';
+    coUpdateConfirmBtn();
+    return;
+  }
 
   status.textContent = '⏳ Checking card…';
   status.style.color = 'var(--timber)';
