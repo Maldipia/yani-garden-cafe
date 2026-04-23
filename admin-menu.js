@@ -25,6 +25,23 @@ async function loadMenuManager() {
 
 var _allMenuCategories = null;
 
+// Rebuild the category <select> from live DB data — called every time edit modal opens
+function _populateCategoryDropdown(selectedValue) {
+  var sel = document.getElementById('menuEditCategory');
+  if (!sel) return;
+  var cats;
+  if (_allMenuCategories && _allMenuCategories.length) {
+    cats = _allMenuCategories.slice().sort();
+  } else {
+    // Fallback to hardcoded list while API loads
+    cats = ['Best With','Hot','Ice And Ice Blended','Meals','Other','Pasta','Pasalubong','Pastry','Wrap'];
+  }
+  sel.innerHTML = cats.map(function(c) {
+    return '<option value="' + c + '"' + (c === selectedValue ? ' selected' : '') + '>' + c + '</option>';
+  }).join('');
+  if (selectedValue) sel.value = selectedValue;
+}
+
 function buildMenuCatTabs() {
   var cats;
   if (_allMenuCategories) {
@@ -236,7 +253,8 @@ function openEditItemModal(itemCode) {
   document.getElementById('menuEditId').value = item.code;
   document.getElementById('menuEditIsNew').value = 'false';
   document.getElementById('menuEditName').value = item.name;
-  document.getElementById('menuEditCategory').value = item.category || '';
+  // Rebuild dropdown from live DB categories so it's always in sync
+  _populateCategoryDropdown(item.category || '');
   document.getElementById('menuEditPrice').value = item.price;
   document.getElementById('menuEditHasSizes').checked = item.hasSizes;
   document.getElementById('menuEditHasSugar').checked = item.hasSugar;
@@ -274,7 +292,7 @@ function openAddItemModal() {
   document.getElementById('menuEditId').value = '';
   document.getElementById('menuEditIsNew').value = 'true';
   document.getElementById('menuEditName').value = '';
-  document.getElementById('menuEditCategory').value = 'Other';
+  _populateCategoryDropdown('Other');
   document.getElementById('menuEditPrice').value = '';
   document.getElementById('menuEditHasSizes').checked = false;
   document.getElementById('menuEditHasSugar').checked = false;
