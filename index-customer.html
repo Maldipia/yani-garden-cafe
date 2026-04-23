@@ -1513,6 +1513,8 @@ let state = {
   receiptTIN: '',
   paymentMethod: '',
   checkoutPayMethod: '', // cash | gcash | card — chosen on checkout
+  yaniCardNumber: '',    // optional Yani Card for 10% discount
+  yaniCardValid:  false, // validated against API
   statusInterval: null
 };
 
@@ -2195,6 +2197,36 @@ function renderCheckoutPage() {
     '<div class="form-group"><label class="form-label">Special Instructions (optional)</label>' +
     '<textarea class="form-textarea" id="custNotes" placeholder="e.g. Extra hot, no ice...">' + esc(state.orderNotes) + '</textarea></div>';
 
+  // Yani Card discount (optional)
+  var yaniDisc = 0;
+  if (state.yaniCardValid && state.yaniCardNumber) {
+    yaniDisc = Math.round(total * 0.10 * 100) / 100;
+    total = Math.max(0, total - yaniDisc);
+  }
+  var yaniStatus = state._yaniCardStatus || '';
+  html += '<div class="form-group" style="background:var(--white);border-radius:var(--r-md);padding:14px;box-shadow:var(--shadow-sm)">'
+    + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'
+    + '<span style="font-size:1rem">💳</span>'
+    + '<label class="form-label" style="margin:0;font-weight:700">Yani Card <span style="font-weight:400;color:var(--timber);font-size:.78rem">(optional — 10% off)</span></label>'
+    + '</div>'
+    + '<div style="display:flex;gap:8px">'
+    + '<input class="form-input" id="yaniCardInput" placeholder="e.g. YANI-1001" value="' + esc(state.yaniCardNumber) + '" '
+    + 'style="flex:1;font-family:monospace;text-transform:uppercase;letter-spacing:.5px" '
+    + 'oninput="state.yaniCardNumber=this.value.toUpperCase().trim();state.yaniCardValid=false;state._yaniCardStatus=\'\';renderCheckoutPage();">'
+    + '<button onclick="validateYaniCard()" style="padding:10px 14px;background:var(--forest);color:#fff;border:none;border-radius:var(--r-sm);font-size:.8rem;font-weight:700;cursor:pointer;white-space:nowrap">Check</button>'
+    + '</div>'
+    + (yaniStatus ? '<div style="font-size:.78rem;margin-top:6px;color:' + (state.yaniCardValid?'#065F46':'#B5443A') + '">' + esc(yaniStatus) + '</div>' : '')
+    + (state.yaniCardValid && yaniDisc > 0 ? '<div style="margin-top:8px;background:#F0FDF4;border-radius:8px;padding:8px 12px;font-size:.8rem;color:#065F46;font-weight:700">🎉 10% discount applied — you save ' + peso(yaniDisc) + '</div>' : '')
+    + '<div style="font-size:.7rem;color:var(--timber);margin-top:8px;font-style:italic">⚠️ Card must be presented to the cashier for verification</div>'
+    + '</div>';
+
+  if (state.yaniCardValid && yaniDisc > 0) {
+    html += '<div style="background:var(--white);border-radius:var(--r-md);padding:12px 14px;box-shadow:var(--shadow-sm);margin-bottom:8px">'
+      + '<div class="summary-row"><span>Yani Card Discount (10%)</span><span style="color:#065F46;font-weight:700">−' + peso(yaniDisc) + '</span></div>'
+      + '<div class="summary-row total"><span>Total After Discount</span><span class="sr-val">' + peso(total) + '</span></div>'
+      + '</div>';
+  }
+
   // Payment method — required before placing
   var pmOpts = [{k:'cash',ico:'💵',lbl:'Cash'},{k:'gcash',ico:'📱',lbl:'GCash/QR'},{k:'card',ico:'💳',lbl:'Card'}];
   var pmHtml = '<div class="form-group"><label class="form-label" style="font-weight:700;font-size:.88rem">Mode of Payment <span style="color:#e04444">*</span></label><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:6px">';
@@ -2207,6 +2239,9 @@ function renderCheckoutPage() {
 
   var gcash = state.checkoutPayMethod === 'gcash';
   var btnLabel = gcash ? 'Pay via GCash — ' + peso(total) : 'Place Order — ' + peso(total);
+  // Store discounted total for placeOrder to use
+  state._checkoutTotal = total;
+  state._checkoutYaniDisc = yaniDisc;
   var btnDis = !state.checkoutPayMethod ? ' disabled style="opacity:.45;cursor:not-allowed"' : '';
   html += '<button class="btn-primary" id="placeOrderBtn" onclick="placeOrder()"' + btnDis + '>' + btnLabel + '</button>';
 
@@ -2219,6 +2254,41 @@ function setOrderType(type) {
 }
 function setCheckoutPay(method) {
   state.checkoutPayMethod = method;
+  renderCheckoutPage();
+}
+
+// ══════════════════════════════════════════════════════════
+// YANI CARD VALIDATION
+// ══════════════════════════════════════════════════════════
+async function validateYaniCard() {
+  var cardNum = (document.getElementById('yaniCardInput') || {value:''}).value.trim().toUpperCase();
+  state.yaniCardNumber = cardNum;
+  if (!cardNum) { state.yaniCardValid=false; state._yaniCardStatus=''; renderCheckoutPage(); return; }
+  state._yaniCardStatus = '⏳ Checking card…';
+  state.yaniCardValid = false;
+  renderCheckoutPage();
+  try {
+    var r = await fetch('/api/card', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ action:'lookupCard', card_number: cardNum })
+    });
+    var d = await r.json();
+    if (!d.ok || !d.card) {
+      state._yaniCardStatus = '❌ Card not found. Check the number and try again.';
+      state.yaniCardValid = false;
+    } else if (d.card.status !== 'ACTIVE') {
+      state._yaniCardStatus = '❌ Card is ' + d.card.status + ' and cannot be used.';
+      state.yaniCardValid = false;
+    } else {
+      var bal = parseFloat(d.card.balance || 0);
+      var name = d.card.holder_name ? ' · ' + d.card.holder_name : '';
+      state._yaniCardStatus = '✅ Valid card' + name + ' · Balance: ₱' + bal.toFixed(2);
+      state.yaniCardValid = true;
+    }
+  } catch(e) {
+    state._yaniCardStatus = '❌ Could not verify card. Try again.';
+    state.yaniCardValid = false;
+  }
   renderCheckoutPage();
 }
 
@@ -2279,20 +2349,28 @@ async function placeOrder() {
     };
   });
 
-  var result = await api('placeOrder', {
+  // Build placeOrder payload — include Yani Card if used
+  var orderPayload = {
     tableNo: state.tableNo || '1',
     token: state.token || '',
     customerName: state.customerName,
     notes: state.orderNotes,
     orderType: state.orderType.toUpperCase(),
     items: items
-  });
+  };
+  if (state.yaniCardValid && state.yaniCardNumber) {
+    orderPayload.yaniCardNumber = state.yaniCardNumber;
+    orderPayload.discountType   = 'YANI_CARD';
+    orderPayload.discountPct    = 10;
+  }
+  var result = await api('placeOrder', orderPayload);
 
   if (result.ok) {
     state.orderId = result.orderId || result.ORDER_ID || (window.ORDER_PREFIX||'ORD') + '-???';
     state.orderTotal = result.total || total;
     state.orderStatus = 'NEW';
     state.paymentMethod = state.checkoutPayMethod || '';
+    state.yaniCardNumber = ''; state.yaniCardValid = false; state._yaniCardStatus = '';
     closePage('checkout');
     openPage('receipt');
     renderReceiptPage();
