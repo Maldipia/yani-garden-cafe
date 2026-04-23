@@ -302,6 +302,7 @@ const CATEGORY_ID_TO_NAME = {
   '098a930f-3789-42fd-b7ca-bd704126ec08': 'Pasta',
   '1b803e7a-c69c-442a-991c-d62c99e6dd11': 'Other',
   '9abfbe5e-3c68-43cb-bed3-4ed5c63380c1': 'Wrap',
+  '9268943a-b5ed-40c3-ac51-4411e06805de': 'Meals',
   '5297871b-fa2e-4376-bd81-6d9b0c173be8': 'Best With',
   'a3123278-d6ba-4004-89db-479248efea6d': 'Pasalubong',
 };
