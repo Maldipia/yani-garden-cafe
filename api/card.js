@@ -113,13 +113,31 @@ export default async function handler(req, res) {
     // ── STAFF: charge card ───────────────────────────────────────────────
     if (action === 'chargeCard') {
       const { qr_token, gross_amount, order_id, performed_by } = body;
-      if (!qr_token)     return res.status(400).json({ ok: false, error: 'qr_token required' });
-      if (!gross_amount) return res.status(400).json({ ok: false, error: 'gross_amount required' });
+      // Accept card_number directly as alternative to qr_token
+      let resolvedToken = qr_token;
+      if (!resolvedToken && body.card_number) {
+        const cn = String(body.card_number).trim().toUpperCase();
+        const cr = await supa(`/rest/v1/yani_cards?card_number=eq.${encodeURIComponent(cn)}&select=qr_token`);
+        if (cr.ok && cr.data && cr.data[0]) resolvedToken = cr.data[0].qr_token;
+      }
+      if (!resolvedToken)  return res.status(400).json({ ok: false, error: 'card_number or qr_token required' });
+      if (!gross_amount)   return res.status(400).json({ ok: false, error: 'gross_amount required' });
+      // IDEMPOTENCY: if this order_id already has a CHARGE, return it instead of charging again
+      if (order_id) {
+        const existR = await supa(`/rest/v1/card_transactions?order_id=eq.${encodeURIComponent(order_id)}&type=eq.CHARGE&select=id,amount,balance_after`);
+        if (existR.ok && existR.data && existR.data.length > 0) {
+          const ex = existR.data[0];
+          return res.status(200).json({ ok: true, already_charged: true,
+            charged: ex.amount, balance_after: ex.balance_after });
+        }
+      }
+      // Replace qr_token with resolved token
+      body.qr_token = resolvedToken;
       const amount = parseFloat(gross_amount);
       if (isNaN(amount) || amount <= 0)
         return res.status(400).json({ ok: false, error: 'Invalid amount' });
       const r = await rpc('charge_card', {
-        p_qr_token:     qr_token,
+        p_qr_token:     resolvedToken,
         p_gross_amount: amount,
         p_order_id:     order_id || null,
         p_performed_by: performed_by || 'STAFF',

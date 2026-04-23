@@ -319,36 +319,7 @@ async function confirmCheckout() {
       }
     }
 
-    // 3. Charge Yani Card (if used)
-    if (coPayMethod === 'YANI_CARD' || (hasDisc && coDiscType === 'YANI_CARD')) {
-      var _r2 = document.getElementById('coYaniCardNumber').value.trim();
-      var cardNum2 = /^\d+$/.test(_r2) ? 'YANI-' + _r2.padStart(4,'0') : _r2.toUpperCase();
-      // IMPORTANT: pass ORIGINAL total — charge_card applies 10% discount itself
-      // Using discountedTotal here would cause double discount
-      var baseTotal2 = parseFloat(order && order.total || 0);
-      try {
-        // Fetch QR token for this card (need it to chargeCard)
-        var cardR = await fetch('/api/card', {
-          method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ action:'lookupCard', card_number: cardNum2, pin: '2026' })
-        });
-        var cardD = await cardR.json();
-        if (cardD.ok && cardD.card && cardD.card.qr_token) {
-          await fetch('/api/card', {
-            method:'POST', headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({
-              action: 'chargeCard',
-              qr_token: cardD.card.qr_token,
-              gross_amount: baseTotal2,
-              order_id: coOrderId,
-              performed_by: currentUser && currentUser.userId || 'ADMIN'
-            })
-          });
-        }
-      } catch(e) { /* non-critical — order still completes */ }
-    }
-
-    // 4. Complete the order
+    // 3. Complete the order first — then charge card only if order succeeds
     var completedOrderId = coOrderId; // capture before closeCheckoutModal nulls it
     var completedPayMethod = coPayMethod;
     closeCheckoutModal();
@@ -362,6 +333,26 @@ async function confirmCheckout() {
       allOrders.forEach(function(o){ if (o.orderId === completedOrderId) { o.status = 'COMPLETED'; o.paymentMethod = completedPayMethod; } });
       renderStats(); renderFilters(); renderOrders();
       showToast(completedOrderId + ' — Completed' + (hasDisc && coDiscType ? ' · Discount applied' : '') + ' · ' + completedPayMethod, 2200);
+
+      // 4. Charge Yani Card — ONLY after order is confirmed COMPLETED (prevents double charge on failed orders)
+      if (completedPayMethod === 'YANI_CARD' || (hasDisc && coDiscType === 'YANI_CARD')) {
+        var _r2 = document.getElementById('coYaniCardNumber') ? document.getElementById('coYaniCardNumber').value.trim() : '';
+        var _st = document.getElementById('coYaniCardStatus');
+        var _storedCardNum = _st && _st.dataset.cardNum; // use validated card number from Check step
+        var cardNum2 = _storedCardNum || (/^\d+$/.test(_r2) ? 'YANI-' + _r2.padStart(4,'0') : _r2.toUpperCase());
+        var grossAmt = parseFloat(order && order.total || 0);
+        if (cardNum2 && grossAmt > 0) {
+          fetch('/api/card', { method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ action:'chargeCard', card_number: cardNum2,
+              gross_amount: grossAmt, order_id: completedOrderId,
+              performed_by: currentUser && currentUser.userId || 'OWNER' })
+          }).then(function(r){ return r.json(); }).then(function(d){
+            if (d.ok) {
+              showToast('💳 ' + cardNum2 + ' charged ₱' + parseFloat(d.charged||grossAmt*0.9).toFixed(2) + ' · Balance: ₱' + parseFloat(d.balance_after||0).toFixed(2), 3000);
+            }
+          }).catch(function(){});
+        }
+      }
       // Show tap-to-print button (auto-print via setTimeout is blocked on mobile — needs user gesture)
       var _pid = completedOrderId;
       setTimeout(function() {
