@@ -150,19 +150,20 @@ async function coValidateYaniCard() {
   var input  = document.getElementById('coYaniCardNumber');
   var status = document.getElementById('coYaniCardStatus');
   if (!input || !status) return;
-  // Always sync the input to uppercase on validation
-  var cardNum = input.value.trim().toUpperCase();
-  input.value = cardNum;
-  if (!cardNum) {
+  // Accept just the number (e.g. 1001) or full card (YANI-1001)
+  var raw = input.value.trim();
+  if (!raw) {
     status.textContent = '';
     status.style.color = '';
     status.dataset.valid = 'false';
     coUpdateConfirmBtn();
     return;
   }
-  // Guard: must look like a card number before hitting API
-  if (cardNum.length < 5) {
-    status.textContent = '⚠️ Enter full card number (e.g. YANI-1001)';
+  // Auto-prepend YANI- if user typed just the number
+  var cardNum = /^\d+$/.test(raw) ? 'YANI-' + raw.padStart(4,'0') : raw.toUpperCase();
+  // Guard
+  if (!/^YANI-\d{4,}$/.test(cardNum)) {
+    status.textContent = '⚠️ Enter the 4-digit card number (e.g. 1001)';
     status.style.color = '#92400E';
     status.dataset.valid = 'false';
     coUpdateConfirmBtn();
@@ -261,7 +262,8 @@ async function confirmCheckout() {
       var discPayload = { userId: currentUser && currentUser.userId, orderId: coOrderId };
 
       if (coDiscType === 'YANI_CARD') {
-        var cardNum = document.getElementById('coYaniCardNumber').value.trim().toUpperCase();
+        var _rawCard = document.getElementById('coYaniCardNumber').value.trim();
+        var cardNum = /^\d+$/.test(_rawCard) ? 'YANI-' + _rawCard.padStart(4,'0') : _rawCard.toUpperCase();
         discPayload.discountType = 'YANI_CARD';
         discPayload.yaniCardNumber = cardNum;
         discPayload.promoPct = 10;
@@ -315,7 +317,8 @@ async function confirmCheckout() {
 
     // 3. Charge Yani Card (if used)
     if (hasDisc && coDiscType === 'YANI_CARD') {
-      var cardNum2 = document.getElementById('coYaniCardNumber').value.trim().toUpperCase();
+      var _r2 = document.getElementById('coYaniCardNumber').value.trim();
+      var cardNum2 = /^\d+$/.test(_r2) ? 'YANI-' + _r2.padStart(4,'0') : _r2.toUpperCase();
       var baseTotal2 = parseFloat(order && (order.discountedTotal || order.total) || 0);
       try {
         // Fetch QR token for this card (need it to chargeCard)

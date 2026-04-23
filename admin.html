@@ -1868,12 +1868,15 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
       <!-- Yani Card number (for YANI_CARD) -->
       <div id="coYaniCardSection" style="display:none;margin-bottom:10px">
         <label style="font-size:.78rem;font-weight:600;color:var(--forest-mid);display:block;margin-bottom:4px">Card Number <span style="color:#e04444">*</span></label>
-        <div style="display:flex;gap:8px;margin-bottom:6px">
-          <input type="text" id="coYaniCardNumber" placeholder="e.g. YANI-1001"
+        <div style="display:flex;gap:8px;margin-bottom:6px;align-items:center">
+          <span style="font-size:.88rem;font-weight:700;color:var(--timber);white-space:nowrap">YANI-</span>
+          <input type="number" id="coYaniCardNumber" placeholder="1001"
+            inputmode="numeric" pattern="[0-9]*"
+            autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
             onkeydown="if(event.key==='Enter'){event.preventDefault();coValidateYaniCard();}"
-            style="flex:1;padding:9px 12px;border:1.5px solid var(--mist);border-radius:8px;font-size:.95rem;font-family:var(--font-body);text-transform:uppercase;letter-spacing:1px;box-sizing:border-box">
+            style="flex:1;padding:9px 12px;border:1.5px solid var(--mist);border-radius:8px;font-size:1.1rem;font-family:var(--font-body);font-weight:700;box-sizing:border-box">
           <button type="button" onclick="coValidateYaniCard()"
-            style="padding:9px 16px;background:var(--forest);color:#fff;border:none;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;white-space:nowrap">Check Card</button>
+            style="padding:9px 16px;background:var(--forest);color:#fff;border:none;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;white-space:nowrap">Check</button>
         </div>
         <div id="coYaniCardStatus" style="font-size:.78rem;margin-top:4px;min-height:18px"></div>
       </div>
