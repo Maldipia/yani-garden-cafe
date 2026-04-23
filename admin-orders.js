@@ -376,8 +376,7 @@ async function adminTogglePrep(rowEl, orderId, itemId, currentPrepared) {
 
 // Direct complete for Yani Card orders — no payment modal needed
 async function _completeYaniCardOrder(orderId) {
-  if (!confirm('Complete ' + orderId + '?
-Card will be charged automatically.')) return;
+  if (!confirm('Complete ' + orderId + '? Card will be charged automatically.')) return;
   var result = await api('updateOrderStatus', {
     orderId: orderId, status: 'COMPLETED',
     userId: currentUser && currentUser.userId
