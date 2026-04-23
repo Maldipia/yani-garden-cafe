@@ -1752,7 +1752,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       const orderId = String(body.orderId || '').trim();
       const method  = String(body.method  || '').trim().toUpperCase();
       const notes   = String(body.notes   || '').trim().slice(0, 300);
-      const VALID   = new Set(['CASH','CARD','GCASH','INSTAPAY','BDO','BPI','UNIONBANK','MAYA','OTHER']);
+      const VALID   = new Set(['CASH','CARD','GCASH','INSTAPAY','BDO','BPI','UNIONBANK','MAYA','OTHER','YANI_CARD']);
 
       if (!orderId) return res.status(400).json({ ok: false, error: 'orderId required' });
       if (!isValidOrderId(orderId)) return res.status(400).json({ ok: false, error: 'Invalid orderId' });

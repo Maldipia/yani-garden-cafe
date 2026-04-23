@@ -320,10 +320,12 @@ async function confirmCheckout() {
     }
 
     // 3. Charge Yani Card (if used)
-    if (hasDisc && coDiscType === 'YANI_CARD') {
+    if (coPayMethod === 'YANI_CARD' || (hasDisc && coDiscType === 'YANI_CARD')) {
       var _r2 = document.getElementById('coYaniCardNumber').value.trim();
       var cardNum2 = /^\d+$/.test(_r2) ? 'YANI-' + _r2.padStart(4,'0') : _r2.toUpperCase();
-      var baseTotal2 = parseFloat(order && (order.discountedTotal || order.total) || 0);
+      // IMPORTANT: pass ORIGINAL total — charge_card applies 10% discount itself
+      // Using discountedTotal here would cause double discount
+      var baseTotal2 = parseFloat(order && order.total || 0);
       try {
         // Fetch QR token for this card (need it to chargeCard)
         var cardR = await fetch('/api/card', {
