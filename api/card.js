@@ -258,6 +258,43 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, card: (r.data||[])[0] || null });
     }
 
+    // ── OWNER: batch create new cards ───────────────────────────────────
+    if (action === 'batchCreateCards') {
+      const { pin, count, start_number, tier } = body;
+      const isOwner = await verifyOwnerPin(pin);
+      if (!isOwner) return res.status(403).json({ ok: false, error: 'Owner PIN required' });
+
+      const numCards = Math.min(parseInt(count) || 10, 100);
+      const startNum = parseInt(start_number) || 1001;
+      const tierVal  = ['500','1000','mix'].includes(tier) ? tier : '500';
+
+      // Build insert rows
+      const rows = [];
+      for (let i = 0; i < numCards; i++) {
+        const cardNum  = String(startNum + i).padStart(4, '0');
+        const cardTier = tierVal === 'mix' ? (i % 2 === 0 ? '500' : '1000') : tierVal;
+        // Generate unique qr_token
+        const token = 'yc-' + Array.from(crypto.getRandomValues(new Uint8Array(12)))
+          .map(b => b.toString(16).padStart(2,'0')).join('');
+        rows.push({ card_number: `YANI-${cardNum}`, qr_token: token, tier: cardTier,
+          balance: 0, total_loaded: 0, total_spent: 0, total_saved: 0,
+          discount_pct: 10, status: 'INACTIVE' });
+      }
+
+      const r = await supa('/rest/v1/yani_cards', {
+        method: 'POST',
+        body: JSON.stringify(rows),
+        headers: { 'Prefer': 'return=minimal' }
+      });
+      if (!r.ok) {
+        const errText = JSON.stringify(r.data);
+        return res.status(500).json({ ok: false, error: 'Failed to create cards: ' + errText });
+      }
+      return res.status(200).json({ ok: true, created: numCards, tier: tierVal,
+        first: `YANI-${String(startNum).padStart(4,'0')}`,
+        last:  `YANI-${String(startNum+numCards-1).padStart(4,'0')}` });
+    }
+
     return res.status(400).json({ ok: false, error: `Unknown action: ${action}` });
 
   } catch (err) {

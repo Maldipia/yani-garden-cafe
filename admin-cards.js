@@ -45,6 +45,7 @@ function _cardsShell() {
     + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'
     + '<h2 style="font-size:1.15rem;font-weight:800;color:var(--forest-deep);margin:0">💳 Yani Cards</h2>'
     + '<div style="display:flex;gap:8px">'
+    + '<button onclick="openAddCardsModal()" style="background:var(--forest);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:.78rem;font-weight:700;cursor:pointer">➕ Add Cards</button>'
     + '<button onclick="openPrintAllSheet()" style="background:var(--terra);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:.78rem;font-weight:700;cursor:pointer">🖨️ Print All QR</button>'
     + '<button onclick="_cardsFetch()" style="background:var(--mist-light);border:none;border-radius:8px;padding:8px 14px;font-size:.78rem;font-weight:700;cursor:pointer;color:var(--timber)">🔄 Refresh</button>'
     + '</div></div>'
@@ -89,17 +90,12 @@ function _appendCardModals() {
 
     // ── SECTION: Top Up ──────────────────────────────────────
     + '<div id="manageTopUpSection">'
-    + '<div style="font-size:.8rem;font-weight:700;color:var(--timber);margin-bottom:8px;text-transform:uppercase;letter-spacing:.4px">💰 Top Up (Add Balance)</div>'
-    + '<div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">'
-    + '<button onclick="document.getElementById(\'manageTopUpAmt\').value=100" style="flex:1;min-width:60px;padding:7px;background:var(--mist-light);border:1.5px solid var(--mist);border-radius:6px;font-size:.8rem;font-weight:700;cursor:pointer">₱100</button>'
-    + '<button onclick="document.getElementById(\'manageTopUpAmt\').value=200" style="flex:1;min-width:60px;padding:7px;background:var(--mist-light);border:1.5px solid var(--mist);border-radius:6px;font-size:.8rem;font-weight:700;cursor:pointer">₱200</button>'
-    + '<button onclick="document.getElementById(\'manageTopUpAmt\').value=500" style="flex:1;min-width:60px;padding:7px;background:var(--forest);color:#fff;border:none;border-radius:6px;font-size:.8rem;font-weight:700;cursor:pointer">₱500</button>'
-    + '<button onclick="document.getElementById(\'manageTopUpAmt\').value=1000" style="flex:1;min-width:60px;padding:7px;background:var(--forest);color:#fff;border:none;border-radius:6px;font-size:.8rem;font-weight:700;cursor:pointer">₱1000</button>'
-    + '</div>'
+    + '<div style="font-size:.8rem;font-weight:700;color:var(--timber);margin-bottom:6px;text-transform:uppercase;letter-spacing:.4px">💰 Reload Balance</div>'
+    + '<div style="font-size:.72rem;color:var(--timber);margin-bottom:8px">Minimum reload: ₱500</div>'
     + '<div style="display:flex;gap:8px;margin-bottom:16px">'
-    + '<input id="manageTopUpAmt" type="number" min="50" step="50" placeholder="Or type custom amount…" '
+    + '<input id="manageTopUpAmt" type="number" min="500" step="100" placeholder="Enter amount (e.g. 500, 1000…)" '
     + 'style="flex:1;padding:9px 12px;border:1.5px solid var(--mist);border-radius:8px;font-size:.9rem;font-family:var(--font-body)">'
-    + '<button onclick="_submitTopUp()" style="padding:9px 18px;background:#1D4ED8;color:#fff;border:none;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer">Add</button>'
+    + '<button onclick="_submitTopUp()" style="padding:9px 20px;background:#1D4ED8;color:#fff;border:none;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer">💰 Reload</button>'
     + '</div>'
     + '</div>'
 
@@ -272,7 +268,7 @@ function _closeManageModal(){ document.getElementById('cardManageModal').style.d
 // ── Submit Top Up ──────────────────────────────────────────────
 async function _submitTopUp(){
   var amt=parseFloat(document.getElementById('manageTopUpAmt').value);
-  if(isNaN(amt)||amt<50){ showToast('❌ Minimum top up is ₱50','error'); return; }
+  if(isNaN(amt)||amt<500){ showToast('❌ Minimum reload is ₱500','error'); return; }
   try{
     var r=await _cardApi('reloadCard',{card_number:_manageCardNumber,amount:amt,performed_by:currentUser.userId||'OWNER'});
     if(r.ok){
@@ -477,6 +473,70 @@ function _openPrintWindow(cards,single){
     +'<button onclick="window.print()" style="padding:10px 24px;background:#1a3c1a;color:#fff;border:none;border-radius:8px;font-size:.9rem;font-weight:700;cursor:pointer">🖨️ Print</button>'
     +'</div><div class="grid">'+ch+'</div></body></html>');
   w.document.close();
+}
+
+// ── Add Cards Modal ──────────────────────────────────────────
+function openAddCardsModal() {
+  var nums = _cardsAll.map(function(c){ return parseInt(c.card_number.replace('YANI-','')); });
+  var lastNum = nums.length > 0 ? Math.max.apply(null, nums) : 1000;
+  var nextNum = lastNum + 1;
+
+  // Build a simple modal dynamically
+  var existing = document.getElementById('addCardsModal');
+  if (existing) existing.remove();
+
+  var m = document.createElement('div');
+  m.id = 'addCardsModal';
+  m.style.cssText = 'display:flex;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9002;align-items:center;justify-content:center;padding:20px';
+  m.innerHTML = '<div style="background:#fff;border-radius:16px;width:100%;max-width:380px;padding:24px">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">'
+    + '<h3 style="font-size:1rem;font-weight:800;color:var(--forest-deep);margin:0">➕ Add New Cards</h3>'
+    + '<button onclick="document.getElementById('addCardsModal').remove()" style="background:var(--mist-light);border:none;border-radius:8px;padding:6px 12px;cursor:pointer">✕</button>'
+    + '</div>'
+    + '<div style="background:var(--mist-light);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:.82rem;color:var(--timber)">'
+    + 'Next card will be: <strong style="color:var(--forest-deep)">YANI-' + String(nextNum).padStart(4,'0') + '</strong>'
+    + '</div>'
+    + '<label style="font-size:.72rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">HOW MANY CARDS TO ADD?</label>'
+    + '<input id="addCardsCount" type="number" min="1" max="100" value="10" '
+    + 'style="width:100%;padding:9px 12px;border:1.5px solid var(--mist);border-radius:8px;font-size:.95rem;font-family:var(--font-body);box-sizing:border-box;margin-bottom:12px">'
+    + '<label style="font-size:.72rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">CARD TIER</label>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:16px">'
+    + '<label style="display:flex;align-items:center;gap:6px;padding:8px;border:1.5px solid var(--mist);border-radius:8px;cursor:pointer;font-size:.82rem">'
+    + '<input type="radio" name="addCardsTier" value="500" checked> ₱500 only</label>'
+    + '<label style="display:flex;align-items:center;gap:6px;padding:8px;border:1.5px solid var(--mist);border-radius:8px;cursor:pointer;font-size:.82rem">'
+    + '<input type="radio" name="addCardsTier" value="1000"> ₱1000 only</label>'
+    + '<label style="display:flex;align-items:center;gap:6px;padding:8px;border:1.5px solid var(--mist);border-radius:8px;cursor:pointer;font-size:.82rem">'
+    + '<input type="radio" name="addCardsTier" value="mix"> Mix (50/50)</label>'
+    + '</div>'
+    + '<div style="display:flex;gap:8px">'
+    + '<button onclick="document.getElementById('addCardsModal').remove()" style="flex:1;padding:10px;background:var(--mist-light);border:none;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;color:var(--timber)">Cancel</button>'
+    + '<button onclick="_submitAddCards(' + nextNum + ')" style="flex:1;padding:10px;background:var(--forest);color:#fff;border:none;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer">Create Cards</button>'
+    + '</div>'
+    + '</div>';
+  document.body.appendChild(m);
+}
+
+async function _submitAddCards(startNumber) {
+  var count = parseInt(document.getElementById('addCardsCount').value);
+  if (isNaN(count) || count < 1 || count > 100) { showToast('❌ Enter 1–100 cards','error'); return; }
+  var tierEl = document.querySelector('input[name="addCardsTier"]:checked');
+  var tier   = tierEl ? tierEl.value : '500';
+  document.getElementById('addCardsModal').remove();
+  showToast('Creating ' + count + ' cards…');
+  try {
+    var r = await _cardApi('batchCreateCards', {
+      pin: '2026',
+      count: count,
+      start_number: startNumber,
+      tier: tier
+    });
+    if (r.ok) {
+      showToast('✅ ' + r.created + ' cards created (YANI-' + String(startNumber).padStart(4,'0') + ' to YANI-' + String(startNumber+count-1).padStart(4,'0') + ')');
+      await _cardsFetch();
+    } else {
+      showToast('❌ ' + (r.error||'Failed'),'error');
+    }
+  } catch(e) { showToast('❌ '+e.message,'error'); }
 }
 
 // ── API helper ────────────────────────────────────────────────
