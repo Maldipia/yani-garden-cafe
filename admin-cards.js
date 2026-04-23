@@ -13,7 +13,7 @@ var _reloadCardNumber = '';
 async function loadYaniCardsView() {
   var view = document.getElementById('yaniCardsView');
   if (!view) return;
-  if (currentRole !== 'OWNER') {
+  if (currentUser.role !== 'OWNER') {
     view.innerHTML = '<div style="padding:60px;text-align:center;color:var(--timber)">🔒 Owner access only</div>';
     return;
   }
@@ -351,9 +351,9 @@ function openCardActivate(cardNumber) {
     try {
       if ((holder||'').trim()||(phone||'').trim()) {
         await fetch('/api/pos',{method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({action:'setCardHolder',card_number:cardNumber,holder_name:holder||null,holder_phone:phone||null,userId:currentUserId,token:currentToken})});
+          body:JSON.stringify({action:'setCardHolder',card_number:cardNumber,holder_name:holder||null,holder_phone:phone||null,userId:currentUser.userId,token:currentUser.token})});
       }
-      var r = await _cardApi('activateCard',{card_number:cardNumber,performed_by:currentUserId||'OWNER'});
+      var r = await _cardApi('activateCard',{card_number:cardNumber,performed_by:currentUser.userId||'OWNER'});
       if (r.ok) { showToast('✅ '+cardNumber+' activated! Balance: ₱'+parseFloat(r.balance_after||0).toFixed(2)); await _cardsFetch(); }
       else showToast('❌ '+(r.error||'Activation failed'),'error');
     } catch(e) { showToast('❌ '+e.message,'error'); }
@@ -374,7 +374,7 @@ async function _submitReload() {
   if (isNaN(amt)||amt<=0) { showToast('❌ Enter a valid amount','error'); return; }
   _closeReloadModal();
   try {
-    var r = await _cardApi('reloadCard',{card_number:_reloadCardNumber,amount:amt,performed_by:currentUserId||'OWNER'});
+    var r = await _cardApi('reloadCard',{card_number:_reloadCardNumber,amount:amt,performed_by:currentUser.userId||'OWNER'});
     if (r.ok) { showToast('✅ Reloaded ₱'+amt.toFixed(2)+' → Balance: ₱'+parseFloat(r.balance||0).toFixed(2)); await _cardsFetch(); }
     else showToast('❌ '+(r.error||'Reload failed'),'error');
   } catch(e) { showToast('❌ '+e.message,'error'); }
