@@ -191,7 +191,7 @@ function _cardsRender() {
         :"_cardToggleOn('"+c.card_number+"')");
 
     html+='<tr style="background:'+bg+';border-bottom:1px solid var(--mist)">';
-    html+='<td style="padding:9px 10px;font-weight:700;font-family:monospace;color:var(--forest-deep)">'+c.card_number+'</td>';
+    html+='<td style="padding:9px 10px;font-weight:700;font-family:monospace;color:var(--forest-deep)">'+c.card_number+(c.card_pin?'<span style="color:#9CA3AF;font-size:.78rem">-'+c.card_pin+'</span>':'')+'</td>';
     html+='<td style="padding:9px 10px">'+(c.holder_name||'<span style="color:#9CA3AF;font-style:italic">—</span>')+'</td>';
     html+='<td style="padding:9px 10px;color:var(--timber)">'+(c.holder_phone||'—')+'</td>';
     html+='<td style="padding:9px 10px"><span style="background:var(--mist-light);border-radius:4px;padding:2px 8px;font-weight:700;font-size:.78rem">₱'+c.tier+'</span></td>';
@@ -245,7 +245,7 @@ function openManageCard(cardNumber){
   if(!card) return;
   _manageCardNumber=cardNumber;
 
-  document.getElementById('manageCardTitle').textContent='⚙️ '+cardNumber;
+  var _cp=card&&card.card_pin?'-'+card.card_pin:''; document.getElementById('manageCardTitle').textContent='⚙️ '+cardNumber+_cp+' (Code: '+(cardNumber.replace('YANI-',''))+(card&&card.card_pin?card.card_pin:'')+')';
   document.getElementById('manageCardBal').textContent='₱'+parseFloat(card.balance||0).toFixed(2);
   var statusEl=document.getElementById('manageCardStatus');
   statusEl.textContent=card.status;

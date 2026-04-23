@@ -2162,9 +2162,9 @@ function cartQty(idx, delta) {
 function _yaniCheck() {
   var input = document.getElementById('yaniCardInput');
   if (!input) return;
-  state._yaniDigits = input.value.replace(/\D/g,'').substring(0,4);
-  if (state._yaniDigits.length === 4) validateYaniCard();
-  else { state._yaniCardStatus = ''; state.yaniCardValid = false; renderCheckoutPage(); }
+  state._yaniDigits = input.value.replace(/\D/g,'').substring(0,6);
+  if (state._yaniDigits.length === 6) validateYaniCard();
+  else { state._yaniCardStatus = '⚠️ Enter all 6 digits from your card'; state.yaniCardValid = false; renderCheckoutPage(); }
 }
 
 function renderCheckoutPage() {
@@ -2223,7 +2223,8 @@ function renderCheckoutPage() {
     + '<label class="form-label" style="margin:0;font-weight:700">Yani Card <span style="font-weight:400;color:var(--timber);font-size:.78rem">(optional — 10% off)</span></label>'
     + '</div>'
     + '<div style="display:flex;gap:8px;margin-bottom:8px">'
-    + '<input id="yaniCardInput" type="text" inputmode="numeric" maxlength="4" placeholder="e.g. 1001"'
+    + '<div style="font-size:.72rem;color:var(--timber);margin-bottom:6px">Enter the <strong>6-digit code</strong> on your card:</div>'\
+    + '<input id="yaniCardInput" type="text" inputmode="numeric" maxlength="6" placeholder="e.g. 100176"'
     + ' autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"'
     + ' style="flex:1;padding:11px 14px;border:1.5px solid ' + (state.yaniCardValid?'#065F46':'var(--mist)') + ';border-radius:var(--r-sm);font-size:1.2rem;font-weight:700;font-family:var(--font-body);letter-spacing:4px;text-align:center"'
     + ' value="' + esc(state._yaniDigits||'') + '">'
@@ -2282,7 +2283,7 @@ function _yaniTap(d) {
   state.yaniCardValid  = false;
   state._yaniCardStatus = '';
   renderCheckoutPage();
-  if (state._yaniDigits.length === 4) validateYaniCard(); // auto-validate on 4th digit
+  if (state._yaniDigits.length === 6) validateYaniCard(); // auto-validate on 6th digit
 }
 function _yaniClear() {
   state._yaniDigits    = (state._yaniDigits || '').slice(0, -1);
@@ -2294,9 +2295,9 @@ function _yaniClear() {
 
 async function validateYaniCard() {
   var inp = document.getElementById('yaniCardInput');
-  if (inp) state._yaniDigits = inp.value.replace(/\D/g,'').substring(0,4);
+  if (inp) state._yaniDigits = inp.value.replace(/\D/g,'').substring(0,6);
   var digits  = state._yaniDigits || '';
-  var cardNum = digits ? 'YANI-' + digits.padStart(4,'0') : '';
+  var cardNum = digits.length === 6 ? digits : '';
   state.yaniCardNumber = cardNum;
   if (!cardNum) { state.yaniCardValid=false; state._yaniCardStatus=''; renderCheckoutPage(); return; }
   state._yaniCardStatus = '⏳ Checking card…';

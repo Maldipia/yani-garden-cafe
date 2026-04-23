@@ -72,20 +72,32 @@ export default async function handler(req, res) {
     // ── PUBLIC: lookup card by card_number (staff use) ──────────────────
     // Returns card info WITHOUT qr_token
     if (action === 'lookupCard') {
-      const { card_number, pin } = body;
+      const { card_number, pin, card_pin } = body;
       if (!card_number) return res.status(400).json({ ok: false, error: 'card_number required' });
-      const cleanNum = card_number.trim().toUpperCase();
-      const r = await supa(`/rest/v1/yani_cards?card_number=eq.${encodeURIComponent(cleanNum)}&select=card_number,holder_name,holder_phone,tier,balance,total_loaded,total_spent,total_saved,discount_pct,status,activated_at,expires_at`);
-      if (!r.ok || !r.data || r.data.length === 0)
-        return res.status(404).json({ ok: false, error: 'Card not found' });
+
+      // Accept 6-digit full code: "100176" → card=YANI-1001, pin=76
+      const raw = String(card_number).trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
+      let cn, pinProvided = card_pin ? String(card_pin).trim() : null;
+      if (/^\d{6}$/.test(raw)) {
+        cn = 'YANI-' + raw.substring(0,4);
+        pinProvided = raw.substring(4);
+      } else {
+        cn = raw.startsWith('YANI-') ? raw : ('YANI-' + raw);
+      }
+
+      const r = await supa(`/rest/v1/yani_cards?card_number=eq.${encodeURIComponent(cn)}&select=card_number,card_pin,holder_name,holder_phone,tier,balance,total_loaded,total_spent,total_saved,discount_pct,status,activated_at,expires_at`);
+      if (!r.ok || !r.data || !r.data.length) return res.status(404).json({ ok: false, error: 'Card not found' });
       const card = r.data[0];
 
-      // Owner gets qr_token too
-      if (pin === OWNER_PIN) {
-        const ro = await supa(`/rest/v1/yani_cards?card_number=eq.${encodeURIComponent(cleanNum)}&select=qr_token`);
-        if (ro.ok && ro.data && ro.data.length > 0) card.qr_token = ro.data[0].qr_token;
+      // Validate PIN when provided (customer-facing always sends 6-digit code)
+      if (pinProvided !== null && pinProvided !== undefined && pinProvided !== '') {
+        if (String(pinProvided) !== String(card.card_pin)) {
+          return res.status(403).json({ ok: false, error: 'Invalid card code — check your card number' });
+        }
       }
-      return res.status(200).json({ ok: true, card });
+
+      const { card_pin: _p, ...safeCard } = card;
+      return res.status(200).json({ ok: true, card: safeCard });
     }
 
     // ── PUBLIC: lookup by QR token (customer scans) ──────────────────────
@@ -116,9 +128,22 @@ export default async function handler(req, res) {
       // Accept card_number directly as alternative to qr_token
       let resolvedToken = qr_token;
       if (!resolvedToken && body.card_number) {
-        const cn = String(body.card_number).trim().toUpperCase();
-        const cr = await supa(`/rest/v1/yani_cards?card_number=eq.${encodeURIComponent(cn)}&select=qr_token`);
-        if (cr.ok && cr.data && cr.data[0]) resolvedToken = cr.data[0].qr_token;
+        const raw = String(body.card_number).trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
+        let cn, pinProvided = body.card_pin ? String(body.card_pin).trim() : null;
+        if (/^\d{6}$/.test(raw)) {
+          cn = 'YANI-' + raw.substring(0,4);
+          pinProvided = raw.substring(4);
+        } else {
+          cn = raw.startsWith('YANI-') ? raw : 'YANI-' + raw;
+        }
+        const cr = await supa(`/rest/v1/yani_cards?card_number=eq.${encodeURIComponent(cn)}&select=qr_token,card_pin`);
+        if (cr.ok && cr.data && cr.data[0]) {
+          // Validate PIN if provided
+          if (pinProvided && String(pinProvided) !== String(cr.data[0].card_pin)) {
+            return res.status(403).json({ ok: false, error: 'Invalid card code' });
+          }
+          resolvedToken = cr.data[0].qr_token;
+        }
       }
       if (!resolvedToken)  return res.status(400).json({ ok: false, error: 'card_number or qr_token required' });
       if (!gross_amount)   return res.status(400).json({ ok: false, error: 'gross_amount required' });
@@ -231,7 +256,7 @@ export default async function handler(req, res) {
       const { pin, status } = body;
       const isOwner = await verifyOwnerPin(pin);
       if (!isOwner) return res.status(403).json({ ok: false, error: 'Owner PIN required' });
-      let url = '/rest/v1/yani_cards?select=card_number,holder_name,holder_phone,holder_email,tier,balance,status,total_loaded,total_spent,total_saved,activated_at&order=card_number.asc';
+      let url = '/rest/v1/yani_cards?select=card_number,card_pin,holder_name,holder_phone,holder_email,tier,balance,status,total_loaded,total_spent,total_saved,activated_at&order=card_number.asc';
       if (status) url += `&status=eq.${encodeURIComponent(status)}`;
       const r = await supa(url);
       return res.status(200).json({ ok: true, cards: r.data || [] });
@@ -251,7 +276,7 @@ export default async function handler(req, res) {
       const { pin } = body;
       const isOwner = await verifyOwnerPin(pin);
       if (!isOwner) return res.status(403).json({ ok: false, error: 'Owner PIN required' });
-      const r = await supa('/rest/v1/yani_cards?select=card_number,holder_name,holder_phone,holder_email,tier,balance,status,qr_token,activated_at&order=card_number.asc');
+      const r = await supa('/rest/v1/yani_cards?select=card_number,card_pin,holder_name,holder_phone,holder_email,tier,balance,status,qr_token,activated_at&order=card_number.asc');
       return res.status(200).json({ ok: true, cards: r.data || [] });
     }
 
@@ -294,7 +319,8 @@ export default async function handler(req, res) {
         // Generate unique qr_token
         const token = 'yc-' + Array.from(crypto.getRandomValues(new Uint8Array(12)))
           .map(b => b.toString(16).padStart(2,'0')).join('');
-        rows.push({ card_number: `YANI-${cardNum}`, qr_token: token, tier: cardTier,
+        const cardPinVal = String(Math.floor(Math.random()*90)+10).padStart(2,'0');
+        rows.push({ card_number: `YANI-${cardNum}`, qr_token: token, card_pin: cardPinVal, tier: cardTier,
           balance: 0, total_loaded: 0, total_spent: 0, total_saved: 0,
           discount_pct: 10, status: 'INACTIVE' });
       }
