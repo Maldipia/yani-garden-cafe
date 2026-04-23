@@ -228,6 +228,15 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, discrepancies: r.data || [] });
     }
 
+    // ── OWNER: list all cards WITH qr_token (for printing) ──────────────
+    if (action === 'listCardsWithQR') {
+      const { pin } = body;
+      const isOwner = await verifyOwnerPin(pin);
+      if (!isOwner) return res.status(403).json({ ok: false, error: 'Owner PIN required' });
+      const r = await supa('/rest/v1/yani_cards?select=card_number,holder_name,holder_phone,tier,balance,status,qr_token,activated_at&order=card_number.asc');
+      return res.status(200).json({ ok: true, cards: r.data || [] });
+    }
+
     return res.status(400).json({ ok: false, error: `Unknown action: ${action}` });
 
   } catch (err) {
