@@ -2255,7 +2255,7 @@ function renderCheckoutPage() {
   // Store discounted total for placeOrder to use
   state._checkoutTotal = total;
   state._checkoutYaniDisc = yaniDisc;
-  var btnDis = !state.checkoutPayMethod ? ' disabled style="opacity:.45;cursor:not-allowed"' : '';
+  var btnDis = (!state.checkoutPayMethod && !(state.yaniCardValid && state.yaniCardNumber)) ? ' disabled style="opacity:.45;cursor:not-allowed"' : '';
   html += '<button class="btn-primary" id="placeOrderBtn" onclick="placeOrder()"' + btnDis + '>' + btnLabel + '</button>';
 
   document.getElementById('checkoutBody').innerHTML = html;
@@ -2330,6 +2330,10 @@ async function validateYaniCard() {
 // PLACE ORDER
 // ══════════════════════════════════════════════════════════
 async function placeOrder() {
+  // Yani Card is the payment — no separate MOP needed
+  if (state.yaniCardValid && state.yaniCardNumber) {
+    state.checkoutPayMethod = 'yani_card';
+  }
   if (!state.checkoutPayMethod) { toast('Please select a payment method first'); return; }
 
   state.customerName = (document.getElementById('custName') || {value:''}).value.trim();

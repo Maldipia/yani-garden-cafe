@@ -1018,27 +1018,25 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       logSync('dine_in_orders', orderId, 'INSERT');
       auditLog({ orderId, action: 'ORDER_PLACED', details: { tableNo, customerName, orderType, total, itemCount: orderItems.length } });
 
-      // AUTO-CHARGE YANI CARD at order placement (fire-and-forget, idempotent)
-      if (yaniDiscount > 0 && yaniCardNum) {
-        (async () => {
-          try {
-            const cardR = await supaFetch(
-              `${SUPABASE_URL}/rest/v1/yani_cards?card_number=eq.${encodeURIComponent(yaniCardNum)}&select=qr_token,status&limit=1`
-            );
-            const cardRow = cardR.data?.[0];
-            if (cardRow && cardRow.status === 'ACTIVE' && cardRow.qr_token) {
-              await supaFetch(`${SUPABASE_URL}/rest/v1/rpc/charge_card`, {
-                method: 'POST',
-                body: JSON.stringify({
-                  p_qr_token:     cardRow.qr_token,
-                  p_gross_amount: total,
-                  p_order_id:     orderId,
-                  p_performed_by: 'CUSTOMER',
-                })
-              });
-            }
-          } catch(e) { console.error('Yani Card charge at placement error:', e.message); }
-        })();
+      // CHARGE YANI CARD at order placement — MUST be awaited (Vercel kills process after response)
+      if (yaniDiscount > 0 && yaniCardNum && !isTest) {
+        try {
+          const cardR = await supaFetch(
+            `${SUPABASE_URL}/rest/v1/yani_cards?card_number=eq.${encodeURIComponent(yaniCardNum)}&select=qr_token,status&limit=1`
+          );
+          const cardRow = cardR.data?.[0];
+          if (cardRow && cardRow.status === 'ACTIVE' && cardRow.qr_token) {
+            await supaFetch(`${SUPABASE_URL}/rest/v1/rpc/charge_card`, {
+              method: 'POST',
+              body: JSON.stringify({
+                p_qr_token:     cardRow.qr_token,
+                p_gross_amount: total,
+                p_order_id:     orderId,
+                p_performed_by: 'CUSTOMER',
+              })
+            });
+          }
+        } catch(e) { console.error('Yani Card charge error:', e.message); }
       }
 
       // Deduct inventory (fire-and-forget, non-blocking)
