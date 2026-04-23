@@ -1870,10 +1870,9 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
         <label style="font-size:.78rem;font-weight:600;color:var(--forest-mid);display:block;margin-bottom:4px">Card Number <span style="color:#e04444">*</span></label>
         <div style="display:flex;gap:8px;margin-bottom:6px;align-items:center">
           <span style="font-size:.88rem;font-weight:700;color:var(--timber);white-space:nowrap">YANI-</span>
-          <input type="number" id="coYaniCardNumber" placeholder="1001"
-            inputmode="numeric" pattern="[0-9]*"
+          <input type="text" id="coYaniCardNumber" placeholder="1001"
+            inputmode="numeric"
             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-            onkeydown="if(event.key==='Enter'){event.preventDefault();coValidateYaniCard();}"
             style="flex:1;padding:9px 12px;border:1.5px solid var(--mist);border-radius:8px;font-size:1.1rem;font-family:var(--font-body);font-weight:700;box-sizing:border-box">
           <button type="button" onclick="coValidateYaniCard()"
             style="padding:9px 16px;background:var(--forest);color:#fff;border:none;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;white-space:nowrap">Check</button>

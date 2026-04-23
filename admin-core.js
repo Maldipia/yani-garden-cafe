@@ -37,6 +37,12 @@ var UPLOAD_URL = '/api/upload-image';
 var POLL_INTERVAL = 5000;
 // Adaptive polling — faster when active orders exist, slower when tab hidden
 var _pollActive = true;
+var _pollPaused = false;
+// Call _pollPause(true) to stop polling (e.g. while modal input is focused)
+// Call _pollPause(false) to resume
+function _pollPause(pause) {
+  _pollPaused = pause;
+}
 document.addEventListener('visibilitychange', function() {
   _pollActive = !document.hidden;
   if (_pollActive && pollTimer) { clearInterval(pollTimer); startPolling(); }
@@ -77,7 +83,7 @@ function initRealtime() {
           _realtimeActive = false;
           // Realtime dropped — restore normal polling
           if (pollTimer) clearInterval(pollTimer);
-          pollTimer = setInterval(function() { loadOrders(); }, POLL_INTERVAL);
+          pollTimer = setInterval(function() { if (!_pollPaused) loadOrders(); }, POLL_INTERVAL);
           console.warn('⚠️ Realtime disconnected — falling back to polling');
         }
       });

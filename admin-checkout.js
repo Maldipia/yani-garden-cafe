@@ -8,6 +8,8 @@ var coIdImageData   = null;
 var coIdUploading   = false;
 
 function openCheckoutModal(orderId) {
+  // Pause order polling while modal open — stops re-renders stealing input focus
+  if (typeof _pollPause === 'function') _pollPause(true);
   coOrderId = orderId; coPayMethod = null; coDiscType = null; coIdImageData = null;
 
   var order = allOrders.find(function(o){ return o.orderId === orderId; });
@@ -60,6 +62,8 @@ function openCheckoutModal(orderId) {
 }
 
 function closeCheckoutModal() {
+  // Resume order polling
+  if (typeof _pollPause === 'function') _pollPause(false);
   document.getElementById('checkoutOverlay').classList.remove('open');
   coOrderId = null; coPayMethod = null; coDiscType = null; coIdImageData = null;
 }
