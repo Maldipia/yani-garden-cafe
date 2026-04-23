@@ -1794,7 +1794,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
 
       if (!orderId) return res.status(400).json({ ok: false, error: 'orderId required' });
       if (!isValidOrderId(orderId)) return res.status(400).json({ ok: false, error: 'Invalid orderId' });
-      if (!['PWD','SENIOR','BOTH','PROMO','CUSTOM','REMOVE'].includes(type))
+      if (!['PWD','SENIOR','BOTH','PROMO','CUSTOM','REMOVE','YANI_CARD'].includes(type))
         return res.status(400).json({ ok: false, error: 'Invalid discountType' });
 
       // Fetch current order total
@@ -1836,6 +1836,10 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       } else if (type === 'CUSTOM') {
         discountAmount = Math.min(customAmt, total);
         discountPct    = Math.round((discountAmount / total) * 100 * 100) / 100;
+      } else if (type === 'YANI_CARD') {
+        // 10% flat on total — card charge handled separately by client
+        discountPct    = 10;
+        discountAmount = Math.round(total * 0.10 * 100) / 100;
       }
 
       const discountedTotal = Math.max(0, Math.round((total - discountAmount) * 100) / 100);
@@ -1843,7 +1847,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       const r = await supa('PATCH', 'dine_in_orders',
         { discount_type: type, discount_pax: qualPax, discount_pct: discountPct,
           discount_amount: discountAmount, discounted_total: discountedTotal,
-          discount_note: note || null, updated_at: new Date().toISOString() },
+          discount_note: (type === 'YANI_CARD' && body.yaniCardNumber ? 'Yani Card: ' + String(body.yaniCardNumber).trim().toUpperCase() : note) || null, updated_at: new Date().toISOString() },
         { order_id: `eq.${encodeURIComponent(orderId)}` }
       );
       if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to apply discount' });

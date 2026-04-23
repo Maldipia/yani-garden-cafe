@@ -37,6 +37,15 @@ function openCheckoutModal(orderId) {
   document.getElementById('coPaxQualified').value = 1;
   document.getElementById('coPromoPct').value = 10;
   document.getElementById('coNotes').value = '';
+  // Reset Yani Card
+  var yaniSec = document.getElementById('coYaniCardSection');
+  if (yaniSec) yaniSec.style.display = 'none';
+  var yaniIn = document.getElementById('coYaniCardNumber');
+  if (yaniIn) yaniIn.value = '';
+  var yaniSt = document.getElementById('coYaniCardStatus');
+  if (yaniSt) yaniSt.textContent = '';
+  var yaniBtn = document.getElementById('coDiscYANI');
+  if (yaniBtn) yaniBtn.className = 'co-disc-btn';
   document.getElementById('coConfirmBtn').disabled = true;
   document.getElementById('coConfirmBtn').textContent = '✅ Confirm & Complete';
 
@@ -74,15 +83,18 @@ function coToggleDiscount() {
 
 function coSelectDisc(type) {
   coDiscType = type;
-  ['PWD','SENIOR','BOTH','PROMO'].forEach(function(t){
-    var b = document.getElementById('coDisc'+t);
+  ['PWD','SENIOR','BOTH','PROMO','YANI_CARD'].forEach(function(t){
+    var id = 'coDisc' + (t==='YANI_CARD'?'YANI':t);
+    var b = document.getElementById(id);
     if (b) b.className = 'co-disc-btn' + (t===type ? ' selected' : '');
   });
-  // Show/hide pax vs promo inputs
-  document.getElementById('coPaxSection').style.display   = (type!=='PROMO') ? '' : 'none';
-  document.getElementById('coPromoSection').style.display  = (type==='PROMO') ? '' : 'none';
-  // ID photo required for PWD/Senior/Both
-  document.getElementById('coIdPhotoSection').style.display = (type!=='PROMO') ? '' : 'none';
+  // Show/hide pax vs promo vs yani card inputs
+  var isPWD  = (type==='PWD'||type==='SENIOR'||type==='BOTH');
+  document.getElementById('coPaxSection').style.display       = isPWD ? '' : 'none';
+  document.getElementById('coPromoSection').style.display     = (type==='PROMO') ? '' : 'none';
+  document.getElementById('coIdPhotoSection').style.display   = isPWD ? '' : 'none';
+  var yaniSec = document.getElementById('coYaniCardSection');
+  if (yaniSec) yaniSec.style.display = (type==='YANI_CARD') ? '' : 'none';
   coCalcDiscount();
   coUpdateConfirmBtn();
 }
@@ -94,7 +106,17 @@ function coCalcDiscount() {
   var baseTotal = parseFloat(order.discountedTotal || order.total || 0);
 
   var discAmt = 0;
-  if (coDiscType === 'PROMO') {
+  if (coDiscType === 'YANI_CARD') {
+    // 10% flat on total — but only calculate if card is validated
+    var yaniSt = document.getElementById('coYaniCardStatus');
+    var isValid = yaniSt && yaniSt.dataset.valid === 'true';
+    if (isValid) {
+      discAmt = Math.round(baseTotal * 0.10 * 100) / 100;
+    } else {
+      document.getElementById('coDiscResult').style.display = 'none';
+      return;
+    }
+  } else if (coDiscType === 'PROMO') {
     var pct = parseFloat(document.getElementById('coPromoPct').value) || 0;
     discAmt = Math.round(baseTotal * (pct/100) * 100) / 100;
   } else {
@@ -110,6 +132,54 @@ function coCalcDiscount() {
   document.getElementById('coDiscAmount').textContent = '−₱' + discAmt.toFixed(2);
   document.getElementById('coNewTotal').textContent = '₱' + newTotal.toFixed(2);
   document.getElementById('coDiscResult').style.display = '';
+}
+
+// Validate Yani Card number and check balance
+async function coValidateYaniCard() {
+  var input  = document.getElementById('coYaniCardNumber');
+  var status = document.getElementById('coYaniCardStatus');
+  if (!input || !status) return;
+  var cardNum = input.value.trim().toUpperCase();
+  if (!cardNum) { status.textContent = ''; status.dataset.valid = 'false'; coUpdateConfirmBtn(); return; }
+
+  status.textContent = '⏳ Checking card…';
+  status.style.color = 'var(--timber)';
+  status.dataset.valid = 'false';
+  coUpdateConfirmBtn();
+
+  try {
+    var r = await fetch('/api/card', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ action: 'lookupCard', card_number: cardNum })
+    });
+    var d = await r.json();
+    if (!d.ok) {
+      status.textContent = '❌ Card not found';
+      status.style.color = '#B5443A';
+      status.dataset.valid = 'false';
+    } else {
+      var card = d.card;
+      if (card.status !== 'ACTIVE') {
+        status.textContent = '❌ Card is ' + card.status + ' — cannot use';
+        status.style.color = '#B5443A';
+        status.dataset.valid = 'false';
+      } else {
+        var bal = parseFloat(card.balance || 0);
+        var holder = card.holder_name ? ' · ' + card.holder_name : '';
+        status.textContent = '✅ Valid' + holder + ' · Balance: ₱' + bal.toFixed(2);
+        status.style.color = '#065F46';
+        status.dataset.valid = 'true';
+        status.dataset.balance = bal;
+        status.dataset.cardNum = cardNum;
+      }
+    }
+  } catch(e) {
+    status.textContent = '❌ Error checking card';
+    status.style.color = '#B5443A';
+    status.dataset.valid = 'false';
+  }
+  coCalcDiscount();
+  coUpdateConfirmBtn();
 }
 
 function coHandleIdPhoto(ev) {
@@ -132,8 +202,10 @@ function coUpdateConfirmBtn() {
   var btn = document.getElementById('coConfirmBtn');
   var hasDisc = document.getElementById('coHasDiscount').checked;
   // Requirements: payment selected; if discount → type selected; if PWD/Senior/Both → ID photo
-  var needsId = hasDisc && coDiscType && coDiscType !== 'PROMO';
-  var ok = !!coPayMethod && (!hasDisc || (!!coDiscType && (!needsId || !!coIdImageData)));
+  var needsId   = hasDisc && coDiscType && (coDiscType==='PWD'||coDiscType==='SENIOR'||coDiscType==='BOTH');
+  var needsCard = hasDisc && coDiscType === 'YANI_CARD';
+  var cardOk    = !needsCard || (function(){ var s=document.getElementById('coYaniCardStatus'); return s&&s.dataset.valid==='true'; })();
+  var ok = !!coPayMethod && (!hasDisc || (!!coDiscType && (!needsId || !!coIdImageData) && cardOk));
   btn.disabled = !ok;
 }
 
@@ -161,7 +233,12 @@ async function confirmCheckout() {
       var baseTotal = parseFloat(order && (order.discountedTotal || order.total) || 0);
       var discPayload = { userId: currentUser && currentUser.userId, orderId: coOrderId };
 
-      if (coDiscType === 'PROMO') {
+      if (coDiscType === 'YANI_CARD') {
+        var cardNum = document.getElementById('coYaniCardNumber').value.trim().toUpperCase();
+        discPayload.discountType = 'YANI_CARD';
+        discPayload.yaniCardNumber = cardNum;
+        discPayload.promoPct = 10;
+      } else if (coDiscType === 'PROMO') {
         discPayload.discountType = 'PROMO';
         discPayload.promoPct = parseFloat(document.getElementById('coPromoPct').value) || 10;
       } else {
@@ -209,7 +286,33 @@ async function confirmCheckout() {
       }
     }
 
-    // 3. Complete the order
+    // 3. Charge Yani Card (if used)
+    if (hasDisc && coDiscType === 'YANI_CARD') {
+      var cardNum2 = document.getElementById('coYaniCardNumber').value.trim().toUpperCase();
+      var baseTotal2 = parseFloat(order && (order.discountedTotal || order.total) || 0);
+      try {
+        // Fetch QR token for this card (need it to chargeCard)
+        var cardR = await fetch('/api/card', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ action:'lookupCard', card_number: cardNum2, pin: '2026' })
+        });
+        var cardD = await cardR.json();
+        if (cardD.ok && cardD.card && cardD.card.qr_token) {
+          await fetch('/api/card', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({
+              action: 'chargeCard',
+              qr_token: cardD.card.qr_token,
+              gross_amount: baseTotal2,
+              order_id: coOrderId,
+              performed_by: currentUser && currentUser.userId || 'ADMIN'
+            })
+          });
+        }
+      } catch(e) { /* non-critical — order still completes */ }
+    }
+
+    // 4. Complete the order
     var completedOrderId = coOrderId; // capture before closeCheckoutModal nulls it
     var completedPayMethod = coPayMethod;
     closeCheckoutModal();

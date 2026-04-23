@@ -1837,6 +1837,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
         <button class="co-disc-btn" id="coDiscSENIOR" onclick="coSelectDisc('SENIOR')">👴 Senior</button>
         <button class="co-disc-btn" id="coDiscBOTH"   onclick="coSelectDisc('BOTH')">👥👴 Both</button>
         <button class="co-disc-btn" id="coDiscPROMO"  onclick="coSelectDisc('PROMO')">🏷️ Promo</button>
+        <button class="co-disc-btn" id="coDiscYANI"   onclick="coSelectDisc('YANI_CARD')">💳 Yani Card</button>
       </div>
 
       <!-- Pax count (for PWD/Senior/Both) -->
@@ -1857,6 +1858,15 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
       <div id="coPromoSection" style="display:none;margin-bottom:10px">
         <label style="font-size:.78rem;font-weight:600;color:var(--forest-mid);display:block;margin-bottom:4px">Promo discount %</label>
         <input type="number" id="coPromoPct" min="1" max="100" value="10" onchange="coCalcDiscount()" style="width:100%;padding:8px;border:1.5px solid var(--mist);border-radius:8px;font-size:.9rem;text-align:center" placeholder="e.g. 10">
+      </div>
+
+      <!-- Yani Card number (for YANI_CARD) -->
+      <div id="coYaniCardSection" style="display:none;margin-bottom:10px">
+        <label style="font-size:.78rem;font-weight:600;color:var(--forest-mid);display:block;margin-bottom:4px">Card Number <span style="color:#e04444">*</span></label>
+        <input type="text" id="coYaniCardNumber" placeholder="e.g. YANI-0001"
+          oninput="this.value=this.value.toUpperCase()" onchange="coValidateYaniCard()"
+          style="width:100%;padding:9px 12px;border:1.5px solid var(--mist);border-radius:8px;font-size:.95rem;font-family:var(--font-body);text-align:center;letter-spacing:1px;box-sizing:border-box">
+        <div id="coYaniCardStatus" style="font-size:.78rem;margin-top:5px;min-height:18px"></div>
       </div>
 
       <!-- ID Photo upload -->
@@ -1963,7 +1973,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 <script src="/admin-menu.js?v=2"></script>
 <script src="/admin-online.js?v=2"></script>
 <script src="/admin-tables.js?v=2"></script>
-<script src="/admin-checkout.js?v=2"></script>
+<script src="/admin-checkout.js?v=3"></script>
 <script src="/admin-costing.js?v=2"></script>
   <script src="/admin-cards.js?v=5"></script>
 </body>
