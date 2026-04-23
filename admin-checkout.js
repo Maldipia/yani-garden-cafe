@@ -15,7 +15,7 @@ function openCheckoutModal(orderId) {
   document.getElementById('coOrderLabel').textContent = orderId + ' — ' + total;
 
   // Reset payment buttons
-  ['GCASH','CASH','CARD'].forEach(function(k){
+  ['GCASH','CASH','CARD','YANI_CARD'].forEach(function(k){
     var b = document.getElementById('coBtnGCASH'.replace('GCASH',k));
     if (b) b.className = 'pm-btn';
   });
@@ -52,7 +52,7 @@ function openCheckoutModal(orderId) {
   // If order already has payment method pre-select it
   if (order && order.paymentMethod) {
     var pm = order.paymentMethod.split('+')[0];
-    if (['GCASH','CASH','CARD'].includes(pm)) { coPayMethod = pm; document.getElementById('coBtnGCASH'.replace('GCASH',pm)).className = 'pm-btn selected'; }
+    if (['GCASH','CASH','CARD','YANI_CARD'].includes(pm)) { coPayMethod = pm; var btn=document.getElementById('coBtnGCASH'.replace('GCASH',pm)); if(btn) btn.className = 'pm-btn selected'; }
     coUpdateConfirmBtn();
   }
 
@@ -67,10 +67,21 @@ function closeCheckoutModal() {
 function coSelectPM(method, ev) {
   if (ev) ev.stopPropagation();
   coPayMethod = method;
-  ['GCASH','CASH','CARD'].forEach(function(k){
+  ['GCASH','CASH','CARD','YANI_CARD'].forEach(function(k){
     var b = document.getElementById('coBtnGCASH'.replace('GCASH',k));
     if (b) b.className = 'pm-btn' + (k===method ? ' selected' : '');
   });
+  // Yani Card = payment + discount in one tap
+  if (method === 'YANI_CARD') {
+    var discChk = document.getElementById('coHasDiscount');
+    if (discChk && !discChk.checked) { discChk.checked = true; coToggleDiscount(); }
+    coSelectDisc('YANI_CARD');
+  } else if (coDiscType === 'YANI_CARD') {
+    // Switched away — clear yani card discount
+    var discChk2 = document.getElementById('coHasDiscount');
+    if (discChk2) { discChk2.checked = false; coToggleDiscount(); }
+    coDiscType = null;
+  }
   coUpdateConfirmBtn();
 }
 
