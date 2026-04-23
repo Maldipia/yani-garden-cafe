@@ -361,69 +361,18 @@ function onMenuPhotoFileChange(input) {
   btn.textContent = 'Upload';
 }
 
-// Canvas resize + base64 encoding via Web Worker — runs off the main thread
-// Falls back to async main-thread encoding if Worker is unavailable
-async function _encodeMenuPhoto(file) {
-  // Try Web Worker path first (Chrome, Edge, Firefox, Safari 15+)
-  if (typeof Worker !== 'undefined') {
-    var blobUrl = URL.createObjectURL(file);
-    try {
-      return await new Promise(function(resolve, reject) {
-        var worker = new Worker('/image-encoder.worker.js');
-        // 10s timeout so we always fall through if worker hangs
-        var timer = setTimeout(function() {
-          worker.terminate();
-          URL.revokeObjectURL(blobUrl);
-          reject(new Error('Worker timeout'));
-        }, 10000);
-        worker.onmessage = function(e) {
-          clearTimeout(timer);
-          worker.terminate();
-          URL.revokeObjectURL(blobUrl);
-          if (e.data.ok) resolve(e.data.base64);
-          else reject(new Error(e.data.error));
-        };
-        worker.onerror = function(err) {
-          clearTimeout(timer);
-          worker.terminate();
-          URL.revokeObjectURL(blobUrl);
-          reject(err);
-        };
-        worker.postMessage({ blobUrl: blobUrl });
-      });
-    } catch(e) {
-      URL.revokeObjectURL(blobUrl);
-      // Worker failed — fall through to main-thread fallback
-    }
-  }
-  // Fallback: main-thread canvas encode — fully async via FileReader + Image.onload
-  // The canvas.toDataURL call is the only synchronous part but it runs AFTER
-  // the browser has already painted the 'Uploading...' state, so INP is not affected.
+// Base64 encode via FileReader — simple, works on all browsers
+function _encodeMenuPhoto(file) {
   return new Promise(function(resolve, reject) {
     var reader = new FileReader();
     reader.onload = function(e) {
-      var img = new Image();
-      img.onload = function() {
-        // Yield one more frame before the synchronous canvas work
-        requestAnimationFrame(function() {
-          try {
-            var MAX = 1200;
-            var w = img.width, h = img.height;
-            if (w > MAX || h > MAX) {
-              if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
-              else { w = Math.round(w * MAX / h); h = MAX; }
-            }
-            var canvas = document.createElement('canvas');
-            canvas.width = w; canvas.height = h;
-            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-            resolve(canvas.toDataURL('image/jpeg', 0.85).split(',')[1]);
-          } catch(err) { reject(err); }
-        });
-      };
-      img.onerror = reject;
-      img.src = e.target.result;
+      // Strip the data URI prefix and return raw base64
+      var result = e.target.result;
+      var base64 = result.split(',')[1];
+      if (!base64) { reject(new Error('Failed to read file')); return; }
+      resolve(base64);
     };
-    reader.onerror = reject;
+    reader.onerror = function() { reject(new Error('File read error')); };
     reader.readAsDataURL(file);
   });
 }
