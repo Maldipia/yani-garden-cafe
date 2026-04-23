@@ -2231,6 +2231,7 @@ function renderCheckoutPage() {
     + '</div>'
     + (yaniStatus ? '<div style="font-size:.82rem;margin-top:4px;font-weight:600;color:' + (state.yaniCardValid?'#065F46':'#B5443A') + '">' + esc(yaniStatus) + '</div>' : '')
     + (state.yaniCardValid && yaniDisc > 0 ? '<div style="margin-top:8px;background:#F0FDF4;border-radius:8px;padding:10px 14px;font-size:.85rem;color:#065F46;font-weight:700">🎉 10% discount — you save ' + peso(yaniDisc) + '!</div>' : '')
+    + '<div style="font-size:.72rem;color:var(--timber);margin-top:8px;font-style:italic">⚠️ Your Yani Card must be presented to the cashier for verification when paying.</div>'
     + '</div>';
 
   if (state.yaniCardValid && yaniDisc > 0) {
