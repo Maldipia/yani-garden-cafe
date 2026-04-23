@@ -128,6 +128,22 @@ function _cardsShell() {
     + '<button onclick="_closeReloadModal()" style="flex:1;padding:10px;background:var(--mist-light);border:none;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;color:var(--timber)">Cancel</button>'
     + '<button onclick="_submitReload()" style="flex:1;padding:10px;background:#1D4ED8;color:#fff;border:none;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer">Reload</button>'
     + '</div></div></div>';
+
+    // ── Edit Holder Modal ──────────────────────────────────
+    + '<div id="cardEditModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9000;align-items:center;justify-content:center;padding:20px">'
+    + '<div style="background:#fff;border-radius:16px;width:100%;max-width:380px;padding:24px">'
+    + '<h3 style="font-size:1rem;font-weight:800;color:var(--forest-deep);margin:0 0 14px">✏️ Edit Card Holder</h3>'
+    + '<div style="font-size:.82rem;color:var(--timber);margin-bottom:14px">Card: <strong id="editCardNum"></strong></div>'
+    + '<label style="font-size:.75rem;font-weight:700;color:var(--timber);display:block;margin-bottom:3px">FULL NAME</label>'
+    + '<input id="editHolderName" type="text" placeholder="e.g. Maria Santos" style="width:100%;padding:9px 12px;border:1.5px solid var(--mist);border-radius:8px;font-size:.88rem;font-family:var(--font-body);box-sizing:border-box;margin-bottom:10px">'
+    + '<label style="font-size:.75rem;font-weight:700;color:var(--timber);display:block;margin-bottom:3px">PHONE</label>'
+    + '<input id="editHolderPhone" type="tel" placeholder="e.g. 09171234567" style="width:100%;padding:9px 12px;border:1.5px solid var(--mist);border-radius:8px;font-size:.88rem;font-family:var(--font-body);box-sizing:border-box;margin-bottom:10px">'
+    + '<label style="font-size:.75rem;font-weight:700;color:var(--timber);display:block;margin-bottom:3px">EMAIL (optional)</label>'
+    + '<input id="editHolderEmail" type="email" placeholder="e.g. maria@email.com" style="width:100%;padding:9px 12px;border:1.5px solid var(--mist);border-radius:8px;font-size:.88rem;font-family:var(--font-body);box-sizing:border-box;margin-bottom:14px">'
+    + '<div style="display:flex;gap:8px">'
+    + '<button onclick="_closeEditModal()" style="flex:1;padding:10px;background:var(--mist-light);border:none;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;color:var(--timber)">Cancel</button>'
+    + '<button onclick="_submitEditHolder()" style="flex:1;padding:10px;background:var(--forest);color:#fff;border:none;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer">Save</button>'
+    + '</div></div></div>'
 }
 
 // ── Render stats + filters + table ────────────────────────────
@@ -202,6 +218,7 @@ function _cardsRender() {
     if (c.status==='ACTIVE') {
       html += '<button onclick="openCardReload(\''+c.card_number+'\',\''+parseFloat(c.balance||0).toFixed(2)+'\')" style="background:#1D4ED8;color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:.75rem;font-weight:700;cursor:pointer;margin-right:4px">Reload</button>';
     }
+    html += '<button onclick="openEditHolder(\''+c.card_number+'\',\''+encodeURIComponent(c.holder_name||'')+'\',\''+encodeURIComponent(c.holder_phone||'')+'\',\''+encodeURIComponent(c.holder_email||'')+'\')" style="background:var(--mist-light);color:var(--timber);border:none;border-radius:6px;padding:5px 10px;font-size:.75rem;font-weight:700;cursor:pointer;margin-right:4px">✏️ Edit</button>';
     html += '<button onclick="openCardTxns(\''+c.card_number+'\')" style="background:var(--mist-light);color:var(--timber);border:none;border-radius:6px;padding:5px 10px;font-size:.75rem;font-weight:700;cursor:pointer">History</button>';
     html += '</td></tr>';
   });
@@ -421,6 +438,38 @@ async function openCardTxns(cardNumber) {
   } catch(e) {
     document.getElementById('cardTxnBody').innerHTML='<p style="color:#B5443A;padding:20px">❌ '+e.message+'</p>';
   }
+}
+
+// ── Edit holder ──────────────────────────────────────────────
+var _editCardNumber = '';
+function openEditHolder(cardNumber, nameEnc, phoneEnc, emailEnc) {
+  _editCardNumber = cardNumber;
+  document.getElementById('editCardNum').textContent = cardNumber;
+  document.getElementById('editHolderName').value  = decodeURIComponent(nameEnc);
+  document.getElementById('editHolderPhone').value = decodeURIComponent(phoneEnc);
+  document.getElementById('editHolderEmail').value = decodeURIComponent(emailEnc);
+  document.getElementById('cardEditModal').style.display = 'flex';
+}
+function _closeEditModal() { document.getElementById('cardEditModal').style.display='none'; }
+async function _submitEditHolder() {
+  var name  = document.getElementById('editHolderName').value.trim();
+  var phone = document.getElementById('editHolderPhone').value.trim();
+  var email = document.getElementById('editHolderEmail').value.trim();
+  if (!name && !phone) { showToast('❌ Enter at least a name or phone','error'); return; }
+  _closeEditModal();
+  try {
+    var r = await fetch('/api/card', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ action:'updateCardHolder', pin:'2026',
+        card_number: _editCardNumber,
+        holder_name: name || null,
+        holder_phone: phone || null,
+        holder_email: email || null })
+    });
+    var d = await r.json();
+    if (d.ok) { showToast('✅ Card holder updated'); await _cardsFetch(); }
+    else showToast('❌ '+(d.error||'Update failed'),'error');
+  } catch(e) { showToast('❌ '+e.message,'error'); }
 }
 
 // ── API helper ────────────────────────────────────────────────

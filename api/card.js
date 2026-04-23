@@ -213,7 +213,7 @@ export default async function handler(req, res) {
       const { pin, status } = body;
       const isOwner = await verifyOwnerPin(pin);
       if (!isOwner) return res.status(403).json({ ok: false, error: 'Owner PIN required' });
-      let url = '/rest/v1/yani_cards?select=card_number,holder_name,holder_phone,tier,balance,status,total_loaded,total_spent,total_saved,activated_at&order=card_number.asc';
+      let url = '/rest/v1/yani_cards?select=card_number,holder_name,holder_phone,holder_email,tier,balance,status,total_loaded,total_spent,total_saved,activated_at&order=card_number.asc';
       if (status) url += `&status=eq.${encodeURIComponent(status)}`;
       const r = await supa(url);
       return res.status(200).json({ ok: true, cards: r.data || [] });
@@ -233,8 +233,29 @@ export default async function handler(req, res) {
       const { pin } = body;
       const isOwner = await verifyOwnerPin(pin);
       if (!isOwner) return res.status(403).json({ ok: false, error: 'Owner PIN required' });
-      const r = await supa('/rest/v1/yani_cards?select=card_number,holder_name,holder_phone,tier,balance,status,qr_token,activated_at&order=card_number.asc');
+      const r = await supa('/rest/v1/yani_cards?select=card_number,holder_name,holder_phone,holder_email,tier,balance,status,qr_token,activated_at&order=card_number.asc');
       return res.status(200).json({ ok: true, cards: r.data || [] });
+    }
+
+    // ── OWNER: update card holder info ──────────────────────────────────
+    if (action === 'updateCardHolder') {
+      const { pin, card_number, holder_name, holder_phone, holder_email } = body;
+      const isOwner = await verifyOwnerPin(pin);
+      if (!isOwner) return res.status(403).json({ ok: false, error: 'Owner PIN required' });
+      if (!card_number) return res.status(400).json({ ok: false, error: 'card_number required' });
+      const cleanNum = card_number.trim().toUpperCase();
+      const patch = {};
+      if (holder_name  !== undefined) patch.holder_name  = holder_name;
+      if (holder_phone !== undefined) patch.holder_phone = holder_phone;
+      if (holder_email !== undefined) patch.holder_email = holder_email;
+      patch.updated_at = new Date().toISOString();
+      const r = await supa(
+        `/rest/v1/yani_cards?card_number=eq.${encodeURIComponent(cleanNum)}`,
+        { method: 'PATCH', body: JSON.stringify(patch),
+          headers: { 'Prefer': 'return=representation' } }
+      );
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Update failed' });
+      return res.status(200).json({ ok: true, card: (r.data||[])[0] || null });
     }
 
     return res.status(400).json({ ok: false, error: `Unknown action: ${action}` });
