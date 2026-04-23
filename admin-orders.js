@@ -182,17 +182,29 @@ function renderOrders() {
     } else {
       // Show customer's chosen payment method even before it's confirmed
       var chosenMethod = (o.paymentMethod || '').toUpperCase().trim();
-      var pmLabel = chosenMethod
-        ? ((pmIcons[chosenMethod] || '💰') + ' ' + chosenMethod.charAt(0) + chosenMethod.slice(1).toLowerCase() + ' · Not yet confirmed')
-        : '⏳ No payment yet';
-      var pmClass = chosenMethod ? 'oc-payment pending-method' : 'oc-payment none';
-      if (canSetPayment) {
+      if (chosenMethod === 'YANI_CARD') {
+        // Yani Card: pre-set by customer — show card ref + direct Complete button
+        var cardRef = (o.discountNote || '').replace('Yani Card: ', '') || 'Yani Card';
         html += '<div class="oc-payment-row">'
-          + '<div class="' + pmClass + '">' + pmLabel + '</div>'
-          + '<button class="oc-pm-set" onclick="openPaymentModal(\'' + esc(o.orderId) + '\')">Set Payment</button>'
-          + '</div>';
+          + '<div class="oc-payment pending-method">🌿 ' + esc(cardRef) + ' · Card payment</div>';
+        if (canSetPayment && o.status !== 'COMPLETED' && o.status !== 'CANCELLED') {
+          html += '<button class="oc-pm-set" style="background:var(--forest);color:#fff;border:none;font-weight:700" '
+            + 'onclick="_completeYaniCardOrder(\'' + esc(o.orderId) + '\')">✅ Complete</button>';
+        }
+        html += '</div>';
       } else {
-        html += '<div class="' + pmClass + '">' + pmLabel + '</div>';
+        var pmLabel = chosenMethod
+          ? ((pmIcons[chosenMethod] || '💰') + ' ' + chosenMethod.charAt(0) + chosenMethod.slice(1).toLowerCase() + ' · Not yet confirmed')
+          : '⏳ No payment yet';
+        var pmClass = chosenMethod ? 'oc-payment pending-method' : 'oc-payment none';
+        if (canSetPayment) {
+          html += '<div class="oc-payment-row">'
+            + '<div class="' + pmClass + '">' + pmLabel + '</div>'
+            + '<button class="oc-pm-set" onclick="openPaymentModal(\'' + esc(o.orderId) + '\')">Set Payment</button>'
+            + '</div>';
+        } else {
+          html += '<div class="' + pmClass + '">' + pmLabel + '</div>';
+        }
       }
     }
 
@@ -204,7 +216,7 @@ function renderOrders() {
     // Discount display
     var canDiscount = (currentUser.role === 'OWNER' || currentUser.role === 'ADMIN' || currentUser.role === 'CASHIER');
     if (o.discountType && parseFloat(o.discountAmount) > 0) {
-      var dtLabel = {PWD:'PWD 20%',SENIOR:'Senior 20%',BOTH:'PWD+Senior',PROMO:'Promo',CUSTOM:'Custom'}[o.discountType] || o.discountType;
+      var dtLabel = {PWD:'PWD 20%',SENIOR:'Senior 20%',BOTH:'PWD+Senior',PROMO:'Promo',CUSTOM:'Custom',YANI_CARD:'🌿 Yani Card 10%'}[o.discountType] || o.discountType;
       html += '<div class="oc-discount-row">'
         + '<span class="oc-discount-badge">🏷️ ' + dtLabel + ' -₱' + parseFloat(o.discountAmount).toFixed(2) + '</span>';
       if (canDiscount && o.status !== 'CANCELLED') {
@@ -362,6 +374,24 @@ async function adminTogglePrep(rowEl, orderId, itemId, currentPrepared) {
   }
 }
 
+// Direct complete for Yani Card orders — no payment modal needed
+async function _completeYaniCardOrder(orderId) {
+  if (!confirm('Complete ' + orderId + '?
+Card will be charged automatically.')) return;
+  var result = await api('updateOrderStatus', {
+    orderId: orderId, status: 'COMPLETED',
+    userId: currentUser && currentUser.userId
+  });
+  if (result && result.ok) {
+    _statusOverrides[orderId] = { status: 'COMPLETED', ts: Date.now() };
+    allOrders.forEach(function(o){ if (o.orderId===orderId) { o.status='COMPLETED'; } });
+    renderStats(); renderFilters(); renderOrders();
+    showToast(orderId + ' — Completed ✅ Card charged', 2500);
+  } else {
+    showToast('❌ ' + ((result && result.error) || 'Failed to complete'), 'error');
+  }
+}
+
 async function updateStatus(orderId, newStatus) {
   if (newStatus === 'CANCELLED') {
     // Ask for cancel reason
@@ -394,7 +424,10 @@ async function updateStatus(orderId, newStatus) {
   if (newStatus === 'COMPLETED') {
     var order = allOrders.find(function(o) { return o.orderId === orderId; });
     var canPay = (currentUser.role === 'OWNER' || currentUser.role === 'ADMIN' || currentUser.role === 'CASHIER');
-    if (canPay && order && order.orderType !== 'PLATFORM') {
+    // Yani Card orders: payment already set — complete directly, card auto-charges
+    if (order && order.paymentMethod === 'YANI_CARD' && order.discountType === 'YANI_CARD') {
+      // fall through to direct complete below
+    } else if (canPay && order && order.orderType !== 'PLATFORM') {
       openCheckoutModal(orderId);
       return;
     }
