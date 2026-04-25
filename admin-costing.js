@@ -344,12 +344,16 @@ function getCostingCatStyle(cat) {
   var map = {
     'HOT':         {bg:'#fef3c7',color:'#92400e'},
     'ICE BLENDED': {bg:'#dbeafe',color:'#1e40af'},
+    'ICE AND ICE BLENDED': {bg:'#dbeafe',color:'#1e40af'},
     'COLD':        {bg:'#e0f2fe',color:'#0369a1'},
     'PASTRY':      {bg:'#fce7f3',color:'#9d174d'},
     'PASTA':       {bg:'#fef9c3',color:'#854d0e'},
     'MEAL':        {bg:'#d1fae5',color:'#065f46'},
+    'MEALS':       {bg:'#d1fae5',color:'#065f46'},
     'BEST WITH':   {bg:'#ede9fe',color:'#5b21b6'},
+    'PASALUBONG':  {bg:'#fdf2f8',color:'#9d174d'},
     'OTHER':       {bg:'#f1f5f9',color:'#475569'},
+    'WRAP':        {bg:'#f0fdf4',color:'#166534'},
   };
   return map[cat] || {bg:'#f1f5f9',color:'#475569'};
 }
@@ -472,6 +476,7 @@ function renderCostingRecModal() {
     + '<option value="PASTA">PASTA</option>'
     + '<option value="MEAL">MEAL</option>'
     + '<option value="BEST WITH">BEST WITH</option>'
+    + '<option value="PASALUBONG">PASALUBONG</option>'
     + '<option value="OTHER">OTHER</option>'
     + '</select></div>'
     + '<div style="margin-bottom:16px"><label style="font-size:.72rem;font-weight:700;color:var(--timber);display:block;margin-bottom:4px">Selling price (₱)</label>'
@@ -573,7 +578,7 @@ async function saveRecipeIngsToDB(rid) {
 }
 
 function renderCostingPricing(panel) {
-  var cats = ['ALL','HOT','ICE BLENDED','COLD','PASTRY','PASTA','MEAL','BEST WITH','OTHER'];
+  var cats = ['ALL','HOT','ICE BLENDED','ICE AND ICE BLENDED','COLD','PASTRY','PASTA','MEAL','MEALS','BEST WITH','PASALUBONG','OTHER','WRAP'];
   var activeCat = window._costingPricingCat || 'ALL';
   var filtered = activeCat === 'ALL' ? _costingRecipes : _costingRecipes.filter(function(r){return r.category===activeCat;});
 
