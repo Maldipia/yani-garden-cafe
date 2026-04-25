@@ -27,16 +27,25 @@ async function loadCostingView() {
   }
   try {
     var sb = _getSB();
-    var [ingRes, recRes, riRes] = await Promise.all([
+    var [ingRes, recRes, riRes, menuRes] = await Promise.all([
       sb.from('costing_ingredients').select('*').order('category').order('name'),
       sb.from('costing_recipes').select('*').order('category').order('name'),
-      sb.from('costing_recipe_ingredients').select('*')
+      sb.from('costing_recipe_ingredients').select('*'),
+      sb.from('menu_items').select('item_code,name,category_id,is_active').eq('is_active',true)
     ]);
     _costingIngredients = ingRes.data || [];
     _costingRecipes = (recRes.data || []).map(function(r) {
       r.ingredients = (riRes.data || []).filter(function(ri) { return ri.recipe_id === r.id; });
       return r;
     });
+    // Store all menu items with their category names for filter chips
+    // Map category_id → name via menu_categories
+    try {
+      var catRes = await sb.from('menu_categories').select('id,name');
+      var catMap = {};
+      (catRes.data || []).forEach(function(c){ catMap[c.id] = c.name; });
+      window._allMenuItems = (menuRes.data || []).map(function(m){ m.category = catMap[m.category_id] || 'OTHER'; return m; });
+    } catch(e) { window._allMenuItems = null; }
   } catch(e) {
     view.innerHTML = '<div style="padding:24px;color:var(--terra)">Error loading costing data: ' + e.message + '</div>';
     return;
@@ -346,9 +355,16 @@ function getCostingCatStyle(cat) {
 }
 
 function renderCostingRecipe(panel) {
-  var allCats = ['ALL'];
-  _costingRecipes.forEach(function(r) { if (r.category && allCats.indexOf(r.category) < 0) allCats.push(r.category); });
-  var catOrder = ['ALL','HOT','ICE BLENDED','COLD','PASTRY','PASTA','MEAL','BEST WITH','OTHER'];
+  // Always show all known categories — not just ones with costed recipes
+  var catOrder = ['ALL','HOT','ICE BLENDED','ICE AND ICE BLENDED','COLD','PASTRY','PASTA','MEAL','MEALS','BEST WITH','PASALUBONG','OTHER','WRAP'];
+  // Collect actual categories from all menu items (loaded separately)
+  var seenCats = ['ALL'];
+  _costingRecipes.forEach(function(r) { if (r.category && seenCats.indexOf(r.category) < 0) seenCats.push(r.category); });
+  // Also add cats from _allMenuItems if available
+  if (window._allMenuItems) {
+    window._allMenuItems.forEach(function(m) { if (m.category && seenCats.indexOf(m.category) < 0) seenCats.push(m.category); });
+  }
+  var allCats = seenCats;
   allCats.sort(function(a,b){ var ai=catOrder.indexOf(a),bi=catOrder.indexOf(b); return (ai<0?99:ai)-(bi<0?99:bi); });
 
   var filtered = _costingCatFilter === 'ALL' ? _costingRecipes : _costingRecipes.filter(function(r){return r.category===_costingCatFilter;});
@@ -358,7 +374,7 @@ function renderCostingRecipe(panel) {
   allCats.forEach(function(c) {
     var active = _costingCatFilter === c;
     var st = c === 'ALL' ? {bg:'var(--forest)',color:'var(--white)'} : getCostingCatStyle(c);
-    chipsHtml += '<button onclick="setCostingRecCat(\'' + c + '\')" style="padding:3px 10px;font-size:.62rem;font-weight:700;font-family:var(--font-body);border:1.5px solid ' + (active?(c==='ALL'?'var(--forest)':st.color):'var(--mist)') + ';background:' + (active?(c==='ALL'?'var(--forest)':st.bg):'transparent') + ';color:' + (active?(c==='ALL'?'var(--white)':st.color):'var(--timber)') + ';border-radius:20px;cursor:pointer;white-space:nowrap">' + (c==='ALL'?'All ('+_costingRecipes.length+')':c+' ('+_costingRecipes.filter(function(r){return r.category===c;}).length+')') + '</button>';
+    chipsHtml += '<button onclick="setCostingRecCat(\'' + c + '\')" style="padding:3px 10px;font-size:.62rem;font-weight:700;font-family:var(--font-body);border:1.5px solid ' + (active?(c==='ALL'?'var(--forest)':st.color):'var(--mist)') + ';background:' + (active?(c==='ALL'?'var(--forest)':st.bg):'transparent') + ';color:' + (active?(c==='ALL'?'var(--white)':st.color):'var(--timber)') + ';border-radius:20px;cursor:pointer;white-space:nowrap">' + (c==='ALL'?'All ('+_costingRecipes.length+')':c+' ('+((window._allMenuItems?window._allMenuItems.filter(function(m){return m.category===c;}).length:_costingRecipes.filter(function(r){return r.category===c;}).length))+')') + '</button>';
   });
   chipsHtml += '</div>';
 
