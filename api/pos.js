@@ -296,15 +296,15 @@ function validateMenuPayload(body, requireItemId = false) {
 
 // ── Category UUID ↔ name maps (from menu_categories table) ──────────────────
 const CATEGORY_ID_TO_NAME = {
-  '228b02da-1a81-46e4-aae2-794b5c88a990': 'Pastry',
-  '069ee74a-350f-467a-86ef-876dd48ced3e': 'Hot',
-  '9094c828-1da1-4802-838b-8eb4da3c16be': 'Ice And Ice Blended',
-  '098a930f-3789-42fd-b7ca-bd704126ec08': 'Pasta',
-  '1b803e7a-c69c-442a-991c-d62c99e6dd11': 'Other',
-  '9abfbe5e-3c68-43cb-bed3-4ed5c63380c1': 'Wrap',
-  '9268943a-b5ed-40c3-ac51-4411e06805de': 'Meals',
-  '5297871b-fa2e-4376-bd81-6d9b0c173be8': 'Best With',
-  'a3123278-d6ba-4004-89db-479248efea6d': 'Pasalubong',
+  '069ee74a-350f-467a-86ef-876dd48ced3e': 'HOT',
+  '9094c828-1da1-4802-838b-8eb4da3c16be': 'ICE AND ICE BLENDED',
+  '228b02da-1a81-46e4-aae2-794b5c88a990': 'PASTRY',
+  '098a930f-3789-42fd-b7ca-bd704126ec08': 'PASTA',
+  '9abfbe5e-3c68-43cb-bed3-4ed5c63380c1': 'WRAP',
+  '1b803e7a-c69c-442a-991c-d62c99e6dd11': 'OTHER',
+  '9268943a-b5ed-40c3-ac51-4411e06805de': 'MEALS',
+  '5297871b-fa2e-4376-bd81-6d9b0c173be8': 'BEST WITH',
+  'a3123278-d6ba-4004-89db-479248efea6d': 'PASALUBONG',
 };
 const CATEGORY_NAME_TO_ID = Object.fromEntries(
   Object.entries(CATEGORY_ID_TO_NAME).map(([id, name]) => [name.toUpperCase(), id])
