@@ -20,7 +20,7 @@ const SAFE_KEYS = [
 
 // Hardcoded fallback so site never goes blank when DB is slow/unavailable
 const FALLBACK_CONFIG = {
-  BUSINESS_NAME:    'YANI Garden Cafe',
+  BUSINESS_NAME:    'Yani Garden Cafe',
   ORDER_PREFIX:     'YANI',
   SERVICE_CHARGE:   '0.10',
   CURRENCY:         'PHP',
@@ -28,16 +28,17 @@ const FALLBACK_CONFIG = {
   PRIMARY_COLOR:    '#2D5016',
   SECONDARY_COLOR:  '#78350F',
   LOGO_URL:         'https://hnynvclpvfxzlfjphefj.supabase.co/storage/v1/object/public/card-assets/ygc-logo.png',
-  ADDRESS:          'Amadeo, Cavite, Philippines',
+  ADDRESS:          'Amadeo, Cavite',
   TAGLINE:          'Holding a cup of Yani everyday...',
   SESSION_KEY:      'pos_session_token',
   WELCOME_ENABLED:  'true',
-  WELCOME_TITLE:    'Welcome to YANI Garden Cafe',
-  WELCOME_STORY:    'Tucked away in the highlands of Amadeo, Cavite at 450 MASL, YANI Garden Cafe is more than a coffee stop — it\u2019s a sanctuary.\n\nEvery cup is brewed with care from beans grown in our own backyard, served in a garden where time slows down and conversations bloom.\n\nWe believe in food that nourishes, coffee that inspires, and moments that linger.',
-  WELCOME_TAGLINE:  'Holding a cup of Yani everyday...',
-  WELCOME_GUIDE:    'Scan to order \u2022 Pay at counter \u2022 Sit back & relax',
-  WELCOME_BUTTON:   'Start Ordering',
+  WELCOME_TITLE:    'YANI Garden Cafe',
+  WELCOME_STORY:    'Behind YANI is a family\nYANI is not just a café.\n It\u2019s where flavors are created.\n\n hands-on, intentional, present in every detail.\n\nsome things were built. some were tested. \nsome failed... then perfected.\n\nOur sauces... combinations... process.\nfrom farm eggs to fresh calamansi,\n chosen, prepared, and used with purpose.\n\nFrom our coffee\u2026 to our sauces\u2026 \nto every plate we serve\nEverything here is made with care.\n\nYANI is still growing.\n Still learning.\n Still building.\n\nfrom: Pia, Myk, Mayo, Ivan, Chinlee, Mark , Aira , tita Fina, Nijhel and Weng\nWe Thank you for your patience.\n\nYou\u2019re part of this story now.',
+  WELCOME_TAGLINE:  'Thank you for being here today. \ud83c\udf3f',
+  WELCOME_GUIDE:    'Browse our menu by category, tap any item to add it to your order. Your order goes straight to our kitchen.',
+  WELCOME_BUTTON:   'See Our Menu \u2192',
   WELCOME_AUTO_SECONDS: '0',
+  WELCOME_BG_URL:   'https://hnynvclpvfxzlfjphefj.supabase.co/storage/v1/object/public/menu-images/WELCOME_BG.jpg',
   CARD_PAYMENT_MODE: 'manual',
 };
 
