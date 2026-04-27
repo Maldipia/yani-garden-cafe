@@ -320,15 +320,33 @@ async function saveCostingIng() {
     category: document.getElementById('cing-cat').value
   };
   if (!payload.name || isNaN(payload.cost_per_unit)) { showToast('Name and cost required'); return; }
+
   var sb = _getSB();
+
+  // Prevent duplicates on insert (case-insensitive name + same category)
+  if (!id) {
+    var dup = _costingIngredients.find(function(i){
+      return i.name.toLowerCase() === payload.name.toLowerCase()
+          && (i.category || '') === (payload.category || '');
+    });
+    if (dup) {
+      showToast('"' + payload.name + '" already exists in ' + payload.category + ' \u2014 not added again');
+      closeCostingIngModal();
+      return;
+    }
+  }
+
   if (id) {
     await sb.from('costing_ingredients').update(payload).eq('id', parseInt(id));
   } else {
     await sb.from('costing_ingredients').insert(payload);
   }
   closeCostingIngModal();
+  // Reload data — _costingIngredients is now fresh
   await loadCostingView();
-  setCostingTab('inventory');
+  // Stay on the tab the user was on (default to inventory if first open)
+  setCostingTab(_costingTab || 'inventory');
+  showToast(id ? 'Ingredient updated \u2705' : 'Ingredient added \u2705 \u2014 now available in all recipe dropdowns');
 }
 
 async function deleteCostingIng(id) {
@@ -409,7 +427,22 @@ function renderCostingRecipe(panel) {
       var ingRows = (rec.ingredients || []).map(function(ri, idx) {
         var ing = _costingIngredients.find(function(i){return i.id===ri.ingredient_id;});
         var rowCost = ing ? Number(ing.cost_per_unit) * Number(ri.qty) : 0;
-        var opts = _costingIngredients.map(function(i){return '<option value="'+i.id+'"'+(i.id===ri.ingredient_id?' selected':'')+'>'+i.name+' (₱'+i.cost_per_unit+'/'+i.unit+')</option>';}).join('');
+        // Group dropdown by category, sorted alphabetically within each
+        var groups = {};
+        _costingIngredients.forEach(function(i){
+          var cat = i.category || 'Other';
+          if (!groups[cat]) groups[cat] = [];
+          groups[cat].push(i);
+        });
+        var orderedCats = Object.keys(groups).sort();
+        var opts = orderedCats.map(function(cat){
+          var items = groups[cat].slice().sort(function(a,b){return a.name.localeCompare(b.name);});
+          return '<optgroup label="' + cat + ' (' + items.length + ')">'
+            + items.map(function(i){
+                return '<option value="'+i.id+'"'+(i.id===ri.ingredient_id?' selected':'')+'>'+i.name+' \u2014 \u20b1'+i.cost_per_unit+'/'+i.unit+'</option>';
+              }).join('')
+            + '</optgroup>';
+        }).join('');
         return '<div style="display:grid;grid-template-columns:1fr 80px 90px auto;gap:8px;align-items:center;margin-bottom:8px">'
           + '<select onchange="updateRecipeIng('+rec.id+','+idx+',\'iid\',this.value)" style="padding:6px 8px;font-size:.72rem;border:1.5px solid var(--mist);border-radius:var(--r-sm);font-family:var(--font-body);background:var(--white)">' + opts + '</select>'
           + '<input type="number" step="0.1" value="'+ri.qty+'" onchange="updateRecipeIng('+rec.id+','+idx+',\'qty\',this.value)" oninput="updateRecipeIng('+rec.id+','+idx+',\'qty\',this.value)" style="padding:6px 8px;font-size:.72rem;border:1.5px solid var(--mist);border-radius:var(--r-sm);text-align:right;width:100%">'
