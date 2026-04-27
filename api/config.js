@@ -18,9 +18,34 @@ const SAFE_KEYS = [
   'PAYMENT_IMAGE_URL','CARD_PAYMENT_MODE',
 ];
 
-// Cache for 5 min — config rarely changes
+// Hardcoded fallback so site never goes blank when DB is slow/unavailable
+const FALLBACK_CONFIG = {
+  BUSINESS_NAME:    'YANI Garden Cafe',
+  ORDER_PREFIX:     'YANI',
+  SERVICE_CHARGE:   '0.10',
+  CURRENCY:         'PHP',
+  TIMEZONE:         'Asia/Manila',
+  PRIMARY_COLOR:    '#2D5016',
+  SECONDARY_COLOR:  '#78350F',
+  LOGO_URL:         'https://hnynvclpvfxzlfjphefj.supabase.co/storage/v1/object/public/card-assets/ygc-logo.png',
+  ADDRESS:          'Amadeo, Cavite, Philippines',
+  TAGLINE:          'Holding a cup of Yani everyday...',
+  SESSION_KEY:      'pos_session_token',
+  WELCOME_ENABLED:  'true',
+  WELCOME_TITLE:    'Welcome to YANI Garden Cafe',
+  WELCOME_STORY:    'Tucked away in the highlands of Amadeo, Cavite at 450 MASL, YANI Garden Cafe is more than a coffee stop — it\u2019s a sanctuary.\n\nEvery cup is brewed with care from beans grown in our own backyard, served in a garden where time slows down and conversations bloom.\n\nWe believe in food that nourishes, coffee that inspires, and moments that linger.',
+  WELCOME_TAGLINE:  'Holding a cup of Yani everyday...',
+  WELCOME_GUIDE:    'Scan to order \u2022 Pay at counter \u2022 Sit back & relax',
+  WELCOME_BUTTON:   'Start Ordering',
+  WELCOME_AUTO_SECONDS: '0',
+  CARD_PAYMENT_MODE: 'manual',
+};
+
+// Long cache — 24 hours. Config rarely changes.
+// Admin edits show after this window or after a redeploy.
 let _cache = null;
 let _cacheAt = 0;
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 module.exports = async function handler(req, res) {
   const origin = req.headers.origin || '';
@@ -35,35 +60,37 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'GET') return res.status(405).json({ ok: false, error: 'GET only' });
 
-  // Serve from cache
-  if (_cache && Date.now() - _cacheAt < 60 * 1000) { // 60s cache — edits show within 1 minute
+  // Serve from in-memory cache
+  if (_cache && Date.now() - _cacheAt < CACHE_TTL_MS) {
     return res.status(200).json({ ok: true, config: _cache, cached: true });
   }
 
+  // Try DB with a 5-second timeout
+  let config = { ...FALLBACK_CONFIG };
+  let source = 'fallback';
   try {
+    const ctrl = new AbortController();
+    const timeoutId = setTimeout(() => ctrl.abort(), 5000);
     const r = await fetch(
       `${SUPABASE_URL}/rest/v1/settings?select=key,value&key=in.(${SAFE_KEYS.map(k => `"${k}"`).join(',')})`,
-      { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+      { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }, signal: ctrl.signal }
     );
+    clearTimeout(timeoutId);
     const rows = await r.json();
-    const config = {};
-    (rows || []).forEach(({ key, value }) => { config[key] = value; });
-
-    // Defaults for anything missing
-    config.BUSINESS_NAME    = config.BUSINESS_NAME    || 'My Cafe';
-    config.ORDER_PREFIX     = config.ORDER_PREFIX     || 'ORD';
-    config.SERVICE_CHARGE   = config.SERVICE_CHARGE   || '0.10';
-    config.PRIMARY_COLOR    = config.PRIMARY_COLOR    || '#2D5016';
-    config.SECONDARY_COLOR  = config.SECONDARY_COLOR  || '#78350F';
-    config.LOGO_URL         = config.LOGO_URL         || '/images/logo.png';
-    config.CURRENCY         = config.CURRENCY         || 'PHP';
-    config.SESSION_KEY      = config.SESSION_KEY      || 'pos_session_token';
-    config.SUPABASE_ANON_KEY = config.SUPABASE_ANON_KEY || '';
-
-    _cache = config;
-    _cacheAt = Date.now();
-    return res.status(200).json({ ok: true, config });
+    if (Array.isArray(rows) && rows.length) {
+      const dbConfig = {};
+      rows.forEach(({ key, value }) => { dbConfig[key] = value; });
+      // Merge: DB values override fallback
+      config = { ...FALLBACK_CONFIG, ...dbConfig };
+      source = 'db';
+    }
   } catch (e) {
-    return res.status(500).json({ ok: false, error: e.message });
+    console.error('Config DB fetch failed, serving fallback:', e.message);
   }
+
+  // Cache result (even fallback, to avoid hammering DB)
+  _cache = config;
+  _cacheAt = Date.now();
+  res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=300, stale-while-revalidate=86400');
+  return res.status(200).json({ ok: true, config, source });
 };
