@@ -900,7 +900,7 @@ function initQueueMonitor() {
     panel.style.display = 'block';
     loadQueueStats();
     // Auto-refresh every 30 seconds
-    _qmRefreshTimer = setInterval(loadQueueStats, 30000);
+    _qmRefreshTimer = setInterval(loadQueueStats, 120000);  // 2 min (was 30s — too aggressive)
   }
 }
 
