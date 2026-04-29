@@ -3044,13 +3044,28 @@ function renderStatusPage() {
   // Shown on the order status page so customers can shop while waiting
   // ═══════════════════════════════════════════════════════════
   html += '<div style="margin-top:32px;padding-top:24px;border-top:1px solid var(--mist)">'
-    + '<div style="text-align:center;margin-bottom:16px">'
+    + '<div style="text-align:center;margin-bottom:18px">'
     +   '<div style="font-family:var(--font-soul);font-size:1.05rem;font-weight:700;color:var(--forest-deep);margin-bottom:4px">While you wait... 🌿</div>'
     +   '<div style="font-size:.78rem;color:var(--timber);font-style:italic">Discover our sister brands — also from the family behind YANI</div>'
     + '</div>'
+
+    // ── LUNTIAN LOG CABIN — featured (full width, with story) ──
+    + '<a href="https://luntian.net" target="_blank" rel="noopener"'
+    +   ' style="text-decoration:none;display:block;background:linear-gradient(135deg,#1a3a0f 0%,#2d5a18 50%,#3a7322 100%);border-radius:14px;padding:18px 16px;margin-bottom:10px;box-shadow:var(--shadow-sm);position:relative;overflow:hidden">'
+    +   '<div style="position:absolute;top:8px;right:10px;background:rgba(255,255,255,0.18);color:#fff;font-size:.6rem;font-weight:700;padding:3px 8px;border-radius:10px;letter-spacing:.5px">YANI STAYCATION</div>'
+    +   '<div style="display:flex;align-items:center;gap:14px">'
+    +     '<div style="font-size:2rem;flex-shrink:0">🌲</div>'
+    +     '<div style="flex:1;min-width:0">'
+    +       '<div style="font-size:.95rem;font-weight:800;color:#fff;letter-spacing:.5px">Luntian Log Cabin</div>'
+    +       '<div style="font-size:.7rem;color:rgba(255,255,255,0.75);font-style:italic;line-height:1.45;margin-top:3px">Extend your YANI experience \u2014 stay overnight in our highland sanctuary in Tagaytay. Garden, cabin, sunrise.</div>'
+    +     '</div>'
+    +   '</div>'
+    +   '<div style="margin-top:10px;background:rgba(255,255,255,0.12);color:#fff;font-size:.72rem;font-weight:600;padding:6px 12px;border-radius:8px;text-align:center">Book your stay \u2192</div>'
+    + '</a>'
+
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
 
-    // SoleBlessing card — original sneakers
+    // ── SoleBlessing card — original sneakers ──
     +   '<a href="https://soleblessingofficial.com" target="_blank" rel="noopener"'
     +     ' style="text-decoration:none;background:linear-gradient(135deg,#1a1a1a 0%,#2d2d2d 100%);border-radius:14px;padding:16px 12px;display:flex;flex-direction:column;align-items:center;text-align:center;box-shadow:var(--shadow-sm);transition:transform .2s">'
     +     '<div style="font-size:1.6rem;margin-bottom:6px">👟</div>'
@@ -3059,7 +3074,7 @@ function renderStatusPage() {
     +     '<div style="margin-top:8px;font-size:.7rem;color:#fff;background:rgba(255,255,255,0.12);padding:3px 10px;border-radius:10px;font-weight:600">Shop now \u2192</div>'
     +   '</a>'
 
-    // AST3R card — high-quality apparel
+    // ── AST3R card — high-quality apparel ──
     +   '<a href="https://ast3r.store" target="_blank" rel="noopener"'
     +     ' style="text-decoration:none;background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);border-radius:14px;padding:16px 12px;display:flex;flex-direction:column;align-items:center;text-align:center;box-shadow:var(--shadow-sm);transition:transform .2s">'
     +     '<div style="font-size:1.6rem;margin-bottom:6px">\u2728</div>'
