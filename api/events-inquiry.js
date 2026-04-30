@@ -40,10 +40,11 @@ function escapeHtml(s) {
 
 // Decision engine — recommend a package from guest count
 function recommendPackage(pax) {
-  if (pax <= 40) return 'Intimate';
-  if (pax <= 60) return 'Signature';
+  if (pax <= 40) return 'Basic Elegant (Intimate)';
+  if (pax <= 60) return 'Styled & Complete (Most Popular)';
   if (pax <= 70) return 'Full Experience';
-  return 'Custom (over 70 guests)';
+  if (pax <= 100) return 'Custom Larger Event (70–100 pax) — site visit recommended';
+  return 'Custom Event (100+ pax) — full venue zoning required';
 }
 
 function formatDate(dateStr) {
@@ -171,8 +172,8 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ ok:false, error:'Invalid email' });
   }
   const pax = parseInt(body.pax, 10);
-  if (isNaN(pax) || pax < 1 || pax > 100) {
-    return res.status(400).json({ ok:false, error:'Guest count must be 1–100' });
+  if (isNaN(pax) || pax < 1 || pax > 150) {
+    return res.status(400).json({ ok:false, error:'Guest count must be 1–150' });
   }
 
   const data = {

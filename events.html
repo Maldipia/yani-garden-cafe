@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Intimate Garden Weddings & Events | YANI Garden Cafe Cavite</title>
-<meta name="description" content="Cozy garden venue in Amadeo, Cavite for weddings, anniversaries, christenings, birthdays. 30–50 pax. Buffet + styling packages from ₱18,000.">
+<meta name="description" content="Cozy garden venue in Amadeo, Cavite for weddings, anniversaries, christenings, birthdays. Intimate 30–50 pax setups, scalable to 70–100+ guests on request. Buffet + styling packages from ₱18,000.">
 <meta property="og:title" content="Intimate Garden Weddings at YANI 🌿">
-<meta property="og:description" content="For 30–50 guests · Cozy · Elegant · Memorable. Amadeo, Cavite.">
+<meta property="og:description" content="Garden venue in Amadeo, Cavite. Best for 30–50 guests. Larger events of 70–100+ accommodated on request.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://yanigardencafe.com/events">
 <meta property="og:image" content="https://hnynvclpvfxzlfjphefj.supabase.co/storage/v1/object/public/card-assets/events/wedding-night.jpg">
@@ -417,6 +417,7 @@
     <h1>For <em>30–50</em> Guests</h1>
     <div class="hero-pax">Cozy &nbsp;·&nbsp; Elegant &nbsp;·&nbsp; Memorable</div>
     <div class="hero-tagline">Amadeo · Cavite</div>
+    <div style="font-size: 0.85rem; color: rgba(245,241,232,0.65); margin: -28px 0 36px; font-style: italic;">Larger events of 70–100+ guests accommodated on request</div>
     <div class="cta-row">
       <a href="#packages" class="btn btn-primary">View Packages</a>
       <a href="#inquiry" class="btn btn-ghost">Book a Site Visit</a>
@@ -431,7 +432,7 @@
       <span class="qv-item">Private garden venue</span>
       <span class="qv-item">Buffet + styling packages</span>
       <span class="qv-item">Photo & video available</span>
-      <span class="qv-item">Flexible setups for 30–50 pax</span>
+      <span class="qv-item">Flexible setups for 30–100+ guests</span>
       <span class="qv-item">Amadeo, Cavite</span>
     </div>
   </div>
@@ -538,6 +539,23 @@
     </div>
 
     <p class="pkg-fineprint">All packages can be customized. We'll prepare a final quotation based on the details you share.</p>
+  </div>
+</section>
+
+<!-- LARGER EVENTS NOTE — reassurance for 70-100+ pax inquiries -->
+<section style="background:linear-gradient(135deg, var(--ivory) 0%, var(--ivory-soft) 100%); padding: 64px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);">
+  <div class="container">
+    <div style="max-width: 760px; margin: 0 auto; text-align: center;">
+      <span class="small-caps" style="color: var(--gold); margin-bottom: 16px; display: block;">Larger Celebrations</span>
+      <h3 style="font-size: clamp(1.6rem, 3vw, 2.2rem); color: var(--emerald); margin-bottom: 18px; font-weight: 500;">Hosting <em style="color:var(--gold);font-style:italic">more than 50</em> guests?</h3>
+      <p style="color: var(--charcoal-soft); font-size: 1rem; line-height: 1.7; margin-bottom: 20px;">
+        While our garden is most cherished for intimate gatherings of 30–50 pax, we have hosted celebrations of <strong style="color: var(--emerald);">70 to 100+ guests</strong> with thoughtful zoning across the garden, covered strip, and upper deck.
+      </p>
+      <p style="color: var(--charcoal-soft); font-size: 0.95rem; line-height: 1.7; font-style: italic;">
+        For larger events, pricing and layout are tailored to your specific date, program flow, and preferences. <span style="color: var(--emerald); font-style: normal; font-weight: 500;">Send us your details</span> — we'll prepare a custom quotation.
+      </p>
+      <a href="#inquiry" class="btn btn-emerald" style="margin-top: 28px;">Request a Custom Quote</a>
+    </div>
   </div>
 </section>
 
@@ -743,7 +761,7 @@
           </div>
           <div>
             <label class="field-label">Estimated Guests <span class="required">*</span></label>
-            <input type="number" name="pax" min="1" max="100" required>
+            <input type="number" name="pax" min="1" max="150" required placeholder="e.g. 50">
           </div>
           <div>
             <label class="field-label">Preferred Date <span class="required">*</span></label>
@@ -770,6 +788,7 @@
               <option>Basic Elegant (₱18k–₱25k)</option>
               <option>Styled & Complete (₱25k–₱35k)</option>
               <option>Full Experience (₱30k–₱45k)</option>
+              <option>Larger Event (70–100+ pax) — custom quote</option>
               <option>Custom — let's discuss</option>
               <option>Not sure yet</option>
             </select>
@@ -844,9 +863,9 @@
       return;
     }
     const pax = parseInt(form.pax.value, 10);
-    if (isNaN(pax) || pax < 1 || pax > 100) {
+    if (isNaN(pax) || pax < 1 || pax > 150) {
       status.className = 'form-status error';
-      status.textContent = 'Guest count must be between 1 and 100.';
+      status.textContent = 'Guest count must be between 1 and 150. For events larger than 150, please message us on Facebook directly.';
       return;
     }
 
