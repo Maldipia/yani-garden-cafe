@@ -365,9 +365,11 @@ function logSync() {} // GAS/Sheets sync removed — no-op
 // Stub — no longer pushes directly to GAS
 async function pushToSheets() {}
 
-// ── In-memory menu cache (5-minute TTL) ──────────────────────────────────
+// ── In-memory menu cache (15-minute TTL, indefinite stale fallback) ──
+// Cache persists in Vercel's warm function instance. If DB is down,
+// we serve last-known-good menu instead of returning 502 (blank menu).
 const menuCache = { public: null, admin: null, ts: 0 };
-const MENU_CACHE_TTL = 5 * 60 * 1000;
+const MENU_CACHE_TTL = 15 * 60 * 1000;
 function invalidateMenuCache() { menuCache.public = null; menuCache.admin = null; menuCache.ts = 0; }
 
 // ── Settings cache (2-minute TTL) — settings rarely change ──────────────
@@ -576,10 +578,28 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       if (menuCache.public && (now - menuCache.ts) < MENU_CACHE_TTL) {
         return res.status(200).json({ ok: true, items: menuCache.public, cached: true });
       }
-      const r = await supaFetch(
-        `${SUPABASE_URL}/rest/v1/menu_items?is_active=eq.true&order=name.asc&select=item_code,name,base_price,has_sizes,has_sugar_levels,price_short,price_medium,price_tall,image_path,category_id,is_signature,available_from,available_until,available_days`
-      );
-      if (!r.ok) return res.status(502).json({ ok: false, error: 'Failed to load menu' });
+      // Fetch from DB with 5-second timeout — if DB is slow, fall back to stale cache
+      let r;
+      try {
+        const ctrl = new AbortController();
+        const timeoutId = setTimeout(() => ctrl.abort(), 5000);
+        r = await supaFetch(
+          `${SUPABASE_URL}/rest/v1/menu_items?is_active=eq.true&order=name.asc&select=item_code,name,base_price,has_sizes,has_sugar_levels,price_short,price_medium,price_tall,image_path,category_id,is_signature,available_from,available_until,available_days`,
+          { signal: ctrl.signal }
+        );
+        clearTimeout(timeoutId);
+      } catch (e) {
+        console.error('getMenu DB fetch failed:', e.message);
+        r = { ok: false };
+      }
+      if (!r.ok) {
+        // STALE-WHILE-ERROR: if we have ANY cached menu (even old), serve it
+        if (menuCache.public) {
+          console.log('getMenu: DB failed, serving stale cache (' + Math.round((now - menuCache.ts)/1000) + 's old)');
+          return res.status(200).json({ ok: true, items: menuCache.public, cached: true, stale: true });
+        }
+        return res.status(502).json({ ok: false, error: 'Failed to load menu' });
+      }
 
       // Current PHT time for schedule filtering
       const nowPHT = new Date(Date.now() + 8*3600000);
