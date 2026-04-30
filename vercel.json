@@ -194,5 +194,8 @@
       "path": "/api/low-stock",
       "schedule": "0 6 * * *"
     }
+  ],
+  "regions": [
+    "sin1"
   ]
 }
