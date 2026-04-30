@@ -41,9 +41,20 @@
     },
     "api/create-promo-table.js": {
       "maxDuration": 15
+    },
+    "api/events-inquiry.js": {
+      "maxDuration": 15
     }
   },
   "rewrites": [
+    {
+      "source": "/events",
+      "destination": "/events.html"
+    },
+    {
+      "source": "/weddings",
+      "destination": "/events.html"
+    },
     {
       "source": "/api/pos",
       "destination": "/api/pos"

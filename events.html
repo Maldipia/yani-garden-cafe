@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Intimate Garden Weddings in Cavite | YANI Garden Cafe</title>
+<meta name="description" content="Curated celebrations for 30 to 70 guests in the highlands of Amadeo, Cavite. Wedding, proposal, anniversary and private event venue.">
+<meta property="og:title" content="Intimate Garden Weddings | YANI Garden Cafe">
+<meta property="og:description" content="Curated celebrations for 30 to 70 guests in the highlands of Cavite.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://yanigardencafe.com/events">
+<link rel="icon" type="image/png" href="https://hnynvclpvfxzlfjphefj.supabase.co/storage/v1/object/public/card-assets/ygc-logo.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "EventVenue",
+  "name": "YANI Garden Cafe",
+  "description": "Intimate garden venue for weddings and private events.",
+  "address": {
+    "@type": "PostalAddress",
+    "addressLocality": "Amadeo",
+    "addressRegion": "Cavite",
+    "addressCountry": "PH"
+  },
+  "maximumAttendeeCapacity": 70,
+  "url": "https://yanigardencafe.com/events"
+}
+</script>
+
+<style>
+  :root {
+    --emerald: #0F4C3A;
+    --emerald-deep: #073829;
+    --ivory: #F5F1E8;
+    --ivory-soft: #FAF7F0;
+    --gold: #B8956A;
+    --gold-soft: #D4B896;
+    --charcoal: #1A1A1A;
+    --charcoal-soft: #4A4A4A;
+    --line: rgba(184, 149, 106, 0.25);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Inter', sans-serif;
+    color: var(--charcoal);
+    background: var(--ivory);
+    font-weight: 300;
+    line-height: 1.7;
+    font-size: 16px;
+  }
+  h1, h2, h3 { font-family: 'Playfair Display', serif; font-weight: 400; letter-spacing: -0.01em; }
+  a { color: inherit; text-decoration: none; transition: opacity 0.2s; }
+  a:hover { opacity: 0.7; }
+  img { max-width: 100%; display: block; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 0 32px; }
+  .small-caps { font-size: 0.7rem; letter-spacing: 0.3em; text-transform: uppercase; font-weight: 500; color: var(--gold); }
+  .hairline { width: 60px; height: 1px; background: var(--gold); margin: 24px auto; opacity: 0.6; }
+  .hairline-full { height: 1px; background: var(--line); border: none; margin: 0; }
+
+  /* HERO */
+  .hero {
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    text-align: center; position: relative; padding: 120px 32px 80px;
+    background: linear-gradient(135deg, var(--emerald-deep) 0%, var(--emerald) 60%, #1a5a44 100%);
+    color: var(--ivory);
+    overflow: hidden;
+  }
+  .hero::before {
+    content: ''; position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse at 20% 30%, rgba(255,255,255,0.06) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 70%, rgba(184,149,106,0.08) 0%, transparent 60%);
+    pointer-events: none;
+  }
+  .hero-content { position: relative; z-index: 1; max-width: 720px; }
+  .hero .small-caps { color: var(--gold-soft); margin-bottom: 24px; display: block; }
+  .hero h1 {
+    font-size: clamp(2.4rem, 5.5vw, 4.2rem);
+    color: var(--ivory); margin-bottom: 20px; line-height: 1.1;
+  }
+  .hero .subhead {
+    font-size: clamp(1rem, 1.6vw, 1.15rem);
+    color: rgba(245,241,232,0.8); max-width: 540px;
+    margin: 0 auto 40px; font-weight: 300;
+  }
+  .cta-row { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+  .btn {
+    display: inline-block; padding: 14px 32px;
+    font-family: 'Inter', sans-serif; font-size: 0.85rem;
+    font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase;
+    border-radius: 2px; cursor: pointer; transition: all 0.2s ease;
+    border: 1px solid transparent;
+  }
+  .btn-primary { background: var(--gold); color: var(--emerald-deep); border-color: var(--gold); }
+  .btn-primary:hover { background: var(--gold-soft); opacity: 1; transform: translateY(-1px); }
+  .btn-ghost { background: transparent; color: var(--ivory); border-color: rgba(245,241,232,0.4); }
+  .btn-ghost:hover { background: rgba(255,255,255,0.05); border-color: var(--ivory); opacity: 1; }
+
+  /* SECTION GENERIC */
+  section { padding: 100px 0; }
+  .section-label { text-align: center; margin-bottom: 12px; color: var(--gold); }
+  .section-title {
+    text-align: center; font-size: clamp(1.8rem, 3.5vw, 2.6rem);
+    color: var(--charcoal); margin-bottom: 60px;
+  }
+
+  /* EXPERIENCE */
+  .experience { background: var(--ivory-soft); }
+  .exp-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 48px; }
+  .exp-card { text-align: center; }
+  .exp-icon {
+    width: 64px; height: 64px; margin: 0 auto 24px;
+    border: 1px solid var(--gold); border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--gold); font-family: 'Playfair Display', serif;
+    font-size: 1.4rem; font-style: italic;
+  }
+  .exp-card h3 { font-size: 1.3rem; margin-bottom: 14px; color: var(--emerald); }
+  .exp-card p { color: var(--charcoal-soft); font-size: 0.94rem; }
+
+  /* PACKAGES */
+  .packages { background: var(--ivory); }
+  .pkg-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+  .pkg-card {
+    background: white; padding: 48px 32px; border: 1px solid var(--line);
+    border-radius: 2px; transition: all 0.3s ease;
+    display: flex; flex-direction: column;
+  }
+  .pkg-card.featured {
+    background: var(--emerald); color: var(--ivory);
+    border-color: var(--emerald);
+    transform: translateY(-12px);
+    box-shadow: 0 24px 60px -20px rgba(15,76,58,0.4);
+  }
+  .pkg-card.featured h3, .pkg-card.featured .pkg-pax,
+  .pkg-card.featured .pkg-price-label, .pkg-card.featured .pkg-price-amount,
+  .pkg-card.featured .pkg-inclusions li { color: var(--ivory); }
+  .pkg-card.featured .small-caps { color: var(--gold-soft); }
+  .pkg-card.featured .hairline-full { background: rgba(245,241,232,0.2); }
+
+  .pkg-badge {
+    display: inline-block; font-size: 0.6rem; letter-spacing: 0.2em;
+    text-transform: uppercase; padding: 4px 10px;
+    background: var(--gold); color: var(--emerald-deep);
+    align-self: flex-start; margin-bottom: 20px; font-weight: 600;
+  }
+  .pkg-card h3 {
+    font-size: 1.6rem; color: var(--emerald); margin-bottom: 8px;
+  }
+  .pkg-pax { color: var(--charcoal-soft); font-size: 0.85rem; margin-bottom: 28px; letter-spacing: 0.05em; }
+  .pkg-prices { margin-bottom: 28px; }
+  .pkg-price-row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 0.9rem; }
+  .pkg-price-label { color: var(--charcoal-soft); }
+  .pkg-price-amount { font-weight: 500; color: var(--charcoal); font-family: 'Playfair Display', serif; }
+  .pkg-inclusions { list-style: none; margin-bottom: 32px; flex-grow: 1; }
+  .pkg-inclusions li {
+    padding: 8px 0; font-size: 0.88rem; color: var(--charcoal-soft);
+    padding-left: 18px; position: relative; line-height: 1.5;
+  }
+  .pkg-inclusions li::before {
+    content: '—'; position: absolute; left: 0; color: var(--gold);
+  }
+  .pkg-card.featured .pkg-inclusions li::before { color: var(--gold-soft); }
+  .pkg-fineprint {
+    text-align: center; font-size: 0.78rem; color: var(--charcoal-soft);
+    font-style: italic; margin-top: 48px; max-width: 700px; margin-left: auto; margin-right: auto;
+  }
+
+  /* ADD-ONS */
+  .addons { background: var(--ivory-soft); padding: 80px 0; }
+  .addons-grid {
+    display: grid; grid-template-columns: repeat(6, 1fr); gap: 1px;
+    background: var(--line); border: 1px solid var(--line);
+    max-width: 1100px; margin: 40px auto 0;
+  }
+  .addon-item {
+    background: var(--ivory-soft); padding: 32px 16px; text-align: center;
+    font-size: 0.85rem; color: var(--charcoal-soft); letter-spacing: 0.02em;
+  }
+
+  /* FORM */
+  .inquiry { background: var(--emerald); color: var(--ivory); }
+  .inquiry .section-label { color: var(--gold-soft); }
+  .inquiry .section-title { color: var(--ivory); margin-bottom: 14px; }
+  .inquiry .lead {
+    text-align: center; color: rgba(245,241,232,0.75);
+    max-width: 540px; margin: 0 auto 56px; font-size: 0.98rem;
+  }
+  .form-card {
+    background: var(--ivory); color: var(--charcoal);
+    max-width: 720px; margin: 0 auto; padding: 56px 48px;
+    border-radius: 2px;
+  }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .form-row-full { grid-column: 1 / -1; }
+  .field-label {
+    display: block; font-size: 0.75rem; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--charcoal-soft);
+    margin-bottom: 8px; font-weight: 500;
+  }
+  .field-label .required { color: var(--gold); margin-left: 4px; }
+  input[type="text"], input[type="email"], input[type="tel"],
+  input[type="number"], input[type="date"], select, textarea {
+    width: 100%; padding: 13px 16px; border: 1px solid var(--line);
+    background: white; font-family: inherit; font-size: 0.95rem;
+    color: var(--charcoal); border-radius: 2px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  input:focus, select:focus, textarea:focus {
+    outline: none; border-color: var(--gold);
+    box-shadow: 0 0 0 3px rgba(184,149,106,0.1);
+  }
+  textarea { resize: vertical; min-height: 110px; font-family: inherit; }
+  select { cursor: pointer; appearance: none;
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23B8956A' d='M6 8L0 0h12z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 16px center; padding-right: 40px;
+  }
+  .honeypot { position: absolute; left: -10000px; opacity: 0; pointer-events: none; }
+  .form-submit {
+    margin-top: 32px; width: 100%; padding: 16px;
+    background: var(--emerald); color: var(--ivory); border: none;
+    font-family: inherit; font-size: 0.85rem; font-weight: 500;
+    letter-spacing: 0.12em; text-transform: uppercase; cursor: pointer;
+    border-radius: 2px; transition: background 0.2s;
+  }
+  .form-submit:hover { background: var(--emerald-deep); }
+  .form-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+  .form-status { margin-top: 24px; padding: 16px; border-radius: 2px; font-size: 0.92rem; display: none; }
+  .form-status.success { display: block; background: #f0f9f4; color: #0F4C3A; border-left: 3px solid var(--emerald); }
+  .form-status.error { display: block; background: #fef2f2; color: #991b1b; border-left: 3px solid #b91c1c; }
+
+  /* LOCATION */
+  .location { background: var(--ivory); }
+  .loc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: center; }
+  .loc-info h3 { font-size: 1.7rem; color: var(--emerald); margin-bottom: 24px; }
+  .loc-info p { margin-bottom: 14px; color: var(--charcoal-soft); }
+  .loc-info .label { color: var(--gold); font-size: 0.7rem; letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 4px; display: block; font-weight: 500; }
+  .loc-map {
+    background: var(--ivory-soft); border: 1px solid var(--line);
+    aspect-ratio: 4/3; display: flex; align-items: center; justify-content: center;
+    color: var(--charcoal-soft); font-style: italic; overflow: hidden;
+  }
+  .loc-map iframe { width: 100%; height: 100%; border: 0; }
+
+  /* FOOTER */
+  footer { background: var(--charcoal); color: rgba(245,241,232,0.6); padding: 56px 0 32px; text-align: center; }
+  footer .small-caps { color: var(--gold); margin-bottom: 16px; display: block; }
+  footer p { font-size: 0.85rem; margin-bottom: 8px; }
+  footer a { color: var(--gold-soft); }
+  .ftr-divider { width: 40px; height: 1px; background: var(--gold); margin: 24px auto; opacity: 0.5; }
+
+  /* RESPONSIVE */
+  @media (max-width: 900px) {
+    section { padding: 70px 0; }
+    .container { padding: 0 24px; }
+    .exp-grid { grid-template-columns: 1fr; gap: 40px; }
+    .pkg-grid { grid-template-columns: 1fr; }
+    .pkg-card.featured { transform: none; }
+    .addons-grid { grid-template-columns: repeat(2, 1fr); }
+    .form-grid { grid-template-columns: 1fr; }
+    .form-card { padding: 36px 24px; }
+    .loc-grid { grid-template-columns: 1fr; gap: 40px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-content">
+    <span class="small-caps">YANI Garden Cafe</span>
+    <h1>Intimate Garden Weddings</h1>
+    <p class="subhead">Curated celebrations for 30 to 70 guests in the highlands of Amadeo, Cavite. Where the day is held with care.</p>
+    <div class="cta-row">
+      <a href="#inquiry" class="btn btn-primary">Request a Proposal</a>
+      <a href="#packages" class="btn btn-ghost">View Packages</a>
+    </div>
+  </div>
+</section>
+
+<!-- EXPERIENCE -->
+<section class="experience">
+  <div class="container">
+    <span class="section-label small-caps">The Experience</span>
+    <h2 class="section-title">A Day Held With Care</h2>
+    <div class="exp-grid">
+      <div class="exp-card">
+        <div class="exp-icon">i</div>
+        <h3>Garden Ceremony</h3>
+        <p>An open-air setting amid native foliage and morning light, where vows feel grounded in something quietly enduring.</p>
+      </div>
+      <div class="exp-card">
+        <div class="exp-icon">ii</div>
+        <h3>Covered Dining</h3>
+        <p>A long, considered table beneath the covered strip — a space designed for conversation that lingers past dessert.</p>
+      </div>
+      <div class="exp-card">
+        <div class="exp-icon">iii</div>
+        <h3>Sunset Reception</h3>
+        <p>The garden softens into golden hour. Music, laughter, and the unhurried close of an unrepeatable day.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PACKAGES -->
+<section class="packages" id="packages">
+  <div class="container">
+    <span class="section-label small-caps">Investment</span>
+    <h2 class="section-title">Three Considered Tiers</h2>
+    <div class="pkg-grid">
+
+      <div class="pkg-card">
+        <h3>Intimate</h3>
+        <div class="pkg-pax">30 to 40 guests</div>
+        <div class="pkg-prices">
+          <div class="pkg-price-row"><span class="pkg-price-label">Venue from</span><span class="pkg-price-amount">₱22,000</span></div>
+          <div class="pkg-price-row"><span class="pkg-price-label">All-in from</span><span class="pkg-price-amount">₱65,000</span></div>
+        </div>
+        <hr class="hairline-full">
+        <ul class="pkg-inclusions" style="margin-top:24px">
+          <li>Four to five hour exclusive use of the venue</li>
+          <li>Ceremony setup with garden setting</li>
+          <li>Dining tables and chairs for all guests</li>
+          <li>Ambient lighting throughout the garden</li>
+          <li>Basic sound system with microphone</li>
+        </ul>
+      </div>
+
+      <div class="pkg-card featured">
+        <span class="pkg-badge">Most Requested</span>
+        <h3>Signature</h3>
+        <div class="pkg-pax">40 to 60 guests</div>
+        <div class="pkg-prices">
+          <div class="pkg-price-row"><span class="pkg-price-label">Venue from</span><span class="pkg-price-amount">₱35,000</span></div>
+          <div class="pkg-price-row"><span class="pkg-price-label">All-in from</span><span class="pkg-price-amount">₱95,000</span></div>
+        </div>
+        <hr class="hairline-full">
+        <ul class="pkg-inclusions" style="margin-top:24px">
+          <li>Full exclusive use of the garden</li>
+          <li>Styled ceremony and dining areas</li>
+          <li>Dedicated buffet or plated service area</li>
+          <li>Enhanced ambient and feature lighting</li>
+          <li>Premium sound system</li>
+          <li>Flow coordination on the day of the event</li>
+        </ul>
+      </div>
+
+      <div class="pkg-card">
+        <h3>Full Experience</h3>
+        <div class="pkg-pax">60 to 70 guests</div>
+        <div class="pkg-prices">
+          <div class="pkg-price-row"><span class="pkg-price-label">Venue from</span><span class="pkg-price-amount">₱55,000</span></div>
+          <div class="pkg-price-row"><span class="pkg-price-label">All-in from</span><span class="pkg-price-amount">₱130,000</span></div>
+        </div>
+        <hr class="hairline-full">
+        <ul class="pkg-inclusions" style="margin-top:24px">
+          <li>Full venue including garden, covered strip, upper deck</li>
+          <li>Distinct event zoning for ceremony, dining, reception</li>
+          <li>Comprehensive styling upgrade</li>
+          <li>Layered lighting design</li>
+          <li>Premium sound system with multiple microphones</li>
+          <li>Dedicated event coordinator throughout the day</li>
+        </ul>
+      </div>
+
+    </div>
+    <p class="pkg-fineprint">Pricing varies based on date, season, and customization. A final quotation is provided upon inquiry, prepared specifically for the details of your celebration.</p>
+  </div>
+</section>
+
+<!-- ADD-ONS -->
+<section class="addons">
+  <div class="container">
+    <span class="section-label small-caps">Optional Enhancements</span>
+    <h2 class="section-title" style="margin-bottom:20px">Coordinated With Our Preferred Partners</h2>
+    <div class="addons-grid">
+      <div class="addon-item">Photo & Video</div>
+      <div class="addon-item">Hair & Makeup</div>
+      <div class="addon-item">Floral Styling</div>
+      <div class="addon-item">Host & Emcee</div>
+      <div class="addon-item">Live Music</div>
+      <div class="addon-item">Catering Upgrades</div>
+    </div>
+  </div>
+</section>
+
+<!-- INQUIRY FORM -->
+<section class="inquiry" id="inquiry">
+  <div class="container">
+    <span class="section-label small-caps">Begin</span>
+    <h2 class="section-title">Request a Proposal</h2>
+    <p class="lead">Share your details below. A personalized response will reach you within 24 hours.</p>
+
+    <div class="form-card">
+      <form id="inquiryForm" novalidate>
+
+        <!-- Honeypot (hidden) -->
+        <div class="honeypot" aria-hidden="true">
+          <label>Do not fill this field <input type="text" name="website" tabindex="-1" autocomplete="off"></label>
+        </div>
+
+        <div class="form-grid">
+
+          <div class="form-row-full">
+            <label class="field-label">Full Name <span class="required">*</span></label>
+            <input type="text" name="fullName" required autocomplete="name">
+          </div>
+
+          <div>
+            <label class="field-label">Email <span class="required">*</span></label>
+            <input type="email" name="email" required autocomplete="email">
+          </div>
+
+          <div>
+            <label class="field-label">Phone / Viber <span class="required">*</span></label>
+            <input type="tel" name="phone" required autocomplete="tel">
+          </div>
+
+          <div>
+            <label class="field-label">Event Type <span class="required">*</span></label>
+            <select name="eventType" required>
+              <option value="">Please select…</option>
+              <option>Wedding</option>
+              <option>Proposal</option>
+              <option>Anniversary</option>
+              <option>Private Event</option>
+              <option>Other</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="field-label">Estimated Guests <span class="required">*</span></label>
+            <input type="number" name="pax" min="1" max="100" required>
+          </div>
+
+          <div>
+            <label class="field-label">Preferred Date <span class="required">*</span></label>
+            <input type="date" name="eventDate" required>
+          </div>
+
+          <div>
+            <label class="field-label">Alternative Date</label>
+            <input type="date" name="altDate">
+          </div>
+
+          <div>
+            <label class="field-label">Time of Day</label>
+            <select name="timeOfDay">
+              <option value="">Please select…</option>
+              <option>Morning</option>
+              <option>Afternoon</option>
+              <option>Sunset</option>
+              <option>Evening</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="field-label">Budget Range</label>
+            <select name="budget">
+              <option value="">Please select…</option>
+              <option>Under ₱75,000</option>
+              <option>₱75,000 – ₱120,000</option>
+              <option>₱120,000 – ₱180,000</option>
+              <option>₱180,000+</option>
+              <option>Not sure yet</option>
+            </select>
+          </div>
+
+          <div class="form-row-full">
+            <label class="field-label">Your Vision (optional)</label>
+            <textarea name="message" placeholder="Tell us about the kind of celebration you imagine — themes, must-haves, anything we should know."></textarea>
+          </div>
+
+        </div>
+
+        <button type="submit" class="form-submit" id="submitBtn">Submit Inquiry</button>
+
+        <div class="form-status" id="formStatus"></div>
+
+      </form>
+    </div>
+  </div>
+</section>
+
+<!-- LOCATION -->
+<section class="location">
+  <div class="container">
+    <div class="loc-grid">
+      <div class="loc-info">
+        <span class="section-label small-caps" style="text-align:left;display:block">Visit</span>
+        <h3>Schedule a Private Viewing</h3>
+        <p style="margin-bottom:32px">We warmly invite you to walk through the garden in person. Viewings are arranged by appointment.</p>
+
+        <div style="margin-bottom:24px">
+          <span class="label">Address</span>
+          <p>Amadeo, Cavite, Philippines</p>
+        </div>
+        <div style="margin-bottom:24px">
+          <span class="label">Email</span>
+          <p><a href="mailto:events@yanigardencafe.com">events@yanigardencafe.com</a></p>
+        </div>
+        <div style="margin-bottom:24px">
+          <span class="label">Viewing Hours</span>
+          <p>By appointment, Mondays through Saturdays</p>
+        </div>
+
+        <a href="#inquiry" class="btn btn-primary" style="margin-top:8px">Schedule a Site Visit</a>
+      </div>
+      <div class="loc-map">
+        <iframe
+          src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3870.5!2d120.93!3d14.18!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s!2s!5e0!3m2!1sen!2sph!4v1700000000000"
+          allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="container">
+    <span class="small-caps">YANI Garden Cafe</span>
+    <p>Amadeo, Cavite · Philippines</p>
+    <div class="ftr-divider"></div>
+    <p style="font-size:0.8rem">A <a href="https://yanigardencafe.com">TYG Services</a> brand · Part of the YANI family</p>
+    <p style="font-size:0.75rem;margin-top:16px;opacity:0.6">© 2026 YANI Garden Cafe. All rights reserved.</p>
+  </div>
+</footer>
+
+<script>
+(function() {
+  const form = document.getElementById('inquiryForm');
+  const submitBtn = document.getElementById('submitBtn');
+  const status = document.getElementById('formStatus');
+
+  form.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    status.className = 'form-status'; status.textContent = '';
+
+    // Honeypot check
+    if (form.website.value) return; // bot detected, silent fail
+
+    // Validation
+    const required = ['fullName','email','phone','eventType','pax','eventDate'];
+    for (const f of required) {
+      if (!form[f].value.trim()) {
+        status.className = 'form-status error';
+        status.textContent = 'Please complete all required fields.';
+        return;
+      }
+    }
+    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.value);
+    if (!emailOk) {
+      status.className = 'form-status error';
+      status.textContent = 'Please provide a valid email address.';
+      return;
+    }
+    const pax = parseInt(form.pax.value, 10);
+    if (isNaN(pax) || pax < 1 || pax > 100) {
+      status.className = 'form-status error';
+      status.textContent = 'Guest count must be between 1 and 100.';
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Submitting…';
+
+    const payload = {
+      fullName: form.fullName.value.trim(),
+      email: form.email.value.trim(),
+      phone: form.phone.value.trim(),
+      eventType: form.eventType.value,
+      pax: pax,
+      eventDate: form.eventDate.value,
+      altDate: form.altDate.value || null,
+      timeOfDay: form.timeOfDay.value || null,
+      budget: form.budget.value || null,
+      message: form.message.value.trim() || null,
+    };
+
+    try {
+      const r = await fetch('/api/events-inquiry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const d = await r.json();
+      if (d.ok) {
+        status.className = 'form-status success';
+        status.innerHTML = '<strong>Thank you, ' + escapeHtml(payload.fullName.split(' ')[0]) + '.</strong><br>Your inquiry has been received. A personalized proposal will reach your inbox within 24 hours.';
+        form.reset();
+        // Scroll status into view
+        status.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else {
+        throw new Error(d.error || 'Submission failed');
+      }
+    } catch (err) {
+      status.className = 'form-status error';
+      status.textContent = 'We could not submit your inquiry. Please email events@yanigardencafe.com directly, and we will respond promptly.';
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Submit Inquiry';
+    }
+  });
+
+  function escapeHtml(s){return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+})();
+</script>
+
+</body>
+</html>
