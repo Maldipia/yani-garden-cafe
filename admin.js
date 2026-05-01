@@ -2576,6 +2576,13 @@ function renderMenuMgrGrid() {
 async function quickToggleItem(itemCode, currentlyActive) {
   var item = menuMgrItems.find(function(i){ return i.code === itemCode; });
   if (!item) return;
+
+  // Confirmation required when DEACTIVATING to prevent accidental toggles
+  if (currentlyActive) {
+    var confirmed = confirm('Hide "' + item.name + '" from the menu?\n\nCustomers will not see it on the QR menu until you turn it back on.');
+    if (!confirmed) return; // User cancelled — do nothing
+  }
+
   var newStatus = currentlyActive ? 'INACTIVE' : 'ACTIVE';
   var label     = currentlyActive ? 'unavailable' : 'available';
 
