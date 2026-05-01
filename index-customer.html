@@ -2428,15 +2428,60 @@ async function placeOrder() {
 // ══════════════════════════════════════════════════════════
 // RECEIPT PAGE
 // ══════════════════════════════════════════════════════════
+function _brandFooterHTML() {
+  return '<div style="margin-top:28px;padding-top:20px;border-top:1px solid var(--mist)">'
+    + '<div style="text-align:center;margin-bottom:14px">'
+    +   '<div style="font-family:var(--font-soul);font-size:.95rem;font-weight:700;color:var(--forest-deep);margin-bottom:3px">While you wait... 🌿</div>'
+    +   '<div style="font-size:.72rem;color:var(--timber);font-style:italic">Our sister brands — from the YANI family</div>'
+    + '</div>'
+    + '<a href="https://luntian.net" target="_blank" rel="noopener"'
+    +   ' style="text-decoration:none;display:block;background:linear-gradient(135deg,#1a3a0f,#2d5a18);border-radius:12px;padding:14px;margin-bottom:8px">'
+    +   '<div style="display:flex;align-items:center;gap:12px">'
+    +     '<div style="font-size:1.6rem">🌲</div>'
+    +     '<div style="flex:1">'
+    +       '<div style="font-size:.85rem;font-weight:800;color:#fff">Luntian</div>'
+    +       '<div style="font-size:.62rem;color:rgba(255,255,255,0.75);font-style:italic;margin-top:2px">Extend your YANI experience — backpackers &amp; couple room · <span style="color:#D4B896">Book your stay →</span></div>'
+    +     '</div>'
+    +   '</div>'
+    + '</a>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+    +   '<a href="https://soleblessingofficial.com" target="_blank" rel="noopener"'
+    +     ' style="text-decoration:none;background:linear-gradient(135deg,#1a1a1a,#2d2d2d);border-radius:12px;padding:12px;display:flex;flex-direction:column;align-items:center;text-align:center">'
+    +     '<div style="font-size:1.4rem;margin-bottom:4px">👟</div>'
+    +     '<div style="font-size:.78rem;font-weight:800;color:#fff">SoleBlessing</div>'
+    +     '<div style="font-size:.58rem;color:rgba(255,255,255,0.65);font-style:italic;margin-top:2px">Original sneakers · est 2019</div>'
+    +     '<div style="margin-top:6px;font-size:.65rem;color:#fff;background:rgba(255,255,255,0.12);padding:2px 8px;border-radius:8px">Shop →</div>'
+    +   '</a>'
+    +   '<a href="https://ast3r.store" target="_blank" rel="noopener"'
+    +     ' style="text-decoration:none;background:linear-gradient(135deg,#0f172a,#1e293b);border-radius:12px;padding:12px;display:flex;flex-direction:column;align-items:center;text-align:center">'
+    +     '<div style="font-size:1.4rem;margin-bottom:4px">✨</div>'
+    +     '<div style="font-size:.78rem;font-weight:800;color:#fff;letter-spacing:1px">AST3R</div>'
+    +     '<div style="font-size:.58rem;color:rgba(255,255,255,0.65);font-style:italic;margin-top:2px">High-quality apparel</div>'
+    +     '<div style="margin-top:6px;font-size:.65rem;color:#fff;background:rgba(255,255,255,0.12);padding:2px 8px;border-radius:8px">Shop →</div>'
+    +   '</a>'
+    + '</div>'
+    + '<div style="text-align:center;margin-top:10px;font-size:.65rem;color:var(--timber);opacity:.6">Part of the TYG Services family 🌿</div>'
+    + '</div>';
+}
+
 function renderReceiptPage() {
   var body = document.getElementById('receiptBody');
-  
-  // Determine current step
+
+  // Auto-advance to status if no interaction within 45 seconds
+  if (window._receiptAutoTimer) clearTimeout(window._receiptAutoTimer);
+  window._receiptAutoTimer = setTimeout(function() {
+    var rp = document.getElementById('receiptPage');
+    if (rp && rp.style.display !== 'none') {
+      state.receiptType = '';
+      closePage('receipt'); openPage('status'); startStatusPolling();
+    }
+  }, 45000);
+
   var step = 'ask';
   if (state.receiptType === 'bir' && !state.receiptEmail) {
-    step = 'details'; // BIR needs full details
+    step = 'details';
   } else if (state.receiptType === 'simple' && !state.receiptEmail) {
-    step = 'email_only'; // Simple receipt needs just email before delivery choice
+    step = 'email_only';
   } else if (state.receiptType) {
     step = 'delivery';
   }
@@ -2447,15 +2492,16 @@ function renderReceiptPage() {
     '<div style="margin-top:8px;font-size:.88rem;font-weight:700;color:var(--terra)">' + peso(state.orderTotal) + '</div></div>';
 
   if (step === 'ask') {
-    html += '<div style="font-family:var(--font-soul);font-size:1.1rem;font-weight:700;margin-bottom:16px;text-align:center">Do you need a receipt?</div>' +
-      '<div class="receipt-option" onclick="state.receiptType=\'\';closePage(\'receipt\');openPage(\'status\');startStatusPolling()">' +
-        '<h4>No thanks</h4><p>Track my order</p></div>' +
-      '<div class="receipt-option" onclick="state.receiptType=\'simple\';renderReceiptPage()">' +
-        '<h4>📋 Receipt Only</h4><p>No personal details needed</p></div>' +
-      '<div class="receipt-option" onclick="state.receiptType=\'bir\';renderReceiptPage()">' +
-        '<h4>📄 Put My Details</h4><p>For BIR / tax purposes</p></div>';
+    html += '<div style="font-family:var(--font-soul);font-size:1.1rem;font-weight:700;margin-bottom:14px;text-align:center">Do you need a receipt?</div>' +
+      '<button onclick="if(window._receiptAutoTimer)clearTimeout(window._receiptAutoTimer);state.receiptType=\'\';closePage(\'receipt\');openPage(\'status\');startStatusPolling()"'
+      + ' style="width:100%;padding:16px;background:var(--forest);color:#fff;border:none;border-radius:14px;font-family:inherit;font-size:1rem;font-weight:700;cursor:pointer;margin-bottom:12px;">'
+      + '✅  No thanks — Track my order</button>'
+      + '<div style="text-align:center;font-size:.72rem;color:var(--timber);margin-bottom:12px;font-style:italic">— or choose receipt type —</div>'
+      + '<div class="receipt-option" onclick="state.receiptType=\'simple\';renderReceiptPage()">'
+      +   '<h4>📋 Receipt Only</h4><p>No personal details needed</p></div>'
+      + '<div class="receipt-option" onclick="state.receiptType=\'bir\';renderReceiptPage()">'
+      +   '<h4>📄 Put My Details</h4><p>For BIR / tax purposes</p></div>';
   } else if (step === 'email_only') {
-    // Simple receipt — just need email to know where to send, or skip to printed
     html += '<div style="font-family:var(--font-soul);font-size:1.05rem;font-weight:700;margin-bottom:16px;text-align:center">How would you like your receipt?</div>' +
       '<div class="receipt-option" onclick="promptSimpleEmail()">' +
         '<h4>📧 Email Receipt</h4><p>Sent to your email instantly • Full price</p></div>' +
@@ -2479,9 +2525,10 @@ function renderReceiptPage() {
       '<button class="btn-secondary mt-16" onclick="state.receiptType=\'\';state.receiptEmail=\'\';renderReceiptPage()">← Back</button>';
   }
 
+  // Brands footer on EVERY step
+  html += _brandFooterHTML();
   body.innerHTML = html;
 }
-
 // Simple receipt: show inline email prompt
 function promptSimpleEmail() {
   var body = document.getElementById('receiptBody');
