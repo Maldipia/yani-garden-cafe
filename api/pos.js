@@ -368,9 +368,15 @@ async function pushToSheets() {}
 // ── In-memory menu cache (15-minute TTL, indefinite stale fallback) ──
 // Cache persists in Vercel's warm function instance. If DB is down,
 // we serve last-known-good menu instead of returning 502 (blank menu).
-const menuCache = { public: null, admin: null, ts: 0 };
-const MENU_CACHE_TTL = 15 * 60 * 1000;
-function invalidateMenuCache() { menuCache.public = null; menuCache.admin = null; menuCache.ts = 0; }
+// Admin and public have SEPARATE timestamps to prevent cross-contamination
+// when direct SQL updates are made bypassing the API.
+const menuCache = { public: null, admin: null, tsPublic: 0, tsAdmin: 0 };
+const MENU_CACHE_TTL       = 15 * 60 * 1000; // 15 min for customer-facing
+const MENU_CACHE_TTL_ADMIN =  1 * 60 * 1000; // 1 min for admin (always near-fresh)
+function invalidateMenuCache() {
+  menuCache.public = null; menuCache.admin = null;
+  menuCache.tsPublic = 0; menuCache.tsAdmin = 0;
+}
 
 // ── Settings cache (2-minute TTL) — settings rarely change ──────────────
 const _settingsCache = { data: null, ts: 0 };
@@ -575,7 +581,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
     // ── getMenu ────────────────────────────────────────────────────────────
     if (action === 'getMenu') {
       const now = Date.now();
-      if (menuCache.public && (now - menuCache.ts) < MENU_CACHE_TTL) {
+      if (menuCache.public && (now - menuCache.tsPublic) < MENU_CACHE_TTL) {
         return res.status(200).json({ ok: true, items: menuCache.public, cached: true });
       }
       // Fetch from DB with 5-second timeout — if DB is slow, fall back to stale cache
@@ -595,7 +601,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       if (!r.ok) {
         // STALE-WHILE-ERROR: if we have ANY cached menu (even old), serve it
         if (menuCache.public) {
-          console.log('getMenu: DB failed, serving stale cache (' + Math.round((now - menuCache.ts)/1000) + 's old)');
+          console.log('getMenu: DB failed, serving stale cache (' + Math.round((now - menuCache.tsPublic)/1000) + 's old)');
           return res.status(200).json({ ok: true, items: menuCache.public, cached: true, stale: true });
         }
         return res.status(502).json({ ok: false, error: 'Failed to load menu' });
@@ -634,7 +640,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
         };
       });
       menuCache.public = items;
-      menuCache.ts = now;
+      menuCache.tsPublic = now;
       return res.status(200).json({ ok: true, items });
     }
 
@@ -643,7 +649,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       const authMA = await checkAdminAuth();
       if (!authMA.ok) return res.status(403).json({ ok: false, error: authMA.error });
       const now = Date.now();
-      if (menuCache.admin && (now - menuCache.ts) < MENU_CACHE_TTL) {
+      if (menuCache.admin && (now - menuCache.tsAdmin) < MENU_CACHE_TTL_ADMIN) {
         return res.status(200).json({ ok: true, items: menuCache.admin, cached: true });
       }
       const r = await supaFetch(
@@ -670,7 +676,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
         availableDays:  m.available_days || null,
       }));
       menuCache.admin = items;
-      menuCache.ts = now;
+      menuCache.tsAdmin = now;
       return res.status(200).json({ ok: true, items });
     }
 
