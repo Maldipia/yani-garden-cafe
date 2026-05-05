@@ -305,6 +305,7 @@ const CATEGORY_ID_TO_NAME = {
   '9268943a-b5ed-40c3-ac51-4411e06805de': 'MEALS',
   '5297871b-fa2e-4376-bd81-6d9b0c173be8': 'BEST WITH',
   'a3123278-d6ba-4004-89db-479248efea6d': 'PASALUBONG',
+  '8d83f583-5d6c-4b9a-b32a-5e5639b3d162': 'BEANS',
 };
 const CATEGORY_NAME_TO_ID = Object.fromEntries(
   Object.entries(CATEGORY_ID_TO_NAME).map(([id, name]) => [name.toUpperCase(), id])
