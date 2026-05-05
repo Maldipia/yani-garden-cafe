@@ -765,6 +765,10 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
     }
 
     // ── upsertToSupabase (backfill helper — ADMIN/OWNER only) ──────────────
+    // NOTE: is_active is intentionally EXCLUDED here. Active/inactive status
+    // must only change via quickToggleItem (admin UI) or direct SQL.
+    // Including is_active here caused GAS Sheets sync to silently deactivate
+    // items whenever the Sheet had them stored as INACTIVE.
     if (action === 'upsertToSupabase') {
       const authUps = await checkAdminAuth();
       if (!authUps.ok) return res.status(403).json({ ok: false, error: authUps.error });
@@ -782,7 +786,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
         price_medium:     parseFloat(body.priceMedium) || null,
         price_tall:       parseFloat(body.priceTall) || null,
         image_path:       body.image || null,
-        is_active:        (body.status || 'ACTIVE').toUpperCase() === 'ACTIVE',
+        // is_active deliberately NOT included — toggle only via quickToggleItem
       };
       const r = await supa('POST', 'menu_items', row, null, 'resolution=merge-duplicates');
       return res.status(200).json({ ok: r.ok, data: r.data });
