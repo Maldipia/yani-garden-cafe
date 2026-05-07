@@ -1182,17 +1182,16 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       const ordersR = await supaFetch(url);
       if (!ordersR.ok) return res.status(502).json({ ok: false, orders: [], error: 'Failed to load orders' });
 
-      // Fetch items for all orders
+      // Fetch items for all orders (include created_at to show when items were added)
       const orderIds = ordersR.data.map(o => o.order_id);
       let itemsMap = {};
       if (orderIds.length > 0) {
         const itemsR = await supaFetch(
-          `${SUPABASE_URL}/rest/v1/dine_in_order_items?order_id=in.(${orderIds.map(id => `"${id}"`).join(',')})&order=id.asc`
+          `${SUPABASE_URL}/rest/v1/dine_in_order_items?order_id=in.(${orderIds.map(id => `"${id}"`).join(',')})&order=id.asc&select=id,order_id,item_code,item_name,unit_price,qty,size_choice,sugar_choice,item_notes,prepared,addons,created_at`
         );
         if (itemsR.ok && Array.isArray(itemsR.data)) {
           itemsR.data.forEach(it => {
             if (!itemsMap[it.order_id]) itemsMap[it.order_id] = [];
-            // Parse addons from JSON if stored
             let parsedAddons = [];
             try { parsedAddons = it.addons ? JSON.parse(it.addons) : []; } catch(_) {}
             itemsMap[it.order_id].push({
@@ -1206,6 +1205,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
               notes:    it.item_notes || '',
               prepared: it.prepared || false,
               addons:   parsedAddons,
+              addedAt:  it.created_at || null,
             });
           });
         }

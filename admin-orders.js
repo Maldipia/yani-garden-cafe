@@ -133,11 +133,29 @@ function renderOrders() {
 
         var pillsHtml = (sizePill || sugarPill) ? '<div style="margin-top:3px">' + sizePill + sugarPill + '</div>' : '';
 
+        // Show "➕ added X:XX AM" badge if item was added 5+ mins after the original order
+        var addedAtBadge = '';
+        try {
+          if (it.addedAt && o.createdAt) {
+            var diffMins = Math.round((new Date(it.addedAt) - new Date(o.createdAt)) / 60000);
+            if (diffMins >= 5) {
+              var addedTime = new Date(it.addedAt).toLocaleTimeString('en-PH', {
+                hour:'numeric', minute:'2-digit', hour12:true, timeZone:'Asia/Manila'
+              });
+              addedAtBadge = '<div style="margin-top:3px">'
+                + '<span style="background:#FEF3C7;color:#92400E;border-radius:6px;padding:2px 8px;font-size:.68rem;font-weight:700">'
+                + '➕ added ' + addedTime
+                + '</span></div>';
+            }
+          }
+        } catch(e) {}
+
         html += '<div class="oc-item" data-item-id="' + (it.id||'') + '" style="' + prepStyle + 'cursor:pointer;user-select:none;" title="' + (it.prepared ? 'Tap to unmark' : 'Tap to mark prepared') + '" onclick="adminTogglePrep(this,\'' + esc(o.orderId) + '\',' + (it.id||0) + ',' + (it.prepared ? 1 : 0) + ')">' +
           '<span style="font-size:1.3rem;margin-right:6px;flex-shrink:0;line-height:1;">' + prepIcon + '</span>' +
           '<div class="oc-item-qty">' + (it.qty || 1) + '×</div>' +
           '<div class="oc-item-info">' +
             '<div class="oc-item-name">' + esc(it.name) + '</div>' +
+            addedAtBadge +
             pillsHtml +
             (it.addons && it.addons.length ? '<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px">' + it.addons.map(function(a){ return '<span style="background:#dcfce7;color:#14532d;border:1.5px solid #86efac;border-radius:6px;padding:2px 8px;font-size:.75rem;font-weight:800">➕ ' + esc(a.name) + ' +₱' + parseFloat(a.price||0).toFixed(0) + '</span>'; }).join('') + '</div>' : '') +
             (it.notes ? '<div class="oc-item-notes">"' + esc(it.notes) + '"</div>' : '') +
