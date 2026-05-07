@@ -308,16 +308,35 @@ var spTableNo = '';
 var spSelectedCat = 'ALL';
 var spAddingItem = null;
 var spMenuItems = [];
-var spActiveOrderId = null; // tracks if we're adding to an existing order
+var spActiveOrderId = null;
 
 function openStaffPOS() {
   spCart = []; spOrderType = 'DINE_IN'; spTableNo = ''; spSelectedCat = 'ALL'; spActiveOrderId = null;
-  document.getElementById('spCustomerName').value = '';
-  document.getElementById('spNotes').value = '';
-  document.getElementById('spFooter').style.display = 'none';
-  document.getElementById('spCart').style.display = 'none';
+  var cn = document.getElementById('spCustomerName');
+  var nt = document.getElementById('spNotes');
+  var si = document.getElementById('spSearchInput');
+  if (cn) cn.value = '';
+  if (nt) nt.value = '';
+  if (si) si.value = '';
   document.getElementById('spOverlay').classList.add('open');
-  spSelectType('DINE_IN');
+  // Populate table dropdown with busy indicators
+  var tblSel = document.getElementById('spTableSelect');
+  if (tblSel) {
+    var occupied = {};
+    allOrders.forEach(function(o) {
+      if (['NEW','PREPARING','READY'].includes(o.status) && !o.isTest && o.tableNo) occupied[String(o.tableNo)] = true;
+    });
+    tblSel.innerHTML = '<option value="">Select table…</option>' +
+      _allTables.map(function(t) {
+        var tno = String(t.table_number);
+        var name = t.table_name || ('Table ' + tno);
+        var busy = occupied[tno] ? ' 🔴' : '';
+        return '<option value="' + tno + '">' + name + busy + '</option>';
+      }).join('');
+  }
+  var ts = document.getElementById('spTypeSelect');
+  if (ts) ts.value = 'DINE_IN';
+  spRenderCart();
   spLoadMenu();
 }
 
@@ -326,71 +345,31 @@ function closeStaffPOS() {
 }
 
 function spSelectType(type) {
-  spOrderType = type;
-  spTableNo = '';
-  document.getElementById('spTypeDineIn').classList.toggle('active', type === 'DINE_IN');
-  document.getElementById('spTypeTakeOut').classList.toggle('active', type === 'TAKE_OUT');
-  var tblSection = document.getElementById('spTableSection');
-  if (tblSection) tblSection.style.display = type === 'DINE_IN' ? '' : 'none';
-  if (type === 'DINE_IN') spRenderTables();
+  spOrderType = type === 'TAKE_OUT' ? 'TAKE_OUT' : 'DINE_IN';
+  var tblSel = document.getElementById('spTableSelect');
+  if (tblSel) tblSel.style.display = spOrderType === 'DINE_IN' ? '' : 'none';
+  if (spOrderType === 'TAKE_OUT') spTableNo = '';
   spUpdateFooter();
 }
 
+function spSelectTableFromDropdown(val) {
+  spTableNo = val || '';
+  var btn = document.getElementById('spSubmitBtn');
+  if (btn) btn.textContent = '✅ Place Order';
+}
+
+function spClearCart() {
+  spCart = [];
+  spRenderCart();
+  spRenderMenu();
+}
+
+// spRenderTables kept for legacy callers — no-op if element missing
 function spRenderTables() {
   var grid = document.getElementById('spTableGrid');
   if (!grid) return;
-  // Map active orders by table
-  var activeOrders = {};
-  allOrders.forEach(function(o) {
-    if (['NEW','PREPARING','READY'].includes(o.status) && !o.isTest && o.tableNo) {
-      activeOrders[String(o.tableNo)] = o;
-    }
-  });
-  var tables = _allTables.length > 0 ? _allTables : [];
-  grid.innerHTML = tables.map(function(tbl) {
-    var tno = String(tbl.table_number);
-    var name = tbl.table_name || ('Table ' + tno);
-    var activeOrder = activeOrders[tno];
-    var isActive = spTableNo === tno;
-    var cls = 'sp-tbl-btn' + (isActive ? ' active' : activeOrder ? ' occupied' : '');
-    var label = name;
-    if (activeOrder) {
-      label += '<br><span style="font-size:.58rem">🔴 ' + (activeOrder.customerName||'Guest') + '</span>';
-      label += '<br><span style="font-size:.56rem;opacity:.8">+ Add items</span>';
-    }
-    return '<button class="' + cls + '" onclick="spSelectTable(\'' + tno + '\')" title="' + esc(name) + '">'
-      + label + '</button>';
-  }).join('');
 }
-
-function spSelectTable(tno) {
-  spTableNo = tno;
-  // Check if this table has an active order
-  var activeOrder = null;
-  allOrders.forEach(function(o) {
-    if (['NEW','PREPARING','READY'].includes(o.status) && !o.isTest && String(o.tableNo) === tno) {
-      activeOrder = o;
-    }
-  });
-  spActiveOrderId = activeOrder ? activeOrder.orderId : null;
-
-  // Update mode label
-  var modeEl = document.getElementById('spModeLabel');
-  if (modeEl) {
-    if (spActiveOrderId) {
-      modeEl.innerHTML = '<div style="background:#DBEAFE;color:#1E40AF;border-radius:8px;padding:6px 10px;font-size:.75rem;font-weight:700;margin-bottom:8px">➕ Adding to existing order: ' + spActiveOrderId + '</div>';
-    } else {
-      modeEl.innerHTML = '';
-    }
-  }
-
-  // Update submit button label
-  var btn = document.getElementById('spSubmitBtn');
-  if (btn) btn.textContent = spActiveOrderId ? '➕ Add to Order' : '✅ Place Order';
-
-  spRenderTables();
-  spUpdateFooter();
-}
+function spSelectTable(tno) { spTableNo = tno; }
 
 async function spLoadMenu() {
   if (spMenuItems.length === 0) {
@@ -404,24 +383,50 @@ async function spLoadMenu() {
 function spRenderCats() {
   var cats = ['ALL'];
   spMenuItems.forEach(function(it) { if (it.category && cats.indexOf(it.category) < 0) cats.push(it.category); });
-  document.getElementById('spCats').innerHTML = cats.map(function(c) {
-    return '<button class="po-cat-btn' + (spSelectedCat===c?' active':'') + '" onclick="spSetCat(\'' + esc(c) + '\')">' +
-      (c==='ALL' ? '🍽️ All' : esc(c)) + '</button>';
+  var el = document.getElementById('spCats');
+  if (!el) return;
+  el.innerHTML = cats.map(function(c) {
+    var label = c === 'ALL' ? '🍽 All' : c;
+    return '<button class="po-cat-btn' + (spSelectedCat===c?' active':'') + '" onclick="spSetCat(\'' + esc(c) + '\')">' + label + '</button>';
   }).join('');
 }
 
 function spSetCat(c) { spSelectedCat = c; spRenderCats(); spRenderMenu(); }
 
 function spRenderMenu() {
+  var q = (document.getElementById('spSearchInput') || {}).value || '';
+  q = q.toLowerCase().trim();
+  var SUPABASE_IMG = 'https://hnynvclpvfxzlfjphefj.supabase.co/storage/v1/object/public/card-assets/menu/';
+  var CAT_ICON = {
+    'HOT':'☕','ICE AND ICE BLENDED':'🧊','PASTRY':'🥐','PASTA':'🍝',
+    'MEALS':'🍽','BEST WITH':'🍟','PASALUBONG':'🎁','BEANS':'☕','OTHER':'📦','WRAP':'🌯'
+  };
   var filtered = spMenuItems.filter(function(it) {
-    return spSelectedCat === 'ALL' || it.category === spSelectedCat;
+    var catOk = spSelectedCat === 'ALL' || it.category === spSelectedCat;
+    var searchOk = !q || it.name.toLowerCase().includes(q) || (it.category||'').toLowerCase().includes(q);
+    return catOk && searchOk;
   });
-  document.getElementById('spMenuGrid').innerHTML = filtered.map(function(it) {
-    var priceStr = it.hasSizes ? ('₱' + it.priceShort + '–₱' + it.priceTall) : ('₱' + it.price);
+  var grid = document.getElementById('spMenuGrid');
+  if (!grid) return;
+  if (!filtered.length) {
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:32px;color:var(--timber);font-size:.85rem">No items found</div>';
+    return;
+  }
+  grid.innerHTML = filtered.map(function(it) {
+    var priceStr = it.hasSizes ? ('₱' + it.priceShort + '–₱' + it.priceTall) : ('₱' + (it.price||it.basePrice||0));
+    var imgUrl = it.image ? (it.image.startsWith('http') ? it.image : SUPABASE_IMG + it.image) : null;
+    var qtyInCart = spCart.filter(function(c){return c.code===it.code;}).reduce(function(s,c){return s+c.qty;},0);
+    var imgHtml = imgUrl
+      ? '<img class="po-menu-item-img" src="' + imgUrl + '" alt="' + esc(it.name) + '" loading="lazy" onerror="this.style.display=\'none\';this.nextSibling.style.display=\'flex\'">' +
+        '<div class="po-menu-item-no-img" style="display:none">' + (CAT_ICON[it.category]||'🍽') + '</div>'
+      : '<div class="po-menu-item-no-img">' + (CAT_ICON[it.category]||'🍽') + '</div>';
     return '<div class="po-menu-item" onclick="spAddItem(\'' + esc(it.code) + '\')">' +
-      '<div class="po-menu-item-cat">' + esc(it.category||'') + '</div>' +
-      '<div class="po-menu-item-name">' + esc(it.name) + '</div>' +
-      '<div class="po-menu-item-price">' + priceStr + '</div>' +
+      imgHtml +
+      (qtyInCart > 0 ? '<div class="po-menu-item-qty-badge">' + qtyInCart + '</div>' : '') +
+      '<div class="po-menu-item-body">' +
+        '<div class="po-menu-item-name">' + esc(it.name) + '</div>' +
+        '<div class="po-menu-item-price">' + priceStr + '</div>' +
+      '</div>' +
     '</div>';
   }).join('');
 }
@@ -455,48 +460,62 @@ function spFinishAdd() {
 }
 
 function spRenderCart() {
-  var cartEl = document.getElementById('spCart');
+  var emptyEl = document.getElementById('spCartEmpty');
   var itemsEl = document.getElementById('spCartItems');
-  if (spCart.length === 0) { cartEl.style.display='none'; spUpdateFooter(); return; }
-  cartEl.style.display = '';
+  var badgeEl = document.getElementById('spCartBadge');
+  var totalCount = spCart.reduce(function(s,it){return s+it.qty;},0);
+  if (badgeEl) badgeEl.textContent = totalCount;
+  if (!itemsEl) { spUpdateFooter(); return; }
+  if (spCart.length === 0) {
+    if (emptyEl) emptyEl.style.display = '';
+    itemsEl.innerHTML = '';
+    spUpdateFooter();
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
   itemsEl.innerHTML = spCart.map(function(it, idx) {
     var opts = [it.size, it.sugarLevel].filter(Boolean).join(' · ');
-    return '<div class="po-cart-item">' +
-      '<div style="flex:1">' +
-        '<div class="po-cart-item-name">' + esc(it.name) + '</div>' +
-        (opts ? '<div class="po-cart-item-opts">' + esc(opts) + '</div>' : '') +
+    return '<div class="sp-cart-row">' +
+      '<div class="sp-qty-ctrl">' +
+        '<button onclick="spQty(' + idx + ',-1)" aria-label="Remove">−</button>' +
+        '<span>' + it.qty + '</span>' +
+        '<button onclick="spQty(' + idx + ',1)" aria-label="Add">+</button>' +
       '</div>' +
-      '<div class="po-cart-qty">' +
-        '<button onclick="spQty(' + idx + ',-1)">−</button>' +
-        '<span style="font-size:.82rem;font-weight:700;min-width:20px;text-align:center">' + it.qty + '</span>' +
-        '<button onclick="spQty(' + idx + ',1)">+</button>' +
+      '<div style="flex:1;min-width:0">' +
+        '<div class="sp-cart-name">' + esc(it.name) + '</div>' +
+        (opts ? '<div class="sp-cart-sub">' + esc(opts) + '</div>' : '') +
       '</div>' +
-      '<div class="po-cart-item-price">₱' + (it.price * it.qty).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2}) + '</div>' +
-      '<span class="po-cart-remove" onclick="spRemove(' + idx + ')">✕</span>' +
+      '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">' +
+        '<div class="sp-cart-price">₱' + (it.price * it.qty).toFixed(2) + '</div>' +
+        '<span style="font-size:.65rem;color:var(--timber);cursor:pointer" onclick="spRemove(' + idx + ')">✕ remove</span>' +
+      '</div>' +
     '</div>';
   }).join('');
   spUpdateFooter();
+  var scroll = document.getElementById('spCartScroll');
+  if (scroll) scroll.scrollTop = scroll.scrollHeight;
 }
 
 function spQty(idx, delta) {
   spCart[idx].qty += delta;
   if (spCart[idx].qty <= 0) spCart.splice(idx, 1);
   spRenderCart();
+  spRenderMenu();
 }
-function spRemove(idx) { spCart.splice(idx,1); spRenderCart(); }
+function spRemove(idx) { spCart.splice(idx,1); spRenderCart(); spRenderMenu(); }
 
 function spUpdateFooter() {
-  var footer = document.getElementById('spFooter');
-  if (spCart.length === 0) { footer.style.display='none'; return; }
   var subtotal = spCart.reduce(function(s,it){ return s + it.price*it.qty; }, 0);
-  var svcCharge = spOrderType === 'DINE_IN' ? subtotal * 0.10 : 0;
-  var total = subtotal + svcCharge;
-  document.getElementById('spSubtotal').textContent = '₱' + subtotal.toFixed(2);
-  document.getElementById('spService').textContent = '₱' + svcCharge.toFixed(2);
-  document.getElementById('spTotal').textContent = '₱' + total.toFixed(2);
+  var svcCharge = spOrderType === 'DINE_IN' ? Math.round(subtotal * 10) / 100 : 0;
+  var total = Math.round((subtotal + svcCharge) * 100) / 100;
+  var sub = document.getElementById('spSubtotal');
+  var svc = document.getElementById('spService');
+  var tot = document.getElementById('spTotal');
   var svcRow = document.getElementById('spServiceRow');
+  if (sub) sub.textContent = '₱' + subtotal.toFixed(2);
+  if (svc) svc.textContent = '₱' + svcCharge.toFixed(2);
+  if (tot) tot.textContent = '₱' + total.toFixed(2);
   if (svcRow) svcRow.style.display = spOrderType === 'DINE_IN' ? '' : 'none';
-  footer.style.display = '';
 }
 
 async function submitStaffOrder() {
