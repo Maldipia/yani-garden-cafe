@@ -524,22 +524,111 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 /* ── Platform Order Modal ── */
 .po-overlay {
   position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:200;
-  display:none; align-items:flex-end; justify-content:center;
+  display:none; align-items:center; justify-content:center;
 }
 .po-overlay.open { display:flex }
 .po-modal {
-  background:var(--cream); width:100%; max-width:600px; max-height:92vh;
-  border-radius:var(--r-xl) var(--r-xl) 0 0;
+  background:var(--cream); width:96%; max-width:900px; max-height:94vh;
+  border-radius:var(--r-xl);
   display:flex; flex-direction:column; overflow:hidden;
-  box-shadow:0 -4px 30px rgba(0,0,0,.25);
+  box-shadow:0 8px 40px rgba(0,0,0,.35);
 }
 .po-header {
-  background:var(--forest); color:#fff; padding:16px 20px;
+  background:var(--forest); color:#fff; padding:14px 20px;
   display:flex; align-items:center; gap:12px;
+  flex-shrink: 0;
 }
 .po-header-title { flex:1; font-family:var(--font-soul); font-size:1.1rem; font-weight:700 }
 .po-close { background:none; border:none; color:#fff; font-size:1.5rem; cursor:pointer; padding:4px }
 .po-body { flex:1; overflow-y:auto; padding:16px }
+
+/* ── Staff POS two-column layout ── */
+#spOverlay .po-modal {
+  max-width: 1000px;
+}
+#spOverlay .po-body {
+  display: flex; flex-direction: column; overflow: hidden; padding: 0; flex: 1;
+}
+.sp-two-col {
+  display: grid; grid-template-columns: 1fr 280px;
+  flex: 1; overflow: hidden; min-height: 0;
+}
+.sp-left {
+  display: flex; flex-direction: column; overflow: hidden;
+  border-right: 1px solid var(--mist);
+}
+.sp-left-header {
+  padding: 12px 16px 0; flex-shrink: 0;
+}
+.sp-search-bar {
+  width: 100%; padding: 8px 12px; font-size: .88rem;
+  border: 1.5px solid var(--mist); border-radius: var(--r-md);
+  background: var(--white); margin-bottom: 10px; box-sizing: border-box;
+}
+.sp-search-bar:focus { outline: none; border-color: var(--forest); }
+.sp-cats-row {
+  display: flex; gap: 6px; overflow-x: auto; padding-bottom: 10px;
+  scrollbar-width: none;
+}
+.sp-cats-row::-webkit-scrollbar { display: none; }
+.sp-menu-scroll {
+  flex: 1; overflow-y: auto; padding: 4px 16px 16px;
+}
+.sp-right {
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.sp-cart-scroll {
+  flex: 1; overflow-y: auto; padding: 12px 14px 0;
+}
+.sp-cart-empty {
+  text-align: center; padding: 40px 16px; color: var(--timber); font-size: .85rem;
+}
+.sp-cart-row {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 8px 0; border-bottom: 1px solid var(--mist);
+}
+.sp-cart-row:last-child { border-bottom: none; }
+.sp-cart-name { flex: 1; font-size: .8rem; color: var(--forest); font-weight: 600; line-height: 1.3; }
+.sp-cart-sub { font-size: .7rem; color: var(--timber); }
+.sp-cart-price { font-size: .8rem; font-weight: 700; color: var(--terra); white-space: nowrap; }
+.sp-qty-ctrl { display: flex; align-items: center; gap: 4px; }
+.sp-qty-ctrl button {
+  width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--mist);
+  background: var(--white); font-size: .9rem; cursor: pointer; color: var(--forest);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.sp-qty-ctrl span { font-size: .78rem; font-weight: 700; min-width: 16px; text-align: center; }
+
+/* ── Menu item card WITH image ── */
+.po-menu-grid {
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(130px, 1fr)); gap:8px;
+  margin-bottom:16px;
+}
+.po-menu-item {
+  background:var(--white); border-radius:var(--r-md); cursor:pointer;
+  border:1.5px solid var(--mist); transition:all .15s; overflow: hidden;
+  position: relative;
+}
+.po-menu-item:hover { border-color: var(--forest); box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+.po-menu-item:active { transform:scale(.97) }
+.po-menu-item-img {
+  width: 100%; height: 72px; object-fit: cover; display: block;
+  background: var(--mist);
+}
+.po-menu-item-no-img {
+  width: 100%; height: 72px; display: flex; align-items: center; justify-content: center;
+  background: var(--mist); font-size: 1.6rem;
+}
+.po-menu-item-body { padding: 7px 8px 8px; }
+.po-menu-item-name { font-size:.75rem; font-weight:600; color:var(--forest); line-height: 1.3; }
+.po-menu-item-price { font-size:.72rem; color:var(--terra); font-weight:700; margin-top:3px }
+.po-menu-item-cat { font-size:.62rem; color:var(--timber); text-transform:uppercase }
+.po-menu-item-qty-badge {
+  position: absolute; top: 5px; right: 5px;
+  background: var(--forest); color: white; font-size: .65rem; font-weight: 700;
+  width: 20px; height: 20px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+}
 
 /* Platform selector */
 .po-platforms { display:flex; gap:8px; margin-bottom:16px }
@@ -1412,7 +1501,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
   <div class="fab-wrap" id="fabWrap" style="display:none">
     <div class="fab-menu" id="fabMenu">
       <button class="fab-menu-item" onclick="closeFab();openStaffPOS()">
-        <span class="fab-menu-label">🏪 Walk-up Order</span>
+        <span class="fab-menu-label">🛒 Quick Order</span>
         <span class="fab-menu-icon fab-icon-pos">🛒</span>
       </button>
       <button class="fab-menu-item" onclick="closeFab();openPlatformOrder()">
@@ -1427,60 +1516,76 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
   <div class="po-overlay" id="spOverlay">
     <div class="po-modal">
       <div class="po-header">
-        <div class="po-header-title">🛒 New Walk-up Order</div>
-        <button class="po-close" onclick="closeStaffPOS()">&times;</button>
-      </div>
-      <div class="po-body" id="spBody">
-
-        <!-- Order Type -->
-        <div style="display:flex;gap:8px;margin-bottom:16px">
-          <button class="sp-type-btn active" id="spTypeDineIn" onclick="spSelectType('DINE_IN')">🪑 Dine-in</button>
-          <button class="sp-type-btn" id="spTypeTakeOut" onclick="spSelectType('TAKE_OUT')">🥡 Take-out</button>
-        </div>
-
-        <!-- Table selector (dine-in only) -->
-        <div id="spTableSection" style="margin-bottom:14px">
-          <div style="font-size:.75rem;font-weight:700;color:var(--timber);margin-bottom:8px;text-transform:uppercase;letter-spacing:.4px">Select Table</div>
-          <div class="sp-table-grid" id="spTableGrid"></div>
-          <div id="spModeLabel"></div>
-        </div>
-
-        <!-- Customer Name -->
-        <div style="margin-bottom:14px">
-          <div style="font-size:.75rem;font-weight:700;color:var(--timber);margin-bottom:6px;text-transform:uppercase;letter-spacing:.4px">Customer Name <span style="color:#94a3b8;font-weight:400;text-transform:none">(optional)</span></div>
-          <input id="spCustomerName" placeholder="e.g. Maria, Table 3 Group" class="po-ref-input" style="width:100%;box-sizing:border-box">
-        </div>
-
-        <!-- Category filter -->
-        <div style="font-size:.75rem;font-weight:700;color:var(--timber);margin-bottom:8px;text-transform:uppercase;letter-spacing:.4px">Menu</div>
-        <div class="po-cats" id="spCats"></div>
-
-        <!-- Menu grid -->
-        <div class="po-menu-grid" id="spMenuGrid"></div>
-
-        <!-- Cart -->
-        <div class="po-cart" id="spCart" style="display:none">
-          <div class="po-cart-title">🛒 Order Items</div>
-          <div id="spCartItems"></div>
-        </div>
-
-        <!-- Notes -->
-        <div style="margin-top:10px">
-          <input id="spNotes" placeholder="Special instructions (optional)" class="po-ref-input" style="width:100%;box-sizing:border-box">
+        <div class="po-header-title">🛒 Quick Order</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <select id="spTypeSelect" onchange="spSelectType(this.value)"
+            style="background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);color:#fff;font-size:.8rem;padding:5px 8px;border-radius:8px">
+            <option value="DINE_IN">🪑 Dine-in</option>
+            <option value="TAKE_OUT">🥡 Take-out</option>
+          </select>
+          <select id="spTableSelect" onchange="spSelectTableFromDropdown(this.value)"
+            style="background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);color:#fff;font-size:.8rem;padding:5px 8px;border-radius:8px">
+            <option value="">Select table…</option>
+          </select>
+          <button class="po-close" onclick="closeStaffPOS()">×</button>
         </div>
       </div>
 
-      <!-- Footer with totals -->
-      <div class="po-cart-footer" id="spFooter" style="display:none">
-        <div style="font-size:.78rem;color:var(--timber);margin-bottom:4px">
-          <div style="display:flex;justify-content:space-between"><span>Subtotal</span><span id="spSubtotal">₱0</span></div>
-          <div style="display:flex;justify-content:space-between" id="spServiceRow"><span>Service Charge (10%)</span><span id="spService">₱0</span></div>
+      <div class="po-body">
+        <div class="sp-two-col">
+
+          <!-- LEFT: search + categories + menu grid -->
+          <div class="sp-left">
+            <div class="sp-left-header">
+              <input class="sp-search-bar" id="spSearchInput" placeholder="Search menu…"
+                oninput="spRenderMenu()" autocomplete="off">
+              <div class="sp-cats-row" id="spCats"></div>
+            </div>
+            <div class="sp-menu-scroll">
+              <div class="po-menu-grid" id="spMenuGrid"></div>
+            </div>
+          </div>
+
+          <!-- RIGHT: cart always visible -->
+          <div class="sp-right">
+            <div style="padding:12px 14px 8px;border-bottom:1px solid var(--mist);flex-shrink:0">
+              <div style="font-size:.8rem;font-weight:700;color:var(--forest)">Order
+                <span id="spCartBadge" style="background:var(--forest);color:#fff;font-size:.65rem;font-weight:700;padding:2px 7px;border-radius:10px;margin-left:4px">0</span>
+              </div>
+              <input id="spCustomerName" placeholder="Customer name (optional)"
+                style="width:100%;margin-top:8px;padding:6px 10px;font-size:.8rem;border:1.5px solid var(--mist);border-radius:8px;box-sizing:border-box">
+              <input id="spNotes" placeholder="Special notes (optional)"
+                style="width:100%;margin-top:6px;padding:6px 10px;font-size:.8rem;border:1.5px solid var(--mist);border-radius:8px;box-sizing:border-box">
+            </div>
+
+            <div class="sp-cart-scroll" id="spCartScroll">
+              <div class="sp-cart-empty" id="spCartEmpty">
+                <div style="font-size:2rem;margin-bottom:8px">🛒</div>
+                Tap items to add
+              </div>
+              <div id="spCartItems"></div>
+            </div>
+
+            <div style="padding:12px 14px;border-top:1px solid var(--mist);flex-shrink:0">
+              <div style="font-size:.75rem;color:var(--timber);margin-bottom:4px">
+                <div style="display:flex;justify-content:space-between"><span>Subtotal</span><span id="spSubtotal">₱0</span></div>
+                <div style="display:flex;justify-content:space-between" id="spServiceRow"><span>Service (10%)</span><span id="spService">₱0</span></div>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-weight:700;font-size:.95rem;color:var(--forest);margin:8px 0">
+                <span>Total</span><span id="spTotal">₱0</span>
+              </div>
+              <button id="spSubmitBtn" onclick="submitStaffOrder()"
+                style="width:100%;padding:12px;background:var(--forest);color:#fff;border:none;border-radius:10px;font-weight:700;font-size:.9rem;cursor:pointer">
+                ✅ Place Order
+              </button>
+              <button onclick="spClearCart()"
+                style="width:100%;margin-top:6px;padding:7px;background:none;color:var(--timber);border:1px solid var(--mist);border-radius:8px;font-size:.78rem;cursor:pointer">
+                Clear order
+              </button>
+            </div>
+          </div>
+
         </div>
-        <div class="po-cart-total">
-          <span>Total</span>
-          <span id="spTotal">₱0</span>
-        </div>
-        <button class="po-submit-btn" id="spSubmitBtn" onclick="submitStaffOrder()">✅ Place Order</button>
       </div>
     </div>
   </div>
