@@ -43,7 +43,7 @@ function renderOrders() {
       else elapsed = Math.floor(mins/60) + 'h ' + (mins%60) + 'm ago';
     } catch(e) {}
 
-    var html = '<div class="order-card" data-status="' + o.status + '"' + (o.platform ? ' data-platform="' + esc(o.platform) + '"' : '') + '>';
+    var html = '<div class="order-card" data-status="' + o.status + '"' + (o.platform ? ' data-platform="' + esc(o.platform) + '"' : '') + (o.source === 'STAFF' ? ' data-source="STAFF"' : '') + '>';
 
     // Header
     html += '<div class="oc-header">' +
@@ -58,6 +58,7 @@ function renderOrders() {
     
     html += '<span class="oc-status-badge ' + cfg.badge + '">' + cfg.icon + ' ' + cfg.label + '</span>';
     if (o.isTest) html += '<span style="background:#f59e0b;color:#fff;font-size:.6rem;padding:2px 5px;border-radius:4px;font-weight:700;margin-left:4px">🧪 TEST</span>';
+    if (o.source === 'STAFF') html += '<span style="background:#6d28d9;color:#fff;font-size:.6rem;padding:2px 6px;border-radius:4px;font-weight:700;margin-left:4px">🧑‍💼 STAFF</span>';
     if (o.isPreorder && o.scheduledFor) {
       var pickupPH = '';
       try {
@@ -79,12 +80,25 @@ function renderOrders() {
     var typeLabel = isPlatform ? 'Rider Pickup' : esc(o.orderType || '');
     var typeBg    = isPlatform ? '#7c3aed' : (o.orderType==='TAKE-OUT' ? '#c2550a' : '#065f46');
     
+    // Detect if order was edited significantly after placement (>2 min difference)
+    var editedNote = '';
+    try {
+      if (o.updatedAt && o.createdAt) {
+        var diffMins = Math.floor((new Date(o.updatedAt) - new Date(o.createdAt)) / 60000);
+        if (diffMins >= 2) {
+          var editTime = new Date(o.updatedAt).toLocaleTimeString('en-PH', { hour:'numeric', minute:'2-digit', hour12:true, timeZone:'Asia/Manila' });
+          editedNote = '<div class="oc-meta-item" style="color:#92400e;font-size:.65rem">✏️ edited ' + editTime + '</div>';
+        }
+      }
+    } catch(e) {}
+
     html += '<div class="oc-meta">' +
       '<div class="oc-meta-item">' + tableLabel + '</div>' +
       (o.customer ? '<div class="oc-meta-item">👤 ' + esc(o.customer) + '</div>' : '') +
       '<div class="oc-meta-item"><span style="background:' + typeBg + ';color:#fff;padding:2px 8px;border-radius:20px;font-size:.65rem;font-weight:800;letter-spacing:.3px">' + typeIcon + ' ' + typeLabel + '</span></div>' +
       '<div class="oc-meta-item">🕐 ' + esc(time) + '</div>' +
       '<div class="oc-meta-item" style="opacity:.6">' + esc(elapsed) + '</div>' +
+      editedNote +
     '</div>';
 
     // Items

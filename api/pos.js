@@ -998,7 +998,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
           vat_amount:        vatAmt,
           total:             total,
           notes:             notes,
-          source:            'QR',
+          source:            isStaffOrder ? 'STAFF' : 'QR',
           is_test:           isTest,
           ...(yaniDiscount > 0 ? {
             discount_type:    'YANI_CARD',
