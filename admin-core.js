@@ -476,7 +476,7 @@ async function loadOrders() {
     return true;
   });
 
-  // ── Kitchen audio alert + auto-print 2 copies for new orders ───────────
+  // ── Kitchen audio alert for new orders ───────────────────────────────────
   if (window._knownOrderIds) {
     var newArrivals = freshOrders.filter(function(o) {
       return o.status === 'NEW' && !window._knownOrderIds[o.orderId];
