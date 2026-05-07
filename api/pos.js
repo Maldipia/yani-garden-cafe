@@ -2132,9 +2132,9 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
 
       // Discount is handled below — editOrderItems recalculates discount proportionally
 
-      // Fetch existing items to preserve their 'prepared' state
+      // Fetch existing items to preserve their 'prepared' state AND original created_at
       const existItemsR = await supaFetch(
-        `${SUPABASE_URL}/rest/v1/dine_in_order_items?order_id=eq.${encodeURIComponent(orderId)}&select=item_code,size_choice,sugar_choice,item_notes,prepared`
+        `${SUPABASE_URL}/rest/v1/dine_in_order_items?order_id=eq.${encodeURIComponent(orderId)}&select=item_code,size_choice,sugar_choice,item_notes,prepared,created_at`
       );
       const existItems = existItemsR.ok ? (existItemsR.data || []) : [];
 
@@ -2144,7 +2144,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
         const qty = Math.max(1, parseInt(it.qty) || 1);
         const price = parseFloat(it.price) || 0;
         subtotal += price * qty;
-        // Carry over prepared state if this item already existed (match on code+size+sugar)
+        // Carry over prepared state AND original created_at if this item already existed
         const existMatch = existItems.find(e =>
           e.item_code === (it.code || 'CUSTOM') &&
           (e.size_choice || '') === (it.size || '') &&
@@ -2162,6 +2162,9 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
           sugar_choice: it.sugar || '',
           item_notes:   it.notes || '',
           prepared:     existMatch ? (existMatch.prepared || false) : false,
+          // Preserve original timestamp for existing items so "added at" badge stays accurate
+          // New items (not in existMatch) get current time (default DB behavior)
+          ...(existMatch && existMatch.created_at ? { created_at: existMatch.created_at } : {}),
         };
       });
 
