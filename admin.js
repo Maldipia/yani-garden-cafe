@@ -1973,7 +1973,8 @@ var poAddingItem = null;  // item being configured (size/sugar)
 // FAB SPEED-DIAL
 // ══════════════════════════════════════════════════════════
 var _fabOpen = false;
-function toggleFab() {
+function toggleFab(e) {
+  if (e) e.stopPropagation();
   _fabOpen = !_fabOpen;
   document.getElementById('fabMenu').classList.toggle('open', _fabOpen);
   document.getElementById('fabMain').classList.toggle('open', _fabOpen);
