@@ -283,7 +283,8 @@ var poAddingItem = null;  // item being configured (size/sugar)
 // FAB SPEED-DIAL
 // ══════════════════════════════════════════════════════════
 var _fabOpen = false;
-function toggleFab() {
+function toggleFab(e) {
+  if (e) e.stopPropagation();
   _fabOpen = !_fabOpen;
   document.getElementById('fabMenu').classList.toggle('open', _fabOpen);
   document.getElementById('fabMain').classList.toggle('open', _fabOpen);
@@ -310,7 +311,7 @@ var spAddingItem = null;
 var spMenuItems = [];
 var spActiveOrderId = null;
 
-function openStaffPOS() {
+async function openStaffPOS() {
   spCart = []; spOrderType = 'DINE_IN'; spTableNo = ''; spSelectedCat = 'ALL'; spActiveOrderId = null;
   var cn = document.getElementById('spCustomerName');
   var nt = document.getElementById('spNotes');
@@ -319,12 +320,24 @@ function openStaffPOS() {
   if (nt) nt.value = '';
   if (si) si.value = '';
   document.getElementById('spOverlay').classList.add('open');
-  // Populate table dropdown with busy indicators
+  var ts = document.getElementById('spTypeSelect');
+  if (ts) ts.value = 'DINE_IN';
+  spRenderCart();
+
+  // Show loading state while fetching tables
   var tblSel = document.getElementById('spTableSelect');
+  if (tblSel) tblSel.innerHTML = '<option value="">⏳ Loading tables…</option>';
+
+  // Always fetch fresh tables so dropdown is accurate
+  var tr = await api('getTables', {});
+  if (tr && tr.ok) _allTables = tr.tables || [];
+
+  // Populate dropdown with busy indicators
   if (tblSel) {
     var occupied = {};
     allOrders.forEach(function(o) {
-      if (['NEW','PREPARING','READY'].includes(o.status) && !o.isTest && o.tableNo) occupied[String(o.tableNo)] = true;
+      if (['NEW','PREPARING','READY'].includes(o.status) && !o.isTest && o.tableNo)
+        occupied[String(o.tableNo)] = true;
     });
     tblSel.innerHTML = '<option value="">Select table…</option>' +
       _allTables.map(function(t) {
@@ -333,10 +346,9 @@ function openStaffPOS() {
         var busy = occupied[tno] ? ' 🔴' : '';
         return '<option value="' + tno + '">' + name + busy + '</option>';
       }).join('');
+    tblSel.style.display = '';
   }
-  var ts = document.getElementById('spTypeSelect');
-  if (ts) ts.value = 'DINE_IN';
-  spRenderCart();
+
   spLoadMenu();
 }
 
@@ -396,7 +408,6 @@ function spSetCat(c) { spSelectedCat = c; spRenderCats(); spRenderMenu(); }
 function spRenderMenu() {
   var q = (document.getElementById('spSearchInput') || {}).value || '';
   q = q.toLowerCase().trim();
-  var SUPABASE_IMG = 'https://hnynvclpvfxzlfjphefj.supabase.co/storage/v1/object/public/card-assets/menu/';
   var CAT_ICON = {
     'HOT':'☕','ICE AND ICE BLENDED':'🧊','PASTRY':'🥐','PASTA':'🍝',
     'MEALS':'🍽','BEST WITH':'🍟','PASALUBONG':'🎁','BEANS':'☕','OTHER':'📦','WRAP':'🌯'
@@ -414,14 +425,15 @@ function spRenderMenu() {
   }
   grid.innerHTML = filtered.map(function(it) {
     var priceStr = it.hasSizes ? ('₱' + it.priceShort + '–₱' + it.priceTall) : ('₱' + (it.price||it.basePrice||0));
-    var imgUrl = it.image ? (it.image.startsWith('http') ? it.image : SUPABASE_IMG + it.image) : null;
+    // Use stored image_path directly. For /images/xxx.png paths (no http), it's a Vercel static asset.
+    // Only fall back to code-based path if image is empty.
+    var imgSrc = (it.image && it.image.trim()) ? it.image : getLocalMenuImgPath(it.code);
+    var catIcon = CAT_ICON[it.category] || '🍽';
     var qtyInCart = spCart.filter(function(c){return c.code===it.code;}).reduce(function(s,c){return s+c.qty;},0);
-    var imgHtml = imgUrl
-      ? '<img class="po-menu-item-img" src="' + imgUrl + '" alt="' + esc(it.name) + '" loading="lazy" onerror="this.style.display=\'none\';this.nextSibling.style.display=\'flex\'">' +
-        '<div class="po-menu-item-no-img" style="display:none">' + (CAT_ICON[it.category]||'🍽') + '</div>'
-      : '<div class="po-menu-item-no-img">' + (CAT_ICON[it.category]||'🍽') + '</div>';
     return '<div class="po-menu-item" onclick="spAddItem(\'' + esc(it.code) + '\')">' +
-      imgHtml +
+      '<img class="po-menu-item-img" src="' + imgSrc + '" alt="' + esc(it.name) + '" loading="lazy"' +
+        ' onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">' +
+      '<div class="po-menu-item-no-img" style="display:none">' + catIcon + '</div>' +
       (qtyInCart > 0 ? '<div class="po-menu-item-qty-badge">' + qtyInCart + '</div>' : '') +
       '<div class="po-menu-item-body">' +
         '<div class="po-menu-item-name">' + esc(it.name) + '</div>' +
