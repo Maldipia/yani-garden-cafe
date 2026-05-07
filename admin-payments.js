@@ -161,7 +161,7 @@ function closeProofModal() {
 async function openVerifyFromOrder(orderId) {
   // Find the paymentId for this order from the payments list
   var r = await api('listPayments', { userId: currentUser && currentUser.userId });
-  if (!r || !r.ok) { showToast('Could not load payment data', 'error'); return; }
+  if (!r || !r.ok) { showToast('Could not load payment data', 3500); return; }
   var payment = (r.payments || []).find(function(p) {
     return p.orderId === orderId && (p.status === 'SUBMITTED' || p.status === 'PENDING');
   });
@@ -246,7 +246,7 @@ async function doVerifyPayment(paymentId) {
       renderStats();
     }
   } else {
-    showToast('Failed: ' + (result.error || 'Unknown error'), 'error');
+    showToast('Failed: ' + (result.error || 'Unknown error'), 3500);
   }
 }
 
@@ -266,7 +266,7 @@ async function doRejectPayment(paymentId) {
       renderStats();
     }
   } else {
-    showToast('Failed: ' + (result.error || 'Unknown error'), 'error');
+    showToast('Failed: ' + (result.error || 'Unknown error'), 3500);
   }
 }
 
@@ -531,8 +531,14 @@ function spUpdateFooter() {
 }
 
 async function submitStaffOrder() {
-  if (spCart.length === 0) { showToast('Add items to cart first', 'error'); return; }
-  if (spOrderType === 'DINE_IN' && !spTableNo) { showToast('Please select a table', 'error'); return; }
+  if (spCart.length === 0) { showToast('⚠️ Add items to the cart first', 3500); return; }
+  if (spOrderType === 'DINE_IN' && !spTableNo) {
+    showToast('⚠️ Please select a table from the dropdown', 3500);
+    // Highlight the table dropdown so user knows what to do
+    var tblSel = document.getElementById('spTableSelect');
+    if (tblSel) { tblSel.style.border = '2px solid #f59e0b'; tblSel.focus(); setTimeout(function(){ tblSel.style.border = ''; }, 3000); }
+    return;
+  }
 
   var btn = document.getElementById('spSubmitBtn');
   btn.disabled = true;
@@ -555,7 +561,7 @@ async function submitStaffOrder() {
       showToast('✅ Added ' + spCart.length + ' item(s) to ' + spActiveOrderId);
       await loadOrders();
     } else {
-      showToast('❌ ' + (r.error||'Failed to add items'), 'error');
+      showToast('❌ ' + (r.error||'Failed to add items'), 3500);
     }
     return;
   }
@@ -584,10 +590,10 @@ async function submitStaffOrder() {
   btn.disabled = false; btn.textContent = '✅ Place Order';
   if (r.ok) {
     closeStaffPOS();
-    showToast('✅ Order ' + (r.orderId||'') + ' placed!', 'success');
+    showToast('✅ Order ' + (r.orderId||'') + ' placed!', 2500);
     await loadOrders();
   } else {
-    showToast('❌ ' + (r.error||'Failed to place order'), 'error');
+    showToast('❌ ' + (r.error||'Failed to place order'), 3500);
   }
 }
 
@@ -838,6 +844,6 @@ async function submitPlatformOrder() {
     loadOrders();
     showToast('✅ ' + poSelectedPlatform + ' order placed! Order: ' + result.orderId + ' · ₱' + Number(result.total).toLocaleString());
   } else {
-    showToast('❌ Failed: ' + (result.error || 'Unknown error'), 'error');
+    showToast('❌ Failed: ' + (result.error || 'Unknown error'), 3500);
   }
 }
