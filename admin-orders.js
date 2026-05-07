@@ -1068,26 +1068,34 @@ function capitalize(s) {
 // ORDER HISTORY — full timeline for customer dispute resolution
 // ══════════════════════════════════════════════════════════════
 async function showOrderHistory(orderId) {
-  // Show loading modal immediately
   var existing = document.getElementById('orderHistoryModal');
   if (existing) existing.remove();
 
   var modal = document.createElement('div');
   modal.id = 'orderHistoryModal';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
-  modal.innerHTML = '<div id="orderHistoryBox" style="background:#fff;border-radius:20px 20px 0 0;padding:24px 20px;width:100%;max-width:520px;max-height:80vh;overflow-y:auto;box-shadow:0 -4px 20px rgba(0,0,0,.2)">'
-    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">'
-    +   '<div><div style="font-weight:800;font-size:1rem;color:var(--forest-deep)">📋 Order Timeline</div>'
-    +   '<div style="font-size:.78rem;color:#6b7280;margin-top:1px">' + orderId + '</div></div>'
-    +   '<button onclick="document.getElementById(\'orderHistoryModal\').remove()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:#6b7280">×</button>'
-    + '</div>'
-    + '<div id="orderHistoryContent" style="text-align:center;padding:20px;color:#9ca3af">Loading…</div>'
-    + '</div>';
+  modal.innerHTML =
+    '<div id="orderHistoryBox" style="background:#fff;border-radius:20px 20px 0 0;width:100%;max-width:560px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 -4px 20px rgba(0,0,0,.2)">' +
+      '<div style="padding:18px 20px 12px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">' +
+        '<div>' +
+          '<div style="font-weight:800;font-size:1rem;color:var(--forest-deep)">📋 Order Timeline</div>' +
+          '<div style="font-size:.75rem;color:#6b7280;margin-top:1px">' + orderId + '</div>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px;align-items:center">' +
+          '<button onclick="printOrderHistory()" style="background:var(--forest);color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:.78rem;font-weight:700;cursor:pointer">🖨️ Print</button>' +
+          '<button onclick="document.getElementById(\'orderHistoryModal\').remove()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:#6b7280">×</button>' +
+        '</div>' +
+      '</div>' +
+      '<div id="orderHistoryContent" style="text-align:center;padding:20px;color:#9ca3af;flex:1;overflow-y:auto">Loading…</div>' +
+    '</div>';
   document.body.appendChild(modal);
   modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
 
-  // Fetch audit logs
-  var r = await api('getAuditLogs', { orderId: orderId, limit: 50 });
+  // Fetch audit logs + order items (for prepared_at times)
+  var [r, itemsR] = await Promise.all([
+    api('getAuditLogs', { orderId: orderId, limit: 50 }),
+    api('getOrders', { limit: 1, orderId: orderId })
+  ]);
   var box = document.getElementById('orderHistoryContent');
   if (!box) return;
 
@@ -1096,73 +1104,154 @@ async function showOrderHistory(orderId) {
     return;
   }
 
-  var ACTOR_LABELS = { 'USR_001': 'Owner', 'USR_002': 'Admin', 'USR_003': 'Cashier', 'USR_004': 'Kitchen' };
-  var ACTION_CONFIG = {
-    'ORDER_PLACED':     { icon: '🟢', label: 'Order placed',       color: '#065f46', bg: '#D1FAE5' },
-    'PREORDER_PLACED':  { icon: '⏰', label: 'Pre-order placed',    color: '#5B21B6', bg: '#EDE9FE' },
-    'STATUS_CHANGED':   { icon: '🔄', label: 'Status updated',      color: '#1D4ED8', bg: '#DBEAFE' },
-    'ITEMS_ADDED':      { icon: '➕', label: 'Items added',          color: '#92400E', bg: '#FEF3C7' },
-    'ORDER_EDITED':     { icon: '✏️', label: 'Order edited',         color: '#92400E', bg: '#FEF3C7' },
-    'PAYMENT_SET':      { icon: '💳', label: 'Payment recorded',     color: '#065f46', bg: '#D1FAE5' },
-    'DISCOUNT_APPLIED': { icon: '🏷️', label: 'Discount applied',    color: '#5B21B6', bg: '#EDE9FE' },
-    'DISCOUNT_REMOVED': { icon: '🏷️', label: 'Discount removed',    color: '#991B1B', bg: '#FEE2E2' },
-    'ORDER_DELETED':    { icon: '🗑️', label: 'Order deleted',       color: '#991B1B', bg: '#FEE2E2' },
-    'ORDER_RESTORED':   { icon: '↩️', label: 'Order restored',      color: '#065f46', bg: '#D1FAE5' },
-    'SERVICE_CHARGE_WAIVED': { icon: '🎁', label: 'Service charge waived', color: '#065f46', bg: '#D1FAE5' },
+  var ACTOR = { 'USR_001':'Owner','USR_002':'Admin','USR_003':'Cashier','USR_004':'Kitchen' };
+  var CFG = {
+    'ORDER_PLACED':    { icon:'🟢', label:'Order placed',        color:'#065f46', bg:'#D1FAE5' },
+    'PREORDER_PLACED': { icon:'⏰', label:'Pre-order placed',     color:'#5B21B6', bg:'#EDE9FE' },
+    'STATUS_CHANGED':  { icon:'🔄', label:'Status updated',       color:'#1D4ED8', bg:'#DBEAFE' },
+    'ITEMS_ADDED':     { icon:'➕', label:'Items added',           color:'#92400E', bg:'#FEF3C7' },
+    'ORDER_EDITED':    { icon:'✏️', label:'Items changed',         color:'#92400E', bg:'#FEF3C7' },
+    'PAYMENT_SET':     { icon:'💳', label:'Payment recorded',      color:'#065f46', bg:'#D1FAE5' },
+    'DISCOUNT_APPLIED':{ icon:'🏷️', label:'Discount applied',     color:'#5B21B6', bg:'#EDE9FE' },
+    'DISCOUNT_REMOVED':{ icon:'🏷️', label:'Discount removed',     color:'#991B1B', bg:'#FEE2E2' },
+    'ORDER_DELETED':   { icon:'🗑️', label:'Order deleted',        color:'#991B1B', bg:'#FEE2E2' },
+    'ORDER_RESTORED':  { icon:'↩️', label:'Order restored',       color:'#065f46', bg:'#D1FAE5' },
+    'SERVICE_CHARGE_WAIVED':{ icon:'🎁', label:'Service charge waived', color:'#065f46', bg:'#D1FAE5' },
   };
 
-  // Sort ascending (oldest first)
-  var logs = r.logs.slice().sort(function(a,b){ return new Date(a.created_at) - new Date(b.created_at); });
+  // Sort ascending
+  var logs = r.logs.slice().sort(function(a,b){ return new Date(a.created_at)-new Date(b.created_at); });
 
-  var html = '<div style="position:relative">'
-    + '<div style="position:absolute;left:19px;top:0;bottom:0;width:2px;background:#e5e7eb;z-index:0"></div>';
+  // Compute placed time for elapsed calculation
+  var placedLog = logs.find(function(l){ return l.action==='ORDER_PLACED'||l.action==='PREORDER_PLACED'; });
+  var placedTime = placedLog ? new Date(placedLog.created_at) : null;
+
+  function elapsed(ts) {
+    if (!placedTime || !ts) return '';
+    var mins = Math.round((new Date(ts)-placedTime)/60000);
+    return mins >= 0 ? '+' + mins + ' min' : '';
+  }
+  function fmt(ts) {
+    if (!ts) return '';
+    try { return new Date(ts).toLocaleString('en-PH',{timeZone:'Asia/Manila',month:'short',day:'numeric',hour:'numeric',minute:'2-digit',hour12:true}); }
+    catch(e){ return ''; }
+  }
+
+  // Build diff for ORDER_EDITED: compare with previous items list
+  var prevItems = [];
+  function getItemDiff(currItems) {
+    if (!currItems || !currItems.length) return { added:[], removed:[] };
+    var added = currItems.filter(function(c){ return !prevItems.includes(c); });
+    var removed = prevItems.filter(function(p){ return !currItems.includes(p); });
+    return { added:added, removed:removed };
+  }
+
+  var html = '<div style="position:relative" id="orderHistoryPrintArea">';
+  html += '<div style="position:absolute;left:19px;top:0;bottom:0;width:2px;background:#e5e7eb;z-index:0"></div>';
+
+  // Print header (hidden until print)
+  html += '<div class="print-only" style="display:none;margin-bottom:16px;border-bottom:2px solid #333;padding-bottom:10px">'
+    + '<div style="font-size:1.1rem;font-weight:800">YANI Garden Café — Order Timeline</div>'
+    + '<div style="font-size:.85rem;color:#555;margin-top:2px">Order: ' + orderId + ' · Printed: ' + fmt(new Date()) + '</div>'
+    + '</div>';
 
   logs.forEach(function(log, idx) {
-    var cfg = ACTION_CONFIG[log.action] || { icon: '📌', label: log.action, color: '#374151', bg: '#F3F4F6' };
-    var timeStr = '';
-    try {
-      timeStr = new Date(log.created_at).toLocaleString('en-PH', {
-        timeZone:'Asia/Manila', month:'short', day:'numeric',
-        hour:'numeric', minute:'2-digit', second:'2-digit', hour12:true
-      });
-    } catch(e) {}
-    var actor = log.actor_id ? (ACTOR_LABELS[log.actor_id] || log.actor_id) : 'Customer';
+    var cfg = CFG[log.action] || { icon:'📌', label:log.action, color:'#374151', bg:'#F3F4F6' };
+    var actor = log.actor_id ? (ACTOR[log.actor_id]||log.actor_id) : 'Customer';
+    var timeStr = fmt(log.created_at);
+    var elapsedStr = elapsed(log.created_at);
     var details = '';
+
     try {
       var d = log.details;
       if (d) {
         if (log.action === 'ORDER_PLACED') {
-          details = d.itemCount + ' item' + (d.itemCount>1?'s':'') + ' · ₱' + parseFloat(d.total).toFixed(2)
-            + (d.customerName ? ' · ' + d.customerName : '')
+          var itemList = d.items && d.items.length ? d.items : [];
+          prevItems = itemList.slice();
+          details = d.itemCount + ' item' + (d.itemCount>1?'s':'')
+            + ' · ₱' + parseFloat(d.total||0).toFixed(2)
+            + (d.customerName && d.customerName!=='Guest' ? ' · ' + d.customerName : '')
             + (d.orderType ? ' · ' + d.orderType : '');
+          if (itemList.length) details += '<br><span style="color:#065f46">' + itemList.join(', ') + '</span>';
         } else if (log.action === 'ITEMS_ADDED') {
-          details = d.added + ' item' + (d.added>1?'s':'') + ' added'
-            + (d.newTotal ? ' · New total: ₱' + parseFloat(d.newTotal).toFixed(2) : '')
-            + (d.items && d.items.length ? '<br><span style="color:#92400E">' + d.items.join(', ') + '</span>' : '');
+          var newItems = d.items || [];
+          prevItems = prevItems.concat(newItems);
+          details = '<span style="color:#065f46">Added: ' + newItems.join(', ') + '</span>'
+            + (d.newTotal ? ' · New total: ₱' + parseFloat(d.newTotal).toFixed(2) : '');
         } else if (log.action === 'ORDER_EDITED') {
-          details = d.itemCount + ' item' + (d.itemCount>1?'s':'') + ' · ₱' + parseFloat(d.newTotal).toFixed(2)
-            + (d.items && d.items.length ? '<br><span style="color:#92400E">' + d.items.join(', ') + '</span>' : '');
+          var currItems = d.items || [];
+          var diff = getItemDiff(currItems);
+          prevItems = currItems.slice();
+          var parts = [];
+          if (diff.added.length) parts.push('<span style="color:#065f46">+ ' + diff.added.join(', ') + '</span>');
+          if (diff.removed.length) parts.push('<span style="color:#991B1B">− ' + diff.removed.join(', ') + '</span>');
+          if (!parts.length && currItems.length) {
+            // No diff detectable (e.g. older log without items list) — show count + total only
+            details = d.itemCount + ' item' + (d.itemCount>1?'s':'') + ' · ₱' + parseFloat(d.newTotal||0).toFixed(2);
+          } else {
+            details = parts.join('<br>') + ' · ₱' + parseFloat(d.newTotal||0).toFixed(2);
+          }
         } else if (log.action === 'STATUS_CHANGED') {
-          details = (log.old_value || '') + (log.old_value && log.new_value ? ' → ' : '') + (log.new_value || '');
+          details = (log.old_value||'') + (log.old_value&&log.new_value?' → ':'') + (log.new_value||'');
         } else if (log.action === 'DISCOUNT_APPLIED') {
-          details = d.type ? d.type + (d.amount ? ' · −₱' + parseFloat(d.amount).toFixed(2) : '') : '';
+          details = d.type ? d.type + (d.amount ? ' · −₱'+parseFloat(d.amount).toFixed(2) : '') : '';
+        } else if (log.action === 'PAYMENT_SET') {
+          details = (d.method||'') + (d.total ? ' · ₱'+parseFloat(d.total).toFixed(2) : '');
         }
       }
     } catch(e) {}
 
-    var isLast = idx === logs.length - 1;
-    html += '<div style="display:flex;gap:14px;margin-bottom:' + (isLast?'0':'16px') + ';position:relative;z-index:1">'
-      + '<div style="width:38px;height:38px;border-radius:50%;background:' + cfg.bg + ';display:flex;align-items:center;justify-content:center;font-size:.95rem;flex-shrink:0;border:2px solid #fff;box-shadow:0 0 0 2px ' + cfg.bg + '">'
-      +   cfg.icon
-      + '</div>'
+    var isLast = idx === logs.length-1;
+    html += '<div style="display:flex;gap:14px;margin-bottom:' + (isLast?'4px':'16px') + ';position:relative;z-index:1">'
+      + '<div style="width:38px;height:38px;border-radius:50%;background:' + cfg.bg + ';display:flex;align-items:center;justify-content:center;font-size:.95rem;flex-shrink:0;border:2px solid #fff;box-shadow:0 0 0 2px ' + cfg.bg + '">' + cfg.icon + '</div>'
       + '<div style="flex:1;padding-top:4px">'
       +   '<div style="font-size:.82rem;font-weight:700;color:' + cfg.color + '">' + cfg.label + '</div>'
-      +   (details ? '<div style="font-size:.75rem;color:#374151;margin-top:2px">' + details + '</div>' : '')
-      +   '<div style="font-size:.7rem;color:#9ca3af;margin-top:3px">' + timeStr + ' · ' + actor + '</div>'
+      +   (details ? '<div style="font-size:.75rem;color:#374151;margin-top:2px;line-height:1.5">' + details + '</div>' : '')
+      +   '<div style="font-size:.7rem;color:#9ca3af;margin-top:3px">'
+      +     timeStr
+      +     (elapsedStr ? ' <span style="background:#F3F4F6;color:#374151;border-radius:4px;padding:1px 5px;font-weight:600;margin-left:4px">' + elapsedStr + '</span>' : '')
+      +     ' · ' + actor
+      +   '</div>'
       + '</div>'
       + '</div>';
   });
 
+  // Items completion section
+  var order = null;
+  try { order = (itemsR && itemsR.ok && itemsR.orders && itemsR.orders[0]) ? itemsR.orders[0] : null; } catch(e){}
+  var preparedItems = order && order.items ? order.items.filter(function(i){ return i.prepared && i.preparedAt; }) : [];
+  if (preparedItems.length && placedTime) {
+    html += '<div style="margin-top:16px;padding-top:14px;border-top:1px dashed #e5e7eb">'
+      + '<div style="font-size:.78rem;font-weight:700;color:#374151;margin-bottom:8px">⏱️ Item completion times</div>';
+    preparedItems.forEach(function(it) {
+      var mins = Math.round((new Date(it.preparedAt)-placedTime)/60000);
+      html += '<div style="display:flex;justify-content:space-between;font-size:.75rem;padding:3px 0;border-bottom:1px solid #f3f4f6">'
+        + '<span style="color:#374151">' + (it.qty>1?it.qty+'× ':'') + it.name + '</span>'
+        + '<span style="background:#D1FAE5;color:#065f46;border-radius:4px;padding:1px 7px;font-weight:700">✅ ' + mins + ' min</span>'
+        + '</div>';
+    });
+    html += '</div>';
+  }
+
   html += '</div>';
   box.innerHTML = html;
+}
+
+function printOrderHistory() {
+  var content = document.getElementById('orderHistoryPrintArea');
+  if (!content) return;
+  // Show print-only header
+  var printHeaders = content.querySelectorAll('.print-only');
+  printHeaders.forEach(function(el){ el.style.display = 'block'; });
+  var win = window.open('', '_blank', 'width=520,height=700');
+  win.document.write('<!DOCTYPE html><html><head><title>Order Timeline</title>'
+    + '<style>body{font-family:Arial,sans-serif;font-size:13px;padding:20px;max-width:480px;margin:0 auto}'
+    + 'h2{margin:0 0 4px;font-size:15px} .no-print{display:none}'
+    + '@media print{button{display:none}}</style>'
+    + '</head><body>' + content.innerHTML
+    + '<script>window.onload=function(){window.print();window.close();}<\/script>'
+    + '</body></html>');
+  win.document.close();
+  // Hide print-only header again
+  printHeaders.forEach(function(el){ el.style.display = 'none'; });
 }
