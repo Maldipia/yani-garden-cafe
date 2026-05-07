@@ -2103,7 +2103,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
         body: JSON.stringify({ subtotal: trueSubtotal, service_charge: newSvc, total: newTotal })
       });
 
-      await auditLog({ orderId, action: 'ITEMS_ADDED', actor: { userId: authA.userId }, details: { added: newItems.length, addSubtotal, trueSubtotal, newTotal } });
+      await auditLog({ orderId, action: 'ITEMS_ADDED', actor: { userId: authA.userId }, details: { added: newItems.length, addSubtotal, trueSubtotal, newTotal, items: newItems.map(function(i){ return (i.qty||1)+'x '+i.name; }) } });
 
       return res.status(200).json({ ok: true, orderId, added: newItems.length, newTotal });
     }
@@ -2207,7 +2207,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       await supa('PATCH', 'dine_in_orders', patch, { order_id: `eq.${orderId}` });
 
       logSync('dine_in_orders', orderId, 'UPDATE');
-      auditLog({ orderId, action: 'ORDER_EDITED', actor: { userId: body.userId, role: authE.role }, details: { newTotal: total, itemCount: itemRows.length, discountRecalculated: !!newDiscountedTotal } });
+      auditLog({ orderId, action: 'ORDER_EDITED', actor: { userId: body.userId, role: authE.role }, details: { newTotal: total, itemCount: itemRows.length, discountRecalculated: !!newDiscountedTotal, items: itemRows.map(function(i){ return i.qty+'x '+i.item_name; }) } });
       return res.status(200).json({ ok: true, orderId, subtotal, serviceCharge: svcCharge, total, discountedTotal: newDiscountedTotal, discountAmount: newDiscountAmt });
     }
 

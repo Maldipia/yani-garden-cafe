@@ -268,6 +268,12 @@ function renderOrders() {
       html += '<button class="oc-btn oc-btn-print" onclick="printReceipt(\'' + o.orderId + '\')">🖨️ Print Receipt</button>';
     }
 
+    // Order History button — always visible to ADMIN/OWNER/CASHIER
+    if (currentUser.role !== 'KITCHEN') {
+      html += '<button class="oc-btn" style="background:#F5F3FF;color:#5B21B6;border:1px solid #DDD6FE;margin-top:4px;width:calc(100% - 32px);margin-left:16px;font-size:.75rem;" '
+        + 'onclick="showOrderHistory(\'' + esc(o.orderId) + '\')">📋 Order History</button>';
+    }
+
     // Split Bill button (ADMIN/OWNER/CASHIER, active or completed orders)
     var canSplit = (currentUser.role === 'ADMIN' || currentUser.role === 'OWNER' || currentUser.role === 'CASHIER');
     if (canSplit && o.status !== 'CANCELLED') {
@@ -1006,4 +1012,107 @@ function esc(s) {
 function capitalize(s) {
   if (!s) return '';
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+}
+
+// ══════════════════════════════════════════════════════════════
+// ORDER HISTORY — full timeline for customer dispute resolution
+// ══════════════════════════════════════════════════════════════
+async function showOrderHistory(orderId) {
+  // Show loading modal immediately
+  var existing = document.getElementById('orderHistoryModal');
+  if (existing) existing.remove();
+
+  var modal = document.createElement('div');
+  modal.id = 'orderHistoryModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
+  modal.innerHTML = '<div id="orderHistoryBox" style="background:#fff;border-radius:20px 20px 0 0;padding:24px 20px;width:100%;max-width:520px;max-height:80vh;overflow-y:auto;box-shadow:0 -4px 20px rgba(0,0,0,.2)">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">'
+    +   '<div><div style="font-weight:800;font-size:1rem;color:var(--forest-deep)">📋 Order Timeline</div>'
+    +   '<div style="font-size:.78rem;color:#6b7280;margin-top:1px">' + orderId + '</div></div>'
+    +   '<button onclick="document.getElementById(\'orderHistoryModal\').remove()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:#6b7280">×</button>'
+    + '</div>'
+    + '<div id="orderHistoryContent" style="text-align:center;padding:20px;color:#9ca3af">Loading…</div>'
+    + '</div>';
+  document.body.appendChild(modal);
+  modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
+
+  // Fetch audit logs
+  var r = await api('getActivityLogs', { orderId: orderId, limit: 50 });
+  var box = document.getElementById('orderHistoryContent');
+  if (!box) return;
+
+  if (!r || !r.ok || !r.logs || !r.logs.length) {
+    box.innerHTML = '<div style="padding:20px;color:#9ca3af;text-align:center">No history found for this order.</div>';
+    return;
+  }
+
+  var ACTOR_LABELS = { 'USR_001': 'Owner', 'USR_002': 'Admin', 'USR_003': 'Cashier', 'USR_004': 'Kitchen' };
+  var ACTION_CONFIG = {
+    'ORDER_PLACED':     { icon: '🟢', label: 'Order placed',       color: '#065f46', bg: '#D1FAE5' },
+    'PREORDER_PLACED':  { icon: '⏰', label: 'Pre-order placed',    color: '#5B21B6', bg: '#EDE9FE' },
+    'STATUS_CHANGED':   { icon: '🔄', label: 'Status updated',      color: '#1D4ED8', bg: '#DBEAFE' },
+    'ITEMS_ADDED':      { icon: '➕', label: 'Items added',          color: '#92400E', bg: '#FEF3C7' },
+    'ORDER_EDITED':     { icon: '✏️', label: 'Order edited',         color: '#92400E', bg: '#FEF3C7' },
+    'PAYMENT_SET':      { icon: '💳', label: 'Payment recorded',     color: '#065f46', bg: '#D1FAE5' },
+    'DISCOUNT_APPLIED': { icon: '🏷️', label: 'Discount applied',    color: '#5B21B6', bg: '#EDE9FE' },
+    'DISCOUNT_REMOVED': { icon: '🏷️', label: 'Discount removed',    color: '#991B1B', bg: '#FEE2E2' },
+    'ORDER_DELETED':    { icon: '🗑️', label: 'Order deleted',       color: '#991B1B', bg: '#FEE2E2' },
+    'ORDER_RESTORED':   { icon: '↩️', label: 'Order restored',      color: '#065f46', bg: '#D1FAE5' },
+    'SERVICE_CHARGE_WAIVED': { icon: '🎁', label: 'Service charge waived', color: '#065f46', bg: '#D1FAE5' },
+  };
+
+  // Sort ascending (oldest first)
+  var logs = r.logs.slice().sort(function(a,b){ return new Date(a.created_at) - new Date(b.created_at); });
+
+  var html = '<div style="position:relative">'
+    + '<div style="position:absolute;left:19px;top:0;bottom:0;width:2px;background:#e5e7eb;z-index:0"></div>';
+
+  logs.forEach(function(log, idx) {
+    var cfg = ACTION_CONFIG[log.action] || { icon: '📌', label: log.action, color: '#374151', bg: '#F3F4F6' };
+    var timeStr = '';
+    try {
+      timeStr = new Date(log.created_at).toLocaleString('en-PH', {
+        timeZone:'Asia/Manila', month:'short', day:'numeric',
+        hour:'numeric', minute:'2-digit', second:'2-digit', hour12:true
+      });
+    } catch(e) {}
+    var actor = log.actor_id ? (ACTOR_LABELS[log.actor_id] || log.actor_id) : 'Customer';
+    var details = '';
+    try {
+      var d = log.details;
+      if (d) {
+        if (log.action === 'ORDER_PLACED') {
+          details = d.itemCount + ' item' + (d.itemCount>1?'s':'') + ' · ₱' + parseFloat(d.total).toFixed(2)
+            + (d.customerName ? ' · ' + d.customerName : '')
+            + (d.orderType ? ' · ' + d.orderType : '');
+        } else if (log.action === 'ITEMS_ADDED') {
+          details = d.added + ' item' + (d.added>1?'s':'') + ' added'
+            + (d.newTotal ? ' · New total: ₱' + parseFloat(d.newTotal).toFixed(2) : '')
+            + (d.items && d.items.length ? '<br><span style="color:#92400E">' + d.items.join(', ') + '</span>' : '');
+        } else if (log.action === 'ORDER_EDITED') {
+          details = d.itemCount + ' item' + (d.itemCount>1?'s':'') + ' · ₱' + parseFloat(d.newTotal).toFixed(2)
+            + (d.items && d.items.length ? '<br><span style="color:#92400E">' + d.items.join(', ') + '</span>' : '');
+        } else if (log.action === 'STATUS_CHANGED') {
+          details = (log.old_value || '') + (log.old_value && log.new_value ? ' → ' : '') + (log.new_value || '');
+        } else if (log.action === 'DISCOUNT_APPLIED') {
+          details = d.type ? d.type + (d.amount ? ' · −₱' + parseFloat(d.amount).toFixed(2) : '') : '';
+        }
+      }
+    } catch(e) {}
+
+    var isLast = idx === logs.length - 1;
+    html += '<div style="display:flex;gap:14px;margin-bottom:' + (isLast?'0':'16px') + ';position:relative;z-index:1">'
+      + '<div style="width:38px;height:38px;border-radius:50%;background:' + cfg.bg + ';display:flex;align-items:center;justify-content:center;font-size:.95rem;flex-shrink:0;border:2px solid #fff;box-shadow:0 0 0 2px ' + cfg.bg + '">'
+      +   cfg.icon
+      + '</div>'
+      + '<div style="flex:1;padding-top:4px">'
+      +   '<div style="font-size:.82rem;font-weight:700;color:' + cfg.color + '">' + cfg.label + '</div>'
+      +   (details ? '<div style="font-size:.75rem;color:#374151;margin-top:2px">' + details + '</div>' : '')
+      +   '<div style="font-size:.7rem;color:#9ca3af;margin-top:3px">' + timeStr + ' · ' + actor + '</div>'
+      + '</div>'
+      + '</div>';
+  });
+
+  html += '</div>';
+  box.innerHTML = html;
 }
