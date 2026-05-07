@@ -483,21 +483,7 @@ async function loadOrders() {
     });
     if (newArrivals.length > 0) {
       playNewOrderAlert();
-      // Auto-print 2 copies for each brand-new order (fires once per order)
-      if (!window._autoPrintedOrders) window._autoPrintedOrders = {};
-      newArrivals.forEach(function(o, idx) {
-        if (window._autoPrintedOrders[o.orderId]) return;
-        window._autoPrintedOrders[o.orderId] = true;
-        // Stagger if multiple orders arrive simultaneously
-        setTimeout(function() { printReceipt(o.orderId, 2); }, idx * 1800);
-      });
     }
-  }
-  // Seed _autoPrintedOrders on very first poll so existing NEW orders don't auto-print
-  if (!window._initialPollDone) {
-    window._initialPollDone = true;
-    if (!window._autoPrintedOrders) window._autoPrintedOrders = {};
-    freshOrders.forEach(function(o) { window._autoPrintedOrders[o.orderId] = true; });
   }
   window._knownOrderIds = {};
   freshOrders.forEach(function(o) { window._knownOrderIds[o.orderId] = true; });
