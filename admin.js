@@ -2000,7 +2000,7 @@ var spSelectedCat = 'ALL';
 var spAddingItem = null;
 var spMenuItems = [];
 
-function openStaffPOS() {
+async function openStaffPOS() {
   spCart = []; spOrderType = 'DINE_IN'; spTableNo = ''; spSelectedCat = 'ALL';
   var cn = document.getElementById('spCustomerName');
   var nt = document.getElementById('spNotes');
@@ -2009,26 +2009,35 @@ function openStaffPOS() {
   if (nt) nt.value = '';
   if (si) si.value = '';
   document.getElementById('spOverlay').classList.add('open');
-  // Populate table dropdown
-  var tblSel = document.getElementById('spTableSelect');
-  if (tblSel) {
-    var occupied = {};
-    allOrders.forEach(function(o) {
-      if (['NEW','PREPARING','READY'].includes(o.status) && !o.isTest && o.tableNo) occupied[String(o.tableNo)] = true;
-    });
-    tblSel.innerHTML = '<option value="">Select table…</option>' +
-      _allTables.map(function(t) {
-        var tno = String(t.table_number);
-        var name = t.table_name || ('Table ' + tno);
-        var busy = occupied[tno] ? ' 🔴' : '';
-        return '<option value="' + tno + '">' + name + busy + '</option>';
-      }).join('');
-    tblSel.style.display = '';
-  }
   var ts = document.getElementById('spTypeSelect');
   if (ts) ts.value = 'DINE_IN';
   spRenderCart();
+
+  // Fetch tables if not yet loaded, then populate dropdown
+  if (_allTables.length === 0) {
+    var tr = await api('getTables', { userId: currentUser && currentUser.userId });
+    if (tr && tr.ok) _allTables = tr.tables || [];
+  }
+  spPopulateTableDropdown();
   spLoadMenu();
+}
+
+function spPopulateTableDropdown() {
+  var tblSel = document.getElementById('spTableSelect');
+  if (!tblSel) return;
+  var occupied = {};
+  allOrders.forEach(function(o) {
+    if (['NEW','PREPARING','READY'].includes(o.status) && !o.isTest && o.tableNo)
+      occupied[String(o.tableNo)] = true;
+  });
+  tblSel.innerHTML = '<option value="">Select table…</option>' +
+    _allTables.map(function(t) {
+      var tno = String(t.table_number);
+      var name = t.table_name || ('Table ' + tno);
+      var busy = occupied[tno] ? ' 🔴' : '';
+      return '<option value="' + tno + '">' + name + busy + '</option>';
+    }).join('');
+  tblSel.style.display = '';
 }
 
 function closeStaffPOS() {
