@@ -1110,7 +1110,7 @@ async function showOrderHistory(orderId) {
     'PREORDER_PLACED': { icon:'⏰', label:'Pre-order placed',     color:'#5B21B6', bg:'#EDE9FE' },
     'STATUS_CHANGED':  { icon:'🔄', label:'Status updated',       color:'#1D4ED8', bg:'#DBEAFE' },
     'ITEMS_ADDED':     { icon:'➕', label:'Items added',           color:'#92400E', bg:'#FEF3C7' },
-    'ORDER_EDITED':    { icon:'✏️', label:'Items changed',         color:'#92400E', bg:'#FEF3C7' },
+    'ORDER_EDITED':    { icon:'✏️', label:'Order edited',           color:'#92400E', bg:'#FEF3C7' },
     'PAYMENT_SET':     { icon:'💳', label:'Payment recorded',      color:'#065f46', bg:'#D1FAE5' },
     'DISCOUNT_APPLIED':{ icon:'🏷️', label:'Discount applied',     color:'#5B21B6', bg:'#EDE9FE' },
     'DISCOUNT_REMOVED':{ icon:'🏷️', label:'Discount removed',     color:'#991B1B', bg:'#FEE2E2' },
@@ -1139,12 +1139,7 @@ async function showOrderHistory(orderId) {
 
   // Build diff for ORDER_EDITED: compare with previous items list
   var prevItems = [];
-  function getItemDiff(currItems) {
-    if (!currItems || !currItems.length) return { added:[], removed:[] };
-    var added = currItems.filter(function(c){ return !prevItems.includes(c); });
-    var removed = prevItems.filter(function(p){ return !currItems.includes(p); });
-    return { added:added, removed:removed };
-  }
+  var hasKnownPrev = false; // only diff once we've seen a full items list
 
   var html = '<div style="position:relative" id="orderHistoryPrintArea">';
   html += '<div style="position:absolute;left:19px;top:0;bottom:0;width:2px;background:#e5e7eb;z-index:0"></div>';
@@ -1156,7 +1151,8 @@ async function showOrderHistory(orderId) {
     + '</div>';
 
   logs.forEach(function(log, idx) {
-    var cfg = CFG[log.action] || { icon:'📌', label:log.action, color:'#374151', bg:'#F3F4F6' };
+    // cfg is dynamic — overridden per entry for ORDER_EDITED to reflect what actually changed
+    var cfg = Object.assign({}, CFG[log.action] || { icon:'📌', label:log.action, color:'#374151', bg:'#F3F4F6' });
     var actor = log.actor_id ? (ACTOR[log.actor_id]||log.actor_id) : 'Customer';
     var timeStr = fmt(log.created_at);
     var elapsedStr = elapsed(log.created_at);
@@ -1167,35 +1163,65 @@ async function showOrderHistory(orderId) {
       if (d) {
         if (log.action === 'ORDER_PLACED') {
           var itemList = d.items && d.items.length ? d.items : [];
-          prevItems = itemList.slice();
+          if (itemList.length) { prevItems = itemList.slice(); hasKnownPrev = true; }
           details = d.itemCount + ' item' + (d.itemCount>1?'s':'')
             + ' · ₱' + parseFloat(d.total||0).toFixed(2)
-            + (d.customerName && d.customerName!=='Guest' ? ' · ' + d.customerName : '')
-            + (d.orderType ? ' · ' + d.orderType : '');
-          if (itemList.length) details += '<br><span style="color:#065f46">' + itemList.join(', ') + '</span>';
+            + (d.customerName && d.customerName!=='Guest' && d.customerName!=='Staff' ? ' · Customer: ' + d.customerName : '')
+            + ' · ' + (d.orderType||'DINE-IN');
+          if (itemList.length) details += '<br><span style="color:#065f46">' + itemList.join(' · ') + '</span>';
         } else if (log.action === 'ITEMS_ADDED') {
           var newItems = d.items || [];
-          prevItems = prevItems.concat(newItems);
-          details = '<span style="color:#065f46">Added: ' + newItems.join(', ') + '</span>'
+          if (newItems.length) { prevItems = prevItems.concat(newItems); hasKnownPrev = true; }
+          var addedCount = newItems.length;
+          cfg = { icon:'➕', label: addedCount + ' item' + (addedCount===1?'':'s') + ' added by ' + actor, color:'#065f46', bg:'#D1FAE5' };
+          details = '<span style="color:#065f46;font-weight:600">' + newItems.join(' · ') + '</span>'
             + (d.newTotal ? ' · New total: ₱' + parseFloat(d.newTotal).toFixed(2) : '');
         } else if (log.action === 'ORDER_EDITED') {
           var currItems = d.items || [];
-          var diff = getItemDiff(currItems);
-          prevItems = currItems.slice();
-          var parts = [];
-          if (diff.added.length) parts.push('<span style="color:#065f46">+ ' + diff.added.join(', ') + '</span>');
-          if (diff.removed.length) parts.push('<span style="color:#991B1B">− ' + diff.removed.join(', ') + '</span>');
-          if (!parts.length && currItems.length) {
-            // No diff detectable (e.g. older log without items list) — show count + total only
-            details = d.itemCount + ' item' + (d.itemCount>1?'s':'') + ' · ₱' + parseFloat(d.newTotal||0).toFixed(2);
+          if (!currItems.length) {
+            // Old log — no items stored, just show totals
+            cfg = { icon:'✏️', label:'Order updated by ' + actor, color:'#92400E', bg:'#FEF3C7' };
+            details = '₱' + parseFloat(d.newTotal||0).toFixed(2)
+              + ' · ' + d.itemCount + ' item' + (d.itemCount>1?'s':'');
+          } else if (!hasKnownPrev) {
+            // First full items list seen — can't compute diff, record current state as baseline
+            prevItems = currItems.slice(); hasKnownPrev = true;
+            cfg = { icon:'📋', label:'Order state recorded by ' + actor, color:'#374151', bg:'#F3F4F6' };
+            details = '<span style="color:#374151">' + currItems.join(' · ') + '</span>'
+              + ' · ₱' + parseFloat(d.newTotal||0).toFixed(2);
           } else {
-            details = parts.join('<br>') + ' · ₱' + parseFloat(d.newTotal||0).toFixed(2);
+            var addedItems = currItems.filter(function(c){ return !prevItems.includes(c); });
+            var removedItems = prevItems.filter(function(p){ return !currItems.includes(p); });
+            prevItems = currItems.slice();
+            if (addedItems.length && !removedItems.length) {
+              cfg = { icon:'➕', label: addedItems.length + ' item' + (addedItems.length===1?'':'s') + ' added by ' + actor, color:'#065f46', bg:'#D1FAE5' };
+              details = '<span style="color:#065f46;font-weight:600">' + addedItems.join(' · ') + '</span>'
+                + ' · New total: ₱' + parseFloat(d.newTotal||0).toFixed(2);
+            } else if (removedItems.length && !addedItems.length) {
+              cfg = { icon:'➖', label: removedItems.length + ' item' + (removedItems.length===1?'':'s') + ' removed by ' + actor, color:'#991B1B', bg:'#FEE2E2' };
+              details = '<span style="color:#991B1B;font-weight:600">' + removedItems.join(' · ') + '</span>'
+                + ' · New total: ₱' + parseFloat(d.newTotal||0).toFixed(2);
+            } else if (addedItems.length && removedItems.length) {
+              cfg = { icon:'🔀', label:'Order modified by ' + actor, color:'#92400E', bg:'#FEF3C7' };
+              details = '<span style="color:#065f46;font-weight:600">Added: ' + addedItems.join(' · ') + '</span>'
+                + '<br><span style="color:#991B1B;font-weight:600">Removed: ' + removedItems.join(' · ') + '</span>'
+                + ' · New total: ₱' + parseFloat(d.newTotal||0).toFixed(2);
+            } else {
+              cfg = { icon:'✏️', label:'Order updated by ' + actor, color:'#92400E', bg:'#FEF3C7' };
+              details = '₱' + parseFloat(d.newTotal||0).toFixed(2);
+            }
           }
         } else if (log.action === 'STATUS_CHANGED') {
-          details = (log.old_value||'') + (log.old_value&&log.new_value?' → ':'') + (log.new_value||'');
+          var oldS = (log.old_value||'').toUpperCase();
+          var newS = (log.new_value||'').toUpperCase();
+          // Specific label per transition — clear for incident report
+          cfg = Object.assign({}, cfg, { label: 'Status changed: ' + oldS + ' → ' + newS });
+          details = oldS + ' → ' + newS + ' · by ' + actor;
         } else if (log.action === 'DISCOUNT_APPLIED') {
+          cfg = Object.assign({}, cfg, { label: 'Discount applied by ' + actor });
           details = d.type ? d.type + (d.amount ? ' · −₱'+parseFloat(d.amount).toFixed(2) : '') : '';
         } else if (log.action === 'PAYMENT_SET') {
+          cfg = Object.assign({}, cfg, { label: 'Payment recorded by ' + actor });
           details = (d.method||'') + (d.total ? ' · ₱'+parseFloat(d.total).toFixed(2) : '');
         }
       }
