@@ -2013,11 +2013,12 @@ async function openStaffPOS() {
   if (ts) ts.value = 'DINE_IN';
   spRenderCart();
 
-  // Fetch tables if not yet loaded, then populate dropdown
-  if (_allTables.length === 0) {
-    var tr = await api('getTables', { userId: currentUser && currentUser.userId });
-    if (tr && tr.ok) _allTables = tr.tables || [];
-  }
+  // Always fetch fresh tables so dropdown is accurate
+  var tblSel = document.getElementById('spTableSelect');
+  if (tblSel) tblSel.innerHTML = '<option value="">⏳ Loading tables…</option>';
+
+  var tr = await api('getTables', {});
+  if (tr && tr.ok) _allTables = tr.tables || [];
   spPopulateTableDropdown();
   spLoadMenu();
 }
@@ -2130,10 +2131,10 @@ function spRenderMenu() {
   }
   grid.innerHTML = filtered.map(function(it) {
     var priceStr = it.hasSizes ? ('₱' + it.priceShort + '–₱' + it.priceTall) : ('₱' + (it.price||it.basePrice||0));
-    // Use same image logic as Menu Manager: local /images/{code}.ext path
-    var localPath = getLocalMenuImgPath(it.code);
-    var hasExternal = it.image && it.image.startsWith('http');
-    var imgSrc = hasExternal ? it.image : localPath;
+    // Image: use stored image_path directly (it.image from getMenu API).
+    // Only fall back to local path construction if no image stored.
+    // This handles both /images/C014.png paths AND http:// Supabase URLs.
+    var imgSrc = (it.image && it.image.trim()) ? it.image : getLocalMenuImgPath(it.code);
     var qtyInCart = spCart.filter(function(c){return c.code===it.code;}).reduce(function(s,c){return s+c.qty;},0);
     var catIcon = CAT_ICON[it.category] || '🍽';
     return '<div class="po-menu-item" onclick="spAddItem(\'' + esc(it.code) + '\')">' +
