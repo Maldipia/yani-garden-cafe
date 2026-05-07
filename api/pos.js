@@ -2162,9 +2162,8 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
           sugar_choice: it.sugar || '',
           item_notes:   it.notes || '',
           prepared:     existMatch ? (existMatch.prepared || false) : false,
-          // Preserve original timestamp for existing items so "added at" badge stays accurate
-          // New items (not in existMatch) get current time (default DB behavior)
-          ...(existMatch && existMatch.created_at ? { created_at: existMatch.created_at } : {}),
+          // _origCreatedAt is ONLY used post-insert for UPDATE — not sent to Supabase
+          _origCreatedAt: existMatch ? (existMatch.created_at || null) : null,
         };
       });
 
@@ -2176,8 +2175,45 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       const total       = Math.round(preTax2 * 100) / 100;
 
       // Delete old items and insert new ones (prepared state preserved above)
+      // Strip internal _origCreatedAt field before sending to Supabase
+      const insertRows = itemRows.map(function(r) {
+        const row = Object.assign({}, r);
+        delete row._origCreatedAt;
+        return row;
+      });
       await supa('DELETE', 'dine_in_order_items', null, { order_id: `eq.${orderId}` });
-      if (itemRows.length > 0) await supa('POST', 'dine_in_order_items', itemRows);
+      if (insertRows.length > 0) {
+        const insertR = await supa('POST', 'dine_in_order_items', insertRows);
+        if (!insertR.ok) {
+          console.error('editOrderItems: insert failed', insertR.status, JSON.stringify(insertR.data));
+          return res.status(500).json({ ok: false, error: 'Failed to save order items' });
+        }
+      }
+
+      // After insert, restore original created_at for items that existed before
+      // This ensures the "added at X:XX AM" badge only shows on genuinely new items
+      const itemsWithOrigTime = itemRows.filter(r => r._origCreatedAt);
+      if (itemsWithOrigTime.length > 0) {
+        // Fetch the newly inserted items to get their IDs
+        const newItemsR = await supaFetch(
+          `${SUPABASE_URL}/rest/v1/dine_in_order_items?order_id=eq.${encodeURIComponent(orderId)}&select=id,item_code,size_choice,sugar_choice&order=id.asc`
+        );
+        if (newItemsR.ok && newItemsR.data) {
+          for (const orig of itemsWithOrigTime) {
+            const match = newItemsR.data.find(ni =>
+              ni.item_code === orig.item_code &&
+              (ni.size_choice || '') === (orig.size_choice || '') &&
+              (ni.sugar_choice || '') === (orig.sugar_choice || '')
+            );
+            if (match) {
+              await supaFetch(
+                `${SUPABASE_URL}/rest/v1/dine_in_order_items?id=eq.${match.id}`,
+                { method: 'PATCH', body: JSON.stringify({ created_at: orig._origCreatedAt }) }
+              );
+            }
+          }
+        }
+      }
 
       // Update order totals
       // If order had a discount, recalculate it proportionally on the new total
