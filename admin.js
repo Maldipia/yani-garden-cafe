@@ -2113,7 +2113,6 @@ function spSetCat(c) { spSelectedCat = c; spRenderCats(); spRenderMenu(); }
 function spRenderMenu() {
   var q = (document.getElementById('spSearchInput') || {}).value || '';
   q = q.toLowerCase().trim();
-  var SUPABASE_IMG = 'https://hnynvclpvfxzlfjphefj.supabase.co/storage/v1/object/public/card-assets/menu/';
   var CAT_ICON = {
     'HOT':'☕','ICE AND ICE BLENDED':'🧊','PASTRY':'🥐','PASTA':'🍝',
     'MEALS':'🍽','BEST WITH':'🍟','PASALUBONG':'🎁','BEANS':'☕','OTHER':'📦','WRAP':'🌯'
@@ -2131,13 +2130,16 @@ function spRenderMenu() {
   }
   grid.innerHTML = filtered.map(function(it) {
     var priceStr = it.hasSizes ? ('₱' + it.priceShort + '–₱' + it.priceTall) : ('₱' + (it.price||it.basePrice||0));
-    var imgUrl = it.image ? (it.image.startsWith('http') ? it.image : SUPABASE_IMG + it.image) : null;
+    // Use same image logic as Menu Manager: local /images/{code}.ext path
+    var localPath = getLocalMenuImgPath(it.code);
+    var hasExternal = it.image && it.image.startsWith('http');
+    var imgSrc = hasExternal ? it.image : localPath;
     var qtyInCart = spCart.filter(function(c){return c.code===it.code;}).reduce(function(s,c){return s+c.qty;},0);
-    var imgHtml = imgUrl
-      ? '<img class="po-menu-item-img" src="' + imgUrl + '" alt="' + esc(it.name) + '" loading="lazy" onerror="this.parentNode.innerHTML=\'<div class=po-menu-item-no-img>' + (CAT_ICON[it.category]||'🍽') + '</div>\'">'
-      : '<div class="po-menu-item-no-img">' + (CAT_ICON[it.category]||'🍽') + '</div>';
+    var catIcon = CAT_ICON[it.category] || '🍽';
     return '<div class="po-menu-item" onclick="spAddItem(\'' + esc(it.code) + '\')">' +
-      imgHtml +
+      '<img class="po-menu-item-img" src="' + imgSrc + '" alt="' + esc(it.name) + '" loading="lazy"' +
+        ' onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">' +
+      '<div class="po-menu-item-no-img" style="display:none">' + catIcon + '</div>' +
       (qtyInCart > 0 ? '<div class="po-menu-item-qty-badge">' + qtyInCart + '</div>' : '') +
       '<div class="po-menu-item-body">' +
         '<div class="po-menu-item-name">' + esc(it.name) + '</div>' +
