@@ -355,16 +355,7 @@ async function confirmCheckout() {
           }).catch(function(){});
         }
       }
-      // Show tap-to-print button (auto-print via setTimeout is blocked on mobile — needs user gesture)
-      var _pid = completedOrderId;
-      setTimeout(function() {
-        var toastEl = document.createElement('div');
-        toastEl.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#2D5016;color:#fff;padding:12px 24px;border-radius:12px;font-size:15px;cursor:pointer;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.3);white-space:nowrap;';
-        toastEl.innerHTML = '🖨️ Tap to print receipt — ' + _pid;
-        toastEl.onclick = function() { printReceipt(_pid); document.body.removeChild(toastEl); };
-        document.body.appendChild(toastEl);
-        setTimeout(function() { if (document.body.contains(toastEl)) document.body.removeChild(toastEl); }, 8000);
-      }, 400);
+      // Receipt printing: user can tap "Print Receipt" button on the order card
     } else {
       throw new Error(completeResult && completeResult.error || 'Failed to complete');
     }
@@ -742,7 +733,8 @@ function renderSplitBill() {
 
     // Printable split receipt area
     html += '<button onclick="printSplitReceipts()" style="width:100%;padding:12px;background:#1a3a2a;color:#fff;border:none;border-radius:10px;font-weight:700;font-size:.9rem;cursor:pointer;margin-bottom:8px">🖨️ Print Split Receipts</button>';
-    html += '<button onclick="saveSplitBillData()" style="width:100%;padding:11px;background:#f0fdf4;color:#166534;border:1.5px solid #86EFAC;border-radius:10px;font-weight:700;font-size:.85rem;cursor:pointer">💾 Save Split Record</button>';
+    html += '<button onclick="printReceipt(_splitOrder&&_splitOrder.orderId)" style="width:100%;padding:11px;background:#f0fdf4;color:#166534;border:1.5px solid #86EFAC;border-radius:10px;font-weight:700;font-size:.85rem;cursor:pointer;margin-bottom:8px">🧾 Print Combined Bill</button>';
+    html += '<button onclick="saveSplitBillData()" style="width:100%;padding:11px;background:#f9fafb;color:#374151;border:1.5px solid #e5e7eb;border-radius:10px;font-weight:700;font-size:.85rem;cursor:pointer">💾 Save Split Record</button>';
 
   } else {
     // ── SPLIT BY ITEMS ─────────────────────────────────────────────────────
@@ -801,7 +793,8 @@ function renderSplitBill() {
     html += '</div>';
 
     html += '<button onclick="printItemSplitReceipts()" style="width:100%;padding:12px;background:#1a3a2a;color:#fff;border:none;border-radius:10px;font-weight:700;font-size:.9rem;cursor:pointer;margin-bottom:8px">🖨️ Print Split Receipts</button>';
-    html += '<button onclick="saveSplitBillData()" style="width:100%;padding:11px;background:#f0fdf4;color:#166534;border:1.5px solid #86EFAC;border-radius:10px;font-weight:700;font-size:.85rem;cursor:pointer">💾 Save Split Record</button>';
+    html += '<button onclick="printReceipt(_splitOrder&&_splitOrder.orderId)" style="width:100%;padding:11px;background:#f0fdf4;color:#166534;border:1.5px solid #86EFAC;border-radius:10px;font-weight:700;font-size:.85rem;cursor:pointer;margin-bottom:8px">🧾 Print Combined Bill</button>';
+    html += '<button onclick="saveSplitBillData()" style="width:100%;padding:11px;background:#f9fafb;color:#374151;border:1.5px solid #e5e7eb;border-radius:10px;font-weight:700;font-size:.85rem;cursor:pointer">💾 Save Split Record</button>';
   }
 
   html += '</div>'; // end padding div
@@ -875,32 +868,63 @@ function printSplitReceipts() {
   var svc   = parseFloat(o.serviceCharge || 0);
   var sub   = parseFloat(o.subtotal || 0);
   var perPerson = total / _splitPax;
-  var perSvc    = svc / _splitPax;
-  var perSub    = sub / _splitPax;
+  var perSvc    = Math.round((svc / _splitPax) * 100) / 100;
+  var perSub    = Math.round((sub / _splitPax) * 100) / 100;
+  var now = new Date();
+  var printDate = now.toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric',timeZone:'Asia/Manila'}) + ' ' + now.toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit',hour12:true,timeZone:'Asia/Manila'});
+  var bizName = (window.APP_CONFIG&&window.APP_CONFIG.BUSINESS_NAME)||'YANI Garden Café';
 
-  var receipts = '';
-  for (var i = 0; i < _splitPax; i++) {
-    receipts += '<div style="page-break-after:' + (i < _splitPax-1 ? 'always' : 'avoid') + ';padding:20px;max-width:300px;font-family:monospace;font-size:12px">'
-      + '<div style="text-align:center;font-weight:bold;font-size:14px">YANI GARDEN CAFE</div>'
-      + '<div style="text-align:center;font-size:11px">Amadeo, Cavite</div>'
-      + '<div style="text-align:center;border-top:1px dashed #000;border-bottom:1px dashed #000;margin:6px 0;padding:4px 0">SPLIT RECEIPT — Person ' + (i+1) + ' of ' + _splitPax + '</div>'
-      + '<div>Order: ' + esc(o.orderId) + '</div>'
-      + '<div>Table: ' + (o.tableNo||'-') + '</div>'
-      + '<div style="border-top:1px dashed #000;margin:6px 0"></div>'
-      + '<div style="display:flex;justify-content:space-between"><span>Subtotal (share):</span><span>₱' + perSub.toFixed(2) + '</span></div>'
-      + '<div style="display:flex;justify-content:space-between"><span>Service Charge:</span><span>₱' + perSvc.toFixed(2) + '</span></div>'
-      + '<div style="border-top:1px dashed #000;margin:6px 0"></div>'
-      + '<div style="display:flex;justify-content:space-between;font-weight:bold;font-size:14px"><span>YOUR TOTAL:</span><span>₱' + perPerson.toFixed(2) + '</span></div>'
-      + '<div style="text-align:center;margin-top:10px;font-size:11px">Thank you! 🌿</div>'
-      + '</div>';
+  function receiptStyle() {
+    return '<style>*{margin:0;padding:0;box-sizing:border-box}'
+      + 'body{font-family:Arial,Helvetica,sans-serif;width:80mm;max-width:80mm;margin:0 auto;padding:0 2mm 8mm 2mm;font-size:11pt;color:#000;line-height:1.35}'
+      + '.center{text-align:center}.bold{font-weight:bold}'
+      + '.dash{border-top:1px dashed #000;margin:3px 0}'
+      + '.row{display:flex;justify-content:space-between;font-size:11pt;margin:1px 0}'
+      + '.grand{font-size:16pt;font-weight:bold}'
+      + '@media print{@page{size:80mm auto;margin:0}body{padding:0 2mm 8mm 2mm}button{display:none}}'
+      + '</style>';
   }
 
-  var win = window.open('', '_blank', 'width=400,height=600');
-  win.document.write('<html><head><title>Split Receipts</title><style>body{margin:0}@media print{.no-print{display:none}}</style></head><body>');
-  win.document.write('<div class="no-print" style="padding:10px;text-align:center"><button onclick="window.print()">🖨️ Print</button></div>');
-  win.document.write(receipts);
-  win.document.write('</body></html>');
-  win.document.close();
+  var allReceipts = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Split Receipts</title>' + receiptStyle() + '</head><body>';
+  for (var i = 0; i < _splitPax; i++) {
+    var isLast = i === _splitPax - 1;
+    allReceipts += '<div style="' + (!isLast ? 'page-break-after:always;' : '') + '">'
+      + '<div class="center bold" style="font-size:16pt">' + esc(bizName) + '</div>'
+      + '<div class="center" style="font-size:10pt">Amadeo, Cavite · 0967-400-0040</div>'
+      + '<div class="dash" style="border-top:2px solid #000;margin:4px 0"></div>'
+      + '<div class="center bold" style="font-size:12pt">SPLIT RECEIPT</div>'
+      + '<div class="center" style="font-size:11pt">Person ' + (i+1) + ' of ' + _splitPax + '</div>'
+      + '<div class="dash"></div>'
+      + '<div class="row"><span>Order:</span><span><b>' + esc(o.orderId) + '</b></span></div>'
+      + '<div class="row"><span>Table:</span><span>' + (o.tableNo||'-') + '</span></div>'
+      + '<div class="row"><span>Date:</span><span>' + printDate + '</span></div>'
+      + '<div class="dash"></div>'
+      + '<div class="row"><span>Subtotal (your share):</span><span>₱' + perSub.toFixed(2) + '</span></div>'
+      + (perSvc > 0 ? '<div class="row"><span>Service Charge:</span><span>₱' + perSvc.toFixed(2) + '</span></div>' : '')
+      + '<div class="dash" style="border-top:2px solid #000;margin:3px 0"></div>'
+      + '<div class="row grand"><span>YOUR TOTAL:</span><span>₱' + perPerson.toFixed(2) + '</span></div>'
+      + '<div class="dash"></div>'
+      + '<div class="center" style="margin-top:4px;font-size:10pt">Thank you for dining with us! 🌿</div>'
+      + '</div>';
+  }
+  allReceipts += '</body></html>';
+
+  // Use iframe to avoid popup blockers
+  var existingFrame = document.getElementById('receiptPrintFrame');
+  if (existingFrame) existingFrame.remove();
+  var iframe = document.createElement('iframe');
+  iframe.id = 'receiptPrintFrame';
+  iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:80mm;height:1px;border:none;visibility:hidden;';
+  iframe.onload = function() {
+    setTimeout(function() {
+      try { iframe.contentWindow.focus(); iframe.contentWindow.print(); }
+      catch(e) { var w=window.open('','_blank','width=420,height=700'); if(w){w.document.write(allReceipts);w.document.close();setTimeout(function(){w.print();},500);} }
+    }, 400);
+  };
+  document.body.appendChild(iframe);
+  iframe.contentWindow.document.open();
+  iframe.contentWindow.document.write(allReceipts);
+  iframe.contentWindow.document.close();
 }
 
 function printItemSplitReceipts() {
@@ -909,46 +933,75 @@ function printItemSplitReceipts() {
   var items = o.items || [];
   var svc   = parseFloat(o.serviceCharge || 0);
   var personTotals = _calcItemSplitTotals(items, svc);
+  var now = new Date();
+  var printDate = now.toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric',timeZone:'Asia/Manila'}) + ' ' + now.toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit',hour12:true,timeZone:'Asia/Manila'});
+  var bizName = (window.APP_CONFIG&&window.APP_CONFIG.BUSINESS_NAME)||'YANI Garden Café';
 
-  var receipts = '';
+  var allReceipts = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Split Receipts</title>'
+    + '<style>*{margin:0;padding:0;box-sizing:border-box}'
+    + 'body{font-family:Arial,Helvetica,sans-serif;width:80mm;max-width:80mm;margin:0 auto;padding:0 2mm 8mm 2mm;font-size:11pt;color:#000;line-height:1.35}'
+    + '.center{text-align:center}.bold{font-weight:bold}'
+    + '.dash{border-top:1px dashed #000;margin:3px 0}'
+    + '.row{display:flex;justify-content:space-between;font-size:11pt;margin:1px 0}'
+    + '.grand{font-size:16pt;font-weight:bold}'
+    + '@media print{@page{size:80mm auto;margin:0}body{padding:0 2mm 8mm 2mm}button{display:none}}'
+    + '</style></head><body>';
+
   for (var i = 0; i < _splitPax; i++) {
     var myItems = items.filter(function(_, idx) { return _itemAssign[idx] === i; });
     var ptotal  = personTotals[i] || { subtotal:0, svc:0, total:0 };
+    var isLast  = i === _splitPax - 1;
 
-    receipts += '<div style="page-break-after:' + (i < _splitPax-1 ? 'always' : 'avoid') + ';padding:20px;max-width:300px;font-family:monospace;font-size:12px">'
-      + '<div style="text-align:center;font-weight:bold;font-size:14px">YANI GARDEN CAFE</div>'
-      + '<div style="text-align:center;font-size:11px">Amadeo, Cavite</div>'
-      + '<div style="text-align:center;border-top:1px dashed #000;border-bottom:1px dashed #000;margin:6px 0;padding:4px 0">SPLIT RECEIPT — Person ' + (i+1) + ' of ' + _splitPax + '</div>'
-      + '<div>Order: ' + esc(o.orderId) + '</div>'
-      + '<div>Table: ' + (o.tableNo||'-') + '</div>'
-      + '<div style="border-top:1px dashed #000;margin:6px 0"></div>';
+    allReceipts += '<div style="' + (!isLast ? 'page-break-after:always;' : '') + '">'
+      + '<div class="center bold" style="font-size:16pt">' + esc(bizName) + '</div>'
+      + '<div class="center" style="font-size:10pt">Amadeo, Cavite · 0967-400-0040</div>'
+      + '<div class="dash" style="border-top:2px solid #000;margin:4px 0"></div>'
+      + '<div class="center bold" style="font-size:12pt">SPLIT RECEIPT</div>'
+      + '<div class="center" style="font-size:11pt">Person ' + (i+1) + ' of ' + _splitPax + '</div>'
+      + '<div class="dash"></div>'
+      + '<div class="row"><span>Order:</span><span><b>' + esc(o.orderId) + '</b></span></div>'
+      + '<div class="row"><span>Table:</span><span>' + (o.tableNo||'-') + '</span></div>'
+      + '<div class="row"><span>Date:</span><span>' + printDate + '</span></div>'
+      + '<div class="dash"></div>'
+      + '<table style="width:100%;font-size:10pt;border-collapse:collapse">'
+      + '<tr><th style="text-align:left;padding-bottom:3px;border-bottom:1px solid #000">Item</th><th style="text-align:center;width:8%">Qty</th><th style="text-align:right;width:22%">Total</th></tr>';
 
     if (myItems.length === 0) {
-      receipts += '<div style="color:#888;font-style:italic">No items assigned</div>';
+      allReceipts += '<tr><td colspan="3" style="font-style:italic;color:#888;padding:4px 0">No items assigned</td></tr>';
     } else {
       myItems.forEach(function(it) {
         var lt = parseFloat(it.price||0) * parseInt(it.qty||1);
-        receipts += '<div style="display:flex;justify-content:space-between">'
-          + '<span>' + esc(it.name||'') + ' x' + (it.qty||1) + '</span>'
-          + '<span>₱' + lt.toFixed(2) + '</span></div>';
+        allReceipts += '<tr><td style="padding:2px 0">' + esc(it.name||'') + '</td><td style="text-align:center">' + (it.qty||1) + '</td><td style="text-align:right">₱' + lt.toFixed(2) + '</td></tr>';
       });
     }
 
-    receipts += '<div style="border-top:1px dashed #000;margin:6px 0"></div>'
-      + '<div style="display:flex;justify-content:space-between"><span>Subtotal:</span><span>₱' + ptotal.subtotal.toFixed(2) + '</span></div>'
-      + '<div style="display:flex;justify-content:space-between"><span>Service Charge:</span><span>₱' + ptotal.svc.toFixed(2) + '</span></div>'
-      + '<div style="border-top:1px dashed #000;margin:6px 0"></div>'
-      + '<div style="display:flex;justify-content:space-between;font-weight:bold;font-size:14px"><span>YOUR TOTAL:</span><span>₱' + ptotal.total.toFixed(2) + '</span></div>'
-      + '<div style="text-align:center;margin-top:10px;font-size:11px">Thank you! 🌿</div>'
+    allReceipts += '</table>'
+      + '<div class="dash" style="margin-top:3px"></div>'
+      + '<div class="row"><span>Subtotal:</span><span>₱' + ptotal.subtotal.toFixed(2) + '</span></div>'
+      + (ptotal.svc > 0 ? '<div class="row"><span>Service Charge:</span><span>₱' + ptotal.svc.toFixed(2) + '</span></div>' : '')
+      + '<div class="dash" style="border-top:2px solid #000;margin:3px 0"></div>'
+      + '<div class="row grand"><span>YOUR TOTAL:</span><span>₱' + ptotal.total.toFixed(2) + '</span></div>'
+      + '<div class="dash"></div>'
+      + '<div class="center" style="margin-top:4px;font-size:10pt">Thank you for dining with us! 🌿</div>'
       + '</div>';
   }
+  allReceipts += '</body></html>';
 
-  var win = window.open('', '_blank', 'width=400,height=600');
-  win.document.write('<html><head><title>Split Receipts</title><style>body{margin:0}@media print{.no-print{display:none}}</style></head><body>');
-  win.document.write('<div class="no-print" style="padding:10px;text-align:center"><button onclick="window.print()">🖨️ Print</button></div>');
-  win.document.write(receipts);
-  win.document.write('</body></html>');
-  win.document.close();
+  var existingFrame = document.getElementById('receiptPrintFrame');
+  if (existingFrame) existingFrame.remove();
+  var iframe = document.createElement('iframe');
+  iframe.id = 'receiptPrintFrame';
+  iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:80mm;height:1px;border:none;visibility:hidden;';
+  iframe.onload = function() {
+    setTimeout(function() {
+      try { iframe.contentWindow.focus(); iframe.contentWindow.print(); }
+      catch(e) { var w=window.open('','_blank','width=420,height=700'); if(w){w.document.write(allReceipts);w.document.close();setTimeout(function(){w.print();},500);} }
+    }, 400);
+  };
+  document.body.appendChild(iframe);
+  iframe.contentWindow.document.open();
+  iframe.contentWindow.document.write(allReceipts);
+  iframe.contentWindow.document.close();
 }
 
 async function saveSplitBillData() {

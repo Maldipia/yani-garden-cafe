@@ -800,8 +800,8 @@ async function submitResendReceipt(orderId) {
 }
 
 
-function printReceipt(orderId, copies) {
-  copies = copies || 1;
+function printReceipt(orderId) {
+
   var o = allOrders.find(function(x) { return x.orderId === orderId; });
   if (!o) { showToast('Order not found', 'error'); return; }
 
@@ -885,7 +885,7 @@ function printReceipt(orderId, copies) {
     '\n-->' +
     '<style>' +
     '* { margin:0; padding:0; box-sizing:border-box; }' +
-    'body { font-family: Arial, Helvetica, sans-serif; width:80mm; max-width:80mm; margin:0 auto; padding:0 2mm 0.5mm 2mm; font-size:11pt !important; color:#000; -webkit-print-color-adjust:exact; line-height:1.35; }' +
+    'body { font-family: Arial, Helvetica, sans-serif; width:80mm; max-width:80mm; margin:0 auto; padding:0 2mm 8mm 2mm; font-size:11pt !important; color:#000; -webkit-print-color-adjust:exact; line-height:1.35; }' +
     '.header { text-align:center; margin-bottom:0; }' +
     '.header h1 { font-size:18pt !important; font-weight:bold; margin-bottom:1px; letter-spacing:0.5px; }' +
     '.header .subtitle { font-size:14pt !important; font-weight:bold; margin:1px 0; }' +
@@ -914,7 +914,7 @@ function printReceipt(orderId, copies) {
     '.footer .legal { font-size:8pt !important; margin-top:0; color:#333; }' +
     '.notes { border:1px solid #000; padding:5px 6px; margin:0; font-size:10pt !important; }' +
     '@media print { ' +
-    'body { width:80mm; margin:0; padding:0 2mm 0.5mm 2mm; font-size:11pt !important; line-height:1.35; } ' +
+    'body { width:80mm; margin:0; padding:0 2mm 8mm 2mm; font-size:11pt !important; line-height:1.35; } ' +
     '.header h1 { font-size:18pt !important; } ' +
     '.header .subtitle { font-size:14pt !important; } ' +
     '.header p { font-size:10pt !important; } ' +
@@ -1000,25 +1000,6 @@ function printReceipt(orderId, copies) {
     // Auto-print
     '</body></html>';
 
-  // Duplicate receipt for 2 copies in one print job
-  if (copies >= 2) {
-    // Insert a second copy after the first with a page break
-    var copyLabel = '<div style="page-break-before:always;"></div>';
-    // Add COPY label to each copy
-    var copy1HTML = receiptHTML.replace('</body></html>',
-      '<div style="text-align:center;font-size:9px;margin-top:4px;border-top:1px dashed #aaa;padding-top:4px;">--- COPY 1 ---</div></body></html>');
-    var copy2 = receiptHTML
-      .replace('<html>', '<html data-copy="2">')
-      .replace('</body></html>',
-        '<div style="text-align:center;font-size:9px;margin-top:4px;border-top:1px dashed #aaa;padding-top:4px;">--- COPY 2 ---</div></body></html>');
-    // Extract body content of copy 2 and append after copy 1
-    var bodyMatch = copy2.match(/<body[^>]*>([\s\S]*)<\/body>/);
-    if (bodyMatch) {
-      receiptHTML = copy1HTML.replace('</body></html>',
-        copyLabel + bodyMatch[1] + '</body></html>');
-    }
-  }
-
   // Use hidden iframe — bypasses popup blockers, works on mobile
   var existingFrame = document.getElementById('receiptPrintFrame');
   if (existingFrame) existingFrame.remove();
@@ -1043,10 +1024,6 @@ function printReceipt(orderId, copies) {
   iframe.contentWindow.document.open();
   iframe.contentWindow.document.write(receiptHTML);
   iframe.contentWindow.document.close();
-  // Safety fallback: if onload doesn't fire within 2s
-  setTimeout(function() {
-    try { iframe.contentWindow.focus(); iframe.contentWindow.print(); } catch(e) {}
-  }, 2000);
 }
 
 // ══════════════════════════════════════════════════════════
