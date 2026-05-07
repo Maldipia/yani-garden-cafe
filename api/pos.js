@@ -1187,7 +1187,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       let itemsMap = {};
       if (orderIds.length > 0) {
         const itemsR = await supaFetch(
-          `${SUPABASE_URL}/rest/v1/dine_in_order_items?order_id=in.(${orderIds.map(id => `"${id}"`).join(',')})&order=id.asc&select=id,order_id,item_code,item_name,unit_price,qty,size_choice,sugar_choice,item_notes,prepared,addons,created_at`
+          `${SUPABASE_URL}/rest/v1/dine_in_order_items?order_id=in.(${orderIds.map(id => `"${id}"`).join(',')})&order=id.asc&select=id,order_id,item_code,item_name,unit_price,qty,size_choice,sugar_choice,item_notes,prepared,addons,created_at,prepared_at`
         );
         if (itemsR.ok && Array.isArray(itemsR.data)) {
           itemsR.data.forEach(it => {
@@ -1206,6 +1206,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
               prepared: it.prepared || false,
               addons:   parsedAddons,
               addedAt:  it.created_at || null,
+              preparedAt: it.prepared_at || null,
             });
           });
         }
@@ -1478,7 +1479,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       if (!itemId || isNaN(itemId)) return res.status(400).json({ ok: false, error: 'itemId is required' });
 
       const r = await supa('PATCH', 'dine_in_order_items',
-        { prepared },
+        { prepared, prepared_at: prepared ? new Date().toISOString() : null },
         { id: `eq.${itemId}` }
       );
       if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to update item' });

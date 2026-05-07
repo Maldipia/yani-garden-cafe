@@ -150,12 +150,25 @@ function renderOrders() {
           }
         } catch(e) {}
 
-        html += '<div class="oc-item" data-item-id="' + (it.id||'') + '" style="' + prepStyle + 'cursor:pointer;user-select:none;" title="' + (it.prepared ? 'Tap to unmark' : 'Tap to mark prepared') + '" onclick="adminTogglePrep(this,\'' + esc(o.orderId) + '\',' + (it.id||0) + ',' + (it.prepared ? 1 : 0) + ')">' +
+        // "done in X min" badge — shown when item is marked prepared
+        var preparedBadge = '';
+        try {
+          if (it.prepared && it.preparedAt && o.createdAt) {
+            var pMins = Math.round((new Date(it.preparedAt) - new Date(o.createdAt)) / 60000);
+            preparedBadge = '<div class="prep-time-badge" style="margin-top:3px">'
+              + '<span style="background:#D1FAE5;color:#065F46;border-radius:6px;padding:2px 8px;font-size:.68rem;font-weight:700">'
+              + '✅ done in ' + pMins + ' min'
+              + '</span></div>';
+          }
+        } catch(e) {}
+
+        html += '<div class="oc-item" data-item-id="' + (it.id||'') + '" data-order-created="' + esc(o.createdAt||'') + '" style="' + prepStyle + 'cursor:pointer;user-select:none;" title="' + (it.prepared ? 'Tap to unmark' : 'Tap to mark prepared') + '" onclick="adminTogglePrep(this,\'' + esc(o.orderId) + '\',' + (it.id||0) + ',' + (it.prepared ? 1 : 0) + ')">' +
           '<span style="font-size:1.3rem;margin-right:6px;flex-shrink:0;line-height:1;">' + prepIcon + '</span>' +
           '<div class="oc-item-qty">' + (it.qty || 1) + '×</div>' +
           '<div class="oc-item-info">' +
             '<div class="oc-item-name">' + esc(it.name) + '</div>' +
             addedAtBadge +
+            preparedBadge +
             pillsHtml +
             (it.addons && it.addons.length ? '<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px">' + it.addons.map(function(a){ return '<span style="background:#dcfce7;color:#14532d;border:1.5px solid #86efac;border-radius:6px;padding:2px 8px;font-size:.75rem;font-weight:800">➕ ' + esc(a.name) + ' +₱' + parseFloat(a.price||0).toFixed(0) + '</span>'; }).join('') + '</div>' : '') +
             (it.notes ? '<div class="oc-item-notes">"' + esc(it.notes) + '"</div>' : '') +
@@ -375,6 +388,25 @@ async function adminTogglePrep(rowEl, orderId, itemId, currentPrepared) {
   rowEl.style.textDecoration = newPrepared ? 'line-through' : '';
   rowEl.setAttribute('onclick', 'adminTogglePrep(this,\'' + orderId + '\',' + itemId + ',' + newPrepared + ')');
   rowEl.title = newPrepared ? 'Tap to unmark' : 'Tap to mark prepared';
+
+  // Show/hide "done in X min" badge instantly
+  var infoDiv = rowEl.querySelector('.oc-item-info');
+  var existingBadge = rowEl.querySelector('.prep-time-badge');
+  if (existingBadge) existingBadge.remove();
+  if (newPrepared && infoDiv) {
+    var orderCreated = rowEl.getAttribute('data-order-created') || '';
+    var mins = orderCreated ? Math.round((Date.now() - new Date(orderCreated).getTime()) / 60000) : 0;
+    var badge = document.createElement('div');
+    badge.className = 'prep-time-badge';
+    badge.style.marginTop = '3px';
+    badge.innerHTML = '<span style="background:#D1FAE5;color:#065F46;border-radius:6px;padding:2px 8px;font-size:.68rem;font-weight:700">✅ done in ' + mins + ' min</span>';
+    var nameEl = infoDiv.querySelector('.oc-item-name');
+    if (nameEl && nameEl.nextSibling) {
+      infoDiv.insertBefore(badge, nameEl.nextSibling);
+    } else {
+      infoDiv.appendChild(badge);
+    }
+  }
   // Update prep bar counts
   var card = rowEl.closest('.order-card') || rowEl.parentElement;
   while (card && !card.querySelector('.prep-bar-label')) { card = card.parentElement; }
@@ -1055,7 +1087,7 @@ async function showOrderHistory(orderId) {
   modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
 
   // Fetch audit logs
-  var r = await api('getActivityLogs', { orderId: orderId, limit: 50 });
+  var r = await api('getAuditLogs', { orderId: orderId, limit: 50 });
   var box = document.getElementById('orderHistoryContent');
   if (!box) return;
 
