@@ -144,7 +144,7 @@ function renderOrders() {
               });
               addedAtBadge = '<div style="margin-top:3px">'
                 + '<span style="background:#FEF3C7;color:#92400E;border-radius:6px;padding:2px 8px;font-size:.68rem;font-weight:700">'
-                + '➕ added ' + addedTime
+                + '🕐 ' + addedTime
                 + '</span></div>';
             }
           }
