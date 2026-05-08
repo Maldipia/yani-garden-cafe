@@ -297,6 +297,7 @@ function renderOrders() {
     var canPrint = (currentUser.role !== 'KITCHEN');
     if (canPrint) {
       html += '<button class="oc-btn oc-btn-print" onclick="printReceipt(\'' + o.orderId + '\')">🖨️ Print Receipt</button>';
+      html += '<button class="oc-btn" style="background:#f0fdf4;color:#065f46;border:1.5px solid #86EFAC" onclick="pdfReceipt(\'' + o.orderId + '\')">📄 PDF</button>';
     }
 
     // Order History button — always visible to ADMIN/OWNER/CASHIER
@@ -1024,6 +1025,125 @@ function printReceipt(orderId) {
   iframe.contentWindow.document.open();
   iframe.contentWindow.document.write(receiptHTML);
   iframe.contentWindow.document.close();
+}
+
+// ══════════════════════════════════════════════════════════
+// PDF RECEIPT  — A4 formatted, save-as-PDF friendly
+// ══════════════════════════════════════════════════════════
+function pdfReceipt(orderId) {
+  var o = allOrders.find(function(x) { return x.orderId === orderId; });
+  if (!o) { showToast('Order not found', 3500); return; }
+
+  var itemsTotal = 0;
+  var itemRows = '';
+  (o.items || []).forEach(function(it) {
+    var opts = [];
+    if (it.size)  opts.push(it.size);
+    if (it.sugar) opts.push(it.sugar);
+    var lt = (it.price || 0) * (it.qty || 1);
+    itemsTotal += lt;
+    itemRows += '<tr>'
+      + '<td class="item-name">' + esc(it.name) + (opts.length ? '<br><span class="item-opt">' + esc(opts.join(' | ')) + '</span>' : '') + '</td>'
+      + '<td class="item-qty">' + (it.qty || 1) + '</td>'
+      + '<td class="item-price">' + (it.price || 0).toFixed(2) + '</td>'
+      + '<td class="item-total">' + lt.toFixed(2) + '</td>'
+      + '</tr>';
+  });
+
+  var subtotal  = parseFloat(o.subtotal) > 0 ? parseFloat(o.subtotal) : itemsTotal;
+  var svc       = (typeof o.serviceCharge === 'number') ? o.serviceCharge : 0;
+  var vat       = (typeof o.vatAmount === 'number') ? o.vatAmount : 0;
+  var disc      = (typeof o.discountAmount === 'number') ? o.discountAmount : 0;
+  var discType  = o.discountType || '';
+  var _disc     = o.discountedTotal !== null && o.discountedTotal !== undefined ? parseFloat(o.discountedTotal) : NaN;
+  var grandTotal = (!isNaN(_disc) && _disc > 0) ? _disc : (subtotal + svc);
+  var scPct     = subtotal > 0 ? ((svc / subtotal) * 100).toFixed(1) : '0.0';
+  var bizName   = (window.APP_CONFIG && window.APP_CONFIG.BUSINESS_NAME) || 'YANI Garden Café';
+
+  var now = new Date();
+  var printDate = now.toLocaleDateString('en-PH', { month:'long', day:'numeric', year:'numeric', timeZone:'Asia/Manila' })
+    + ' ' + now.toLocaleTimeString('en-PH', { hour:'2-digit', minute:'2-digit', hour12:true, timeZone:'Asia/Manila' });
+  var orderDate = o.createdAt ? new Date(o.createdAt).toLocaleString('en-PH', { month:'long', day:'numeric', year:'numeric', hour:'2-digit', minute:'2-digit', hour12:true, timeZone:'Asia/Manila' }) : '';
+
+  var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Receipt ' + orderId + '</title>'
+    + '<style>'
+    + '* { margin:0; padding:0; box-sizing:border-box; }'
+    + 'body { font-family: Arial, Helvetica, sans-serif; font-size: 11pt; color: #000; padding: 20mm 18mm; max-width: 210mm; margin: 0 auto; }'
+    + 'h1 { font-size: 20pt; font-weight: 800; color: #1a3a2a; margin-bottom: 2px; }'
+    + '.tagline { font-size: 10pt; color: #4b7a5a; margin-bottom: 2px; }'
+    + '.biz-info { font-size: 9pt; color: #555; }'
+    + '.header-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; padding-bottom: 14px; border-bottom: 2px solid #1a3a2a; }'
+    + '.receipt-label { font-size: 9pt; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #4b7a5a; margin-bottom: 12px; }'
+    + '.meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 20px; margin-bottom: 18px; }'
+    + '.meta-row { display: flex; gap: 6px; font-size: 10pt; }'
+    + '.meta-label { color: #777; min-width: 80px; }'
+    + '.meta-val { font-weight: 700; color: #1a3a2a; }'
+    + 'table { width: 100%; border-collapse: collapse; font-size: 10pt; margin-bottom: 12px; }'
+    + 'thead th { background: #f0f7f0; padding: 7px 8px; text-align: left; font-weight: 700; font-size: 9pt; text-transform: uppercase; letter-spacing: .04em; color: #4b7a5a; border-bottom: 1.5px solid #c8e0c8; }'
+    + 'thead th:nth-child(2), thead th:nth-child(3) { text-align: right; }'
+    + 'thead th:last-child { text-align: right; }'
+    + 'tbody tr { border-bottom: 1px solid #eef4ee; }'
+    + 'tbody tr:last-child { border-bottom: none; }'
+    + 'td { padding: 7px 8px; vertical-align: top; }'
+    + 'td.item-name { font-weight: 600; }'
+    + 'td.item-qty, td.item-price { text-align: right; color: #555; }'
+    + 'td.item-total { text-align: right; font-weight: 700; }'
+    + '.item-opt { font-size: 8.5pt; color: #777; font-weight: 400; }'
+    + '.totals { margin-left: auto; width: 260px; }'
+    + '.tot-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 10pt; color: #555; }'
+    + '.tot-row.disc { color: #b45309; }'
+    + '.tot-row.grand { font-size: 14pt; font-weight: 800; color: #1a3a2a; padding: 8px 0 2px; border-top: 2px solid #1a3a2a; margin-top: 4px; }'
+    + '.footer { margin-top: 28px; padding-top: 14px; border-top: 1px dashed #bbb; display: flex; justify-content: space-between; align-items: flex-end; }'
+    + '.footer-left { font-size: 9pt; color: #777; }'
+    + '.footer-right { text-align: right; font-size: 9pt; color: #777; }'
+    + '.status-badge { display: inline-block; background: #d1fae5; color: #065f46; border-radius: 4px; padding: 2px 8px; font-size: 8.5pt; font-weight: 700; }'
+    + '@media print { @page { size: A4; margin: 12mm 18mm; } body { padding: 0; } button { display:none; } }'
+    + '</style></head><body>'
+    + '<div class="header-row">'
+    +   '<div>'
+    +     '<h1>' + esc(bizName) + '</h1>'
+    +     '<div class="tagline">' + esc((window.APP_CONFIG && window.APP_CONFIG.TAGLINE) || 'Hold on a cup of blessing') + '</div>'
+    +     '<div class="biz-info">Purok 8 Daang Malinaw, Amadeo, Cavite · 0967-400-0040</div>'
+    +     '<div class="biz-info">TIN: 501-401-857-00005</div>'
+    +   '</div>'
+    +   '<div style="text-align:right">'
+    +     '<div class="receipt-label">Sales Invoice</div>'
+    +     '<div style="font-size:18pt;font-weight:800;color:#1a3a2a">' + esc(orderId) + '</div>'
+    +     (o.orNumber ? '<div style="font-size:9pt;color:#555">OR No.: ' + esc(String(o.orNumber)) + '</div>' : '')
+    +     '<div style="margin-top:4px"><span class="status-badge">' + (o.status || '') + '</span></div>'
+    +   '</div>'
+    + '</div>'
+    + '<div class="meta-grid">'
+    +   '<div class="meta-row"><span class="meta-label">Date:</span><span class="meta-val">' + (orderDate || printDate) + '</span></div>'
+    +   '<div class="meta-row"><span class="meta-label">Printed:</span><span class="meta-val">' + printDate + '</span></div>'
+    +   '<div class="meta-row"><span class="meta-label">Type:</span><span class="meta-val">' + esc(o.orderType || 'DINE-IN') + '</span></div>'
+    +   '<div class="meta-row"><span class="meta-label">Table:</span><span class="meta-val">' + esc(String(o.tableNo || '—')) + '</span></div>'
+    +   (o.customer && o.customer !== 'TEST only' ? '<div class="meta-row"><span class="meta-label">Customer:</span><span class="meta-val">' + esc(o.customer) + '</span></div>' : '')
+    +   (o.paymentMethod ? '<div class="meta-row"><span class="meta-label">Payment:</span><span class="meta-val">' + esc(o.paymentMethod) + '</span></div>' : '')
+    + '</div>'
+    + '<table>'
+    + '<thead><tr><th>Item</th><th style="text-align:right;width:8%">Qty</th><th style="text-align:right;width:15%">Price</th><th style="text-align:right;width:16%">Amount</th></tr></thead>'
+    + '<tbody>' + itemRows + '</tbody>'
+    + '</table>'
+    + '<div class="totals">'
+    +   '<div class="tot-row"><span>Subtotal</span><span>₱ ' + subtotal.toFixed(2) + '</span></div>'
+    +   (svc > 0 ? '<div class="tot-row"><span>Service Charge (' + scPct + '%)</span><span>₱ ' + svc.toFixed(2) + '</span></div>' : '')
+    +   (vat > 0 ? '<div class="tot-row"><span>VAT (12%, incl.)</span><span>₱ ' + vat.toFixed(2) + '</span></div>' : '')
+    +   (disc > 0 ? '<div class="tot-row disc"><span>Discount (' + esc(discType) + ')</span><span>−₱ ' + disc.toFixed(2) + '</span></div>' : '')
+    +   '<div class="tot-row grand"><span>TOTAL</span><span>₱ ' + grandTotal.toFixed(2) + '</span></div>'
+    + '</div>'
+    + (o.notes ? '<div style="margin-top:14px;padding:10px 12px;background:#fafdf8;border:1px solid #c8e0c8;border-radius:6px;font-size:9.5pt"><b>Notes:</b> ' + esc(o.notes) + '</div>' : '')
+    + '<div class="footer">'
+    +   '<div class="footer-left"><div>This serves as your Sales Invoice</div><div>Not valid for input tax claim</div></div>'
+    +   '<div class="footer-right"><div>Thank you for dining with us!</div><div style="color:#4b7a5a;font-style:italic">' + esc((window.APP_CONFIG && window.APP_CONFIG.TAGLINE) || 'Hold on a cup of blessing') + '</div></div>'
+    + '</div>'
+    + '<script>window.onload=function(){window.print();}<\/script>'
+    + '</body></html>';
+
+  var w = window.open('', '_blank', 'width=800,height=900');
+  if (!w) { showToast('Allow popups to save PDF', 3500); return; }
+  w.document.write(html);
+  w.document.close();
 }
 
 // ══════════════════════════════════════════════════════════

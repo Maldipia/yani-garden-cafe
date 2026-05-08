@@ -607,6 +607,150 @@ async function loadAnalytics() {
   }
 }
 
+// ── PDF Report Export ─────────────────────────────────────────────────────────
+async function exportReportPDF() {
+  var btn = document.querySelector('[onclick="exportReportPDF()"]');
+  if (btn) { btn.textContent = '⏳ Building...'; btn.disabled = true; }
+
+  try {
+    var r = await api('getAnalytics', { userId: currentUser && currentUser.userId });
+    if (!r || !r.ok) throw new Error(r && r.error || 'Failed to load analytics');
+  } catch(e) {
+    if (btn) { btn.textContent = '📄 Export PDF'; btn.disabled = false; }
+    showToast('Failed to load report data', 3500); return;
+  }
+
+  var s   = r.summary;
+  var top = r.topItems || [];
+  var daily = (r.daily || []).slice(-30);
+  var pb  = r.paymentBreakdown || {};
+  var bizName = (window.APP_CONFIG && window.APP_CONFIG.BUSINESS_NAME) || 'YANI Garden Café';
+  var now = new Date();
+  var printDate = now.toLocaleDateString('en-PH', { month:'long', day:'numeric', year:'numeric', timeZone:'Asia/Manila' });
+  var todayChange = s.yesterday.revenue > 0
+    ? ((s.today.revenue - s.yesterday.revenue) / s.yesterday.revenue * 100).toFixed(1) : null;
+
+  function money(n) { return '₱ ' + parseFloat(n||0).toLocaleString('en-PH', { minimumFractionDigits:2 }); }
+  function pct(a,b) { return b > 0 ? (a/b*100).toFixed(1)+'%' : '0%'; }
+
+  // ── KPI section ────────────────────────────────────────────────────────────
+  var kpiHtml = '<table class="kpi-grid"><tr>'
+    + kpiPdf('Today\'s Revenue', money(s.today.revenue), s.today.orders + ' orders' + (todayChange !== null ? ' · ' + (todayChange >= 0 ? '▲' : '▼') + Math.abs(todayChange) + '% vs yesterday' : ''))
+    + kpiPdf('Last 7 Days', money(s.last7days.revenue), s.last7days.orders + ' orders')
+    + kpiPdf('Last 30 Days', money(s.last30days.revenue), s.last30days.orders + ' orders')
+    + kpiPdf('Avg Order Value', money(s.last30days.orders > 0 ? s.last30days.revenue / s.last30days.orders : 0), 'per transaction')
+    + '</tr></table>';
+
+  // ── Daily revenue table (last 30 days) ─────────────────────────────────────
+  var dailyHtml = '<table class="data-table"><thead><tr><th>Date</th><th>Orders</th><th>Revenue</th></tr></thead><tbody>';
+  var dailySlice = daily.slice().reverse(); // most recent first
+  dailySlice.forEach(function(d) {
+    var isToday = d.day === new Date().toISOString().slice(0,10);
+    dailyHtml += '<tr' + (isToday ? ' class="today-row"' : '') + '>'
+      + '<td>' + d.day + (isToday ? ' <span class="badge-today">today</span>' : '') + '</td>'
+      + '<td>' + d.count + '</td>'
+      + '<td>' + money(d.revenue) + '</td>'
+      + '</tr>';
+  });
+  dailyHtml += '</tbody></table>';
+
+  // ── Top items table ─────────────────────────────────────────────────────────
+  var topHtml = top.length === 0 ? '<p style="color:#777;font-size:9pt">No data</p>'
+    : '<table class="data-table"><thead><tr><th>#</th><th>Item</th><th>Qty Sold</th><th>Revenue</th></tr></thead><tbody>'
+    + top.map(function(it, i) {
+        return '<tr><td>' + (i+1) + '</td><td>' + esc(it.name) + '</td><td>' + it.qty + '</td><td>' + money(it.revenue) + '</td></tr>';
+      }).join('')
+    + '</tbody></table>';
+
+  // ── Payment breakdown ───────────────────────────────────────────────────────
+  var pmTotalRev = Object.values(pb).reduce(function(a,v){ return a+(v.revenue||0); }, 0);
+  var pmHtml = Object.keys(pb).length === 0 ? '<p style="color:#777;font-size:9pt">No data</p>'
+    : '<table class="data-table"><thead><tr><th>Method</th><th>Orders</th><th>Revenue</th><th>Share</th></tr></thead><tbody>'
+    + Object.keys(pb).sort().map(function(pm) {
+        var d = pb[pm];
+        return '<tr><td>' + pm + '</td><td>' + d.count + '</td><td>' + money(d.revenue) + '</td><td>' + pct(d.revenue, pmTotalRev) + '</td></tr>';
+      }).join('')
+    + '</tbody></table>';
+
+  // ── Order type split ────────────────────────────────────────────────────────
+  var dineIn  = s.typeSplit['DINE-IN'] || 0;
+  var takeOut = s.typeSplit['TAKE-OUT'] || 0;
+  var typeTotal = dineIn + takeOut || 1;
+  var typeHtml = '<table class="data-table"><thead><tr><th>Type</th><th>Orders</th><th>Share</th></tr></thead><tbody>'
+    + '<tr><td>Dine-In</td><td>' + dineIn + '</td><td>' + pct(dineIn, typeTotal) + '</td></tr>'
+    + '<tr><td>Take-Out</td><td>' + takeOut + '</td><td>' + pct(takeOut, typeTotal) + '</td></tr>'
+    + '</tbody></table>';
+
+  var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Sales Report — ' + printDate + '</title>'
+    + '<style>'
+    + '* { margin:0; padding:0; box-sizing:border-box; }'
+    + 'body { font-family: Arial, Helvetica, sans-serif; font-size: 10pt; color: #222; padding: 16mm 18mm; max-width: 297mm; margin: 0 auto; }'
+    + 'h1 { font-size: 18pt; font-weight: 800; color: #1a3a2a; }'
+    + 'h2 { font-size: 11pt; font-weight: 700; color: #1a3a2a; margin: 18px 0 8px; padding-bottom: 4px; border-bottom: 1.5px solid #c8e0c8; }'
+    + '.report-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; padding-bottom: 14px; border-bottom: 2px solid #1a3a2a; }'
+    + '.report-meta { text-align: right; font-size: 9pt; color: #555; }'
+    + '.kpi-grid { width: 100%; border-collapse: separate; border-spacing: 8px; margin-bottom: 4px; }'
+    + '.kpi-cell { background: #f0f7f0; border: 1.5px solid #c8e0c8; border-radius: 8px; padding: 10px 14px; width: 25%; vertical-align: top; }'
+    + '.kpi-label { font-size: 8pt; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #4b7a5a; margin-bottom: 4px; }'
+    + '.kpi-value { font-size: 14pt; font-weight: 800; color: #1a3a2a; }'
+    + '.kpi-sub { font-size: 8pt; color: #777; margin-top: 2px; }'
+    + '.data-table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }'
+    + '.data-table thead th { background: #f0f7f0; padding: 6px 8px; text-align: left; font-size: 8.5pt; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #4b7a5a; border-bottom: 1.5px solid #c8e0c8; }'
+    + '.data-table tbody td { padding: 6px 8px; border-bottom: 1px solid #eef4ee; }'
+    + '.data-table tbody tr:last-child td { border-bottom: none; }'
+    + '.today-row td { background: #fefce8; font-weight: 600; }'
+    + '.badge-today { background: #fef3c7; color: #92400e; border-radius: 4px; padding: 1px 5px; font-size: 7.5pt; font-weight: 700; }'
+    + '.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }'
+    + '.section { break-inside: avoid; }'
+    + 'footer { margin-top: 24px; padding-top: 10px; border-top: 1px dashed #bbb; display: flex; justify-content: space-between; font-size: 8.5pt; color: #999; }'
+    + '@media print { @page { size: A4; margin: 12mm 14mm; } body { padding: 0; } button { display: none; } h2 { margin-top: 12px; } }'
+    + '</style></head><body>'
+
+    + '<div class="report-header">'
+    +   '<div>'
+    +     '<h1>' + esc(bizName) + '</h1>'
+    +     '<div style="font-size:10pt;color:#4b7a5a;margin-top:2px">Sales Report · Last 30 Days</div>'
+    +   '</div>'
+    +   '<div class="report-meta">'
+    +     '<div style="font-size:11pt;font-weight:700;color:#1a3a2a">' + printDate + '</div>'
+    +     '<div>Amadeo, Cavite · TIN: 501-401-857-00005</div>'
+    +     '<div style="margin-top:4px;font-size:8pt">Generated by YANI POS</div>'
+    +   '</div>'
+    + '</div>'
+
+    + '<h2>📊 Key Performance Indicators</h2>'
+    + kpiHtml
+
+    + '<div class="two-col" style="margin-top:4px">'
+    +   '<div class="section"><h2>📅 Daily Revenue (Last 30 Days)</h2>' + dailyHtml + '</div>'
+    +   '<div>'
+    +     '<div class="section"><h2>🏆 Top Selling Items</h2>' + topHtml + '</div>'
+    +     '<div class="section"><h2>💳 Payment Methods</h2>' + pmHtml + '</div>'
+    +     '<div class="section"><h2>🪑 Order Types (30d)</h2>' + typeHtml + '</div>'
+    +   '</div>'
+    + '</div>'
+
+    + '<footer>'
+    +   '<span>YANI Garden Café · Amadeo, Cavite · 0967-400-0040</span>'
+    +   '<span>Printed: ' + now.toLocaleString('en-PH', { timeZone:'Asia/Manila', month:'short', day:'numeric', year:'numeric', hour:'2-digit', minute:'2-digit', hour12:true }) + '</span>'
+    + '</footer>'
+    + '<script>window.onload=function(){window.print();}<\/script>'
+    + '</body></html>';
+
+  if (btn) { btn.textContent = '📄 Export PDF'; btn.disabled = false; }
+
+  var w = window.open('', '_blank', 'width=960,height=1000');
+  if (!w) { showToast('Allow popups to export PDF', 3500); return; }
+  w.document.write(html);
+  w.document.close();
+}
+
+function kpiPdf(title, value, sub) {
+  return '<td class="kpi-cell"><div class="kpi-label">' + title + '</div>'
+    + '<div class="kpi-value">' + value + '</div>'
+    + '<div class="kpi-sub">' + sub + '</div></td>';
+}
+
 function kpiCard(title, value, sub, extra, icon) {
   return '<div style="background:#fff;border:1.5px solid var(--mist);border-radius:12px;padding:14px">' +
     '<div style="font-size:1.3rem;margin-bottom:4px">' + icon + '</div>' +

@@ -1402,8 +1402,13 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
   <!-- Analytics View (ADMIN/OWNER only) -->
   <div id="analyticsView" style="display:none;padding:0 0 100px">
     <div style="background:#fff;border-bottom:1.5px solid var(--mist);padding:14px 16px;position:sticky;top:0;z-index:10">
-      <div style="font-weight:800;font-size:1.1rem;color:var(--forest-deep)">📈 Sales Analytics</div>
-      <div style="font-size:.8rem;color:var(--forest-mid);margin-top:2px">Last 30 days · Real orders only</div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-weight:800;font-size:1.1rem;color:var(--forest-deep)">📈 Sales Analytics</div>
+          <div style="font-size:.8rem;color:var(--forest-mid);margin-top:2px">Last 30 days · Real orders only</div>
+        </div>
+        <button onclick="exportReportPDF()" style="background:var(--forest);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:.8rem;font-weight:700;cursor:pointer">📄 Export PDF</button>
+      </div>
     </div>
     <div id="analyticsContent" style="padding:16px">
       <div style="text-align:center;padding:40px;color:var(--forest-mid)">Loading analytics...</div>
