@@ -634,11 +634,12 @@ async function exportReportPDF() {
   function pct(a,b) { return b > 0 ? (a/b*100).toFixed(1)+'%' : '0%'; }
 
   // ── KPI section ────────────────────────────────────────────────────────────
+  var rev30 = daily.reduce(function(sum, d) { return sum + (d.revenue || 0); }, 0);
   var kpiHtml = '<table class="kpi-grid"><tr>'
     + kpiPdf('Today\'s Revenue', money(s.today.revenue), s.today.orders + ' orders' + (todayChange !== null ? ' · ' + (todayChange >= 0 ? '▲' : '▼') + Math.abs(todayChange) + '% vs yesterday' : ''))
     + kpiPdf('Last 7 Days', money(s.last7days.revenue), s.last7days.orders + ' orders')
-    + kpiPdf('Last 30 Days', money(s.last30days.revenue), s.last30days.orders + ' orders')
-    + kpiPdf('Avg Order Value', money(s.last30days.orders > 0 ? s.last30days.revenue / s.last30days.orders : 0), 'per transaction')
+    + kpiPdf('Last 30 Days', money(rev30), s.totalOrders30d + ' orders')
+    + kpiPdf('Avg Order Value', money(s.totalOrders30d > 0 ? rev30 / s.totalOrders30d : 0), 'per transaction')
     + '</tr></table>';
 
   // ── Daily revenue table (last 30 days) ─────────────────────────────────────
