@@ -504,7 +504,7 @@ async function pmLookupYaniCard() {
 
   // Get the order total to show discount preview
   var order = (typeof allOrders !== 'undefined') && allOrders.find(function(o){ return o.orderId === pmCurrentOrder; });
-  var orderTotal = order ? parseFloat(order.discountedTotal || order.total || 0) : 0;
+  var orderTotal = order ? parseFloat(order.total || 0) : 0; // always gross total — charge_card RPC applies 10% itself
 
   try {
     var r = await api('getYaniCards', { cardNumber: cardNum });
