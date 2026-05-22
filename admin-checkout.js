@@ -407,6 +407,10 @@ function closePaymentModal() {
   if (yaniSec) yaniSec.style.display = 'none';
   var yaniSt = document.getElementById('pmYaniCardStatus');
   if (yaniSt) { yaniSt.textContent = ''; yaniSt.dataset.valid = 'false'; yaniSt.dataset.cardNum = ''; }
+  var yaniIn = document.getElementById('pmYaniCardInput');
+  if (yaniIn) yaniIn.value = '';
+  var yaniSel = document.getElementById('pmYaniCardSelect');
+  if (yaniSel) yaniSel.value = '';
   pmCurrentOrder = null; pmSelectedMethod = null; pmSelectedMethod2 = null; pmFromComplete = false;
 }
 
@@ -473,7 +477,6 @@ function selectPM(pmKey, ev) {
 // ── Yani Card lookup for Set Payment modal ───────────────────────────────────
 async function pmLoadYaniCards() {
   var sel = document.getElementById('pmYaniCardSelect');
-  var st  = document.getElementById('pmYaniCardStatus');
   if (!sel) return;
   sel.innerHTML = '<option value="">Loading cards…</option>';
   try {
@@ -484,11 +487,11 @@ async function pmLoadYaniCards() {
     });
     var r = await resp.json();
     if (r && r.ok && r.cards && r.cards.length) {
-      sel.innerHTML = '<option value="">— Select card —</option>'
+      sel.innerHTML = '<option value="">— Pick from active cards —</option>'
         + r.cards.map(function(c) {
             var name = c.holder_name ? ' · ' + c.holder_name : '';
             return '<option value="' + c.card_number + '">'
-              + c.card_number + name + ' · ₱' + parseFloat(c.balance).toFixed(2) + '</option>';
+              + c.card_number + name + ' · \u20b1' + parseFloat(c.balance).toFixed(2) + '</option>';
           }).join('');
     } else {
       sel.innerHTML = '<option value="">No active cards found</option>';
@@ -498,18 +501,36 @@ async function pmLoadYaniCards() {
   }
 }
 
+// Called when user picks from dropdown — fills text input then looks up
+function pmPickFromDropdown() {
+  var sel = document.getElementById('pmYaniCardSelect');
+  var inp = document.getElementById('pmYaniCardInput');
+  if (sel && inp && sel.value) {
+    inp.value = sel.value;
+    pmLookupYaniCard();
+  }
+}
+
+// Called on every keystroke in text input OR after dropdown pick
 async function pmLookupYaniCard() {
-  var sel    = document.getElementById('pmYaniCardSelect');
+  var inp    = document.getElementById('pmYaniCardInput');
   var st     = document.getElementById('pmYaniCardStatus');
   var btn    = document.getElementById('pmConfirmBtn');
-  var cardNum = sel ? sel.value : '';
+  var raw    = inp ? inp.value.trim().toUpperCase() : '';
+
+  // Normalise: "1004" or "YANI1004" → "YANI-1004"
+  var cardNum = raw;
+  if (raw && !raw.startsWith('YANI-')) {
+    var digits = raw.replace(/^YANI/i, '').replace(/\D/g, '');
+    cardNum = digits ? 'YANI-' + digits : '';
+  }
+
   if (st) { st.textContent = ''; st.dataset.valid = 'false'; st.dataset.cardNum = ''; }
   if (btn) btn.disabled = true;
   if (!cardNum) return;
 
-  // Get the order total to show discount preview
   var order = (typeof allOrders !== 'undefined') && allOrders.find(function(o){ return o.orderId === pmCurrentOrder; });
-  var orderTotal = order ? parseFloat(order.total || 0) : 0; // always gross total — charge_card RPC applies 10% itself
+  var orderTotal = order ? parseFloat(order.total || 0) : 0; // always gross
 
   try {
     var resp2 = await fetch('/api/card', {
