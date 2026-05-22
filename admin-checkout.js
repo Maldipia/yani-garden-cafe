@@ -381,13 +381,18 @@ function openPaymentModal(orderId, fromComplete) {
   confirmBtn.textContent = fromComplete ? '✅ Set Payment & Complete' : '✅ Confirm Payment';
   confirmBtn.disabled = true;
 
-  // Reset all 3 buttons
-  ['GCASH','CASH','CARD'].forEach(function(k) {
+  // Reset all 4 buttons
+  ['GCASH','CASH','CARD','YANI_CARD'].forEach(function(k) {
     var btn   = document.getElementById('pmBtn'   + k);
     var badge = document.getElementById('pmBadge' + k);
     if (btn)   btn.className = 'pm-btn';
     if (badge) badge.style.display = 'none';
   });
+  // Hide Yani card section
+  var yaniSec = document.getElementById('pmYaniCardSection');
+  if (yaniSec) yaniSec.style.display = 'none';
+  var yaniSt = document.getElementById('pmYaniCardStatus');
+  if (yaniSt) { yaniSt.textContent = ''; yaniSt.dataset.valid = 'false'; yaniSt.dataset.cardNum = ''; }
   var splitInfo = document.getElementById('pmSplitInfo');
   if (splitInfo) splitInfo.classList.remove('show');
   var notes = document.getElementById('pmNotes');
@@ -398,15 +403,26 @@ function openPaymentModal(orderId, fromComplete) {
 
 function closePaymentModal() {
   document.getElementById('pmOverlay').classList.remove('open');
+  var yaniSec = document.getElementById('pmYaniCardSection');
+  if (yaniSec) yaniSec.style.display = 'none';
+  var yaniSt = document.getElementById('pmYaniCardStatus');
+  if (yaniSt) { yaniSt.textContent = ''; yaniSt.dataset.valid = 'false'; yaniSt.dataset.cardNum = ''; }
   pmCurrentOrder = null; pmSelectedMethod = null; pmSelectedMethod2 = null; pmFromComplete = false;
 }
 
-// pmKey: 'GCASH' | 'CASH' | 'CARD'  (also the DB method value)
+// pmKey: 'GCASH' | 'CASH' | 'CARD' | 'YANI_CARD'
 function selectPM(pmKey, ev) {
   if (ev) ev.stopPropagation();
   else if (typeof event !== 'undefined' && event) try { event.stopPropagation(); } catch(e) {}
+
+  // YANI_CARD cannot be used as a split method (it applies a discount + deducts balance)
+  if (pmKey === 'YANI_CARD' && pmSelectedMethod && pmSelectedMethod !== 'YANI_CARD') return;
+  if (pmSelectedMethod2 && pmKey === 'YANI_CARD') return;
+
   var btn   = document.getElementById('pmBtn'   + pmKey);
   var badge = document.getElementById('pmBadge' + pmKey);
+  var yaniSec = document.getElementById('pmYaniCardSection');
+  var yaniSt  = document.getElementById('pmYaniCardStatus');
 
   if (!pmSelectedMethod) {
     // ── First selection ─────────────────────────────
@@ -415,19 +431,29 @@ function selectPM(pmKey, ev) {
     if (badge) { badge.textContent = '1st'; badge.style.display = ''; }
     var si = document.getElementById('pmSplitInfo');
     if (si) si.classList.add('show');
-    document.getElementById('pmConfirmBtn').disabled = false;
+
+    // Show Yani Card section + load cards
+    if (pmKey === 'YANI_CARD') {
+      if (yaniSec) { yaniSec.style.display = ''; pmLoadYaniCards(); }
+      document.getElementById('pmConfirmBtn').disabled = true; // wait for card selection
+    } else {
+      if (yaniSec) yaniSec.style.display = 'none';
+      document.getElementById('pmConfirmBtn').disabled = false;
+    }
 
   } else if (pmKey === pmSelectedMethod && !pmSelectedMethod2) {
     // ── Deselect first pick ─────────────────────────
     pmSelectedMethod = null;
     if (btn)   btn.className = 'pm-btn';
     if (badge) badge.style.display = 'none';
+    if (yaniSec) yaniSec.style.display = 'none';
+    if (yaniSt)  { yaniSt.textContent = ''; yaniSt.dataset.valid = 'false'; yaniSt.dataset.cardNum = ''; }
     var si = document.getElementById('pmSplitInfo');
     if (si) si.classList.remove('show');
     document.getElementById('pmConfirmBtn').disabled = true;
 
   } else if (!pmSelectedMethod2 && pmKey !== pmSelectedMethod) {
-    // ── Second selection — split ────────────────────
+    // ── Second selection — split (YANI_CARD blocked above) ─────────────────
     pmSelectedMethod2 = pmKey;
     if (btn)   btn.className = 'pm-btn selected-2';
     if (badge) { badge.textContent = '2nd'; badge.style.display = ''; }
@@ -444,6 +470,73 @@ function selectPM(pmKey, ev) {
   }
 }
 
+// ── Yani Card lookup for Set Payment modal ───────────────────────────────────
+async function pmLoadYaniCards() {
+  var sel = document.getElementById('pmYaniCardSelect');
+  var st  = document.getElementById('pmYaniCardStatus');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Loading cards…</option>';
+  try {
+    var r = await api('getYaniCards', { statusFilter: 'ACTIVE' });
+    if (r && r.ok && r.cards && r.cards.length) {
+      sel.innerHTML = '<option value="">— Select card —</option>'
+        + r.cards.map(function(c) {
+            var name = c.holder_name ? ' · ' + c.holder_name : '';
+            return '<option value="' + c.card_number + '">'
+              + c.card_number + name + ' · ₱' + parseFloat(c.balance).toFixed(2) + '</option>';
+          }).join('');
+    } else {
+      sel.innerHTML = '<option value="">No active cards found</option>';
+    }
+  } catch(e) {
+    sel.innerHTML = '<option value="">Error loading cards</option>';
+  }
+}
+
+async function pmLookupYaniCard() {
+  var sel    = document.getElementById('pmYaniCardSelect');
+  var st     = document.getElementById('pmYaniCardStatus');
+  var btn    = document.getElementById('pmConfirmBtn');
+  var cardNum = sel ? sel.value : '';
+  if (st) { st.textContent = ''; st.dataset.valid = 'false'; st.dataset.cardNum = ''; }
+  if (btn) btn.disabled = true;
+  if (!cardNum) return;
+
+  // Get the order total to show discount preview
+  var order = (typeof allOrders !== 'undefined') && allOrders.find(function(o){ return o.orderId === pmCurrentOrder; });
+  var orderTotal = order ? parseFloat(order.discountedTotal || order.total || 0) : 0;
+
+  try {
+    var r = await api('getYaniCards', { cardNumber: cardNum });
+    if (r && r.ok && r.cards && r.cards.length) {
+      var c = r.cards[0];
+      var bal = parseFloat(c.balance);
+      var discPct = parseFloat(c.discount_pct || 10);
+      var discount = Math.round(orderTotal * discPct / 100 * 100) / 100;
+      var charge   = Math.round((orderTotal - discount) * 100) / 100;
+      var sufficient = bal >= charge;
+      if (st) {
+        st.dataset.valid   = sufficient ? 'true' : 'false';
+        st.dataset.cardNum = cardNum;
+        if (!sufficient) {
+          st.textContent = '❌ Insufficient balance · ₱' + bal.toFixed(2) + ' available, ₱' + charge.toFixed(2) + ' needed';
+          st.style.color = '#DC2626';
+        } else {
+          st.innerHTML = '✅ <strong>' + (c.holder_name || cardNum) + '</strong>'
+            + ' · Balance: ₱' + bal.toFixed(2)
+            + (orderTotal > 0 ? ' · Charge: ₱' + charge.toFixed(2) + ' <span style="color:#4b7a5a">(save ₱' + discount.toFixed(2) + ')</span>' : '');
+          st.style.color = '#065f46';
+          if (btn) btn.disabled = false;
+        }
+      }
+    } else {
+      if (st) { st.textContent = '❌ Card not found or inactive'; st.style.color = '#DC2626'; }
+    }
+  } catch(e) {
+    if (st) { st.textContent = '❌ Lookup failed'; st.style.color = '#DC2626'; }
+  }
+}
+
 async function confirmPaymentMethod() {
   if (!pmCurrentOrder || !pmSelectedMethod) return;
   var btn = document.getElementById('pmConfirmBtn');
@@ -456,6 +549,19 @@ async function confirmPaymentMethod() {
     : pmSelectedMethod;
   var notes = (document.getElementById('pmNotes') && document.getElementById('pmNotes').value.trim()) || '';
 
+  // Yani Card: validate card is selected and valid
+  if (pmSelectedMethod === 'YANI_CARD') {
+    var yaniSt  = document.getElementById('pmYaniCardStatus');
+    var cardNum = yaniSt && yaniSt.dataset.cardNum;
+    if (!cardNum || yaniSt.dataset.valid !== 'true') {
+      showToast('❌ Select a valid Yani Card first', 3500);
+      btn.disabled = false; btn.textContent = '✅ Confirm Payment'; return;
+    }
+    // Store card number in notes for the charge_card RPC trigger on COMPLETED
+    if (!notes) notes = 'Yani Card: ' + cardNum;
+    else notes = 'Yani Card: ' + cardNum + ' · ' + notes;
+  }
+
   try {
     var r = await api('setPaymentMethod', {
       userId: currentUser && currentUser.userId,
@@ -464,30 +570,39 @@ async function confirmPaymentMethod() {
       notes: notes || undefined
     });
     if (r && r.ok) {
+      // If Yani Card — also apply the discount before completing
+      if (pmSelectedMethod === 'YANI_CARD') {
+        var yaniSt2 = document.getElementById('pmYaniCardStatus');
+        var cNum = yaniSt2 && yaniSt2.dataset.cardNum;
+        if (cNum) {
+          await api('applyDiscount', {
+            userId: currentUser && currentUser.userId,
+            orderId: pmCurrentOrder,
+            discountType: 'YANI_CARD',
+            yaniCardNumber: cNum
+          });
+        }
+      }
       closePaymentModal();
-      // Always auto-complete when payment is recorded (regardless of fromComplete flag)
       var order = allOrders.find(function(o){ return o.orderId === pmCurrentOrder; });
       var needsComplete = order && (order.status === 'READY' || order.status === 'PREPARING' || order.status === 'NEW');
       if (pmFromComplete || needsComplete) {
         await updateStatus(pmCurrentOrder || r.orderId, 'COMPLETED');
-        showToast('✅ Paid + Completed: ' + finalMethod);
+        showToast('✅ Paid + Completed: ' + finalMethod, 3500);
       } else {
         await loadOrders();
         var label = pmSelectedMethod2
           ? '✅ Split: ' + pmSelectedMethod + ' + ' + pmSelectedMethod2
           : '✅ Payment: ' + finalMethod;
-        showToast(label);
+        showToast(label, 3500);
       }
     } else {
-      showToast('\u274C ' + (r && r.error ? r.error : 'Failed to save'));
-      btn.disabled = false;
-      btn.textContent = '\u2705 Confirm Payment';
+      showToast('❌ ' + (r && r.error ? r.error : 'Failed to save'), 3500);
+      btn.disabled = false; btn.textContent = '✅ Confirm Payment';
     }
-
   } catch(e) {
-    showToast('\u274C Network error');
-    btn.disabled = false;
-    btn.textContent = '\u2705 Confirm Payment';
+    showToast('❌ Network error', 3500);
+    btn.disabled = false; btn.textContent = '✅ Confirm Payment';
   }
 }
 
