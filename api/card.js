@@ -208,14 +208,20 @@ export default async function handler(req, res) {
       const { card_number, pin, card_pin } = body;
       if (!card_number) return res.status(400).json({ ok: false, error: 'card_number required' });
 
-      // Accept 6-digit full code: "100176" → card=YANI-1001, pin=76
       const raw = String(card_number).trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
       let cn, pinProvided = card_pin ? String(card_pin).trim() : null;
       if (/^\d{6}$/.test(raw)) {
+        // 6-digit short code: "100176" → card=YANI-1001, pin=76
         cn = 'YANI-' + raw.substring(0,4);
         pinProvided = raw.substring(4);
+      } else if (/^\d{1,4}$/.test(raw)) {
+        // Just the number: "1004" → "YANI-1004"
+        cn = 'YANI-' + raw;
+      } else if (raw.startsWith('YANI') && /^\d+$/.test(raw.substring(4))) {
+        // "YANI1004" (dash stripped by regex) → "YANI-1004"
+        cn = 'YANI-' + raw.substring(4);
       } else {
-        cn = raw.startsWith('YANI-') ? raw : ('YANI-' + raw);
+        cn = raw;
       }
 
       const r = await supa(`/rest/v1/yani_cards?card_number=eq.${encodeURIComponent(cn)}&select=card_number,card_pin,holder_name,holder_phone,tier,balance,total_loaded,total_spent,total_saved,discount_pct,status,activated_at,expires_at`);
