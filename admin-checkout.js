@@ -253,7 +253,50 @@ async function confirmCheckout() {
   var hasDisc = document.getElementById('coHasDiscount').checked;
   var notes   = document.getElementById('coNotes').value.trim();
 
+  // ── Capture Yani Card details BEFORE closeCheckoutModal() can reset state ──
+  // closeCheckoutModal() nulls coOrderId/coPayMethod/coDiscType. Grab everything
+  // chargeCard will need now while the modal is still alive.
+  var willUseYaniCard = coPayMethod === 'YANI_CARD' || (hasDisc && coDiscType === 'YANI_CARD');
+  var yaniCardNum = '';
+  if (willUseYaniCard) {
+    var _st = document.getElementById('coYaniCardStatus');
+    var _in = document.getElementById('coYaniCardNumber');
+    var _stored = _st && _st.dataset.cardNum;
+    var _raw    = _in ? String(_in.value || '').trim() : '';
+    yaniCardNum = (_stored || (/^\d+$/.test(_raw) ? 'YANI-' + _raw.padStart(4,'0') : _raw.toUpperCase())).trim().toUpperCase();
+  }
+  var grossAmt = parseFloat(order && order.total || 0);
+
   try {
+    // ── 0. PRE-FLIGHT: Yani Card balance check ────────────────────────────
+    // Fail BEFORE touching order state so staff can reload/switch payment cleanly.
+    if (willUseYaniCard) {
+      if (!yaniCardNum) {
+        throw new Error('Yani Card number missing — re-select the card and try again');
+      }
+      var preflightR = await fetch('/api/card', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'lookupCard', card_number: yaniCardNum })
+      });
+      var preflight = await preflightR.json();
+      if (!preflight || !preflight.ok || !preflight.card) {
+        throw new Error('Card lookup failed — ' + ((preflight && preflight.error) || 'unknown error'));
+      }
+      if (preflight.card.status !== 'ACTIVE') {
+        throw new Error('Card ' + yaniCardNum + ' is ' + preflight.card.status + ' — cannot use');
+      }
+      var balance = parseFloat(preflight.card.balance || 0);
+      var netRequired = Math.round(grossAmt * 0.90 * 100) / 100; // after 10% card discount
+      if (balance < netRequired) {
+        throw new Error(
+          'Insufficient balance on ' + yaniCardNum +
+          ' — has ₱' + balance.toFixed(2) +
+          ', needs ₱' + netRequired.toFixed(2) +
+          '. Reload the card or use another payment.'
+        );
+      }
+    }
+
     // 1. Set payment method
     var pmResult = await api('setPaymentMethod', {
       userId: currentUser && currentUser.userId,
@@ -336,23 +379,59 @@ async function confirmCheckout() {
       renderStats(); renderFilters(); renderOrders();
       showToast(completedOrderId + ' — Completed' + (hasDisc && coDiscType ? ' · Discount applied' : '') + ' · ' + completedPayMethod, 2200);
 
-      // 4. Charge Yani Card — ONLY after order is confirmed COMPLETED (prevents double charge on failed orders)
-      if (completedPayMethod === 'YANI_CARD' || (hasDisc && coDiscType === 'YANI_CARD')) {
-        var _r2 = document.getElementById('coYaniCardNumber') ? document.getElementById('coYaniCardNumber').value.trim() : '';
-        var _st = document.getElementById('coYaniCardStatus');
-        var _storedCardNum = _st && _st.dataset.cardNum; // use validated card number from Check step
-        var cardNum2 = _storedCardNum || (/^\d+$/.test(_r2) ? 'YANI-' + _r2.padStart(4,'0') : _r2.toUpperCase());
-        var grossAmt = parseFloat(order && order.total || 0);
-        if (cardNum2 && grossAmt > 0) {
-          fetch('/api/card', { method:'POST', headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({ action:'chargeCard', card_number: cardNum2,
-              gross_amount: grossAmt, order_id: completedOrderId,
-              performed_by: currentUser && currentUser.userId || 'OWNER' })
-          }).then(function(r){ return r.json(); }).then(function(d){
-            if (d.ok) {
-              showToast('💳 ' + cardNum2 + ' charged ₱' + parseFloat(d.charged||grossAmt*0.9).toFixed(2) + ' · Balance: ₱' + parseFloat(d.balance_after||0).toFixed(2), 3000);
-            }
-          }).catch(function(){});
+      // 4. Charge Yani Card — ONLY after order is confirmed COMPLETED (idempotent on order_id)
+      // ANY failure here MUST be loud — the order is already completed + discounted,
+      // so a silent charge failure = revenue leak. Force staff acknowledgment.
+      if (willUseYaniCard && yaniCardNum && grossAmt > 0) {
+        try {
+          var chargeR = await fetch('/api/card', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'chargeCard',
+              card_number: yaniCardNum,
+              gross_amount: grossAmt,
+              order_id: completedOrderId,
+              performed_by: (currentUser && currentUser.userId) || 'OWNER'
+            })
+          });
+          var chargeData = await chargeR.json();
+          if (chargeData && chargeData.ok) {
+            showToast('💳 ' + yaniCardNum + ' charged ₱' + parseFloat(chargeData.charged || grossAmt * 0.9).toFixed(2) +
+                      ' · Balance: ₱' + parseFloat(chargeData.balance_after || 0).toFixed(2), 3000);
+          } else if (chargeData && chargeData.already_charged) {
+            // Idempotency hit — already charged in a previous attempt. Good.
+            showToast('💳 ' + yaniCardNum + ' already charged for ' + completedOrderId + ' — OK', 2500);
+          } else {
+            // LOUD FAILURE — staff MUST know to reconcile manually
+            console.error('Yani Card charge FAILED:', chargeData);
+            var errMsg = (chargeData && chargeData.error) || 'Unknown error';
+            alert(
+              '🚨 YANI CARD CHARGE FAILED 🚨\n\n' +
+              'Order:  ' + completedOrderId + '\n' +
+              'Card:   ' + yaniCardNum + '\n' +
+              'Amount: ₱' + grossAmt.toFixed(2) + ' (gross)\n' +
+              'Error:  ' + errMsg + '\n\n' +
+              'The order is COMPLETED with the 10% discount applied,\n' +
+              'but the card was NOT debited.\n\n' +
+              'TO RECONCILE:\n' +
+              '1. Open the Yani Cards tab\n' +
+              '2. Reload ' + yaniCardNum + ' if balance was the issue\n' +
+              '3. Charge ' + yaniCardNum + ' ₱' + grossAmt.toFixed(2) + ' for ' + completedOrderId
+            );
+            showToast('🚨 ' + yaniCardNum + ' NOT CHARGED — see alert · reconcile manually', 'error');
+          }
+        } catch(e) {
+          console.error('Yani Card charge network error:', e);
+          alert(
+            '🚨 YANI CARD CHARGE — NETWORK ERROR 🚨\n\n' +
+            'Order:  ' + completedOrderId + '\n' +
+            'Card:   ' + yaniCardNum + '\n' +
+            'Amount: ₱' + grossAmt.toFixed(2) + ' (gross)\n\n' +
+            'The order is COMPLETED but the charge request did not reach the server.\n\n' +
+            'Reconcile via the Yani Cards tab — charge ' + yaniCardNum +
+            ' ₱' + grossAmt.toFixed(2) + ' for ' + completedOrderId
+          );
+          showToast('🚨 ' + yaniCardNum + ' charge — network error · reconcile manually', 'error');
         }
       }
       // Receipt printing: user can tap "Print Receipt" button on the order card
