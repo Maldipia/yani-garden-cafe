@@ -464,6 +464,182 @@ export default async function handler(req, res) {
       return res.status(200).json(r.data);
     }
 
+    // ── OWNER ONLY: edit any card field (with audit) ──────────────────────
+    // Accepts: balance, card_pin, tier, status, expires_at, holder_name,
+    //          holder_phone, holder_email. Each changed field produces one
+    //          audit row in card_transactions:
+    //            balance change       → type=ADJUST (so balance_before/after match reality)
+    //            status change        → type=EDIT  (status change with old→new)
+    //            other field changes  → type=EDIT  (one row per field)
+    //          unchanged fields are NOT written or logged.
+    if (action === 'ownerEditCard') {
+      const { pin, card_number, reason } = body;
+      const isOwner = await verifyOwnerPin(pin);
+      if (!isOwner)     return res.status(403).json({ ok: false, error: 'Owner PIN required' });
+      if (!card_number) return res.status(400).json({ ok: false, error: 'card_number required' });
+      if (!reason || String(reason).trim().length < 4)
+        return res.status(400).json({ ok: false, error: 'reason required (4+ chars)' });
+
+      const cn = String(card_number).trim().toUpperCase();
+
+      // Fetch current state for diff + audit
+      const curR = await supa(`/rest/v1/yani_cards?card_number=eq.${encodeURIComponent(cn)}&select=*`);
+      if (!curR.ok || !curR.data || !curR.data[0]) {
+        return res.status(404).json({ ok: false, error: 'Card not found' });
+      }
+      const cur = curR.data[0];
+
+      // ── Validate each provided field ─────────────────────────────────────
+      const VALID_TIERS  = ['500','1000','2000','3000'];
+      const VALID_STATUS = ['ACTIVE','INACTIVE','SUSPENDED','EXPIRED'];
+      const edits = {};  // fields to PATCH
+      const audit = [];  // [{field, old, new}]
+
+      // balance
+      if (body.balance !== undefined && body.balance !== null && body.balance !== '') {
+        const bal = parseFloat(body.balance);
+        if (isNaN(bal) || bal < 0)
+          return res.status(400).json({ ok: false, error: 'balance must be a number >= 0' });
+        if (Math.abs(bal - parseFloat(cur.balance)) > 0.001) {
+          edits.balance = bal;
+          audit.push({ field:'balance', old:parseFloat(cur.balance), new:bal, type:'ADJUST' });
+        }
+      }
+      // card_pin (2-digit text)
+      if (body.card_pin !== undefined && body.card_pin !== null && body.card_pin !== '') {
+        const newPin = String(body.card_pin).trim();
+        if (!/^\d{2}$/.test(newPin))
+          return res.status(400).json({ ok: false, error: 'card_pin must be exactly 2 digits' });
+        if (newPin !== String(cur.card_pin)) {
+          edits.card_pin = newPin;
+          // mask in audit so the old PIN doesn't sit in plaintext logs
+          audit.push({ field:'card_pin', old:'**', new:'**', type:'EDIT', maskedNote:'PIN changed' });
+        }
+      }
+      // tier
+      if (body.tier !== undefined && body.tier !== null && body.tier !== '') {
+        const newTier = String(body.tier).trim();
+        if (!VALID_TIERS.includes(newTier))
+          return res.status(400).json({ ok: false, error: 'tier must be 500/1000/2000/3000' });
+        if (newTier !== String(cur.tier)) {
+          edits.tier = newTier;
+          audit.push({ field:'tier', old:cur.tier, new:newTier, type:'EDIT' });
+        }
+      }
+      // status (use direct PATCH — the set_card_status RPC enforces specific
+      // transitions like activate-only-from-INACTIVE. Owner edit bypasses that.)
+      if (body.status !== undefined && body.status !== null && body.status !== '') {
+        const newStatus = String(body.status).trim().toUpperCase();
+        if (!VALID_STATUS.includes(newStatus))
+          return res.status(400).json({ ok: false, error: 'status must be ACTIVE/INACTIVE/SUSPENDED/EXPIRED' });
+        if (newStatus !== cur.status) {
+          edits.status = newStatus;
+          audit.push({ field:'status', old:cur.status, new:newStatus, type:'EDIT' });
+        }
+      }
+      // expires_at  (ISO date string, or null to clear)
+      if (body.expires_at !== undefined) {
+        if (body.expires_at === null || body.expires_at === '') {
+          if (cur.expires_at !== null) {
+            edits.expires_at = null;
+            audit.push({ field:'expires_at', old:cur.expires_at, new:null, type:'EDIT' });
+          }
+        } else {
+          const d = new Date(body.expires_at);
+          if (isNaN(d.getTime()))
+            return res.status(400).json({ ok: false, error: 'expires_at invalid date' });
+          const iso = d.toISOString();
+          if (cur.expires_at !== iso) {
+            edits.expires_at = iso;
+            audit.push({ field:'expires_at', old:cur.expires_at, new:iso, type:'EDIT' });
+          }
+        }
+      }
+      // holder fields (allow empty string to clear)
+      ['holder_name','holder_phone','holder_email'].forEach(function(f){
+        if (body[f] !== undefined) {
+          const newVal = body[f] === null || body[f] === '' ? null : String(body[f]).trim();
+          if (newVal !== (cur[f] || null)) {
+            edits[f] = newVal;
+            audit.push({ field:f, old:cur[f]||'', new:newVal||'', type:'EDIT' });
+          }
+        }
+      });
+
+      if (Object.keys(edits).length === 0) {
+        return res.status(200).json({ ok: true, no_changes: true, message: 'No changes detected' });
+      }
+
+      // ── Apply PATCH to yani_cards ────────────────────────────────────────
+      edits.updated_at = new Date().toISOString();
+      const patchR = await supa(
+        `/rest/v1/yani_cards?card_number=eq.${encodeURIComponent(cn)}`,
+        { method: 'PATCH', body: JSON.stringify(edits) }
+      );
+      if (!patchR.ok) {
+        return res.status(500).json({ ok: false, error: 'Update failed', detail: patchR.data });
+      }
+      const updatedCard = (patchR.data && patchR.data[0]) || null;
+
+      // ── Write audit rows (one per changed field) ─────────────────────────
+      // Use the NEW balance for balance_before/after on EDIT rows so the
+      // card history shows a consistent running balance.
+      const newBal = updatedCard ? parseFloat(updatedCard.balance) : parseFloat(cur.balance);
+      const auditRows = audit.map(function(a){
+        let desc;
+        if (a.maskedNote) {
+          desc = `Owner edit: ${a.maskedNote} · Reason: ${reason}`;
+        } else if (a.field === 'balance') {
+          const delta = a.new - a.old;
+          desc = `Owner balance set: ₱${Number(a.old).toFixed(2)} → ₱${Number(a.new).toFixed(2)} (${delta>=0?'+':''}${delta.toFixed(2)}) · Reason: ${reason}`;
+        } else {
+          const oldStr = a.old === null || a.old === '' ? '∅' : String(a.old);
+          const newStr = a.new === null || a.new === '' ? '∅' : String(a.new);
+          desc = `Owner edit: ${a.field} "${oldStr}" → "${newStr}" · Reason: ${reason}`;
+        }
+        // For balance ADJUST row: before/after reflect actual change
+        // For EDIT rows: before/after = newBal (no balance movement)
+        let bBefore, bAfter, amount;
+        if (a.field === 'balance') {
+          bBefore = a.old;
+          bAfter  = a.new;
+          amount  = a.new - a.old;
+        } else {
+          bBefore = newBal;
+          bAfter  = newBal;
+          amount  = 0;
+        }
+        return {
+          card_id:        cur.id,
+          card_number:    cn,
+          type:           a.type,
+          amount:         amount,
+          balance_before: bBefore,
+          balance_after:  bAfter,
+          description:    desc,
+          performed_by:   'OWNER',
+        };
+      });
+
+      // Fire-and-forget audit insert — never block the edit response
+      try {
+        if (auditRows.length > 0) {
+          await supa('/rest/v1/card_transactions', {
+            method: 'POST',
+            headers: { 'Prefer': 'return=minimal' },
+            body: JSON.stringify(auditRows),
+          });
+        }
+      } catch (e) { console.error('Owner-edit audit insert error:', e.message); }
+
+      return res.status(200).json({
+        ok: true,
+        card: updatedCard,
+        changed_fields: audit.map(function(a){ return a.field; }),
+        change_count:   audit.length,
+      });
+    }
+
     // ── OWNER: card transactions history ─────────────────────────────────
     if (action === 'getCardTransactions') {
       const { pin, card_number, limit = 50 } = body;

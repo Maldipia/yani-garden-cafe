@@ -156,6 +156,68 @@ function _appendCardModals() {
     + '<button onclick="document.getElementById(\'cardTxnModal\').style.display=\'none\'" style="background:var(--mist-light);border:none;border-radius:8px;padding:6px 14px;font-size:.8rem;cursor:pointer">✕ Close</button>'
     + '</div><div id="cardTxnBody">Loading…</div></div>';
   document.body.appendChild(t);
+
+  // ── OWNER EDIT MODAL (full field edit with audit) ─────────────────────
+  // Removes any stale version first so re-loading the script doesn't dup
+  var prevOE = document.getElementById('cardOwnerEditModal'); if (prevOE) prevOE.remove();
+  var oe = document.createElement('div');
+  oe.id = 'cardOwnerEditModal';
+  oe.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9100;align-items:center;justify-content:center;padding:20px;overflow-y:auto';
+  oe.innerHTML = ''
+    + '<div style="background:#fff;border-radius:16px;width:100%;max-width:520px;max-height:92vh;overflow-y:auto;padding:24px">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
+    +   '<h3 id="oeTitle" style="font-size:1rem;font-weight:800;color:#92400E;margin:0">🔧 Owner Edit</h3>'
+    +   '<button onclick="_closeOwnerEdit()" style="background:var(--mist-light);border:none;border-radius:8px;padding:6px 12px;cursor:pointer">✕</button>'
+    + '</div>'
+    + '<div style="font-size:.72rem;color:var(--timber);margin-bottom:14px;background:#FEF3C7;border-left:3px solid #92400E;padding:8px 10px;border-radius:6px;line-height:1.4">'
+    +   '⚠️ <strong>Owner-only direct edit.</strong> Every changed field is logged. '
+    +   'Leave fields blank/unchanged to keep current value. Reason is required.'
+    + '</div>'
+
+    // BALANCE
+    + '<label style="font-size:.7rem;font-weight:700;color:var(--timber);display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.4px">Balance (₱)</label>'
+    + '<input id="oeBalance" type="number" step="0.01" min="0" style="width:100%;padding:8px 11px;border:1.5px solid var(--mist);border-radius:8px;font-size:.88rem;font-family:var(--font-body);box-sizing:border-box;margin-bottom:10px">'
+
+    // CARD PIN
+    + '<label style="font-size:.7rem;font-weight:700;color:var(--timber);display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.4px">Card PIN (2 digits)</label>'
+    + '<input id="oeCardPin" type="text" maxlength="2" pattern="\\d{2}" placeholder="e.g. 48" style="width:100%;padding:8px 11px;border:1.5px solid var(--mist);border-radius:8px;font-size:.88rem;font-family:monospace;box-sizing:border-box;margin-bottom:10px">'
+
+    // TIER
+    + '<label style="font-size:.7rem;font-weight:700;color:var(--timber);display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.4px">Tier</label>'
+    + '<select id="oeTier" style="width:100%;padding:8px 11px;border:1.5px solid var(--mist);border-radius:8px;font-size:.88rem;font-family:var(--font-body);box-sizing:border-box;margin-bottom:10px;background:#fff">'
+    +   '<option value="500">₱500</option><option value="1000">₱1,000</option>'
+    +   '<option value="2000">₱2,000</option><option value="3000">₱3,000</option>'
+    + '</select>'
+
+    // STATUS
+    + '<label style="font-size:.7rem;font-weight:700;color:var(--timber);display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.4px">Status</label>'
+    + '<select id="oeStatus" style="width:100%;padding:8px 11px;border:1.5px solid var(--mist);border-radius:8px;font-size:.88rem;font-family:var(--font-body);box-sizing:border-box;margin-bottom:10px;background:#fff">'
+    +   '<option value="ACTIVE">ACTIVE</option><option value="INACTIVE">INACTIVE</option>'
+    +   '<option value="SUSPENDED">SUSPENDED</option><option value="EXPIRED">EXPIRED</option>'
+    + '</select>'
+
+    // EXPIRES_AT
+    + '<label style="font-size:.7rem;font-weight:700;color:var(--timber);display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.4px">Expires at <span style="font-weight:400;color:#9CA3AF">(blank = no expiry)</span></label>'
+    + '<input id="oeExpires" type="date" style="width:100%;padding:8px 11px;border:1.5px solid var(--mist);border-radius:8px;font-size:.88rem;font-family:var(--font-body);box-sizing:border-box;margin-bottom:10px">'
+
+    // HOLDER
+    + '<label style="font-size:.7rem;font-weight:700;color:var(--timber);display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.4px">Holder Name</label>'
+    + '<input id="oeHolderName" type="text" style="width:100%;padding:8px 11px;border:1.5px solid var(--mist);border-radius:8px;font-size:.88rem;font-family:var(--font-body);box-sizing:border-box;margin-bottom:10px">'
+    + '<label style="font-size:.7rem;font-weight:700;color:var(--timber);display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.4px">Holder Phone</label>'
+    + '<input id="oeHolderPhone" type="tel" style="width:100%;padding:8px 11px;border:1.5px solid var(--mist);border-radius:8px;font-size:.88rem;font-family:var(--font-body);box-sizing:border-box;margin-bottom:10px">'
+    + '<label style="font-size:.7rem;font-weight:700;color:var(--timber);display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.4px">Holder Email</label>'
+    + '<input id="oeHolderEmail" type="email" style="width:100%;padding:8px 11px;border:1.5px solid var(--mist);border-radius:8px;font-size:.88rem;font-family:var(--font-body);box-sizing:border-box;margin-bottom:14px">'
+
+    // REASON (required)
+    + '<label style="font-size:.7rem;font-weight:700;color:#92400E;display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.4px">Reason for edit *</label>'
+    + '<input id="oeReason" type="text" placeholder="Required — e.g. Overload correction, PIN reset, status fix" style="width:100%;padding:9px 12px;border:1.5px solid #FCD34D;border-radius:8px;font-size:.85rem;font-family:var(--font-body);box-sizing:border-box;margin-bottom:14px">'
+
+    + '<div style="display:flex;gap:8px">'
+    +   '<button onclick="_closeOwnerEdit()" style="flex:1;padding:10px;background:var(--mist-light);border:none;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;color:var(--timber)">Cancel</button>'
+    +   '<button onclick="_submitOwnerEdit()" style="flex:2;padding:10px;background:#92400E;color:#fff;border:none;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer">🔧 Save Changes</button>'
+    + '</div>'
+    + '</div>';
+  document.body.appendChild(oe);
 }
 
 // ── Render table ──────────────────────────────────────────────
@@ -220,6 +282,12 @@ function _cardsRender() {
     html+='<td style="padding:9px 10px;white-space:nowrap">';
     html+='<button onclick="openManageCard(\''+c.card_number+'\')" '
       +'style="background:var(--forest);color:#fff;border:none;border-radius:6px;padding:5px 11px;font-size:.78rem;font-weight:700;cursor:pointer;margin-right:4px">⚙️ Manage</button>';
+    // OWNER-only: full edit modal for every card field
+    if (currentUser && currentUser.role === 'OWNER') {
+      html+='<button onclick="openOwnerEditCard(\''+c.card_number+'\')" '
+        +'style="background:#92400E;color:#fff;border:none;border-radius:6px;padding:5px 11px;font-size:.78rem;font-weight:700;cursor:pointer;margin-right:4px" '
+        +'title="Owner: edit all fields">🔧 Edit</button>';
+    }
     html+='<button onclick="openCardQR(\''+c.card_number+'\')" '
       +'style="background:var(--mist-light);color:var(--timber);border:none;border-radius:6px;padding:5px 11px;font-size:.78rem;font-weight:700;cursor:pointer;margin-right:4px">📱 QR</button>';
     html+='<button onclick="openCardTxns(\''+c.card_number+'\')" '
@@ -344,6 +412,131 @@ async function _submitAdjust(){
       showToast('❌ '+((r&&r.error)||'Adjustment failed'),'error');
     }
   }catch(e){ showToast('❌ '+e.message,'error'); }
+}
+
+// ── Owner Edit Modal (full field edit) ─────────────────────────
+var _oeCardNumber = null;
+var _oeOriginal   = null; // snapshot of card before edit, used for diff display
+
+function openOwnerEditCard(cardNumber){
+  if (!currentUser || currentUser.role !== 'OWNER') {
+    showToast('❌ Owner role required','error'); return;
+  }
+  var card = _cardsAll.find(function(c){return c.card_number===cardNumber;});
+  if (!card) { showToast('❌ Card not found','error'); return; }
+  _oeCardNumber = cardNumber;
+  _oeOriginal   = card;
+
+  document.getElementById('oeTitle').textContent = '🔧 Owner Edit — ' + cardNumber +
+    (card.card_pin ? '-' + card.card_pin : '');
+
+  // Pre-fill all fields with current values
+  document.getElementById('oeBalance').value     = parseFloat(card.balance || 0).toFixed(2);
+  document.getElementById('oeCardPin').value     = card.card_pin || '';
+  document.getElementById('oeTier').value        = String(card.tier || '500');
+  document.getElementById('oeStatus').value      = card.status || 'INACTIVE';
+  document.getElementById('oeExpires').value     = card.expires_at ? card.expires_at.substring(0,10) : '';
+  document.getElementById('oeHolderName').value  = card.holder_name  || '';
+  document.getElementById('oeHolderPhone').value = card.holder_phone || '';
+  document.getElementById('oeHolderEmail').value = card.holder_email || '';
+  document.getElementById('oeReason').value      = '';
+
+  document.getElementById('cardOwnerEditModal').style.display = 'flex';
+}
+function _closeOwnerEdit(){
+  document.getElementById('cardOwnerEditModal').style.display = 'none';
+  _oeCardNumber = null; _oeOriginal = null;
+}
+
+async function _submitOwnerEdit(){
+  if (!_oeCardNumber || !_oeOriginal) return;
+  var reason = document.getElementById('oeReason').value.trim();
+  if (!reason || reason.length < 4) {
+    showToast('❌ Reason required (4+ chars)','error');
+    document.getElementById('oeReason').focus();
+    return;
+  }
+
+  // Collect raw form values
+  var form = {
+    balance:      document.getElementById('oeBalance').value,
+    card_pin:     document.getElementById('oeCardPin').value.trim(),
+    tier:         document.getElementById('oeTier').value,
+    status:       document.getElementById('oeStatus').value,
+    expires_at:   document.getElementById('oeExpires').value, // YYYY-MM-DD or ''
+    holder_name:  document.getElementById('oeHolderName').value.trim(),
+    holder_phone: document.getElementById('oeHolderPhone').value.trim(),
+    holder_email: document.getElementById('oeHolderEmail').value.trim(),
+  };
+
+  // Build a human-readable diff preview vs original
+  var orig = _oeOriginal;
+  var diffs = [];
+  function rowIfChanged(label, oldV, newV, isPin) {
+    var o = oldV === null || oldV === undefined ? '' : String(oldV);
+    var n = newV === null || newV === undefined ? '' : String(newV);
+    if (o === n) return;
+    if (isPin) { o = '••'; n = '••'; }
+    diffs.push(label + ': "' + (o||'∅') + '" → "' + (n||'∅') + '"');
+  }
+  // Balance — compare numerically
+  var newBal = parseFloat(form.balance);
+  if (!isNaN(newBal) && Math.abs(newBal - parseFloat(orig.balance||0)) > 0.001) {
+    diffs.push('Balance: ₱' + parseFloat(orig.balance||0).toFixed(2) + ' → ₱' + newBal.toFixed(2));
+  }
+  rowIfChanged('PIN',     orig.card_pin,     form.card_pin, true);
+  rowIfChanged('Tier',    '₱'+orig.tier,     '₱'+form.tier);
+  rowIfChanged('Status',  orig.status,       form.status);
+  // Expires: compare YYYY-MM-DD slices
+  var origExp = orig.expires_at ? orig.expires_at.substring(0,10) : '';
+  if (origExp !== form.expires_at) {
+    diffs.push('Expires: ' + (origExp || 'never') + ' → ' + (form.expires_at || 'never'));
+  }
+  rowIfChanged('Name',    orig.holder_name,  form.holder_name);
+  rowIfChanged('Phone',   orig.holder_phone, form.holder_phone);
+  rowIfChanged('Email',   orig.holder_email, form.holder_email);
+
+  if (diffs.length === 0) {
+    showToast('No changes to save'); return;
+  }
+
+  var msg = '🔧 OWNER EDIT — ' + _oeCardNumber + '\n\n'
+    + diffs.join('\n')
+    + '\n\nReason: ' + reason
+    + '\n\nEvery change is logged to card History. Continue?';
+  if (!confirm(msg)) return;
+
+  // Send only what user typed; backend diffs vs DB to avoid race conditions
+  var payload = {
+    pin:          '2026',
+    card_number:  _oeCardNumber,
+    reason:       reason,
+    balance:      form.balance === '' ? undefined : parseFloat(form.balance),
+    card_pin:     form.card_pin || undefined,
+    tier:         form.tier,
+    status:       form.status,
+    // expires_at: empty string means CLEAR. ISO date appended to noon UTC so
+    // local-tz off-by-one-day doesn't push it to the wrong calendar day.
+    expires_at:   form.expires_at === '' ? null : (form.expires_at + 'T12:00:00Z'),
+    holder_name:  form.holder_name  === '' ? null : form.holder_name,
+    holder_phone: form.holder_phone === '' ? null : form.holder_phone,
+    holder_email: form.holder_email === '' ? null : form.holder_email,
+  };
+
+  try {
+    var r = await _cardApi('ownerEditCard', payload);
+    if (r && r.ok) {
+      if (r.no_changes) { showToast('No changes detected'); return; }
+      var n = r.change_count || (r.changed_fields ? r.changed_fields.length : 0);
+      showToast('✅ ' + _oeCardNumber + ' updated · ' + n + ' field' + (n===1?'':'s') + ' changed');
+      _closeOwnerEdit();
+      await _cardsFetch();
+    } else {
+      showToast('❌ ' + ((r && r.error) || 'Edit failed'), 'error');
+    }
+  } catch(e) {
+    showToast('❌ ' + e.message, 'error');
+  }
 }
 
 // ── Submit Edit Holder ─────────────────────────────────────────
