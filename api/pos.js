@@ -1331,8 +1331,15 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
             const ord = fullOrder.data?.[0];
             if (ord && !ord.is_test && !ord.points_earned) {
               // ── Resolve loyalty account ───────────────────────────────────
-              // Priority: existing loyalty_account_id > phone-based lookup
+              // Priority chain:
+              //   1. order.loyalty_account_id (explicit)
+              //   2. lookup by order.customer_phone
+              //   3. if paid with YANI_CARD: lookup by CARD HOLDER'S phone,
+              //      and auto-create the loyalty account if it doesn't exist.
+              //      This closes the loop: paying with a Yani Card IS opting
+              //      into loyalty — the card holder bought a membership.
               let resolvedAccountId = ord.loyalty_account_id;
+
               if (!resolvedAccountId && ord.customer_phone) {
                 const cleanPhone = String(ord.customer_phone).replace(/\D/g,'');
                 if (cleanPhone) {
@@ -1341,6 +1348,68 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
                   );
                   if (phoneAccR.ok && phoneAccR.data?.length) {
                     resolvedAccountId = phoneAccR.data[0].id;
+                  }
+                }
+              }
+
+              // Card-holder fallback (only for YANI_CARD-paid orders)
+              const paidWithCardInit = String(ord.payment_method||'').toUpperCase() === 'YANI_CARD';
+              if (!resolvedAccountId && paidWithCardInit) {
+                // Find which card was used — discount_note has the format "Yani Card: YANI-XXXX"
+                const noteR = await supaFetch(
+                  `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=discount_note&limit=1`
+                );
+                const note = noteR.data?.[0]?.discount_note || '';
+                const cardMatch = note.match(/YANI-\d+/);
+                const cardNumber = cardMatch ? cardMatch[0] : null;
+                if (cardNumber) {
+                  const cardR = await supaFetch(
+                    `${SUPABASE_URL}/rest/v1/yani_cards?card_number=eq.${encodeURIComponent(cardNumber)}&select=card_number,holder_name,holder_phone,holder_email&limit=1`
+                  );
+                  const card = cardR.data?.[0];
+                  if (card && card.holder_phone) {
+                    const cleanCardPhone = String(card.holder_phone).replace(/\D/g,'');
+                    if (cleanCardPhone) {
+                      // Lookup existing account for this phone first
+                      const cardPhoneAccR = await supaFetch(
+                        `${SUPABASE_URL}/rest/v1/loyalty_accounts?phone=eq.${encodeURIComponent(cleanCardPhone)}&is_active=eq.true&select=id,linked_card_number&limit=1`
+                      );
+                      if (cardPhoneAccR.ok && cardPhoneAccR.data?.length) {
+                        resolvedAccountId = cardPhoneAccR.data[0].id;
+                        // Backfill linked_card_number if missing
+                        if (!cardPhoneAccR.data[0].linked_card_number) {
+                          await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts?id=eq.${encodeURIComponent(resolvedAccountId)}`, {
+                            method: 'PATCH', headers: { 'Prefer': 'return=minimal' },
+                            body: JSON.stringify({ linked_card_number: card.card_number, updated_at: new Date().toISOString() })
+                          });
+                        }
+                      } else if (card.holder_name) {
+                        // Auto-create loyalty account for the card holder.
+                        // Buying + activating a Yani Card is the consent — the card
+                        // holder bought a membership product, not a one-off coffee.
+                        const createR = await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts`, {
+                          method: 'POST',
+                          body: JSON.stringify({
+                            name:               card.holder_name,
+                            phone:              cleanCardPhone,
+                            email:              card.holder_email || null,
+                            linked_card_number: card.card_number,
+                            points_balance:     0,
+                            total_points_earned:0,
+                            total_points_redeemed:0,
+                            tier:               'BRONZE',
+                            total_spent:        0,
+                            visit_count:        0,
+                            is_active:          true,
+                          }),
+                          headers: { 'Prefer': 'return=representation' }
+                        });
+                        if (createR.ok && createR.data?.[0]) {
+                          resolvedAccountId = createR.data[0].id;
+                          auditLog({ orderId, action: 'LOYALTY_ACCOUNT_AUTO_CREATED', details: { accountId: resolvedAccountId, cardNumber: card.card_number, source: 'card_payment' } });
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -1355,7 +1424,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
                 const earnRate       = parseFloat(sett.LOYALTY_EARN_RATE || '1');
                 const cardMultiplier = parseFloat(sett.LOYALTY_CARD_MULTIPLIER || '2');
                 // Apply Yani Card bonus ONLY if order was paid with the card
-                const paidWithCard = String(ord.payment_method||'').toUpperCase() === 'YANI_CARD';
+                const paidWithCard = paidWithCardInit;
                 const effectiveRate = paidWithCard ? earnRate * cardMultiplier : earnRate;
                 const pointsEarned  = Math.floor(orderTotal * effectiveRate);
 

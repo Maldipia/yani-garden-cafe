@@ -270,27 +270,51 @@ export default async function handler(req, res) {
         }
       } catch(e) { console.error('Welcome email error:', e.message); }
 
-      // Auto-link an existing loyalty account to this newly-activated card
-      // when the phone matches. Fire-and-forget — never block activation
-      // on loyalty linkage. This closes the loop in the reverse direction
-      // from joinLoyalty (which auto-links cards to new loyalty accounts).
+      // Auto-link OR auto-create loyalty account for the card holder.
+      // The Yani Card IS a loyalty membership — buying + activating a card
+      // is the consent. Two paths:
+      //   (a) existing loyalty_accounts row with same phone → link it
+      //   (b) no row exists → create one, BRONZE tier, 0 balance, linked
+      // Fire-and-forget — never block activation on loyalty linkage.
       try {
         if (cardData && cardData.holder_phone) {
           const clean = String(cardData.holder_phone).replace(/\D/g,'');
           if (clean.length >= 7) {
             const accR = await supa(`/rest/v1/loyalty_accounts?phone=eq.${encodeURIComponent(clean)}&select=id,linked_card_number&limit=1`);
-            if (accR.ok && accR.data?.[0] && !accR.data[0].linked_card_number) {
-              await supa(
-                `/rest/v1/loyalty_accounts?id=eq.${encodeURIComponent(accR.data[0].id)}`,
-                { method: 'PATCH',
-                  headers: { 'Prefer':'return=minimal' },
-                  body: JSON.stringify({ linked_card_number: cardData.card_number, updated_at: new Date().toISOString() })
-                }
-              );
+            if (accR.ok && accR.data?.[0]) {
+              // (a) Link existing account if it isn't linked yet
+              if (!accR.data[0].linked_card_number) {
+                await supa(
+                  `/rest/v1/loyalty_accounts?id=eq.${encodeURIComponent(accR.data[0].id)}`,
+                  { method: 'PATCH',
+                    headers: { 'Prefer':'return=minimal' },
+                    body: JSON.stringify({ linked_card_number: cardData.card_number, updated_at: new Date().toISOString() })
+                  }
+                );
+              }
+            } else if (cardData.holder_name) {
+              // (b) Auto-create — but only if we have at least a name
+              await supa(`/rest/v1/loyalty_accounts`, {
+                method: 'POST',
+                headers: { 'Prefer':'return=minimal' },
+                body: JSON.stringify({
+                  name:               cardData.holder_name,
+                  phone:              clean,
+                  email:              cardData.holder_email || null,
+                  linked_card_number: cardData.card_number,
+                  points_balance:     0,
+                  total_points_earned:0,
+                  total_points_redeemed:0,
+                  tier:               'BRONZE',
+                  total_spent:        0,
+                  visit_count:        0,
+                  is_active:          true,
+                }),
+              });
             }
           }
         }
-      } catch(e) { console.error('Loyalty auto-link error:', e.message); }
+      } catch(e) { console.error('Loyalty auto-link/create error:', e.message); }
 
       return res.status(200).json(r.data);
     }
