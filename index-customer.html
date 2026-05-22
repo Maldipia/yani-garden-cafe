@@ -1515,6 +1515,16 @@ let state = {
   checkoutPayMethod: '', // cash | gcash | card — chosen on checkout
   yaniCardNumber: '',    // optional Yani Card for 10% discount
   yaniCardValid:  false, // validated against API
+
+  // ── Loyalty (Stage 2/3) ────────────────────────────────────
+  customerPhone:   '',     // collected at checkout for loyalty + receipt lookup
+  loyaltyConsent:  false,  // opt-in checkbox state
+  loyaltyAccount:  null,   // { id, points_balance, tier, ... } if found/joined
+  _loyaltyLookupPhone: '', // last phone we looked up (avoid spam-lookups)
+  pointsToRedeem:  0,      // user-typed amount to redeem
+  pointsRedeemed:  0,      // confirmed redeemed (after API call)
+  pointsRedeemValue: 0,    // pesos credited from redemption
+
   statusInterval: null
 };
 
@@ -2167,6 +2177,81 @@ function _yaniCheck() {
   else { state._yaniCardStatus = '⚠️ Enter all 6 digits from your card'; state.yaniCardValid = false; renderCheckoutPage(); }
 }
 
+// ── LOYALTY HANDLERS ────────────────────────────────────────────────────
+// Auto-lookup loyalty when phone reaches 10+ digits (avoids spam on every keystroke).
+// If the customer is already enrolled, we silently fetch and display their balance —
+// no need for them to tick "join" twice.
+async function _maybeLookupLoyalty() {
+  var phone = state.customerPhone || '';
+  if (phone.length < 10) { renderCheckoutPage(); return; }
+  if (phone === state._loyaltyLookupPhone) return; // avoid re-lookup
+  state._loyaltyLookupPhone = phone;
+  try {
+    var r = await api('lookupLoyalty', { phone: phone });
+    if (r && r.ok && r.account) {
+      state.loyaltyAccount = r.account;
+    }
+  } catch(e) { /* swallow — non-critical */ }
+  renderCheckoutPage();
+}
+
+async function _joinLoyaltyNow() {
+  var phone = state.customerPhone || '';
+  var name  = state.customerName || (document.getElementById('custName') || {value:''}).value.trim();
+  if (!name) { alert('Please enter your name above first.'); return; }
+  if (phone.length < 7) { alert('Phone must be at least 7 digits.'); return; }
+  if (!state.loyaltyConsent) { alert('Please tick the consent checkbox.'); return; }
+  try {
+    var r = await api('joinLoyalty', {
+      name:    name,
+      phone:   phone,
+      consent: true,
+    });
+    if (r && r.ok && r.account) {
+      state.loyaltyAccount = r.account;
+      renderCheckoutPage();
+    } else {
+      alert('❌ ' + ((r && r.error) || 'Could not join loyalty program'));
+    }
+  } catch(e) { alert('❌ ' + e.message); }
+}
+
+async function _redeemPoints() {
+  if (!state.loyaltyAccount) return;
+  if (!state.yaniCardValid || !state.yaniCardNumber) {
+    alert('Enter your Yani Card above to redeem points.');
+    return;
+  }
+  var input = document.getElementById('redeemPtsInput');
+  var pts = parseInt(input && input.value);
+  if (isNaN(pts) || pts < 500) { alert('Minimum 500 points to redeem.'); return; }
+  if (pts > parseInt(state.loyaltyAccount.points_balance||0)) {
+    alert('You only have ' + state.loyaltyAccount.points_balance + ' points.');
+    return;
+  }
+  // Round to nearest 100 below
+  pts = Math.floor(pts / 100) * 100;
+  if (!confirm('Redeem ' + pts + ' pts → ₱' + (pts/100).toFixed(2) + ' credit to ' + state.yaniCardNumber + '?')) return;
+  try {
+    var r = await api('redeemPointsToCard', {
+      accountId:  state.loyaltyAccount.id,
+      cardNumber: state.yaniCardNumber,
+      points:     pts,
+      performedBy: 'CUSTOMER',
+    });
+    if (r && r.ok) {
+      state.pointsRedeemed     = r.points_redeemed;
+      state.pointsRedeemValue  = parseFloat(r.value_credited);
+      // refresh local loyalty balance
+      state.loyaltyAccount.points_balance = r.points_balance_after;
+      renderCheckoutPage();
+    } else {
+      alert('❌ ' + ((r && r.error) || 'Redemption failed'));
+    }
+  } catch(e) { alert('❌ ' + e.message); }
+}
+// ────────────────────────────────────────────────────────────────────────
+
 function renderCheckoutPage() {
   var subtotal = getCartSubtotal();
 
@@ -2241,6 +2326,74 @@ function renderCheckoutPage() {
       + '<div class="summary-row total"><span>Total After Discount</span><span class="sr-val">' + peso(total) + '</span></div>'
       + '</div>';
   }
+
+  // ─── LOYALTY POINTS (Stage 2/3) ──────────────────────────────────────────
+  // Two states:
+  //   (a) No loyalty account found yet  → show "Join Loyalty?" opt-in section
+  //   (b) Account found / just joined  → show points balance + tier + redeem UI
+  var loyaltyHtml = '<div class="form-group" style="background:var(--white);border-radius:var(--r-md);padding:14px;box-shadow:var(--shadow-sm);margin-top:10px">';
+  if (state.loyaltyAccount) {
+    var acc = state.loyaltyAccount;
+    var tierColors = { BRONZE:'#92400E', SILVER:'#6B7280', GOLD:'#B45309', PLATINUM:'#5B21B6' };
+    var tierClr = tierColors[acc.tier] || '#92400E';
+    var ptsBal = parseInt(acc.points_balance || 0);
+    var canRedeem = state.yaniCardValid && ptsBal >= 500; // min 500 pts; require active Yani Card
+    loyaltyHtml += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">'
+      + '<span style="font-size:1.4rem">⭐</span>'
+      + '<div style="flex:1">'
+      +   '<div style="font-weight:800;color:var(--forest-deep);font-size:.95rem">' + esc(acc.name) + '</div>'
+      +   '<div style="font-size:.78rem;color:var(--timber)">' + ptsBal + ' points · '
+      +     '<span style="background:' + tierClr + ';color:#fff;border-radius:8px;padding:1px 6px;font-size:.68rem;font-weight:700">' + esc(acc.tier) + '</span>'
+      +   '</div>'
+      + '</div>'
+      + '</div>';
+
+    if (state.pointsRedeemed > 0) {
+      // Already redeemed this session
+      loyaltyHtml += '<div style="background:#F0FDF4;border-radius:8px;padding:10px 12px;font-size:.85rem;color:#065F46;font-weight:700">'
+        + '✅ Redeemed ' + state.pointsRedeemed + ' pts → ₱' + state.pointsRedeemValue.toFixed(2) + ' credited to ' + esc(state.yaniCardNumber)
+        + '</div>';
+    } else if (canRedeem) {
+      // 100 pts = ₱1
+      var maxPts = Math.floor(ptsBal / 100) * 100; // largest 100-multiple ≤ balance
+      var inputVal = state.pointsToRedeem || maxPts;
+      loyaltyHtml += '<div style="font-size:.78rem;color:var(--timber);margin-bottom:6px">100 pts = ₱1 · min 500 pts · credited to your Yani Card</div>'
+        + '<div style="display:flex;gap:8px">'
+        + '<input id="redeemPtsInput" type="number" min="500" step="100" max="' + ptsBal + '" value="' + inputVal + '" '
+        + 'style="flex:1;padding:9px 12px;border:1.5px solid var(--mist);border-radius:8px;font-size:.9rem;font-family:var(--font-body);box-sizing:border-box">'
+        + '<button type="button" onclick="_redeemPoints()" style="padding:9px 16px;background:var(--forest);color:#fff;border:none;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer">Redeem</button>'
+        + '</div>';
+    } else if (ptsBal >= 500 && !state.yaniCardValid) {
+      loyaltyHtml += '<div style="font-size:.78rem;color:var(--timber);font-style:italic">💡 Enter your Yani Card above to redeem ' + ptsBal + ' pts for cafe credit.</div>';
+    } else {
+      loyaltyHtml += '<div style="font-size:.78rem;color:var(--timber)">Earn ' + (500 - ptsBal) + ' more pts to redeem!</div>';
+    }
+  } else {
+    // Not joined yet
+    loyaltyHtml += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
+      + '<span style="font-size:1rem">⭐</span>'
+      + '<label class="form-label" style="margin:0;font-weight:700">Loyalty Points <span style="font-weight:400;color:var(--timber);font-size:.78rem">(earn 1 pt per ₱1)</span></label>'
+      + '</div>'
+      + '<div style="font-size:.78rem;color:var(--timber);margin-bottom:10px;line-height:1.4">'
+      + '🎁 Yani Card holders earn <strong>2x points</strong> when paying with their card. Redeem 500+ pts for cafe credit anytime.'
+      + '</div>'
+      + '<input id="loyaltyPhoneInput" type="tel" inputmode="numeric" maxlength="13" placeholder="Phone (e.g. 09171234567)" '
+      + 'value="' + esc(state.customerPhone || '') + '" '
+      + 'oninput="state.customerPhone=this.value.replace(/\\D/g,\\\'\\\').substring(0,13);_maybeLookupLoyalty()" '
+      + 'style="width:100%;padding:10px 12px;border:1.5px solid var(--mist);border-radius:8px;font-size:.9rem;font-family:var(--font-body);box-sizing:border-box;margin-bottom:10px">'
+      + '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.82rem">'
+      + '<input type="checkbox" id="loyaltyConsentBox" ' + (state.loyaltyConsent ? 'checked' : '') + ' '
+      + 'onchange="state.loyaltyConsent=this.checked;renderCheckoutPage()" '
+      + 'style="width:16px;height:16px;cursor:pointer">'
+      + '<span>Join YANI Rewards — I agree to be enrolled to earn points on this order.</span>'
+      + '</label>';
+    if (state.loyaltyConsent && state.customerPhone && state.customerPhone.length >= 7) {
+      loyaltyHtml += '<button type="button" onclick="_joinLoyaltyNow()" style="margin-top:8px;width:100%;padding:9px;background:var(--forest);color:#fff;border:none;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer">⭐ Join Now</button>';
+    }
+  }
+  loyaltyHtml += '</div>';
+  html += loyaltyHtml;
+  // ─────────────────────────────────────────────────────────────────────────
 
   // Payment method — required before placing
   var pmOpts = [{k:'cash',ico:'💵',lbl:'Cash'},{k:'gcash',ico:'📱',lbl:'GCash/QR'},{k:'card',ico:'💳',lbl:'Card'}];
@@ -2398,6 +2551,12 @@ async function placeOrder() {
     orderType: state.orderType.toUpperCase(),
     items: items
   };
+  // Customer phone — enables loyalty auto-earn on order completion.
+  // Sent whenever provided, even if customer didn't formally "join" yet —
+  // they may have joined on a previous order with the same phone.
+  if (state.customerPhone && state.customerPhone.length >= 7) {
+    orderPayload.customerPhone = state.customerPhone;
+  }
   if (state.yaniCardValid && state.yaniCardNumber) {
     orderPayload.yaniCardNumber = state.yaniCardNumber;
     orderPayload.discountType   = 'YANI_CARD';
@@ -2965,6 +3124,7 @@ async function submitPaymentProof() {
         tableNo:      state.tableNo,
         token:        state.tableToken,
         customerName: pending.customerName,
+        customerPhone:(state.customerPhone && state.customerPhone.length >= 7) ? state.customerPhone : undefined,
         orderNotes:   pending.orderNotes,
         orderType:    pending.orderType,
         subtotal:     pending.subtotal,
