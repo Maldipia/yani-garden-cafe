@@ -3209,6 +3209,41 @@ function renderStatusPage() {
     (state.tableNo ? '<div style="margin-top:4px;font-size:.82rem;color:var(--timber)">Table ' + esc(state.tableNo) + '</div>' : '') +
   '</div>';
 
+  // ── Loyalty summary on status page ───────────────────────────────────
+  // Two blocks:
+  //   (a) Points-redemption confirmation if we successfully redeemed during checkout
+  //   (b) Points-to-be-earned estimate when this order completes
+  if (state.pointsRedeemed > 0) {
+    html += '<div style="background:#F0FDF4;border:1.5px solid #065F46;border-radius:14px;padding:14px;margin-bottom:12px;text-align:center">'
+      + '<div style="font-size:1.4rem;margin-bottom:4px">💰</div>'
+      + '<div style="font-size:.88rem;font-weight:700;color:#065F46">Redeemed ' + state.pointsRedeemed + ' pts → ' + peso(state.pointsRedeemValue) + '</div>'
+      + '<div style="font-size:.75rem;color:#065F46;margin-top:2px">credited to ' + esc(state.yaniCardNumber) + '</div>'
+      + '</div>';
+  }
+  if (state.loyaltyAccount && (s === 'NEW' || s === 'PREPARING' || s === 'READY')) {
+    // Estimate points that will be earned. Floor(total × earnRate × multiplier).
+    // We don't know exact discounted_total yet; use orderTotal which is post-discount.
+    var earnRate = 1; // Frontend mirror of LOYALTY_EARN_RATE
+    var mult = (state.yaniCardValid && state.yaniCardNumber) ? 2 : 1;
+    var estPts = Math.floor(state.orderTotal * earnRate * mult);
+    if (estPts > 0) {
+      html += '<div style="background:#FFFBEB;border:1.5px solid #F59E0B;border-radius:14px;padding:12px 14px;margin-bottom:12px;text-align:center">'
+        + '<div style="font-size:.78rem;color:#78350F">⭐ You\'ll earn ~<strong>' + estPts + ' pts</strong>'
+        + (mult > 1 ? ' (<strong>' + mult + 'x Yani Card bonus</strong>)' : '')
+        + ' when this order completes</div>'
+        + '</div>';
+    }
+  }
+  if (state.loyaltyAccount && s === 'COMPLETED') {
+    // Final earned message — we don't know exact figure without re-fetching,
+    // but the order is now COMPLETE so auto-earn fired server-side. Show a
+    // friendly nudge to check balance on next visit.
+    html += '<div style="background:#F0FDF4;border:1.5px solid #10B981;border-radius:14px;padding:12px 14px;margin-bottom:12px;text-align:center">'
+      + '<div style="font-size:.82rem;color:#065F46;font-weight:600">⭐ Points earned! Check your balance on your next order.</div>'
+      + '</div>';
+  }
+  // ─────────────────────────────────────────────────────────────────────
+
   // Show payment-specific message on status page
   if (state.checkoutPayMethod === 'cash') {
     html += '<div style="background:#FFFBEB;border:1.5px solid #F59E0B;border-radius:14px;padding:16px;margin-bottom:14px;text-align:center">' +

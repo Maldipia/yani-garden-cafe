@@ -259,15 +259,39 @@ export default async function handler(req, res) {
       });
       if (!r.ok) return res.status(500).json({ ok: false, error: 'DB error' });
       // Send welcome email if card has holder_email
+      let cardData = null;
       try {
-        const cardR = await supa(`/rest/v1/yani_cards?card_number=eq.${encodeURIComponent(body.card_number.trim().toUpperCase())}&select=card_number,card_pin,holder_name,holder_email,balance,tier`);
-        const cardData = cardR.data?.[0];
+        const cardR = await supa(`/rest/v1/yani_cards?card_number=eq.${encodeURIComponent(body.card_number.trim().toUpperCase())}&select=card_number,card_pin,holder_name,holder_phone,holder_email,balance,tier`);
+        cardData = cardR.data?.[0];
         if (cardData && cardData.holder_email) {
           const bal = r.data?.balance_after ?? r.data?.balance ?? 0;
           const { subject, html } = emailCardWelcome({ ...cardData, balance_after: bal });
           await sendEmail(cardData.holder_email, subject, html);
         }
       } catch(e) { console.error('Welcome email error:', e.message); }
+
+      // Auto-link an existing loyalty account to this newly-activated card
+      // when the phone matches. Fire-and-forget — never block activation
+      // on loyalty linkage. This closes the loop in the reverse direction
+      // from joinLoyalty (which auto-links cards to new loyalty accounts).
+      try {
+        if (cardData && cardData.holder_phone) {
+          const clean = String(cardData.holder_phone).replace(/\D/g,'');
+          if (clean.length >= 7) {
+            const accR = await supa(`/rest/v1/loyalty_accounts?phone=eq.${encodeURIComponent(clean)}&select=id,linked_card_number&limit=1`);
+            if (accR.ok && accR.data?.[0] && !accR.data[0].linked_card_number) {
+              await supa(
+                `/rest/v1/loyalty_accounts?id=eq.${encodeURIComponent(accR.data[0].id)}`,
+                { method: 'PATCH',
+                  headers: { 'Prefer':'return=minimal' },
+                  body: JSON.stringify({ linked_card_number: cardData.card_number, updated_at: new Date().toISOString() })
+                }
+              );
+            }
+          }
+        }
+      } catch(e) { console.error('Loyalty auto-link error:', e.message); }
+
       return res.status(200).json(r.data);
     }
 

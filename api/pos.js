@@ -1739,9 +1739,35 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
         return res.status(200).json({ ok: true, account: existing.data[0], already_existed: true });
       }
 
-      // Also check if a Yani Card exists with this phone — auto-link
-      const cardR = await supaFetch(`${SUPABASE_URL}/rest/v1/yani_cards?holder_phone=eq.${encodeURIComponent(clean)}&select=card_number&limit=1`);
-      const linkedCardNumber = cardR.ok && cardR.data?.[0]?.card_number || null;
+      // Also check if a Yani Card exists with this phone — auto-link.
+      // Selection priority (when multiple cards share a phone, common for family/household):
+      //   1. ACTIVE card with holder_name matching the joining customer's name
+      //   2. ACTIVE card (most recently activated)
+      //   3. Any card with that phone
+      // Cards with status=INACTIVE/SUSPENDED/EXPIRED are de-prioritized.
+      const allCards = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/yani_cards?holder_phone=eq.${encodeURIComponent(clean)}&select=card_number,holder_name,status,activated_at`
+      );
+      let linkedCardNumber = null;
+      if (allCards.ok && allCards.data?.length) {
+        const cards = allCards.data;
+        const cleanName = String(name).trim().toLowerCase();
+        // 1. ACTIVE + name match
+        let pick = cards.find(c =>
+          c.status === 'ACTIVE' &&
+          c.holder_name &&
+          String(c.holder_name).trim().toLowerCase() === cleanName
+        );
+        // 2. Most recently activated ACTIVE card
+        if (!pick) {
+          const active = cards.filter(c => c.status === 'ACTIVE')
+            .sort((a, b) => new Date(b.activated_at||0) - new Date(a.activated_at||0));
+          pick = active[0];
+        }
+        // 3. Any card
+        if (!pick) pick = cards[0];
+        if (pick) linkedCardNumber = pick.card_number;
+      }
 
       const r = await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts`, {
         method: 'POST',

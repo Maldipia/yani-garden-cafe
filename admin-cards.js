@@ -22,15 +22,29 @@ async function loadYaniCardsView() {
 }
 
 // ── Fetch ─────────────────────────────────────────────────────
+// Loyalty-by-phone map populated alongside the cards fetch so the row
+// renderer can show a ⭐ indicator without an N+1 query per card.
+var _loyaltyByPhone = {};
 async function _cardsFetch() {
   var loading = document.getElementById('cardsLoading');
   var wrap    = document.getElementById('cardsTableWrap');
   if (loading) loading.style.display = 'block';
   if (wrap)    wrap.innerHTML = '';
   try {
-    var r = await _cardApi('listCards', { pin: '2026' });
-    if (!r.ok) throw new Error(r.error || 'Failed');
-    _cardsAll = r.cards || [];
+    // Parallel: cards + loyalty accounts
+    var [cardsR, loyaltyR] = await Promise.all([
+      _cardApi('listCards', { pin: '2026' }),
+      api('getLoyaltyAccounts', { userId: (currentUser && currentUser.userId) || 'USR_001', limit: 500 })
+        .catch(function(){ return { ok:false, accounts:[] }; }) // non-critical
+    ]);
+    if (!cardsR.ok) throw new Error(cardsR.error || 'Failed');
+    _cardsAll = cardsR.cards || [];
+    // Build phone → loyalty map (digits-only key)
+    _loyaltyByPhone = {};
+    (loyaltyR.accounts || []).forEach(function(acc){
+      var key = String(acc.phone || '').replace(/\D/g,'');
+      if (key) _loyaltyByPhone[key] = acc;
+    });
     _cardsRender();
   } catch(e) {
     if (wrap) wrap.innerHTML = '<div style="padding:40px;text-align:center;color:#B5443A">❌ ' + e.message + '</div>';
@@ -279,7 +293,14 @@ function _cardsRender() {
 
     html+='<tr style="background:'+bg+';border-bottom:1px solid var(--mist)">';
     html+='<td style="padding:9px 10px;font-weight:700;font-family:monospace;color:var(--forest-deep)">'+_esc(c.card_number)+(c.card_pin?'<span style="color:#9CA3AF;font-size:.78rem">-'+_esc(c.card_pin)+'</span>':'')+'</td>';
-    html+='<td style="padding:9px 10px">'+(c.holder_name?_esc(c.holder_name):'<span style="color:#9CA3AF;font-style:italic">—</span>')+'</td>';
+    // Holder cell — append ⭐+points badge when a loyalty account exists for this phone
+    var loyAcc = c.holder_phone ? _loyaltyByPhone[String(c.holder_phone).replace(/\D/g,'')] : null;
+    var loyBadge = loyAcc
+      ? '<span title="Loyalty: '+_esc(loyAcc.tier)+' · '+(loyAcc.points_balance||0)+' pts" '
+        + 'style="margin-left:6px;display:inline-block;background:#FEF3C7;color:#92400E;border-radius:8px;padding:1px 6px;font-size:.66rem;font-weight:700;cursor:default">'
+        + '⭐ '+(loyAcc.points_balance||0)+' · '+_esc(loyAcc.tier)+'</span>'
+      : '';
+    html+='<td style="padding:9px 10px">'+(c.holder_name?_esc(c.holder_name)+loyBadge:'<span style="color:#9CA3AF;font-style:italic">—</span>')+'</td>';
     html+='<td style="padding:9px 10px;color:var(--timber)">'+(c.holder_phone?_esc(c.holder_phone):'—')+'</td>';
     html+='<td style="padding:9px 10px"><span style="background:var(--mist-light);border-radius:4px;padding:2px 8px;font-weight:700;font-size:.78rem">₱'+_esc(c.tier)+'</span></td>';
     html+='<td style="padding:9px 10px;font-weight:800;color:var(--forest-deep)">₱'+parseFloat(c.balance||0).toFixed(2)+'</td>';
