@@ -274,38 +274,54 @@ export default async function handler(req, res) {
     // ── STAFF: charge card ───────────────────────────────────────────────
     if (action === 'chargeCard') {
       const { qr_token, gross_amount, order_id, performed_by } = body;
-      // Accept card_number directly as alternative to qr_token
+
+      // ── IDEMPOTENCY CHECK FIRST ──────────────────────────────────────────
+      // Order-level check needs only order_id, not the card. Doing this BEFORE
+      // card resolution means "Change Payment" on an already-charged order
+      // returns a clean 'already_charged' instead of a confusing parser error.
+      if (order_id) {
+        const existR = await supa(`/rest/v1/card_transactions?order_id=eq.${encodeURIComponent(order_id)}&type=eq.CHARGE&select=id,amount,balance_after,card_number`);
+        if (existR.ok && existR.data && existR.data.length > 0) {
+          const ex = existR.data[0];
+          return res.status(200).json({ ok: true, already_charged: true,
+            charged: ex.amount, balance_after: ex.balance_after, card_number: ex.card_number });
+        }
+      }
+
+      // ── RESOLVE CARD (qr_token OR card_number in any format) ─────────────
       let resolvedToken = qr_token;
+      let resolvedCardNumber = null;
       if (!resolvedToken && body.card_number) {
         const raw = String(body.card_number).trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
         let cn, pinProvided = body.card_pin ? String(body.card_pin).trim() : null;
+        // Match the 4-branch parsing from lookupCard so all input formats work:
+        //   '100476'    → card=YANI-1004, pin=76 (6-digit short code)
+        //   '1004'      → 'YANI-1004' (bare digits)
+        //   'YANI1004'  → 'YANI-1004' (dash got stripped by regex)
+        //   'YANI-1004' → raw is 'YANI1004' after strip → 'YANI-1004' (same path)
         if (/^\d{6}$/.test(raw)) {
           cn = 'YANI-' + raw.substring(0,4);
           pinProvided = raw.substring(4);
+        } else if (/^\d{1,4}$/.test(raw)) {
+          cn = 'YANI-' + raw;
+        } else if (raw.startsWith('YANI') && /^\d+$/.test(raw.substring(4))) {
+          cn = 'YANI-' + raw.substring(4);
         } else {
-          cn = raw.startsWith('YANI-') ? raw : 'YANI-' + raw;
+          cn = raw;
         }
-        const cr = await supa(`/rest/v1/yani_cards?card_number=eq.${encodeURIComponent(cn)}&select=qr_token,card_pin`);
+        const cr = await supa(`/rest/v1/yani_cards?card_number=eq.${encodeURIComponent(cn)}&select=qr_token,card_pin,card_number`);
         if (cr.ok && cr.data && cr.data[0]) {
-          // Validate PIN if provided
           if (pinProvided && String(pinProvided) !== String(cr.data[0].card_pin)) {
             return res.status(403).json({ ok: false, error: 'Invalid card code' });
           }
           resolvedToken = cr.data[0].qr_token;
+          resolvedCardNumber = cr.data[0].card_number;
+        } else {
+          return res.status(404).json({ ok: false, error: 'Card ' + cn + ' not found' });
         }
       }
       if (!resolvedToken)  return res.status(400).json({ ok: false, error: 'card_number or qr_token required' });
       if (!gross_amount)   return res.status(400).json({ ok: false, error: 'gross_amount required' });
-      // IDEMPOTENCY: if this order_id already has a CHARGE, return it instead of charging again
-      if (order_id) {
-        const existR = await supa(`/rest/v1/card_transactions?order_id=eq.${encodeURIComponent(order_id)}&type=eq.CHARGE&select=id,amount,balance_after`);
-        if (existR.ok && existR.data && existR.data.length > 0) {
-          const ex = existR.data[0];
-          return res.status(200).json({ ok: true, already_charged: true,
-            charged: ex.amount, balance_after: ex.balance_after });
-        }
-      }
-      // Replace qr_token with resolved token
       body.qr_token = resolvedToken;
       const amount = parseFloat(gross_amount);
       if (isNaN(amount) || amount <= 0)
@@ -317,6 +333,34 @@ export default async function handler(req, res) {
         p_performed_by: performed_by || 'STAFF',
       });
       if (!r.ok) return res.status(500).json({ ok: false, error: 'DB error' });
+
+      // ── AUDIT: write CARD_CHARGED to order_audit_logs so it shows in Order History ──
+      // Fire-and-forget — never block the charge response on logging failures.
+      try {
+        const cd = r.data;
+        if (cd?.ok && order_id) {
+          await supa('/rest/v1/order_audit_logs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+            body: JSON.stringify({
+              order_id,
+              action: 'CARD_CHARGED',
+              actor_name: performed_by || 'STAFF',
+              new_value: cd.card_number || resolvedCardNumber,
+              details: {
+                card_number:     cd.card_number || resolvedCardNumber,
+                gross_amount:    cd.gross_amount,
+                discount:        cd.discount,
+                charged:         cd.charged,
+                balance_before:  cd.balance_before,
+                balance_after:   cd.balance_after,
+                txn_id:          cd.txn_id,
+              }
+            })
+          });
+        }
+      } catch(e) { console.error('Card charge audit log error:', e.message); }
+
       // Send charge transaction email
       try {
         const cd = r.data;

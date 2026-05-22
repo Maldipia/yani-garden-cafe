@@ -1211,6 +1211,7 @@ async function showOrderHistory(orderId) {
     'PAYMENT_SET':     { icon:'💳', label:'Payment recorded',      color:'#065f46', bg:'#D1FAE5' },
     'DISCOUNT_APPLIED':{ icon:'🏷️', label:'Discount applied',     color:'#5B21B6', bg:'#EDE9FE' },
     'DISCOUNT_REMOVED':{ icon:'🏷️', label:'Discount removed',     color:'#991B1B', bg:'#FEE2E2' },
+    'CARD_CHARGED':    { icon:'🌿', label:'Yani Card charged',     color:'#065f46', bg:'#D1FAE5' },
     'ORDER_DELETED':   { icon:'🗑️', label:'Order deleted',        color:'#991B1B', bg:'#FEE2E2' },
     'ORDER_RESTORED':  { icon:'↩️', label:'Order restored',       color:'#065f46', bg:'#D1FAE5' },
     'SERVICE_CHARGE_WAIVED':{ icon:'🎁', label:'Service charge waived', color:'#065f46', bg:'#D1FAE5' },
@@ -1320,6 +1321,19 @@ async function showOrderHistory(orderId) {
         } else if (log.action === 'PAYMENT_SET') {
           cfg = Object.assign({}, cfg, { label: 'Payment recorded by ' + actor });
           details = (d.method||'') + (d.total ? ' · ₱'+parseFloat(d.total).toFixed(2) : '');
+        } else if (log.action === 'CARD_CHARGED') {
+          cfg = Object.assign({}, cfg, { label: '🌿 Yani Card charged by ' + actor });
+          var cardN  = d.card_number || log.new_value || '';
+          var gross  = parseFloat(d.gross_amount || 0);
+          var disc   = parseFloat(d.discount    || 0);
+          var paid   = parseFloat(d.charged     || 0);
+          var balBef = parseFloat(d.balance_before || 0);
+          var balAft = parseFloat(d.balance_after  || 0);
+          details = cardN
+            + ' · Charged <strong>₱' + paid.toFixed(2) + '</strong>'
+            + (disc > 0  ? ' <span style="color:#065f46">(saved ₱' + disc.toFixed(2) + ')</span>' : '')
+            + (gross > 0 ? ' · Gross ₱' + gross.toFixed(2) : '')
+            + '<br><span style="color:#6b7280">Balance: ₱' + balBef.toFixed(2) + ' → ₱' + balAft.toFixed(2) + '</span>';
         }
       }
     } catch(e) {}
