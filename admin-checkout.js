@@ -477,7 +477,12 @@ async function pmLoadYaniCards() {
   if (!sel) return;
   sel.innerHTML = '<option value="">Loading cards…</option>';
   try {
-    var r = await api('getYaniCards', { statusFilter: 'ACTIVE' });
+    var resp = await fetch('/api/card', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'listCards', pin: '2026', status: 'ACTIVE' })
+    });
+    var r = await resp.json();
     if (r && r.ok && r.cards && r.cards.length) {
       sel.innerHTML = '<option value="">— Select card —</option>'
         + r.cards.map(function(c) {
@@ -507,9 +512,14 @@ async function pmLookupYaniCard() {
   var orderTotal = order ? parseFloat(order.total || 0) : 0; // always gross total — charge_card RPC applies 10% itself
 
   try {
-    var r = await api('getYaniCards', { cardNumber: cardNum });
-    if (r && r.ok && r.cards && r.cards.length) {
-      var c = r.cards[0];
+    var resp2 = await fetch('/api/card', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'lookupCard', card_number: cardNum })
+    });
+    var r = await resp2.json();
+    if (r && r.ok && r.card) {
+      var c = r.card;
       var bal = parseFloat(c.balance);
       var discPct = parseFloat(c.discount_pct || 10);
       var discount = Math.round(orderTotal * discPct / 100 * 100) / 100;
@@ -519,7 +529,7 @@ async function pmLookupYaniCard() {
         st.dataset.valid   = sufficient ? 'true' : 'false';
         st.dataset.cardNum = cardNum;
         if (!sufficient) {
-          st.textContent = '❌ Insufficient balance · ₱' + bal.toFixed(2) + ' available, ₱' + charge.toFixed(2) + ' needed';
+          st.innerHTML = '❌ Insufficient balance · ₱' + bal.toFixed(2) + ' available, ₱' + charge.toFixed(2) + ' needed';
           st.style.color = '#DC2626';
         } else {
           st.innerHTML = '✅ <strong>' + (c.holder_name || cardNum) + '</strong>'
@@ -530,10 +540,10 @@ async function pmLookupYaniCard() {
         }
       }
     } else {
-      if (st) { st.textContent = '❌ Card not found or inactive'; st.style.color = '#DC2626'; }
+      if (st) { st.innerHTML = '❌ ' + (r && r.error ? r.error : 'Card not found or inactive'); st.style.color = '#DC2626'; }
     }
   } catch(e) {
-    if (st) { st.textContent = '❌ Lookup failed'; st.style.color = '#DC2626'; }
+    if (st) { st.innerHTML = '❌ Lookup failed'; st.style.color = '#DC2626'; }
   }
 }
 
