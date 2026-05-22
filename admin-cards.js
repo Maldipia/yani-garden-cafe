@@ -220,7 +220,21 @@ function _appendCardModals() {
   document.body.appendChild(oe);
 }
 
-// ── Render table ──────────────────────────────────────────────
+// ── HTML escape (XSS-safe rendering of user-supplied fields) ──
+// Used wherever user-controlled strings (holder_name/phone/email,
+// reasons, descriptions) get concatenated into innerHTML. PostgREST
+// stores raw text verbatim — escaping is the renderer's job.
+function _esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+
 function _cardsRender() {
   var cards   = _cardsFiltered();
   var total   = _cardsAll.length;
@@ -264,12 +278,12 @@ function _cardsRender() {
         :"_cardToggleOn('"+c.card_number+"')");
 
     html+='<tr style="background:'+bg+';border-bottom:1px solid var(--mist)">';
-    html+='<td style="padding:9px 10px;font-weight:700;font-family:monospace;color:var(--forest-deep)">'+c.card_number+(c.card_pin?'<span style="color:#9CA3AF;font-size:.78rem">-'+c.card_pin+'</span>':'')+'</td>';
-    html+='<td style="padding:9px 10px">'+(c.holder_name||'<span style="color:#9CA3AF;font-style:italic">—</span>')+'</td>';
-    html+='<td style="padding:9px 10px;color:var(--timber)">'+(c.holder_phone||'—')+'</td>';
-    html+='<td style="padding:9px 10px"><span style="background:var(--mist-light);border-radius:4px;padding:2px 8px;font-weight:700;font-size:.78rem">₱'+c.tier+'</span></td>';
+    html+='<td style="padding:9px 10px;font-weight:700;font-family:monospace;color:var(--forest-deep)">'+_esc(c.card_number)+(c.card_pin?'<span style="color:#9CA3AF;font-size:.78rem">-'+_esc(c.card_pin)+'</span>':'')+'</td>';
+    html+='<td style="padding:9px 10px">'+(c.holder_name?_esc(c.holder_name):'<span style="color:#9CA3AF;font-style:italic">—</span>')+'</td>';
+    html+='<td style="padding:9px 10px;color:var(--timber)">'+(c.holder_phone?_esc(c.holder_phone):'—')+'</td>';
+    html+='<td style="padding:9px 10px"><span style="background:var(--mist-light);border-radius:4px;padding:2px 8px;font-weight:700;font-size:.78rem">₱'+_esc(c.tier)+'</span></td>';
     html+='<td style="padding:9px 10px;font-weight:800;color:var(--forest-deep)">₱'+parseFloat(c.balance||0).toFixed(2)+'</td>';
-    html+='<td style="padding:9px 10px"><span style="background:'+sc+';color:#fff;border-radius:12px;padding:2px 9px;font-size:.72rem;font-weight:700">'+c.status+'</span></td>';
+    html+='<td style="padding:9px 10px"><span style="background:'+sc+';color:#fff;border-radius:12px;padding:2px 9px;font-size:.72rem;font-weight:700">'+_esc(c.status)+'</span></td>';
 
     // Toggle
     html+='<td style="padding:9px 10px">'
@@ -621,11 +635,11 @@ async function openCardQR(cardNumber){
     var qrSrc=_qrUrl(token,280);
     document.getElementById('qrModalContent').innerHTML=
       '<img src="'+qrSrc+'" style="width:200px;height:200px;border-radius:8px;border:2px solid var(--mist)" alt="QR"><br>'
-      +'<div style="margin-top:10px;font-size:.78rem;color:var(--timber);background:var(--mist-light);border-radius:6px;padding:6px 10px;word-break:break-all">'+token+'</div>'
-      +'<div style="margin-top:10px;font-size:.78rem;color:var(--timber)"><strong>'+cardNumber+'</strong>'
-      +(card.holder_name?' · '+card.holder_name:'')
-      +' · ₱'+card.tier+' tier<br>Balance: ₱'+parseFloat(card.balance||0).toFixed(2)
-      +' · <span style="color:'+(card.status==='ACTIVE'?'#065F46':'#B5443A')+'">'+card.status+'</span></div>';
+      +'<div style="margin-top:10px;font-size:.78rem;color:var(--timber);background:var(--mist-light);border-radius:6px;padding:6px 10px;word-break:break-all">'+_esc(token)+'</div>'
+      +'<div style="margin-top:10px;font-size:.78rem;color:var(--timber)"><strong>'+_esc(cardNumber)+'</strong>'
+      +(card.holder_name?' · '+_esc(card.holder_name):'')
+      +' · ₱'+_esc(card.tier)+' tier<br>Balance: ₱'+parseFloat(card.balance||0).toFixed(2)
+      +' · <span style="color:'+(card.status==='ACTIVE'?'#065F46':'#B5443A')+'">'+_esc(card.status)+'</span></div>';
   }catch(e){
     document.getElementById('qrModalContent').innerHTML='<p style="color:#B5443A">❌ '+e.message+'</p>';
   }
@@ -661,7 +675,7 @@ var _txnCurrentCard=''; async function openCardTxns(cardNumber){ _txnCurrentCard
       var ds=dt.toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'2-digit'})+' '+dt.toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'});
       var disc=parseFloat(t.discount_amount||0);
       var canVoid=isOwner&&(t.type==='CHARGE'||t.type==='RELOAD')&&!t.reversed_by_txn;
-      html+='<tr style="background:'+bg+';border-bottom:1px solid var(--mist)">'        +'<td style="padding:7px 9px;white-space:nowrap;color:var(--timber)">'+ds+'</td>'        +'<td style="padding:7px 9px"><span style="background:'+(tc[t.type]||'#374151')+';color:#fff;border-radius:10px;padding:2px 8px;font-size:.7rem;font-weight:700">'+t.type+'</span></td>'        +'<td style="padding:7px 9px;font-weight:700">₱'+parseFloat(t.amount||0).toFixed(2)+'</td>'        +'<td style="padding:7px 9px;color:#065F46;font-weight:700">'+(disc>0?'₱'+disc.toFixed(2):'—')+'</td>'        +'<td style="padding:7px 9px">₱'+parseFloat(t.balance_before||0).toFixed(2)+'</td>'        +'<td style="padding:7px 9px;font-weight:700">₱'+parseFloat(t.balance_after||0).toFixed(2)+'</td>'        +'<td style="padding:7px 9px;font-size:.72rem;color:var(--timber)">'+(t.order_id||'—')+'</td>'        +'<td style="padding:7px 9px;font-size:.72rem;color:var(--timber)">'+(t.performed_by||'—')+'</td>'        +'<td style="padding:4px 9px">'+(t.reversed_by_txn          ?'<span style="color:#9CA3AF;font-size:.68rem;font-style:italic">Voided</span>'          :(canVoid?('<button onclick="_voidTxn(&quot;'+t.id+'&quot;,&quot;'+_txnCurrentCard+'&quot;)" style="padding:4px 10px;background:#B5443A;color:#fff;border:none;border-radius:6px;font-size:.72rem;font-weight:700;cursor:pointer">Void</button>'):''))        +'</td>'        +'</tr>';
+      html+='<tr style="background:'+bg+';border-bottom:1px solid var(--mist)">'        +'<td style="padding:7px 9px;white-space:nowrap;color:var(--timber)">'+ds+'</td>'        +'<td style="padding:7px 9px"><span style="background:'+(tc[t.type]||'#374151')+';color:#fff;border-radius:10px;padding:2px 8px;font-size:.7rem;font-weight:700">'+_esc(t.type)+'</span></td>'        +'<td style="padding:7px 9px;font-weight:700">₱'+parseFloat(t.amount||0).toFixed(2)+'</td>'        +'<td style="padding:7px 9px;color:#065F46;font-weight:700">'+(disc>0?'₱'+disc.toFixed(2):'—')+'</td>'        +'<td style="padding:7px 9px">₱'+parseFloat(t.balance_before||0).toFixed(2)+'</td>'        +'<td style="padding:7px 9px;font-weight:700">₱'+parseFloat(t.balance_after||0).toFixed(2)+'</td>'        +'<td style="padding:7px 9px;font-size:.72rem;color:var(--timber)">'+_esc(t.order_id||'—')+'</td>'        +'<td style="padding:7px 9px;font-size:.72rem;color:var(--timber)">'+_esc(t.performed_by||'—')+'</td>'        +'<td style="padding:4px 9px">'+(t.reversed_by_txn          ?'<span style="color:#9CA3AF;font-size:.68rem;font-style:italic">Voided</span>'          :(canVoid?('<button onclick="_voidTxn(&quot;'+_esc(t.id)+'&quot;,&quot;'+_esc(_txnCurrentCard)+'&quot;)" style="padding:4px 10px;background:#B5443A;color:#fff;border:none;border-radius:6px;font-size:.72rem;font-weight:700;cursor:pointer">Void</button>'):''))        +'</td>'        +'</tr>';
     });;
     html+='</tbody></table></div>';
     document.getElementById('cardTxnBody').innerHTML=html;
