@@ -99,6 +99,17 @@ function _appendCardModals() {
     + '</div>'
     + '</div>'
 
+    // ── SECTION: Adjust Balance (OWNER only — manual deduct/credit, requires reason) ──
+    + '<div id="manageAdjustSection" style="display:none;border-top:1px solid var(--mist);padding-top:14px;margin-top:2px">'
+    + '<div style="font-size:.8rem;font-weight:700;color:#92400E;margin-bottom:6px;text-transform:uppercase;letter-spacing:.4px">⚖️ Adjust Balance <span style="background:#92400E;color:#fff;font-size:.6rem;padding:1px 6px;border-radius:6px;margin-left:4px">OWNER</span></div>'
+    + '<div style="font-size:.72rem;color:var(--timber);margin-bottom:8px;line-height:1.4">Use negative (e.g. <strong>-500</strong>) to deduct, positive to credit. Logged as ADJUST in card history with reason.</div>'
+    + '<input id="manageAdjustAmt" type="number" step="0.01" placeholder="e.g. -500 to deduct, 100 to credit" '
+    + 'style="width:100%;padding:9px 12px;border:1.5px solid #FCD34D;border-radius:8px;font-size:.9rem;font-family:var(--font-body);box-sizing:border-box;margin-bottom:8px">'
+    + '<input id="manageAdjustReason" type="text" placeholder="Reason (required) — e.g. Refund void, correction, promo" '
+    + 'style="width:100%;padding:9px 12px;border:1.5px solid #FCD34D;border-radius:8px;font-size:.85rem;font-family:var(--font-body);box-sizing:border-box;margin-bottom:10px">'
+    + '<button onclick="_submitAdjust()" style="width:100%;padding:10px;background:#92400E;color:#fff;border:none;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer">⚖️ Apply Adjustment</button>'
+    + '</div>'
+
     // ── SECTION: Edit Holder ─────────────────────────────────
     + '<div style="border-top:1px solid var(--mist);padding-top:14px;margin-top:2px">'
     + '<div style="font-size:.8rem;font-weight:700;color:var(--timber);margin-bottom:10px;text-transform:uppercase;letter-spacing:.4px">✏️ Card Holder Info</div>'
@@ -261,6 +272,16 @@ function openManageCard(cardNumber){
   var topUpSec=document.getElementById('manageTopUpSection');
   if(topUpSec) topUpSec.style.display=(card.status==='INACTIVE')?'none':'';
 
+  // Show/hide Adjust section — OWNER only, hidden for INACTIVE cards
+  var adjSec=document.getElementById('manageAdjustSection');
+  if(adjSec){
+    var isOwner = currentUser && currentUser.role === 'OWNER';
+    adjSec.style.display = (isOwner && card.status !== 'INACTIVE') ? '' : 'none';
+    // Clear previous inputs every open
+    var adjAmt=document.getElementById('manageAdjustAmt'); if(adjAmt) adjAmt.value='';
+    var adjRsn=document.getElementById('manageAdjustReason'); if(adjRsn) adjRsn.value='';
+  }
+
   document.getElementById('cardManageModal').style.display='flex';
 }
 function _closeManageModal(){ document.getElementById('cardManageModal').style.display='none'; }
@@ -278,6 +299,50 @@ async function _submitTopUp(){
       document.getElementById('manageCardBal').textContent='₱'+parseFloat(r.balance||0).toFixed(2);
       await _cardsFetch();
     } else showToast('❌ '+(r.error||'Top up failed'),'error');
+  }catch(e){ showToast('❌ '+e.message,'error'); }
+}
+
+// ── Submit Balance Adjustment (OWNER only) ─────────────────────
+// Owner-only because the API requires the owner PIN. Confirm step + reason are
+// required because adjust_card_balance permanently shifts the card balance
+// without a corresponding charge/reload.
+async function _submitAdjust(){
+  var rawAmt=document.getElementById('manageAdjustAmt').value.trim();
+  var reason=document.getElementById('manageAdjustReason').value.trim();
+  var delta=parseFloat(rawAmt);
+  if(isNaN(delta)||delta===0){ showToast('❌ Enter a non-zero amount (use - to deduct)','error'); return; }
+  if(!reason){ showToast('❌ Reason is required for any balance adjustment','error'); return; }
+  if(reason.length<4){ showToast('❌ Give a clearer reason (4+ characters)','error'); return; }
+
+  // Find current card to show before/after preview in confirm
+  var card=_cardsAll.find(function(c){return c.card_number===_manageCardNumber;});
+  var balBefore=card?parseFloat(card.balance||0):0;
+  var balAfter=balBefore+delta;
+  if(balAfter<0){
+    showToast('❌ Adjustment would make balance negative (₱'+balAfter.toFixed(2)+')','error');
+    return;
+  }
+  var verb=delta<0?'DEDUCT':'CREDIT';
+  var absAmt=Math.abs(delta).toFixed(2);
+  var msg=verb+' ₱'+absAmt+' on '+_manageCardNumber+'?\n\n'
+    +'Balance: ₱'+balBefore.toFixed(2)+' → ₱'+balAfter.toFixed(2)+'\n'
+    +'Reason: '+reason+'\n\n'
+    +'This is logged as an ADJUST transaction. Cannot be undone via this UI '
+    +'(only via Void in card History).';
+  if(!confirm(msg)) return;
+
+  try{
+    var r=await _cardApi('adjustCard',{pin:'2026',card_number:_manageCardNumber,delta:delta,reason:reason});
+    if(r&&r.ok){
+      showToast('✅ '+verb+' ₱'+absAmt+' → Balance: ₱'+parseFloat(r.balance_after!=null?r.balance_after:balAfter).toFixed(2));
+      // Update modal balance + clear inputs
+      document.getElementById('manageCardBal').textContent='₱'+parseFloat(r.balance_after!=null?r.balance_after:balAfter).toFixed(2);
+      document.getElementById('manageAdjustAmt').value='';
+      document.getElementById('manageAdjustReason').value='';
+      await _cardsFetch();
+    } else {
+      showToast('❌ '+((r&&r.error)||'Adjustment failed'),'error');
+    }
   }catch(e){ showToast('❌ '+e.message,'error'); }
 }
 
