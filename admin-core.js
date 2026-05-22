@@ -825,9 +825,10 @@ function renderSidebar() {
     html += item('INVENTORY', '📦', 'Inventory', '');
     html += item('ADDONS', '➕', 'Add-ons', '');
     html += item('PROMO_CODES', '🏷️', 'Promo Codes', '');
-    html += item('LOYALTY', '⭐', 'Loyalty Points', '');
-    html += item('YANI_CARDS', '💳', 'Yani Cards', '');
-    html += item('CUSTOMERS', '👥', 'Customers', '');
+    // ── Unified Members hub ──
+    // Replaces 3 separate sidebar items (Loyalty Points, Yani Cards, Customers)
+    // that all represent the same person. The MEMBERS view shows them as tabs.
+    html += item('MEMBERS', '👥', 'Members', '');
   }
 
   if (isAdmin) {
@@ -1000,17 +1001,98 @@ function setFilter(f) {
   } else if (f === 'PROMO_CODES') {
     if (promoCodesView) promoCodesView.style.display = 'block';
     loadPromoCodesView();
+  } else if (f === 'MEMBERS') {
+    // Unified Members hub: wraps Customers + Loyalty + Yani Cards as tabs.
+    // The three underlying views remain intact (DOM divs + loader fns), the
+    // shell just toggles which one is visible and adds a tab strip on top.
+    openMembersHub();
   } else if (f === 'LOYALTY') {
-    if (loyaltyView) loyaltyView.style.display = 'block';
-    loadLoyaltyView();
+    // Legacy route — still works if anything deep-links to it
+    openMembersHub('loyalty');
   } else if (f === 'YANI_CARDS') {
-    if (yaniCardsView) yaniCardsView.style.display = 'block';
-    loadYaniCardsView();
+    openMembersHub('cards');
   } else if (f === 'CUSTOMERS') {
-    if (customersView) customersView.style.display = 'block';
-    loadCustomersView();
+    openMembersHub('customers');
   } else {
     orderGrid.style.display = '';
     renderOrders();
   }
 }
+
+// ── MEMBERS HUB: tabbed view for Customers + Loyalty + Yani Cards ────────
+// All three are facets of the same person, so we surface them under one
+// sidebar item with tabs instead of forcing the user to click around.
+// Each underlying view (customersView / loyaltyView / yaniCardsView) and
+// its loader fn is unchanged — we just toggle visibility + render a tab
+// strip above whichever one is active.
+var _membersActiveTab = 'customers'; // persists within session
+
+function openMembersHub(tab) {
+  if (tab) _membersActiveTab = tab;
+
+  // Make sure the tab strip exists; create lazily on first open
+  var stripId = 'membersTabStrip';
+  var strip   = document.getElementById(stripId);
+  if (!strip) {
+    strip = document.createElement('div');
+    strip.id = stripId;
+    strip.style.cssText = 'padding:14px 20px 0;background:var(--mist-light);border-bottom:1px solid var(--mist);position:sticky;top:0;z-index:50';
+    // Insert BEFORE the customersView (first of the 3 in admin.html DOM order)
+    var firstView = document.getElementById('customersView');
+    if (firstView && firstView.parentNode) {
+      firstView.parentNode.insertBefore(strip, firstView);
+    } else {
+      document.body.appendChild(strip);
+    }
+  }
+
+  // Render tab strip (re-renders so active styling updates)
+  var TABS = [
+    { k:'customers', ico:'👥', label:'Customers' },
+    { k:'loyalty',   ico:'⭐', label:'Loyalty Points' },
+    { k:'cards',     ico:'💳', label:'Yani Cards' },
+  ];
+  strip.innerHTML = '<div style="display:flex;gap:6px;flex-wrap:wrap">'
+    + TABS.map(function(t){
+        var on = _membersActiveTab === t.k;
+        return '<button onclick="openMembersHub(\''+t.k+'\')" '
+          + 'style="padding:8px 16px;border:none;border-radius:10px 10px 0 0;cursor:pointer;'
+          + 'font-family:var(--font-body);font-size:.85rem;font-weight:700;'
+          + (on
+              ? 'background:#fff;color:var(--forest-deep);border-bottom:3px solid var(--forest)'
+              : 'background:transparent;color:var(--timber);border-bottom:3px solid transparent')
+          + '">' + t.ico + ' ' + t.label + '</button>';
+      }).join('')
+    + '</div>';
+  strip.style.display = 'block';
+
+  // Toggle the 3 underlying views
+  var cv = document.getElementById('customersView');
+  var lv = document.getElementById('loyaltyView');
+  var yv = document.getElementById('yaniCardsView');
+  if (cv) cv.style.display = _membersActiveTab === 'customers' ? 'block' : 'none';
+  if (lv) lv.style.display = _membersActiveTab === 'loyalty'   ? 'block' : 'none';
+  if (yv) yv.style.display = _membersActiveTab === 'cards'     ? 'block' : 'none';
+
+  // Call the appropriate loader. Each loader is safe to call multiple times
+  // (they fetch fresh data each call) — preferable to caching since members
+  // data changes frequently (new orders, redemptions, etc).
+  if (_membersActiveTab === 'customers' && typeof loadCustomersView === 'function') loadCustomersView();
+  else if (_membersActiveTab === 'loyalty'   && typeof loadLoyaltyView   === 'function') loadLoyaltyView();
+  else if (_membersActiveTab === 'cards'     && typeof loadYaniCardsView === 'function') loadYaniCardsView();
+}
+
+// Hide the tab strip when leaving Members hub (other views call setFilter which
+// loops through and hides view divs — but the strip lives outside those).
+// Hook into the existing setFilter flow:
+(function(){
+  var origSetFilter = window.setFilter;
+  if (typeof origSetFilter !== 'function') return;
+  window.setFilter = function(f) {
+    var strip = document.getElementById('membersTabStrip');
+    if (strip && f !== 'MEMBERS' && f !== 'LOYALTY' && f !== 'YANI_CARDS' && f !== 'CUSTOMERS') {
+      strip.style.display = 'none';
+    }
+    return origSetFilter.apply(this, arguments);
+  };
+})();
