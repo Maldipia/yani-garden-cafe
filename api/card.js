@@ -270,17 +270,15 @@ export default async function handler(req, res) {
         }
       } catch(e) { console.error('Welcome email error:', e.message); }
 
-      // Auto-link OR auto-create loyalty account for the card holder.
-      // The Yani Card IS a loyalty membership — buying + activating a card
-      // is the consent. Two paths:
-      //   (a) existing loyalty_accounts row with same phone → link it
-      //   (b) no row exists → create one, BRONZE tier, 0 balance, linked
-      // Fire-and-forget — never block activation on loyalty linkage.
+      // Auto-link OR auto-create loyalty account for the card holder, keyed
+      // by EMAIL (the unique loyalty identity). If holder_email is missing,
+      // skip entirely — no email means no loyalty, per business rules.
+      // Fire-and-forget; never block activation on loyalty linkage.
       try {
-        if (cardData && cardData.holder_phone) {
-          const clean = String(cardData.holder_phone).replace(/\D/g,'');
-          if (clean.length >= 7) {
-            const accR = await supa(`/rest/v1/loyalty_accounts?phone=eq.${encodeURIComponent(clean)}&select=id,linked_card_number&limit=1`);
+        if (cardData && cardData.holder_email) {
+          const cleanEmail = String(cardData.holder_email).trim().toLowerCase();
+          if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+            const accR = await supa(`/rest/v1/loyalty_accounts?email=eq.${encodeURIComponent(cleanEmail)}&select=id,linked_card_number&limit=1`);
             if (accR.ok && accR.data?.[0]) {
               // (a) Link existing account if it isn't linked yet
               if (!accR.data[0].linked_card_number) {
@@ -293,14 +291,17 @@ export default async function handler(req, res) {
                 );
               }
             } else if (cardData.holder_name) {
-              // (b) Auto-create — but only if we have at least a name
+              // (b) Auto-create — name + email both required
+              const cleanPhone = cardData.holder_phone
+                ? String(cardData.holder_phone).replace(/\D/g,'')
+                : null;
               await supa(`/rest/v1/loyalty_accounts`, {
                 method: 'POST',
                 headers: { 'Prefer':'return=minimal' },
                 body: JSON.stringify({
                   name:               cardData.holder_name,
-                  phone:              clean,
-                  email:              cardData.holder_email || null,
+                  email:              cleanEmail,
+                  phone:              cleanPhone,
                   linked_card_number: cardData.card_number,
                   points_balance:     0,
                   total_points_earned:0,

@@ -805,10 +805,13 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       // Accept both 'token' (customer front-end) and 'tableToken' (legacy) field names
       const tableToken   = String(body.token || body.tableToken || '').trim();
       const customerName = String(body.customerName || body.customer || 'Guest').trim().substring(0, 100);
-      // Optional customer_phone — when present, enables loyalty auto-earn on
-      // order COMPLETED. Digits-only stripped on insert. Empty/missing is fine.
+      // Optional customer_phone — contact info (no longer the loyalty identity)
       const rawPhone     = String(body.customerPhone || body.customer_phone || '').replace(/\D/g,'');
       const customerPhone= rawPhone.length >= 7 ? rawPhone.substring(0, 20) : null;
+      // Optional customer_email — the loyalty identity. When present and matching
+      // an existing loyalty account, auto-earn fires on order COMPLETED.
+      const rawEmail     = String(body.customerEmail || body.customer_email || '').trim().toLowerCase();
+      const customerEmail= /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail) ? rawEmail.substring(0, 254) : null;
       const notes        = String(body.notes || '').trim().substring(0, 500);
       const rawOrderType = String(body.orderType || '').toUpperCase().replace('_', '-');
       const orderType    = ['DINE-IN', 'TAKE-OUT'].includes(rawOrderType) ? rawOrderType : 'DINE-IN';
@@ -996,6 +999,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
           table_no:          tableNo,
           customer_name:     customerName,
           customer_phone:    customerPhone,
+          customer_email:    customerEmail,
           status:            'NEW',
           order_type:        orderType,
           subtotal:          subtotal,
@@ -1326,28 +1330,29 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
             // can phone-fallback lookup the loyalty account AND apply the Yani
             // Card multiplier when the order was paid with a Yani Card.
             const fullOrder = await supaFetch(
-              `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=total,discounted_total,loyalty_account_id,points_earned,customer_name,customer_phone,payment_method,table_no,is_test&limit=1`
+              `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=total,discounted_total,loyalty_account_id,points_earned,customer_name,customer_phone,customer_email,payment_method,table_no,is_test&limit=1`
             );
             const ord = fullOrder.data?.[0];
             if (ord && !ord.is_test && !ord.points_earned) {
               // ── Resolve loyalty account ───────────────────────────────────
-              // Priority chain:
+              // Priority chain (email is the identity key now):
               //   1. order.loyalty_account_id (explicit)
-              //   2. lookup by order.customer_phone
-              //   3. if paid with YANI_CARD: lookup by CARD HOLDER'S phone,
-              //      and auto-create the loyalty account if it doesn't exist.
-              //      This closes the loop: paying with a Yani Card IS opting
-              //      into loyalty — the card holder bought a membership.
+              //   2. order.customer_email lookup
+              //   3. if paid with YANI_CARD: lookup by CARD HOLDER'S EMAIL,
+              //      and auto-create the loyalty account if it doesn't exist
+              //      (only when card has a holder_email — no email = no loyalty)
+              //   4. fallback: order.customer_phone (legacy, returns first match;
+              //      kept so old orders without email still earn for known customers)
               let resolvedAccountId = ord.loyalty_account_id;
 
-              if (!resolvedAccountId && ord.customer_phone) {
-                const cleanPhone = String(ord.customer_phone).replace(/\D/g,'');
-                if (cleanPhone) {
-                  const phoneAccR = await supaFetch(
-                    `${SUPABASE_URL}/rest/v1/loyalty_accounts?phone=eq.${encodeURIComponent(cleanPhone)}&is_active=eq.true&select=id&limit=1`
+              if (!resolvedAccountId && ord.customer_email) {
+                const cleanEmail = String(ord.customer_email).trim().toLowerCase();
+                if (cleanEmail) {
+                  const emailAccR = await supaFetch(
+                    `${SUPABASE_URL}/rest/v1/loyalty_accounts?email=eq.${encodeURIComponent(cleanEmail)}&is_active=eq.true&select=id&limit=1`
                   );
-                  if (phoneAccR.ok && phoneAccR.data?.length) {
-                    resolvedAccountId = phoneAccR.data[0].id;
+                  if (emailAccR.ok && emailAccR.data?.length) {
+                    resolvedAccountId = emailAccR.data[0].id;
                   }
                 }
               }
@@ -1367,49 +1372,63 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
                     `${SUPABASE_URL}/rest/v1/yani_cards?card_number=eq.${encodeURIComponent(cardNumber)}&select=card_number,holder_name,holder_phone,holder_email&limit=1`
                   );
                   const card = cardR.data?.[0];
-                  if (card && card.holder_phone) {
-                    const cleanCardPhone = String(card.holder_phone).replace(/\D/g,'');
-                    if (cleanCardPhone) {
-                      // Lookup existing account for this phone first
-                      const cardPhoneAccR = await supaFetch(
-                        `${SUPABASE_URL}/rest/v1/loyalty_accounts?phone=eq.${encodeURIComponent(cleanCardPhone)}&is_active=eq.true&select=id,linked_card_number&limit=1`
-                      );
-                      if (cardPhoneAccR.ok && cardPhoneAccR.data?.length) {
-                        resolvedAccountId = cardPhoneAccR.data[0].id;
-                        // Backfill linked_card_number if missing
-                        if (!cardPhoneAccR.data[0].linked_card_number) {
-                          await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts?id=eq.${encodeURIComponent(resolvedAccountId)}`, {
-                            method: 'PATCH', headers: { 'Prefer': 'return=minimal' },
-                            body: JSON.stringify({ linked_card_number: card.card_number, updated_at: new Date().toISOString() })
-                          });
-                        }
-                      } else if (card.holder_name) {
-                        // Auto-create loyalty account for the card holder.
-                        // Buying + activating a Yani Card is the consent — the card
-                        // holder bought a membership product, not a one-off coffee.
-                        const createR = await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts`, {
-                          method: 'POST',
-                          body: JSON.stringify({
-                            name:               card.holder_name,
-                            phone:              cleanCardPhone,
-                            email:              card.holder_email || null,
-                            linked_card_number: card.card_number,
-                            points_balance:     0,
-                            total_points_earned:0,
-                            total_points_redeemed:0,
-                            tier:               'BRONZE',
-                            total_spent:        0,
-                            visit_count:        0,
-                            is_active:          true,
-                          }),
-                          headers: { 'Prefer': 'return=representation' }
+                  // Email is required to attach loyalty. Cards without holder_email
+                  // skip loyalty entirely — staff must set the email first.
+                  if (card && card.holder_email) {
+                    const cleanCardEmail = String(card.holder_email).trim().toLowerCase();
+                    // Lookup existing account for this email first
+                    const cardEmailAccR = await supaFetch(
+                      `${SUPABASE_URL}/rest/v1/loyalty_accounts?email=eq.${encodeURIComponent(cleanCardEmail)}&is_active=eq.true&select=id,linked_card_number&limit=1`
+                    );
+                    if (cardEmailAccR.ok && cardEmailAccR.data?.length) {
+                      resolvedAccountId = cardEmailAccR.data[0].id;
+                      if (!cardEmailAccR.data[0].linked_card_number) {
+                        await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts?id=eq.${encodeURIComponent(resolvedAccountId)}`, {
+                          method: 'PATCH', headers: { 'Prefer': 'return=minimal' },
+                          body: JSON.stringify({ linked_card_number: card.card_number, updated_at: new Date().toISOString() })
                         });
-                        if (createR.ok && createR.data?.[0]) {
-                          resolvedAccountId = createR.data[0].id;
-                          auditLog({ orderId, action: 'LOYALTY_ACCOUNT_AUTO_CREATED', details: { accountId: resolvedAccountId, cardNumber: card.card_number, source: 'card_payment' } });
-                        }
+                      }
+                    } else if (card.holder_name) {
+                      // Auto-create loyalty account for the card holder.
+                      // Buying + activating a Yani Card is the consent — the card
+                      // holder bought a membership product, not a one-off coffee.
+                      const createR = await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts`, {
+                        method: 'POST',
+                        body: JSON.stringify({
+                          name:               card.holder_name,
+                          email:              cleanCardEmail,
+                          phone:              card.holder_phone ? String(card.holder_phone).replace(/\D/g,'') : null,
+                          linked_card_number: card.card_number,
+                          points_balance:     0,
+                          total_points_earned:0,
+                          total_points_redeemed:0,
+                          tier:               'BRONZE',
+                          total_spent:        0,
+                          visit_count:        0,
+                          is_active:          true,
+                        }),
+                        headers: { 'Prefer': 'return=representation' }
+                      });
+                      if (createR.ok && createR.data?.[0]) {
+                        resolvedAccountId = createR.data[0].id;
+                        auditLog({ orderId, action: 'LOYALTY_ACCOUNT_AUTO_CREATED', details: { accountId: resolvedAccountId, cardNumber: card.card_number, source: 'card_payment' } });
                       }
                     }
+                  }
+                }
+              }
+
+              // Last-resort legacy phone fallback for orders placed before email
+              // became the identity key. Skipped when payment is YANI_CARD because
+              // the card-holder branch above already covered that path.
+              if (!resolvedAccountId && !paidWithCardInit && ord.customer_phone) {
+                const cleanPhone = String(ord.customer_phone).replace(/\D/g,'');
+                if (cleanPhone) {
+                  const phoneAccR = await supaFetch(
+                    `${SUPABASE_URL}/rest/v1/loyalty_accounts?phone=eq.${encodeURIComponent(cleanPhone)}&is_active=eq.true&select=id&order=created_at.desc&limit=1`
+                  );
+                  if (phoneAccR.ok && phoneAccR.data?.length) {
+                    resolvedAccountId = phoneAccR.data[0].id;
                   }
                 }
               }
@@ -1779,61 +1798,75 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
 
     // ── lookupLoyalty (by phone — public, used at POS checkout) ───────────
     if (action === 'lookupLoyalty') {
-      const { phone } = body;
-      if (!phone) return res.status(400).json({ ok: false, error: 'phone required' });
-      const clean = phone.replace(/\D/g,'');
-      const r = await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts?phone=eq.${encodeURIComponent(clean)}&select=*&limit=1`);
+      // Lookup by email (primary) — phone accepted but only useful when paired
+      // with a card lookup (phone alone is no longer unique across loyalty rows).
+      const { email, phone } = body;
+      if (!email && !phone) return res.status(400).json({ ok: false, error: 'email or phone required' });
+
+      let r;
+      if (email) {
+        const cleanEmail = String(email).trim().toLowerCase();
+        r = await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts?email=eq.${encodeURIComponent(cleanEmail)}&select=*&limit=1`);
+      } else {
+        // Phone fallback (legacy callers) — returns first match only since phone
+        // is no longer unique. Caller should prefer email when possible.
+        const cleanPhone = String(phone).replace(/\D/g,'');
+        r = await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts?phone=eq.${encodeURIComponent(cleanPhone)}&select=*&order=created_at.desc&limit=1`);
+      }
       if (!r.ok) return res.status(500).json({ ok: false, error: 'Loyalty lookup failed' });
       if (!r.data?.length) return res.status(200).json({ ok: true, found: false, account: null });
       return res.status(200).json({ ok: true, account: r.data[0] });
     }
 
     // ── joinLoyalty (CUSTOMER-FACING — no staff auth required) ─────────────
-    // Called from customer POS when they tick the "Join loyalty?" opt-in box.
-    // Idempotent: if phone already registered, returns existing account.
+    // Email is the unique identity for loyalty accounts (one email = one
+    // account). Phone is contact-only and may be shared across people.
+    // Idempotent: if email already registered, returns existing account.
     // Refuses if LOYALTY_REQUIRE_CONSENT=true and consent flag is not true.
     if (action === 'joinLoyalty') {
-      const { name, phone, email, consent } = body;
-      if (!name || !phone) return res.status(400).json({ ok: false, error: 'name and phone required' });
+      const { name, email, phone, consent } = body;
+      if (!name || !email) return res.status(400).json({ ok: false, error: 'name and email required' });
       const requireConsent = await getSetting('LOYALTY_REQUIRE_CONSENT');
       if (requireConsent === 'true' && consent !== true) {
         return res.status(400).json({ ok: false, error: 'Consent required to join loyalty program' });
       }
-      const clean = String(phone).replace(/\D/g,'');
-      if (clean.length < 7) return res.status(400).json({ ok: false, error: 'Phone must be at least 7 digits' });
+      const cleanEmail = String(email).trim().toLowerCase();
+      // Basic email shape check — full RFC validation isn't worth it; this
+      // catches typos like missing @ or @ with no domain.
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+        return res.status(400).json({ ok: false, error: 'Invalid email format' });
+      }
+      const cleanPhone = phone ? String(phone).replace(/\D/g,'') : null;
 
-      // Already exists? Return it (idempotent — clicking Join twice is fine)
-      const existing = await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts?phone=eq.${encodeURIComponent(clean)}&select=*&limit=1`);
+      // Idempotency: existing email returns the account as-is
+      const existing = await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts?email=eq.${encodeURIComponent(cleanEmail)}&select=*&limit=1`);
       if (existing.ok && existing.data?.length) {
         return res.status(200).json({ ok: true, account: existing.data[0], already_existed: true });
       }
 
-      // Also check if a Yani Card exists with this phone — auto-link.
-      // Selection priority (when multiple cards share a phone, common for family/household):
+      // Auto-link to a Yani Card if one exists with the same email.
+      // Priority (when multiple cards share an email, e.g. personal +
+      // business cards owned by the same person):
       //   1. ACTIVE card with holder_name matching the joining customer's name
       //   2. ACTIVE card (most recently activated)
-      //   3. Any card with that phone
-      // Cards with status=INACTIVE/SUSPENDED/EXPIRED are de-prioritized.
+      //   3. Any card with that email
       const allCards = await supaFetch(
-        `${SUPABASE_URL}/rest/v1/yani_cards?holder_phone=eq.${encodeURIComponent(clean)}&select=card_number,holder_name,status,activated_at`
+        `${SUPABASE_URL}/rest/v1/yani_cards?holder_email=eq.${encodeURIComponent(cleanEmail)}&select=card_number,holder_name,status,activated_at`
       );
       let linkedCardNumber = null;
       if (allCards.ok && allCards.data?.length) {
         const cards = allCards.data;
         const cleanName = String(name).trim().toLowerCase();
-        // 1. ACTIVE + name match
         let pick = cards.find(c =>
           c.status === 'ACTIVE' &&
           c.holder_name &&
           String(c.holder_name).trim().toLowerCase() === cleanName
         );
-        // 2. Most recently activated ACTIVE card
         if (!pick) {
           const active = cards.filter(c => c.status === 'ACTIVE')
             .sort((a, b) => new Date(b.activated_at||0) - new Date(a.activated_at||0));
           pick = active[0];
         }
-        // 3. Any card
         if (!pick) pick = cards[0];
         if (pick) linkedCardNumber = pick.card_number;
       }
@@ -1841,12 +1874,17 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       const r = await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts`, {
         method: 'POST',
         body: JSON.stringify({
-          name: String(name).trim(),
-          phone: clean,
-          email: email ? String(email).trim() : null,
+          name:               String(name).trim(),
+          email:              cleanEmail,
+          phone:              cleanPhone,
           linked_card_number: linkedCardNumber,
-          points_balance: 0, total_points_earned: 0, total_points_redeemed: 0,
-          tier: 'BRONZE', total_spent: 0, visit_count: 0, is_active: true,
+          points_balance:     0,
+          total_points_earned:0,
+          total_points_redeemed:0,
+          tier:               'BRONZE',
+          total_spent:        0,
+          visit_count:        0,
+          is_active:          true,
         }),
         headers: { 'Prefer': 'return=representation' }
       });
@@ -1854,22 +1892,22 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       return res.status(200).json({ ok: true, account: r.data[0], already_existed: false });
     }
 
-    // ── redeemPointsToCard (CUSTOMER-FACING — requires phone match w/ card) ─
+    // ── redeemPointsToCard (CUSTOMER-FACING — requires email match w/ card) ─
     // Atomic via redeem_points_to_card RPC. Deducts points + credits card balance.
     // Either:
     //   accountId + cardNumber  → direct lookup
-    //   phone   + cardNumber  → resolve account by phone first (customer flow)
+    //   email   + cardNumber  → resolve account by email first (customer flow)
     if (action === 'redeemPointsToCard') {
-      let { accountId, cardNumber, points, phone, performedBy } = body;
+      let { accountId, cardNumber, points, email, performedBy } = body;
       if (!cardNumber || !points) return res.status(400).json({ ok: false, error: 'cardNumber and points required' });
 
-      // Resolve accountId from phone if not provided directly
-      if (!accountId && phone) {
-        const clean = String(phone).replace(/\D/g,'');
-        const accR = await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts?phone=eq.${encodeURIComponent(clean)}&select=id&limit=1`);
+      // Resolve accountId from email if not provided directly
+      if (!accountId && email) {
+        const cleanEmail = String(email).trim().toLowerCase();
+        const accR = await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts?email=eq.${encodeURIComponent(cleanEmail)}&select=id&limit=1`);
         if (accR.ok && accR.data?.length) accountId = accR.data[0].id;
       }
-      if (!accountId) return res.status(400).json({ ok: false, error: 'accountId or phone required' });
+      if (!accountId) return res.status(400).json({ ok: false, error: 'accountId or email required' });
 
       // Normalize card_number: accept bare digits ("1004"), no-dash ("YANI1004"), or "YANI-1004"
       let cn = String(cardNumber).trim().toUpperCase().replace(/[^A-Z0-9]/g,'');

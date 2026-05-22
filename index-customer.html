@@ -1516,11 +1516,12 @@ let state = {
   yaniCardNumber: '',    // optional Yani Card for 10% discount
   yaniCardValid:  false, // validated against API
 
-  // ── Loyalty (Stage 2/3) ────────────────────────────────────
-  customerPhone:   '',     // collected at checkout for loyalty + receipt lookup
+  // ── Loyalty (email-keyed) ────────────────────────────────
+  customerPhone:   '',     // contact info, NOT the loyalty identity
+  customerEmail:   '',     // THE loyalty identity (lowercased on input)
   loyaltyConsent:  false,  // opt-in checkbox state
   loyaltyAccount:  null,   // { id, points_balance, tier, ... } if found/joined
-  _loyaltyLookupPhone: '', // last phone we looked up (avoid spam-lookups)
+  _loyaltyLookupEmail: '', // last email we looked up (avoid spam-lookups)
   pointsToRedeem:  0,      // user-typed amount to redeem
   pointsRedeemed:  0,      // confirmed redeemed (after API call)
   pointsRedeemValue: 0,    // pesos credited from redemption
@@ -2178,33 +2179,40 @@ function _yaniCheck() {
 }
 
 // ── LOYALTY HANDLERS ────────────────────────────────────────────────────
-// Auto-lookup loyalty when phone reaches 10+ digits (avoids spam on every keystroke).
-// If the customer is already enrolled, we silently fetch and display their balance —
-// no need for them to tick "join" twice.
+// Email is the loyalty identity. We auto-lookup once the email looks valid
+// (has @ and a dot after) — no per-keystroke spam.
+function _looksLikeEmail(s) {
+  return typeof s === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+}
+
 async function _maybeLookupLoyalty() {
-  var phone = state.customerPhone || '';
-  if (phone.length < 10) { renderCheckoutPage(); return; }
-  if (phone === state._loyaltyLookupPhone) return; // avoid re-lookup
-  state._loyaltyLookupPhone = phone;
+  var email = (state.customerEmail || '').toLowerCase().trim();
+  if (!_looksLikeEmail(email)) return;
+  if (email === state._loyaltyLookupEmail) return; // already looked up
+  state._loyaltyLookupEmail = email;
   try {
-    var r = await api('lookupLoyalty', { phone: phone });
+    var r = await api('lookupLoyalty', { email: email });
     if (r && r.ok && r.account) {
       state.loyaltyAccount = r.account;
+    } else {
+      state.loyaltyAccount = null; // not found
     }
   } catch(e) { /* swallow — non-critical */ }
   renderCheckoutPage();
 }
 
 async function _joinLoyaltyNow() {
+  var email = (state.customerEmail || '').toLowerCase().trim();
   var phone = state.customerPhone || '';
   var name  = state.customerName || (document.getElementById('custName') || {value:''}).value.trim();
   if (!name) { alert('Please enter your name above first.'); return; }
-  if (phone.length < 7) { alert('Phone must be at least 7 digits.'); return; }
+  if (!_looksLikeEmail(email)) { alert('Please enter a valid email address.'); return; }
   if (!state.loyaltyConsent) { alert('Please tick the consent checkbox.'); return; }
   try {
     var r = await api('joinLoyalty', {
       name:    name,
-      phone:   phone,
+      email:   email,
+      phone:   phone || undefined,
       consent: true,
     });
     if (r && r.ok && r.account) {
@@ -2229,7 +2237,6 @@ async function _redeemPoints() {
     alert('You only have ' + state.loyaltyAccount.points_balance + ' points.');
     return;
   }
-  // Round to nearest 100 below
   pts = Math.floor(pts / 100) * 100;
   if (!confirm('Redeem ' + pts + ' pts → ₱' + (pts/100).toFixed(2) + ' credit to ' + state.yaniCardNumber + '?')) return;
   try {
@@ -2242,7 +2249,6 @@ async function _redeemPoints() {
     if (r && r.ok) {
       state.pointsRedeemed     = r.points_redeemed;
       state.pointsRedeemValue  = parseFloat(r.value_credited);
-      // refresh local loyalty balance
       state.loyaltyAccount.points_balance = r.points_balance_after;
       renderCheckoutPage();
     } else {
@@ -2377,9 +2383,13 @@ function renderCheckoutPage() {
       + '<div style="font-size:.78rem;color:var(--timber);margin-bottom:10px;line-height:1.4">'
       + '🎁 Yani Card holders earn <strong>2x points</strong> when paying with their card. Redeem 500+ pts for cafe credit anytime.'
       + '</div>'
-      + '<input id="loyaltyPhoneInput" type="tel" inputmode="numeric" maxlength="13" placeholder="Phone (e.g. 09171234567)" '
+      + '<input id="loyaltyEmailInput" type="email" autocomplete="email" placeholder="Email (e.g. juan@email.com)" '
+      + 'value="' + esc(state.customerEmail || '') + '" '
+      + 'oninput="state.customerEmail=this.value.toLowerCase().trim();_maybeLookupLoyalty()" '
+      + 'style="width:100%;padding:10px 12px;border:1.5px solid var(--mist);border-radius:8px;font-size:.9rem;font-family:var(--font-body);box-sizing:border-box;margin-bottom:8px">'
+      + '<input id="loyaltyPhoneInput" type="tel" inputmode="numeric" maxlength="13" placeholder="Phone (optional)" '
       + 'value="' + esc(state.customerPhone || '') + '" '
-      + 'oninput="state.customerPhone=this.value.replace(/\\D/g,\\\'\\\').substring(0,13);_maybeLookupLoyalty()" '
+      + 'oninput="state.customerPhone=this.value.replace(/\\D/g,\\\'\\\').substring(0,13)" '
       + 'style="width:100%;padding:10px 12px;border:1.5px solid var(--mist);border-radius:8px;font-size:.9rem;font-family:var(--font-body);box-sizing:border-box;margin-bottom:10px">'
       + '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.82rem">'
       + '<input type="checkbox" id="loyaltyConsentBox" ' + (state.loyaltyConsent ? 'checked' : '') + ' '
@@ -2387,7 +2397,7 @@ function renderCheckoutPage() {
       + 'style="width:16px;height:16px;cursor:pointer">'
       + '<span>Join YANI Rewards — I agree to be enrolled to earn points on this order.</span>'
       + '</label>';
-    if (state.loyaltyConsent && state.customerPhone && state.customerPhone.length >= 7) {
+    if (state.loyaltyConsent && state.customerEmail && _looksLikeEmail(state.customerEmail)) {
       loyaltyHtml += '<button type="button" onclick="_joinLoyaltyNow()" style="margin-top:8px;width:100%;padding:9px;background:var(--forest);color:#fff;border:none;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer">⭐ Join Now</button>';
     }
   }
@@ -2551,9 +2561,11 @@ async function placeOrder() {
     orderType: state.orderType.toUpperCase(),
     items: items
   };
-  // Customer phone — enables loyalty auto-earn on order completion.
-  // Sent whenever provided, even if customer didn't formally "join" yet —
-  // they may have joined on a previous order with the same phone.
+  // Customer email + phone — email is the loyalty identity (enables auto-earn
+  // for known customers). Phone is contact-only. Both optional.
+  if (state.customerEmail && _looksLikeEmail(state.customerEmail)) {
+    orderPayload.customerEmail = state.customerEmail;
+  }
   if (state.customerPhone && state.customerPhone.length >= 7) {
     orderPayload.customerPhone = state.customerPhone;
   }
@@ -3124,6 +3136,7 @@ async function submitPaymentProof() {
         tableNo:      state.tableNo,
         token:        state.tableToken,
         customerName: pending.customerName,
+        customerEmail:(state.customerEmail && _looksLikeEmail(state.customerEmail)) ? state.customerEmail : undefined,
         customerPhone:(state.customerPhone && state.customerPhone.length >= 7) ? state.customerPhone : undefined,
         orderNotes:   pending.orderNotes,
         orderType:    pending.orderType,
