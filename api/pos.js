@@ -805,6 +805,10 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       // Accept both 'token' (customer front-end) and 'tableToken' (legacy) field names
       const tableToken   = String(body.token || body.tableToken || '').trim();
       const customerName = String(body.customerName || body.customer || 'Guest').trim().substring(0, 100);
+      // Optional customer_phone — when present, enables loyalty auto-earn on
+      // order COMPLETED. Digits-only stripped on insert. Empty/missing is fine.
+      const rawPhone     = String(body.customerPhone || body.customer_phone || '').replace(/\D/g,'');
+      const customerPhone= rawPhone.length >= 7 ? rawPhone.substring(0, 20) : null;
       const notes        = String(body.notes || '').trim().substring(0, 500);
       const rawOrderType = String(body.orderType || '').toUpperCase().replace('_', '-');
       const orderType    = ['DINE-IN', 'TAKE-OUT'].includes(rawOrderType) ? rawOrderType : 'DINE-IN';
@@ -991,6 +995,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
           order_no:          orderNo,
           table_no:          tableNo,
           customer_name:     customerName,
+          customer_phone:    customerPhone,
           status:            'NEW',
           order_type:        orderType,
           subtotal:          subtotal,
@@ -1317,46 +1322,76 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
         try {
           const loyaltyEnabled = await getSetting('LOYALTY_ENABLED');
           if (loyaltyEnabled !== 'false') {
-            // Get full order to find total + loyalty_account_id
+            // Get full order — now includes customer_phone + payment_method so we
+            // can phone-fallback lookup the loyalty account AND apply the Yani
+            // Card multiplier when the order was paid with a Yani Card.
             const fullOrder = await supaFetch(
-              `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=total,discounted_total,loyalty_account_id,points_earned,customer_name,table_no,is_test&limit=1`
+              `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=total,discounted_total,loyalty_account_id,points_earned,customer_name,customer_phone,payment_method,table_no,is_test&limit=1`
             );
             const ord = fullOrder.data?.[0];
-            if (ord && !ord.is_test && ord.loyalty_account_id && !ord.points_earned) {
-              const orderTotal = parseFloat(ord.discounted_total || ord.total || 0);
-              const rateR = await supaFetch(`${SUPABASE_URL}/rest/v1/settings?key=eq.LOYALTY_EARN_RATE&select=value&limit=1`);
-              const earnRate = parseFloat(rateR.data?.[0]?.value || '1');
-              const pointsEarned = Math.floor(orderTotal * earnRate);
-              if (pointsEarned > 0) {
-                const accR = await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts?id=eq.${encodeURIComponent(ord.loyalty_account_id)}&select=points_balance,total_points_earned,total_spent,visit_count&limit=1`);
-                if (accR.ok && accR.data?.length) {
-                  const acc = accR.data[0];
-                  const balBefore = acc.points_balance || 0;
-                  const balAfter  = balBefore + pointsEarned;
-                  const newTotalEarned = (acc.total_points_earned || 0) + pointsEarned;
-                  const newTotalSpent  = (acc.total_spent || 0) + orderTotal;
-                  const newVisits      = (acc.visit_count || 0) + 1;
-                  // Tier calculation
-                  const thR = await supaFetch(`${SUPABASE_URL}/rest/v1/settings?key=in.("LOYALTY_SILVER_THRESHOLD","LOYALTY_GOLD_THRESHOLD","LOYALTY_PLATINUM_THRESHOLD")&select=key,value`);
-                  const th = {};
-                  (thR.data||[]).forEach(s => { th[s.key] = parseInt(s.value); });
-                  let tier = 'BRONZE';
-                  if (newTotalEarned >= (th.LOYALTY_PLATINUM_THRESHOLD||40000)) tier = 'PLATINUM';
-                  else if (newTotalEarned >= (th.LOYALTY_GOLD_THRESHOLD||15000)) tier = 'GOLD';
-                  else if (newTotalEarned >= (th.LOYALTY_SILVER_THRESHOLD||5000)) tier = 'SILVER';
-                  // Update account
-                  await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts?id=eq.${encodeURIComponent(ord.loyalty_account_id)}`, {
-                    method: 'PATCH', body: JSON.stringify({ points_balance: balAfter, total_points_earned: newTotalEarned, total_spent: newTotalSpent, visit_count: newVisits, tier, last_visit: new Date().toISOString(), updated_at: new Date().toISOString() })
-                  });
-                  // Log transaction
-                  await supaFetch(`${SUPABASE_URL}/rest/v1/points_transactions`, {
-                    method: 'POST', body: JSON.stringify({ account_id: ord.loyalty_account_id, order_id: orderId, type: 'EARN', points: pointsEarned, balance_before: balBefore, balance_after: balAfter, description: `Earned from order ${orderId}`, processed_by: userId })
-                  });
-                  // Mark points earned on order
-                  await supaFetch(`${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}`, {
-                    method: 'PATCH', body: JSON.stringify({ points_earned: pointsEarned })
-                  });
-                  auditLog({ orderId, action: 'LOYALTY_POINTS_EARNED', details: { accountId: ord.loyalty_account_id, pointsEarned, balAfter, tier } });
+            if (ord && !ord.is_test && !ord.points_earned) {
+              // ── Resolve loyalty account ───────────────────────────────────
+              // Priority: existing loyalty_account_id > phone-based lookup
+              let resolvedAccountId = ord.loyalty_account_id;
+              if (!resolvedAccountId && ord.customer_phone) {
+                const cleanPhone = String(ord.customer_phone).replace(/\D/g,'');
+                if (cleanPhone) {
+                  const phoneAccR = await supaFetch(
+                    `${SUPABASE_URL}/rest/v1/loyalty_accounts?phone=eq.${encodeURIComponent(cleanPhone)}&is_active=eq.true&select=id&limit=1`
+                  );
+                  if (phoneAccR.ok && phoneAccR.data?.length) {
+                    resolvedAccountId = phoneAccR.data[0].id;
+                  }
+                }
+              }
+
+              if (resolvedAccountId) {
+                const orderTotal = parseFloat(ord.discounted_total || ord.total || 0);
+                // Earn rate + card multiplier
+                const settKeys = '("LOYALTY_EARN_RATE","LOYALTY_CARD_MULTIPLIER","LOYALTY_SILVER_THRESHOLD","LOYALTY_GOLD_THRESHOLD","LOYALTY_PLATINUM_THRESHOLD")';
+                const settR = await supaFetch(`${SUPABASE_URL}/rest/v1/settings?key=in.${settKeys}&select=key,value`);
+                const sett = {};
+                (settR.data||[]).forEach(s => { sett[s.key] = s.value; });
+                const earnRate       = parseFloat(sett.LOYALTY_EARN_RATE || '1');
+                const cardMultiplier = parseFloat(sett.LOYALTY_CARD_MULTIPLIER || '2');
+                // Apply Yani Card bonus ONLY if order was paid with the card
+                const paidWithCard = String(ord.payment_method||'').toUpperCase() === 'YANI_CARD';
+                const effectiveRate = paidWithCard ? earnRate * cardMultiplier : earnRate;
+                const pointsEarned  = Math.floor(orderTotal * effectiveRate);
+
+                if (pointsEarned > 0) {
+                  const accR = await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts?id=eq.${encodeURIComponent(resolvedAccountId)}&select=points_balance,total_points_earned,total_spent,visit_count&limit=1`);
+                  if (accR.ok && accR.data?.length) {
+                    const acc = accR.data[0];
+                    const balBefore = acc.points_balance || 0;
+                    const balAfter  = balBefore + pointsEarned;
+                    const newTotalEarned = (acc.total_points_earned || 0) + pointsEarned;
+                    const newTotalSpent  = (acc.total_spent || 0) + orderTotal;
+                    const newVisits      = (acc.visit_count || 0) + 1;
+                    // Tier
+                    let tier = 'BRONZE';
+                    if (newTotalEarned >= parseInt(sett.LOYALTY_PLATINUM_THRESHOLD||'40000')) tier = 'PLATINUM';
+                    else if (newTotalEarned >= parseInt(sett.LOYALTY_GOLD_THRESHOLD||'15000')) tier = 'GOLD';
+                    else if (newTotalEarned >= parseInt(sett.LOYALTY_SILVER_THRESHOLD||'5000')) tier = 'SILVER';
+
+                    await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts?id=eq.${encodeURIComponent(resolvedAccountId)}`, {
+                      method: 'PATCH', body: JSON.stringify({ points_balance: balAfter, total_points_earned: newTotalEarned, total_spent: newTotalSpent, visit_count: newVisits, tier, last_visit: new Date().toISOString(), updated_at: new Date().toISOString() })
+                    });
+
+                    // Log transaction — description encodes the multiplier reason
+                    const descSuffix = paidWithCard ? ' · Yani Card ' + cardMultiplier + 'x bonus' : '';
+                    await supaFetch(`${SUPABASE_URL}/rest/v1/points_transactions`, {
+                      method: 'POST', body: JSON.stringify({ account_id: resolvedAccountId, order_id: orderId, type: 'EARN', points: pointsEarned, balance_before: balBefore, balance_after: balAfter, description: `Earned from order ${orderId}` + descSuffix, processed_by: userId })
+                    });
+
+                    // Mark earned + backfill loyalty_account_id if missing
+                    const patchPayload = { points_earned: pointsEarned };
+                    if (!ord.loyalty_account_id) patchPayload.loyalty_account_id = resolvedAccountId;
+                    await supaFetch(`${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}`, {
+                      method: 'PATCH', body: JSON.stringify(patchPayload)
+                    });
+                    auditLog({ orderId, action: 'LOYALTY_POINTS_EARNED', details: { accountId: resolvedAccountId, pointsEarned, balAfter, tier, paidWithCard, multiplier: effectiveRate } });
+                  }
                 }
               }
             }
@@ -1682,6 +1717,84 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       if (!r.ok) return res.status(500).json({ ok: false, error: 'Loyalty lookup failed' });
       if (!r.data?.length) return res.status(200).json({ ok: true, found: false, account: null });
       return res.status(200).json({ ok: true, account: r.data[0] });
+    }
+
+    // ── joinLoyalty (CUSTOMER-FACING — no staff auth required) ─────────────
+    // Called from customer POS when they tick the "Join loyalty?" opt-in box.
+    // Idempotent: if phone already registered, returns existing account.
+    // Refuses if LOYALTY_REQUIRE_CONSENT=true and consent flag is not true.
+    if (action === 'joinLoyalty') {
+      const { name, phone, email, consent } = body;
+      if (!name || !phone) return res.status(400).json({ ok: false, error: 'name and phone required' });
+      const requireConsent = await getSetting('LOYALTY_REQUIRE_CONSENT');
+      if (requireConsent === 'true' && consent !== true) {
+        return res.status(400).json({ ok: false, error: 'Consent required to join loyalty program' });
+      }
+      const clean = String(phone).replace(/\D/g,'');
+      if (clean.length < 7) return res.status(400).json({ ok: false, error: 'Phone must be at least 7 digits' });
+
+      // Already exists? Return it (idempotent — clicking Join twice is fine)
+      const existing = await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts?phone=eq.${encodeURIComponent(clean)}&select=*&limit=1`);
+      if (existing.ok && existing.data?.length) {
+        return res.status(200).json({ ok: true, account: existing.data[0], already_existed: true });
+      }
+
+      // Also check if a Yani Card exists with this phone — auto-link
+      const cardR = await supaFetch(`${SUPABASE_URL}/rest/v1/yani_cards?holder_phone=eq.${encodeURIComponent(clean)}&select=card_number&limit=1`);
+      const linkedCardNumber = cardR.ok && cardR.data?.[0]?.card_number || null;
+
+      const r = await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts`, {
+        method: 'POST',
+        body: JSON.stringify({
+          name: String(name).trim(),
+          phone: clean,
+          email: email ? String(email).trim() : null,
+          linked_card_number: linkedCardNumber,
+          points_balance: 0, total_points_earned: 0, total_points_redeemed: 0,
+          tier: 'BRONZE', total_spent: 0, visit_count: 0, is_active: true,
+        }),
+        headers: { 'Prefer': 'return=representation' }
+      });
+      if (!r.ok) return res.status(500).json({ ok: false, error: r.data?.message || 'Failed to create account' });
+      return res.status(200).json({ ok: true, account: r.data[0], already_existed: false });
+    }
+
+    // ── redeemPointsToCard (CUSTOMER-FACING — requires phone match w/ card) ─
+    // Atomic via redeem_points_to_card RPC. Deducts points + credits card balance.
+    // Either:
+    //   accountId + cardNumber  → direct lookup
+    //   phone   + cardNumber  → resolve account by phone first (customer flow)
+    if (action === 'redeemPointsToCard') {
+      let { accountId, cardNumber, points, phone, performedBy } = body;
+      if (!cardNumber || !points) return res.status(400).json({ ok: false, error: 'cardNumber and points required' });
+
+      // Resolve accountId from phone if not provided directly
+      if (!accountId && phone) {
+        const clean = String(phone).replace(/\D/g,'');
+        const accR = await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts?phone=eq.${encodeURIComponent(clean)}&select=id&limit=1`);
+        if (accR.ok && accR.data?.length) accountId = accR.data[0].id;
+      }
+      if (!accountId) return res.status(400).json({ ok: false, error: 'accountId or phone required' });
+
+      // Normalize card_number: accept bare digits ("1004"), no-dash ("YANI1004"), or "YANI-1004"
+      let cn = String(cardNumber).trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
+      if (/^\d{1,4}$/.test(cn)) cn = 'YANI-' + cn;
+      else if (cn.startsWith('YANI') && /^\d+$/.test(cn.substring(4))) cn = 'YANI-' + cn.substring(4);
+
+      const ptsInt = parseInt(points);
+      if (isNaN(ptsInt) || ptsInt <= 0) return res.status(400).json({ ok: false, error: 'Invalid points amount' });
+
+      const r = await supaFetch(`${SUPABASE_URL}/rest/v1/rpc/redeem_points_to_card`, {
+        method: 'POST',
+        body: JSON.stringify({
+          p_account_id:   accountId,
+          p_card_number:  cn,
+          p_points:       ptsInt,
+          p_performed_by: performedBy || 'CUSTOMER',
+        }),
+      });
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'DB error', detail: r.data });
+      return res.status(200).json(r.data);
     }
 
     // ── getLoyaltyAccounts (admin list) ───────────────────────────────────
