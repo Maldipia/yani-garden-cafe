@@ -1321,28 +1321,19 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
         }
       }
 
-      // AUTO-EARN LOYALTY POINTS when order is completed
+      // AUTO-EARN LEAVES when order is completed (YANI Roots Rewards)
       if (newStatus === 'COMPLETED') {
         try {
-          const loyaltyEnabled = await getSetting('LOYALTY_ENABLED');
-          if (loyaltyEnabled !== 'false') {
-            // Get full order — now includes customer_phone + payment_method so we
-            // can phone-fallback lookup the loyalty account AND apply the Yani
-            // Card multiplier when the order was paid with a Yani Card.
+          const leavesEnabled = await getSetting('LEAVES_ENABLED');
+          if (leavesEnabled !== 'false') {
+            // Get full order — include both total (pre-discount, the basis for leaves)
+            // and discounted_total (for total_spent tracking)
             const fullOrder = await supaFetch(
               `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=total,discounted_total,loyalty_account_id,points_earned,customer_name,customer_phone,customer_email,payment_method,table_no,is_test&limit=1`
             );
             const ord = fullOrder.data?.[0];
             if (ord && !ord.is_test && !ord.points_earned) {
-              // ── Resolve loyalty account ───────────────────────────────────
-              // Priority chain (email is the identity key now):
-              //   1. order.loyalty_account_id (explicit)
-              //   2. order.customer_email lookup
-              //   3. if paid with YANI_CARD: lookup by CARD HOLDER'S EMAIL,
-              //      and auto-create the loyalty account if it doesn't exist
-              //      (only when card has a holder_email — no email = no loyalty)
-              //   4. fallback: order.customer_phone (legacy, returns first match;
-              //      kept so old orders without email still earn for known customers)
+              // ── Resolve loyalty account (same email-priority chain as before) ───
               let resolvedAccountId = ord.loyalty_account_id;
 
               if (!resolvedAccountId && ord.customer_email) {
@@ -1360,7 +1351,6 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
               // Card-holder fallback (only for YANI_CARD-paid orders)
               const paidWithCardInit = String(ord.payment_method||'').toUpperCase() === 'YANI_CARD';
               if (!resolvedAccountId && paidWithCardInit) {
-                // Find which card was used — discount_note has the format "Yani Card: YANI-XXXX"
                 const noteR = await supaFetch(
                   `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=discount_note&limit=1`
                 );
@@ -1372,11 +1362,8 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
                     `${SUPABASE_URL}/rest/v1/yani_cards?card_number=eq.${encodeURIComponent(cardNumber)}&select=card_number,holder_name,holder_phone,holder_email&limit=1`
                   );
                   const card = cardR.data?.[0];
-                  // Email is required to attach loyalty. Cards without holder_email
-                  // skip loyalty entirely — staff must set the email first.
                   if (card && card.holder_email) {
                     const cleanCardEmail = String(card.holder_email).trim().toLowerCase();
-                    // Lookup existing account for this email first
                     const cardEmailAccR = await supaFetch(
                       `${SUPABASE_URL}/rest/v1/loyalty_accounts?email=eq.${encodeURIComponent(cleanCardEmail)}&is_active=eq.true&select=id,linked_card_number&limit=1`
                     );
@@ -1389,9 +1376,6 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
                         });
                       }
                     } else if (card.holder_name) {
-                      // Auto-create loyalty account for the card holder.
-                      // Buying + activating a Yani Card is the consent — the card
-                      // holder bought a membership product, not a one-off coffee.
                       const createR = await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts`, {
                         method: 'POST',
                         body: JSON.stringify({
@@ -1399,13 +1383,9 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
                           email:              cleanCardEmail,
                           phone:              card.holder_phone ? String(card.holder_phone).replace(/\D/g,'') : null,
                           linked_card_number: card.card_number,
-                          points_balance:     0,
-                          total_points_earned:0,
-                          total_points_redeemed:0,
+                          points_balance:     0, total_points_earned: 0, total_points_redeemed: 0,
                           tier:               'BRONZE',
-                          total_spent:        0,
-                          visit_count:        0,
-                          is_active:          true,
+                          total_spent:        0, visit_count: 0, is_active: true,
                         }),
                         headers: { 'Prefer': 'return=representation' }
                       });
@@ -1418,9 +1398,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
                 }
               }
 
-              // Last-resort legacy phone fallback for orders placed before email
-              // became the identity key. Skipped when payment is YANI_CARD because
-              // the card-holder branch above already covered that path.
+              // Legacy phone fallback for non-card orders only
               if (!resolvedAccountId && !paidWithCardInit && ord.customer_phone) {
                 const cleanPhone = String(ord.customer_phone).replace(/\D/g,'');
                 if (cleanPhone) {
@@ -1434,51 +1412,57 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
               }
 
               if (resolvedAccountId) {
-                const orderTotal = parseFloat(ord.discounted_total || ord.total || 0);
-                // Earn rate + card multiplier
-                const settKeys = '("LOYALTY_EARN_RATE","LOYALTY_CARD_MULTIPLIER","LOYALTY_SILVER_THRESHOLD","LOYALTY_GOLD_THRESHOLD","LOYALTY_PLATINUM_THRESHOLD")';
-                const settR = await supaFetch(`${SUPABASE_URL}/rest/v1/settings?key=in.${settKeys}&select=key,value`);
-                const sett = {};
-                (settR.data||[]).forEach(s => { sett[s.key] = s.value; });
-                const earnRate       = parseFloat(sett.LOYALTY_EARN_RATE || '1');
-                const cardMultiplier = parseFloat(sett.LOYALTY_CARD_MULTIPLIER || '2');
-                // Apply Yani Card bonus ONLY if order was paid with the card
-                const paidWithCard = paidWithCardInit;
-                const effectiveRate = paidWithCard ? earnRate * cardMultiplier : earnRate;
-                const pointsEarned  = Math.floor(orderTotal * effectiveRate);
+                // ── LEAVES EARN FORMULA ─────────────────────────────────────
+                // Leaves count the PRE-DISCOUNT ticket (Yani Card 10% off doesn't
+                // shrink earn rate). Formula: floor(total ÷ pesosPerLeaf).
+                // No card multiplier — the 10% off IS the card perk.
+                const preDiscountTotal = parseFloat(ord.total || 0);
+                const actualTotal      = parseFloat(ord.discounted_total || ord.total || 0);
+                const pplR = await supaFetch(`${SUPABASE_URL}/rest/v1/settings?key=eq.LEAVES_PESOS_PER_LEAF&select=value&limit=1`);
+                const pesosPerLeaf = parseInt(pplR.data?.[0]?.value || '300') || 300;
+                const leavesEarned = Math.floor(preDiscountTotal / pesosPerLeaf);
 
-                if (pointsEarned > 0) {
+                if (leavesEarned > 0) {
                   const accR = await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts?id=eq.${encodeURIComponent(resolvedAccountId)}&select=points_balance,total_points_earned,total_spent,visit_count&limit=1`);
                   if (accR.ok && accR.data?.length) {
                     const acc = accR.data[0];
                     const balBefore = acc.points_balance || 0;
-                    const balAfter  = balBefore + pointsEarned;
-                    const newTotalEarned = (acc.total_points_earned || 0) + pointsEarned;
-                    const newTotalSpent  = (acc.total_spent || 0) + orderTotal;
+                    const balAfter  = balBefore + leavesEarned;
+                    const newTotalEarned = (acc.total_points_earned || 0) + leavesEarned;
+                    const newTotalSpent  = (acc.total_spent || 0) + actualTotal;
                     const newVisits      = (acc.visit_count || 0) + 1;
-                    // Tier
-                    let tier = 'BRONZE';
-                    if (newTotalEarned >= parseInt(sett.LOYALTY_PLATINUM_THRESHOLD||'40000')) tier = 'PLATINUM';
-                    else if (newTotalEarned >= parseInt(sett.LOYALTY_GOLD_THRESHOLD||'15000')) tier = 'GOLD';
-                    else if (newTotalEarned >= parseInt(sett.LOYALTY_SILVER_THRESHOLD||'5000')) tier = 'SILVER';
 
                     await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts?id=eq.${encodeURIComponent(resolvedAccountId)}`, {
-                      method: 'PATCH', body: JSON.stringify({ points_balance: balAfter, total_points_earned: newTotalEarned, total_spent: newTotalSpent, visit_count: newVisits, tier, last_visit: new Date().toISOString(), updated_at: new Date().toISOString() })
+                      method: 'PATCH', body: JSON.stringify({
+                        points_balance:      balAfter,
+                        total_points_earned: newTotalEarned,
+                        total_spent:         newTotalSpent,
+                        visit_count:         newVisits,
+                        last_visit:          new Date().toISOString(),
+                        last_earn_at:        new Date().toISOString(),  // expiry anchor
+                        updated_at:          new Date().toISOString(),
+                      })
                     });
 
-                    // Log transaction — description encodes the multiplier reason
-                    const descSuffix = paidWithCard ? ' · Yani Card ' + cardMultiplier + 'x bonus' : '';
                     await supaFetch(`${SUPABASE_URL}/rest/v1/points_transactions`, {
-                      method: 'POST', body: JSON.stringify({ account_id: resolvedAccountId, order_id: orderId, type: 'EARN', points: pointsEarned, balance_before: balBefore, balance_after: balAfter, description: `Earned from order ${orderId}` + descSuffix, processed_by: userId })
+                      method: 'POST', body: JSON.stringify({
+                        account_id:     resolvedAccountId,
+                        order_id:       orderId,
+                        type:           'EARN',
+                        points:         leavesEarned,
+                        balance_before: balBefore,
+                        balance_after:  balAfter,
+                        description:    `Earned ${leavesEarned} leaf${leavesEarned===1?'':'s'} from order ${orderId} (₱${preDiscountTotal.toFixed(2)} ÷ ₱${pesosPerLeaf})`,
+                        processed_by:   userId
+                      })
                     });
 
-                    // Mark earned + backfill loyalty_account_id if missing
-                    const patchPayload = { points_earned: pointsEarned };
+                    const patchPayload = { points_earned: leavesEarned };
                     if (!ord.loyalty_account_id) patchPayload.loyalty_account_id = resolvedAccountId;
                     await supaFetch(`${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}`, {
                       method: 'PATCH', body: JSON.stringify(patchPayload)
                     });
-                    auditLog({ orderId, action: 'LOYALTY_POINTS_EARNED', details: { accountId: resolvedAccountId, pointsEarned, balAfter, tier, paidWithCard, multiplier: effectiveRate } });
+                    auditLog({ orderId, action: 'LEAVES_EARNED', details: { accountId: resolvedAccountId, leavesEarned, balAfter, lifetime: newTotalEarned, preDiscountTotal, paidWithCard: paidWithCardInit } });
                   }
                 }
               }
@@ -1928,6 +1912,92 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       });
       if (!r.ok) return res.status(500).json({ ok: false, error: 'DB error', detail: r.data });
       return res.status(200).json(r.data);
+    }
+
+    // ── listLeafRewards (public — UI ladder display) ─────────────────────
+    // Returns the active tier ladder. No auth needed since rewards are not secret.
+    if (action === 'listLeafRewards') {
+      const r = await supaFetch(`${SUPABASE_URL}/rest/v1/leaf_rewards?is_active=eq.true&select=tier_order,threshold,reward_name,reward_emoji,description&order=tier_order.asc`);
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'DB error' });
+      return res.status(200).json({ ok: true, rewards: r.data || [] });
+    }
+
+    // ── getLeavesProfile (CUSTOMER-FACING — lookup by email) ─────────────
+    // One-shot endpoint for the customer POS to render the leaves UI:
+    // returns account, progress (next tier, leaves to next), claimed tiers,
+    // pending redemptions, expiry date. Uses the account_with_progress view.
+    if (action === 'getLeavesProfile') {
+      const { email, accountId } = body;
+      if (!email && !accountId) return res.status(400).json({ ok: false, error: 'email or accountId required' });
+      let url = `${SUPABASE_URL}/rest/v1/account_with_progress?select=*&limit=1`;
+      if (accountId) {
+        url += `&id=eq.${encodeURIComponent(accountId)}`;
+      } else {
+        const cleanEmail = String(email).trim().toLowerCase();
+        url += `&email=eq.${encodeURIComponent(cleanEmail)}`;
+      }
+      const r = await supaFetch(url);
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'DB error' });
+      if (!r.data?.length) return res.status(200).json({ ok: true, found: false, account: null });
+      return res.status(200).json({ ok: true, account: r.data[0] });
+    }
+
+    // ── claimLeafReward (CUSTOMER-FACING — claim a tier reward) ──────────
+    // Customer claims one unredeemed tier they qualify for. RPC enforces:
+    //   • account exists, lifetime_leaves >= threshold, not already claimed
+    //   • atomic via FOR UPDATE row lock (prevents double-claim races)
+    // Returns PENDING redemption — customer shows it to staff for fulfillment.
+    if (action === 'claimLeafReward') {
+      let { accountId, email, tierOrder, performedBy, orderId: claimOrderId } = body;
+      if (!tierOrder) return res.status(400).json({ ok: false, error: 'tierOrder required' });
+
+      if (!accountId && email) {
+        const cleanEmail = String(email).trim().toLowerCase();
+        const accR = await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts?email=eq.${encodeURIComponent(cleanEmail)}&select=id&limit=1`);
+        if (accR.ok && accR.data?.length) accountId = accR.data[0].id;
+      }
+      if (!accountId) return res.status(400).json({ ok: false, error: 'accountId or email required' });
+
+      const tierInt = parseInt(tierOrder);
+      if (isNaN(tierInt) || tierInt < 1) return res.status(400).json({ ok: false, error: 'Invalid tierOrder' });
+
+      const r = await supaFetch(`${SUPABASE_URL}/rest/v1/rpc/claim_leaf_reward`, {
+        method: 'POST',
+        body: JSON.stringify({
+          p_account_id:   accountId,
+          p_tier_order:   tierInt,
+          p_performed_by: performedBy || 'CUSTOMER',
+          p_order_id:     claimOrderId || null,
+        }),
+      });
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'DB error', detail: r.data });
+      return res.status(200).json(r.data);
+    }
+
+    // ── fulfillLeafReward (STAFF — mark a PENDING claim as FULFILLED) ────
+    // Requires staff auth (any role can fulfill, since it's a counter action).
+    if (action === 'fulfillLeafReward') {
+      const auth = await checkAuth(['OWNER','ADMIN','CASHIER','KITCHEN']);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      const { redemptionId } = body;
+      if (!redemptionId) return res.status(400).json({ ok: false, error: 'redemptionId required' });
+      const r = await supaFetch(`${SUPABASE_URL}/rest/v1/rpc/fulfill_leaf_reward`, {
+        method: 'POST',
+        body: JSON.stringify({ p_redemption_id: redemptionId, p_performed_by: auth.userId || 'STAFF' }),
+      });
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'DB error' });
+      return res.status(200).json(r.data);
+    }
+
+    // ── listPendingRedemptions (STAFF — fulfillment queue) ───────────────
+    if (action === 'listPendingRedemptions') {
+      const auth = await checkAuth(['OWNER','ADMIN','CASHIER','KITCHEN']);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/leaf_redemptions?status=eq.PENDING&select=id,tier_order,reward_name,claimed_at,order_id,account_id,loyalty_accounts(name,email,phone)&order=claimed_at.asc`
+      );
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'DB error' });
+      return res.status(200).json({ ok: true, redemptions: r.data || [] });
     }
 
     // ── getLoyaltyAccounts (admin list) ───────────────────────────────────
