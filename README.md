@@ -290,3 +290,4 @@ If you (a future developer or future Claude with no memory) need to make changes
 **Owner:** Pia (tygfsb@gmail.com / LEGERYN PIA)
 **Repo:** https://github.com/Maldipia/yani-garden-cafe
 **Last meaningful README update:** 2026-05-23
+
