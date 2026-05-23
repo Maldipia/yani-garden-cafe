@@ -2237,6 +2237,10 @@ async function openLoyaltyDetail(id) {
   if (!r.ok) { body.innerHTML = '<div style="color:#EF4444">Failed to load</div>'; return; }
   var a = r.account;
   var txs = r.transactions || [];
+
+  // Fetch the per-tier claim state in parallel for the Roots Rewards checklist
+  var leafStateResp = await api('getMemberLeafState', { accountId: a.id });
+  var leafState = (leafStateResp && leafStateResp.ok) ? leafStateResp : null;
   var tierColors = { BRONZE:'#CD7F32', SILVER:'#64748b', GOLD:'#D97706', PLATINUM:'#7C3AED' };
   var tc = tierColors[a.tier] || '#CD7F32';
   var redeemRate = parseInt(_loyaltySettings.LOYALTY_REDEEM_RATE || '100');
@@ -2266,6 +2270,10 @@ async function openLoyaltyDetail(id) {
     + '<div style="margin-bottom:14px">'
     + '<button onclick="openEarnPointsModal(\'' + a.id + '\')" style="width:100%;padding:10px;background:#DCFCE7;color:#065F46;border:none;border-radius:10px;font-size:.85rem;font-weight:700;cursor:pointer">🍃 Adjust Leaves</button>'
     + '</div>'
+    // ── Roots Rewards 5-tier checklist ──────────────────────────────────
+    // Staff sees per-tier state: claimed / eligible / locked. Click "Claim
+    // now" for eligible+unclaimed; "Undo" appears for OWNER on claimed rows.
+    + _renderLeafChecklist(a.id, leafState)
     // Transaction history
     + '<div style="font-weight:700;font-size:.83rem;color:var(--forest-deep);margin-bottom:8px">Transaction History</div>'
     + (txs.length === 0
@@ -2283,6 +2291,76 @@ async function openLoyaltyDetail(id) {
               + '<div style="font-size:.65rem;color:var(--timber)">Bal: ' + tx.balance_after + '</div></div>'
               + '</div>';
           }).join(''));
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// ROOTS REWARDS — 5-tier claim checklist (staff-initiated at counter)
+// ════════════════════════════════════════════════════════════════════════
+// Renders the 5-row checklist inside the member detail modal. State per row:
+//   • ☑ claimed  — show "(claimed)" + OWNER-only "Undo" button
+//   • ☐ eligible — green "Claim now" button (any staff role)
+//   • ☐ locked   — gray "(needs N more 🍃)" indicator, no button
+// Backed by getMemberLeafState (GET) + claimLeafReward / revokeLeafReward (POST).
+function _renderLeafChecklist(accountId, leafState) {
+  if (!leafState || !leafState.ok) {
+    return '<div style="background:#FEF2F2;border:1px solid #FCA5A5;border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:.78rem;color:#991B1B">⚠️ Could not load rewards checklist</div>';
+  }
+  var canRevoke = (currentUser && currentUser.role === 'OWNER');
+  var tiers = leafState.tiers || [];
+  var html = '<div style="background:#F0FDF4;border:1.5px solid #BBF7D0;border-radius:12px;padding:14px;margin-bottom:14px">'
+    + '<div style="font-weight:700;font-size:.85rem;color:#065F46;margin-bottom:10px">🍃 Roots Rewards <span style="font-weight:400;color:var(--timber);font-size:.72rem">(' + (leafState.total_points_earned||0) + ' lifetime leaves)</span></div>';
+
+  tiers.forEach(function(t) {
+    var checked = t.is_claimed ? '☑' : '☐';
+    var label = 'Tier ' + t.tier_order + ' — ' + t.threshold + '🍃 — ' + (t.reward_emoji || '🎁') + ' ' + esc(t.reward_name || ('Reward ' + t.tier_order));
+    var rowStyle = 'display:flex;align-items:center;justify-content:space-between;padding:6px 0;font-size:.8rem';
+    var labelStyle = t.is_claimed ? 'color:#065F46;text-decoration:line-through;opacity:.75' : (t.is_eligible ? 'color:var(--forest-deep);font-weight:600' : 'color:var(--timber);opacity:.6');
+    var actionHtml = '';
+
+    if (t.is_claimed) {
+      actionHtml = '<span style="color:#059669;font-size:.7rem;font-weight:600">claimed ✓</span>';
+      if (canRevoke) {
+        actionHtml += ' <button onclick="onRevokeLeaf(\'' + accountId + '\',' + t.tier_order + ')" style="margin-left:6px;padding:3px 8px;background:#fff;color:#DC2626;border:1px solid #FCA5A5;border-radius:6px;font-size:.68rem;font-weight:600;cursor:pointer">Undo</button>';
+      }
+    } else if (t.is_eligible) {
+      actionHtml = '<button onclick="onClaimLeaf(\'' + accountId + '\',' + t.tier_order + ',\'' + esc((t.reward_name||'').replace(/'/g,"\\'")) + '\')" style="padding:5px 12px;background:#10B981;color:#fff;border:none;border-radius:8px;font-size:.72rem;font-weight:700;cursor:pointer">Claim now</button>';
+    } else {
+      actionHtml = '<span style="color:var(--timber);font-size:.7rem">needs ' + t.leaves_short_by + ' more 🍃</span>';
+    }
+
+    html += '<div style="' + rowStyle + '"><span style="' + labelStyle + '">' + checked + ' ' + label + '</span>' + actionHtml + '</div>';
+  });
+
+  html += '</div>';
+  return html;
+}
+
+async function onClaimLeaf(accountId, tierOrder, rewardName) {
+  if (!confirm('Give "' + rewardName + '" to this customer?\n\nThis records the claim and cannot be undone (except by OWNER).')) return;
+  var r = await api('claimLeafReward', { accountId: accountId, tierOrder: tierOrder });
+  if (r && r.ok) {
+    showToast('✅ ' + (r.reward_name || 'Reward') + ' claimed', 'success');
+    // Re-render the modal with fresh state
+    await openLoyaltyDetail(accountId);
+  } else {
+    var msg = (r && r.error) || 'Claim failed';
+    if (msg === 'already_claimed') msg = '⚠️ This tier was already claimed.';
+    else if (msg === 'insufficient_leaves') msg = '⚠️ Not enough lifetime leaves for this tier.';
+    showToast('❌ ' + msg, 'error');
+  }
+}
+
+async function onRevokeLeaf(accountId, tierOrder) {
+  var reason = prompt('Reason for un-claiming (required — for audit log):');
+  if (!reason || !reason.trim()) return;
+  if (!confirm('Revert this claim?\n\nReason: ' + reason.trim() + '\n\nThe customer can re-claim this tier afterward if eligible.')) return;
+  var r = await api('revokeLeafReward', { accountId: accountId, tierOrder: tierOrder, reason: reason.trim() });
+  if (r && r.ok) {
+    showToast('✅ Claim reverted', 'success');
+    await openLoyaltyDetail(accountId);
+  } else {
+    showToast('❌ ' + ((r && r.error) || 'Revoke failed'), 'error');
+  }
 }
 
 function openAddLoyaltyModal() {

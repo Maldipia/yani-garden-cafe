@@ -242,6 +242,34 @@ else
   say_fail "security" "admin action with malformed userId rejected" "got ok=$ok"
 fi
 
+# 5.4 claimLeafReward without staff auth must be rejected (was unauthenticated before)
+resp=$(post_json "$POS" '{"action":"claimLeafReward","accountId":"00000000-0000-0000-0000-000000000000","tierOrder":1}')
+ok=$(echo "$resp" | jq -r '.ok // false' 2>/dev/null)
+err=$(echo "$resp" | jq -r '.error // ""' 2>/dev/null)
+if [ "$ok" = "false" ]; then
+  say_pass "security" "claimLeafReward without auth rejected (no anonymous claims)"
+else
+  say_fail "security" "claimLeafReward without auth rejected" "ok=$ok err='$err' — anonymous claim was allowed!"
+fi
+
+# 5.5 revokeLeafReward requires OWNER (KITCHEN role with reason should still be rejected)
+resp=$(post_json "$POS" '{"action":"revokeLeafReward","userId":"USR_004","accountId":"00000000-0000-0000-0000-000000000000","tierOrder":1,"reason":"test"}')
+ok=$(echo "$resp" | jq -r '.ok // false' 2>/dev/null)
+if [ "$ok" = "false" ]; then
+  say_pass "security" "revokeLeafReward KITCHEN-role attempt rejected (OWNER only)"
+else
+  say_fail "security" "revokeLeafReward OWNER-only enforcement" "got ok=$ok — KITCHEN was able to revoke!"
+fi
+
+# 5.6 getMemberLeafState requires staff auth (anonymous should be rejected)
+resp=$(post_json "$POS" '{"action":"getMemberLeafState","accountId":"00000000-0000-0000-0000-000000000000"}')
+ok=$(echo "$resp" | jq -r '.ok // false' 2>/dev/null)
+if [ "$ok" = "false" ]; then
+  say_pass "security" "getMemberLeafState without auth rejected"
+else
+  say_fail "security" "getMemberLeafState without auth rejected" "got ok=$ok"
+fi
+
 # ─────────────────────────────────────────────────────────────────
 # SUMMARY
 # ─────────────────────────────────────────────────────────────────

@@ -2517,13 +2517,18 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       return res.status(200).json({ ok: true, account: r.data[0] });
     }
 
-    // ── claimLeafReward (CUSTOMER-FACING — claim a tier reward) ──────────
-    // Customer claims one unredeemed tier they qualify for. RPC enforces:
-    //   • account exists, lifetime_leaves >= threshold, not already claimed
-    //   • atomic via FOR UPDATE row lock (prevents double-claim races)
-    // Returns PENDING redemption — customer shows it to staff for fulfillment.
+    // ── claimLeafReward (STAFF-INITIATED — claim a tier on customer's behalf) ──
+    // Staff at counter verifies the customer + leaves, then claims via this
+    // endpoint. RPC enforces: account exists, lifetime_leaves >= threshold,
+    // not already claimed; atomic via FOR UPDATE row lock; creates a
+    // FULFILLED leaf_redemptions row immediately (no two-step).
+    // Auth: any staff role. performedBy derived from authenticated user
+    // (NOT from body — the request body cannot impersonate.)
     if (action === 'claimLeafReward') {
-      let { accountId, email, tierOrder, performedBy, orderId: claimOrderId } = body;
+      const authCL = await checkAuth(['OWNER','ADMIN','CASHIER','KITCHEN']);
+      if (!authCL.ok) return res.status(403).json({ ok: false, error: authCL.error || 'Auth required' });
+
+      let { accountId, email, tierOrder, orderId: claimOrderId, notes: claimNotes } = body;
       if (!tierOrder) return res.status(400).json({ ok: false, error: 'tierOrder required' });
 
       if (!accountId && email) {
@@ -2536,16 +2541,98 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       const tierInt = parseInt(tierOrder);
       if (isNaN(tierInt) || tierInt < 1) return res.status(400).json({ ok: false, error: 'Invalid tierOrder' });
 
+      // performedBy is derived from auth, NOT request body — prevents impersonation.
+      const performedBy = (authCL.role || 'STAFF') + ':' + (authCL.userId || '');
+
       const r = await supaFetch(`${SUPABASE_URL}/rest/v1/rpc/claim_leaf_reward`, {
         method: 'POST',
         body: JSON.stringify({
           p_account_id:   accountId,
           p_tier_order:   tierInt,
-          p_performed_by: performedBy || 'CUSTOMER',
+          p_performed_by: performedBy,
           p_order_id:     claimOrderId || null,
+          p_notes:        claimNotes || null,
         }),
       });
       if (!r.ok) return res.status(500).json({ ok: false, error: 'DB error', detail: r.data });
+
+      // Audit log on success
+      if (r.data && r.data.ok) {
+        try {
+          await supaFetch(`${SUPABASE_URL}/rest/v1/order_audit_logs`, {
+            method: 'POST',
+            body: JSON.stringify({
+              action: 'LEAF_REWARD_CLAIMED',
+              actor_name: authCL.role || 'STAFF',
+              details: r.data,
+            }),
+          });
+        } catch (e) { /* non-blocking — audit failure shouldn't roll back the claim */ }
+      }
+
+      return res.status(200).json(r.data);
+    }
+
+    // ── getMemberLeafState (STAFF — read 5-tier claim checklist) ─────────
+    // Returns the per-tier state for the admin Members UI: claimed/eligible/
+    // locked, plus leaves_short_by for locked tiers so we can show
+    // "(needs 2 more 🍃)" inline.
+    if (action === 'getMemberLeafState') {
+      const authGM = await checkAuth(['OWNER','ADMIN','CASHIER','KITCHEN']);
+      if (!authGM.ok) return res.status(403).json({ ok: false, error: authGM.error || 'Auth required' });
+      const { accountId } = body;
+      if (!accountId) return res.status(400).json({ ok: false, error: 'accountId required' });
+
+      const r = await supaFetch(`${SUPABASE_URL}/rest/v1/rpc/get_leaf_claim_state`, {
+        method: 'POST',
+        body: JSON.stringify({ p_account_id: accountId }),
+      });
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'DB error', detail: r.data });
+      return res.status(200).json(r.data);
+    }
+
+    // ── revokeLeafReward (OWNER-only — un-claim a tier within a window) ──
+    // Use case: staff accidentally claimed wrong tier; owner reverts.
+    // Removes tier from claimed_tiers AND marks the most recent FULFILLED
+    // leaf_redemptions row as CANCELLED with audit note. Reason is required.
+    if (action === 'revokeLeafReward') {
+      const authRV = await checkAuth(['OWNER']);
+      if (!authRV.ok) return res.status(403).json({ ok: false, error: authRV.error || 'Owner only' });
+      const { accountId, tierOrder, reason } = body;
+      if (!accountId) return res.status(400).json({ ok: false, error: 'accountId required' });
+      if (!tierOrder) return res.status(400).json({ ok: false, error: 'tierOrder required' });
+      if (!reason || !String(reason).trim()) return res.status(400).json({ ok: false, error: 'reason required' });
+
+      const tierInt = parseInt(tierOrder);
+      if (isNaN(tierInt) || tierInt < 1) return res.status(400).json({ ok: false, error: 'Invalid tierOrder' });
+
+      const performedBy = 'OWNER:' + (authRV.userId || '');
+
+      const r = await supaFetch(`${SUPABASE_URL}/rest/v1/rpc/revoke_leaf_reward`, {
+        method: 'POST',
+        body: JSON.stringify({
+          p_account_id:   accountId,
+          p_tier_order:   tierInt,
+          p_performed_by: performedBy,
+          p_reason:       String(reason).trim(),
+        }),
+      });
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'DB error', detail: r.data });
+
+      // Audit on success
+      if (r.data && r.data.ok) {
+        try {
+          await supaFetch(`${SUPABASE_URL}/rest/v1/order_audit_logs`, {
+            method: 'POST',
+            body: JSON.stringify({
+              action: 'LEAF_REWARD_REVOKED',
+              actor_name: 'OWNER',
+              details: r.data,
+            }),
+          });
+        } catch (e) { /* non-blocking */ }
+      }
+
       return res.status(200).json(r.data);
     }
 
