@@ -189,20 +189,25 @@ async function verifyOwnerPin(pin) {
   return r.ok && Array.isArray(r.data) && r.data.length > 0;
 }
 
-// ─── Card LOAD → Leaves earn ─────────────────────────────────────────────
+// ─── Card LOAD → Leaves earn (CUMULATIVE) ───────────────────────────────
 // When a customer activates or reloads a Yani Card, leaves are credited to
-// the cardholder's loyalty account at the standard rate (₱300 = 1 leaf).
+// the cardholder's loyalty account using a CUMULATIVE formula so the
+// customer doesn't lose fractional pesos when splitting loads:
 //
-// Why card-load and NOT card-charge: Yani Card is prepaid. The customer
-// paid real money at LOAD time. When they later spend from the card balance,
-// it would be double-counting to earn leaves AGAIN on the consumption.
+//   leaves_owed_after_this_load = floor(total_loaded_lifetime / 300)
+//   leaves_to_credit_now        = leaves_owed_after - leaves_owed_before
 //
-// Counterpart in pos.js: the order auto-earn block now skips when
-// payment_method='YANI_CARD' (leaves were already earned at load time).
+// Example (₱300/leaf):
+//   ACTIVATE ₱1000 → total 1000, owed 3, prior 0  → credit 3 leaves
+//   RELOAD ₱500    → total 1500, owed 5, prior 3  → credit 2 leaves
+//   RELOAD ₱1000   → total 2500, owed 8, prior 5  → credit 3 leaves
+//   Total: 8 leaves (matches floor(2500/300) — fractions never lost)
 //
-// Fire-and-forget — never blocks the card transaction. If the loyalty account
-// doesn't exist yet, the parallel auto-link/auto-create branch in activateCard
-// creates it; for reload calls, we lazy-create here if needed.
+// Why card LOAD not card CHARGE: Yani Card is prepaid. The customer
+// paid real money at LOAD time. Earning at consumption would double-count.
+// Counterpart in pos.js: auto-earn skips when payment_method='YANI_CARD'.
+//
+// Fire-and-forget — never blocks the card transaction.
 async function _creditLeavesForCardLoad({ cardNumber, amount, eventType, performedBy }) {
   try {
     const amt = parseFloat(amount);
@@ -211,7 +216,15 @@ async function _creditLeavesForCardLoad({ cardNumber, amount, eventType, perform
     // Get pesosPerLeaf setting (default 300)
     const sR = await supa(`/rest/v1/settings?key=eq.LEAVES_PESOS_PER_LEAF&select=value&limit=1`);
     const pesosPerLeaf = parseInt(sR.data?.[0]?.value || '300') || 300;
-    const leavesEarned = Math.floor(amt / pesosPerLeaf);
+
+    // Cumulative math: sum ALL ACTIVATE+RELOAD amounts for this card. This
+    // includes the just-inserted row, so priorLoaded = totalLoaded - amt.
+    const txnsR = await supa(`/rest/v1/card_transactions?card_number=eq.${encodeURIComponent(cardNumber)}&type=in.(ACTIVATE,RELOAD)&select=amount`);
+    const totalLoaded = (txnsR.data || []).reduce((s, t) => s + parseFloat(t.amount || 0), 0);
+    const priorLoaded = totalLoaded - amt;
+    const leavesNow   = Math.floor(totalLoaded / pesosPerLeaf);
+    const leavesPrior = Math.floor(Math.max(0, priorLoaded) / pesosPerLeaf);
+    const leavesEarned = leavesNow - leavesPrior;
     if (leavesEarned <= 0) return;
 
     // Find the cardholder + their loyalty account (by holder_email)
@@ -235,7 +248,6 @@ async function _creditLeavesForCardLoad({ cardNumber, amount, eventType, perform
         });
       }
     } else if (card.holder_name) {
-      // Create
       const createR = await supa(`/rest/v1/loyalty_accounts`, {
         method: 'POST',
         body: JSON.stringify({
@@ -256,9 +268,9 @@ async function _creditLeavesForCardLoad({ cardNumber, amount, eventType, perform
     if (!accountId) return;
 
     // Credit the leaves
-    const balBefore   = acc.points_balance || 0;
-    const balAfter    = balBefore + leavesEarned;
-    const lifetime    = (acc.total_points_earned || 0) + leavesEarned;
+    const balBefore = acc.points_balance || 0;
+    const balAfter  = balBefore + leavesEarned;
+    const lifetime  = (acc.total_points_earned || 0) + leavesEarned;
     await supa(`/rest/v1/loyalty_accounts?id=eq.${encodeURIComponent(accountId)}`, {
       method: 'PATCH', headers: { 'Prefer':'return=minimal' },
       body: JSON.stringify({
@@ -277,7 +289,7 @@ async function _creditLeavesForCardLoad({ cardNumber, amount, eventType, perform
         points:         leavesEarned,
         balance_before: balBefore,
         balance_after:  balAfter,
-        description:    `Earned ${leavesEarned} leaf${leavesEarned===1?'':'s'} from Yani Card ${eventType} ${cardNumber} (₱${amt.toFixed(2)} ÷ ₱${pesosPerLeaf})`,
+        description:    `+${leavesEarned} leaf${leavesEarned===1?'':'s'} from Yani Card ${eventType} ${cardNumber} (₱${amt.toFixed(2)} load; lifetime ₱${totalLoaded.toFixed(2)} ÷ ₱${pesosPerLeaf} = ${leavesNow} leaves)`,
         processed_by:   performedBy || 'STAFF',
       })
     });
