@@ -496,6 +496,20 @@ function checkNewOrders(orders) {
 }
 
 // ── RENDER ───────────────────────────────────────────
+
+// XSS-safe HTML escaper for user-supplied strings (customer name, notes).
+// Use anywhere customer-controlled text is interpolated into innerHTML/template
+// literals. Catches the 5 chars that can break out of HTML context.
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function renderOrders(orders) {
   const main = document.getElementById('main');
   const empty = document.getElementById('empty');
@@ -569,7 +583,7 @@ function buildCard(o) {
       ? `<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:4px">${it.addons.map(a =>
           `<span style="background:#dcfce7;color:#14532d;border:2px solid #4ade80;border-radius:8px;padding:3px 10px;font-size:.85rem;font-weight:900">➕ ${a.name} +₱${parseFloat(a.price||0).toFixed(0)}</span>`
         ).join('')}</div>` : '';
-    const noteHtml = it.notes ? `<div class="item-note">⚠ ${it.notes}</div>` : '';
+    const noteHtml = it.notes ? `<div class="item-note">⚠ ${esc(it.notes)}</div>` : '';
     const doneClass = it.prepared ? ' item-row-done' : '';
     const checkIcon = it.prepared ? '✅' : '⬜';
     return `<div class="item-row${doneClass}" data-item-id="${it.id}" onclick="toggleItemPrep(this, '${o.orderId}', ${it.id}, ${it.prepared ? 1 : 0})" title="${it.prepared ? 'Mark as NOT prepared' : 'Mark as PREPARED'}">
@@ -584,7 +598,7 @@ function buildCard(o) {
     </div>`;
   }).join('');
 
-  const orderNote = o.notes ? `<div class="order-note">📝 ${o.notes}</div>` : '';
+  const orderNote = o.notes ? `<div class="order-note">📝 ${esc(o.notes)}</div>` : '';
 
   let btnHTML = '';
   // No START or READY buttons — checkboxes drive the status automatically.
@@ -594,12 +608,12 @@ function buildCard(o) {
   el.innerHTML = `
     <div class="card-header">
       <div>
-        <div class="order-id">${o.orderId}</div>
+        <div class="order-id">${esc(o.orderId)}</div>
         <div style="font-size:.8rem;color:var(--muted);margin-top:2px;">
-          ${o.customerName ? '👤 ' + o.customerName : 'Walk-in'}
+          ${o.customerName ? '👤 ' + esc(o.customerName) : 'Walk-in'}
         </div>
       </div>
-      <div class="table-badge">T${o.tableNo || '?'}</div>
+      <div class="table-badge">T${esc(o.tableNo || '?')}</div>
     </div>
     <div class="card-meta">
       <span class="order-type-tag">${typeLabel}</span>

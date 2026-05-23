@@ -734,13 +734,17 @@ function _openPrintWindow(cards,single){
   var ch=cards.map(function(c){
     var token=single?single.token:c.qr_token;
     var qrSrc=_qrUrl(token,220);
+    // Defense-in-depth: holder_name is the obvious XSS sink (user-input field),
+    // but escape every interpolated value here. Even system fields like
+    // card_number/tier/status get escaped — cheap insurance vs assuming the
+    // backend always sanitizes.
     return '<div class="card">'
       +'<div class="logo">🌿 YANI</div>'
-      +'<img class="qr" src="'+qrSrc+'" alt="QR">'
-      +'<div class="num">'+c.card_number+'</div>'
-      +'<div class="holder">'+(c.holder_name||'&nbsp;')+'</div>'
-      +'<div class="tier">₱'+c.tier+' Stored-Value Card · 10% discount every order</div>'
-      +'<div class="status">'+c.status+'</div>'
+      +'<img class="qr" src="'+_esc(qrSrc)+'" alt="QR">'
+      +'<div class="num">'+_esc(c.card_number)+'</div>'
+      +'<div class="holder">'+(c.holder_name?_esc(c.holder_name):'&nbsp;')+'</div>'
+      +'<div class="tier">₱'+_esc(c.tier)+' Stored-Value Card · 10% discount every order</div>'
+      +'<div class="status">'+_esc(c.status)+'</div>'
       +'</div>';
   }).join('');
   w.document.write('<!DOCTYPE html><html><head><title>Yani Cards</title>'

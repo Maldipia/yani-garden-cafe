@@ -669,14 +669,14 @@ function renderDashboardView() {
         return '<div style="display:flex;align-items:center;padding:10px 16px;border-bottom:1px solid var(--mist-light);cursor:pointer" onclick="setFilter(\'ACTIVE\')">'
           + '<div style="width:4px;height:36px;background:'+sColor+';border-radius:2px;margin-right:12px;flex-shrink:0"></div>'
           + '<div style="flex:1">'
-          + '<div style="font-weight:700;font-size:.85rem">' + (o.orderId||'—') + '</div>'
-          + '<div style="font-size:.72rem;color:var(--timber)">' + (o.customerName||'Guest') + ' · ' + (o.orderType||'DINE-IN') + '</div>'
+          + '<div style="font-weight:700;font-size:.85rem">' + esc(o.orderId||'—') + '</div>'
+          + '<div style="font-size:.72rem;color:var(--timber)">' + esc(o.customerName||'Guest') + ' · ' + esc(o.orderType||'DINE-IN') + '</div>'
           + '</div>'
           + '<div style="text-align:right">'
           + '<div style="font-weight:700;font-size:.85rem">₱' + (parseFloat(o.total)||0).toLocaleString() + '</div>'
           + '<div style="font-size:.68rem;color:var(--timber)">' + ago + '</div>'
           + '</div>'
-          + '<div style="margin-left:10px;font-size:.68rem;font-weight:700;padding:3px 8px;border-radius:10px;background:'+sColor+'20;color:'+sColor+'">' + o.status + '</div>'
+          + '<div style="margin-left:10px;font-size:.68rem;font-weight:700;padding:3px 8px;border-radius:10px;background:'+sColor+'20;color:'+sColor+'">' + esc(o.status) + '</div>'
           + '</div>';
       }).join('');
 
