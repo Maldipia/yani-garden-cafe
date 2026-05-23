@@ -1516,14 +1516,9 @@ let state = {
   yaniCardNumber: '',    // optional Yani Card for 10% discount
   yaniCardValid:  false, // validated against API
 
-  // ── Loyalty (Leaves system) ────────────────────────────────
-  customerPhone:   '',     // contact info, NOT the loyalty identity
-  customerEmail:   '',     // THE loyalty identity (lowercased on input)
-  loyaltyConsent:  false,  // opt-in checkbox state
-  loyaltyAccount:  null,   // full profile from getLeavesProfile (includes next_reward, claimed_tiers, etc)
-  _loyaltyLookupEmail: '', // last email we looked up (avoid spam-lookups)
-  leafRewards:     [],     // list from listLeafRewards — the tier ladder
-  claimedThisSession: null,// { tier_order, reward_name, redemption_id } when customer just claimed
+  // ── Customer contact (collected at checkout) ───────────────
+  customerPhone:   '',     // contact info, optional
+  customerEmail:   '',     // optional; passed through to orders/receipts
 
   statusInterval: null
 };
@@ -2177,90 +2172,10 @@ function _yaniCheck() {
   else { state._yaniCardStatus = '⚠️ Enter all 6 digits from your card'; state.yaniCardValid = false; renderCheckoutPage(); }
 }
 
-// ── LOYALTY HANDLERS (Leaves system) ────────────────────────────────────
+// ── Email utility ───────────────────────────────────────────────────────
 function _looksLikeEmail(s) {
   return typeof s === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 }
-
-// Lazy-load the reward ladder once per session — used to render UI even
-// before the customer has joined (so they can SEE what they'd be earning).
-async function _ensureLeafRewards() {
-  if (state.leafRewards && state.leafRewards.length) return;
-  try {
-    var r = await api('listLeafRewards', {});
-    if (r && r.ok) state.leafRewards = r.rewards || [];
-  } catch(e) { /* non-critical */ }
-}
-
-// Auto-lookup loyalty profile when email looks valid. Uses the new
-// getLeavesProfile endpoint which returns the account + progress + claimed
-// tiers + pending redemptions in one call.
-async function _maybeLookupLoyalty() {
-  var email = (state.customerEmail || '').toLowerCase().trim();
-  if (!_looksLikeEmail(email)) return;
-  if (email === state._loyaltyLookupEmail) return;
-  state._loyaltyLookupEmail = email;
-  await _ensureLeafRewards();
-  try {
-    var r = await api('getLeavesProfile', { email: email });
-    state.loyaltyAccount = (r && r.ok && r.account) ? r.account : null;
-  } catch(e) { /* swallow */ }
-  renderCheckoutPage();
-}
-
-async function _joinLoyaltyNow() {
-  var email = (state.customerEmail || '').toLowerCase().trim();
-  var phone = state.customerPhone || '';
-  var name  = state.customerName || (document.getElementById('custName') || {value:''}).value.trim();
-  if (!name) { alert('Please enter your name above first.'); return; }
-  if (!_looksLikeEmail(email)) { alert('Please enter a valid email address.'); return; }
-  if (!state.loyaltyConsent) { alert('Please tick the consent checkbox.'); return; }
-  await _ensureLeafRewards();
-  try {
-    var r = await api('joinLoyalty', {
-      name:    name,
-      email:   email,
-      phone:   phone || undefined,
-      consent: true,
-    });
-    if (r && r.ok && r.account) {
-      // Re-fetch via getLeavesProfile so we get full progress info, not just bare account
-      var prof = await api('getLeavesProfile', { accountId: r.account.id });
-      state.loyaltyAccount = (prof && prof.ok) ? prof.account : r.account;
-      renderCheckoutPage();
-    } else {
-      alert('❌ ' + ((r && r.error) || 'Could not join'));
-    }
-  } catch(e) { alert('❌ ' + e.message); }
-}
-
-// Claim the next-tier reward. Server enforces threshold + one-time per tier.
-async function _claimLeafReward(tierOrder) {
-  if (!state.loyaltyAccount) return;
-  var tierInt = parseInt(tierOrder);
-  if (!tierInt) return;
-  var reward = (state.leafRewards || []).find(function(x){ return x.tier_order === tierInt; });
-  var rewardName = reward ? reward.reward_name : 'reward';
-  if (!confirm('Claim "' + rewardName + '"? Show the confirmation to staff at the counter to receive it.')) return;
-  try {
-    var r = await api('claimLeafReward', {
-      accountId:   state.loyaltyAccount.id,
-      tierOrder:   tierInt,
-      performedBy: 'CUSTOMER',
-      orderId:     state.orderId || undefined,
-    });
-    if (r && r.ok) {
-      state.claimedThisSession = { tier_order: r.tier_order, reward_name: r.reward_name, redemption_id: r.redemption_id };
-      // Refresh full profile so the UI moves to "next reward"
-      var prof = await api('getLeavesProfile', { accountId: state.loyaltyAccount.id });
-      if (prof && prof.ok) state.loyaltyAccount = prof.account;
-      renderCheckoutPage();
-    } else {
-      alert('❌ ' + ((r && r.error) || 'Claim failed'));
-    }
-  } catch(e) { alert('❌ ' + e.message); }
-}
-// ────────────────────────────────────────────────────────────────────────
 
 function renderCheckoutPage() {
   var subtotal = getCartSubtotal();
@@ -2337,11 +2252,9 @@ function renderCheckoutPage() {
       + '</div>';
   }
 
-  // (YANI Roots Rewards loyalty section removed from checkout per owner —
-  // signups now happen via /rewards landing page; Yani Card holders are the
-  // membership cohort on checkout. Helper functions _maybeLookupLoyalty /
-  // _joinLoyaltyNow / _claimLeafReward remain defined but no longer wired
-  // from this view.)
+  // (YANI Roots Rewards loyalty UI moved off this page per owner —
+  // signups happen at /rewards, and Yani Card holders are the membership
+  // cohort here. Earning is implicit via Yani Card LOAD, not checkout.)
 
   // Payment method — required before placing
   var pmOpts = [{k:'cash',ico:'💵',lbl:'Cash'},{k:'gcash',ico:'📱',lbl:'GCash/QR'},{k:'card',ico:'💳',lbl:'Card'}];
@@ -3189,45 +3102,10 @@ function renderStatusPage() {
   '</div>';
 
   // ── Roots Rewards summary on status page ─────────────────────────────
-  // (a) Just-claimed reward (carries from checkout to status page)
-  // (b) Leaves-to-be-earned estimate when this order completes
-  // (c) Earned confirmation on COMPLETED
-  if (state.claimedThisSession) {
-    html += '<div style="background:#F0FDF4;border:1.5px solid #10B981;border-radius:14px;padding:14px;margin-bottom:12px;text-align:center">'
-      + '<div style="font-size:1.4rem;margin-bottom:4px">🎁</div>'
-      + '<div style="font-size:.88rem;font-weight:700;color:#065F46">' + esc(state.claimedThisSession.reward_name) + ' claimed!</div>'
-      + '<div style="font-size:.75rem;color:#065F46;margin-top:2px">Show this screen to staff at the counter</div>'
-      + '</div>';
-  }
-  if (state.loyaltyAccount && (s === 'NEW' || s === 'PREPARING' || s === 'READY')) {
-    // Yani Card payment: leaves were ALREADY earned when the card was loaded.
-    // We don't show an estimate on consumption to avoid customer confusion.
-    var paidWithYaniCard = state.checkoutPayMethod === 'yani_card';
-    if (paidWithYaniCard) {
-      html += '<div style="background:#F0F9FF;border:1.5px solid #93C5FD;border-radius:14px;padding:12px 14px;margin-bottom:12px;text-align:center">'
-        + '<div style="font-size:.8rem;color:#1E40AF">🍃 Leaves for Yani Card orders are earned when you <strong>load</strong> the card — not at consumption</div>'
-        + '</div>';
-    } else {
-      // Estimate leaves from PRE-DISCOUNT total. We use orderTotal which is the
-      // discounted final; for an exact estimate we'd want the pre-discount value
-      // — but since most non-card orders have no discount, this is close.
-      var pesosPerLeaf = 500; // mirror of LEAVES_PESOS_PER_LEAF setting
-      var estLeaves = Math.floor((state.orderTotal || 0) / pesosPerLeaf);
-      if (estLeaves > 0) {
-        html += '<div style="background:#FFFBEB;border:1.5px solid #F59E0B;border-radius:14px;padding:12px 14px;margin-bottom:12px;text-align:center">'
-          + '<div style="font-size:.82rem;color:#78350F">🍃 You\'ll earn ~<strong>' + estLeaves + ' leaf' + (estLeaves===1?'':'s') + '</strong> from this order</div>'
-          + '</div>';
-      }
-    }
-  }
-  if (state.loyaltyAccount && s === 'COMPLETED') {
-    var paidWithCardCompleted = state.checkoutPayMethod === 'yani_card';
-    if (!paidWithCardCompleted) {
-      html += '<div style="background:#F0FDF4;border:1.5px solid #10B981;border-radius:14px;padding:12px 14px;margin-bottom:12px;text-align:center">'
-        + '<div style="font-size:.82rem;color:#065F46;font-weight:600">🌿 Leaves earned! See your progress on your next visit.</div>'
-        + '</div>';
-    }
-  }
+  // Removed: depended on state.loyaltyAccount which is no longer populated
+  // (loyalty UI moved off this page; see /rewards). Yani Card holders see
+  // their leaves balance via the rewards landing page, not the order
+  // status screen.
   // ─────────────────────────────────────────────────────────────────────
 
   // Show payment-specific message on status page
