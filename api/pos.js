@@ -2322,7 +2322,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       if (status === 'FULFILLED' && linkedCard && tierInt > 0) {
         // Look up the card — must be INACTIVE (haven't been activated already)
         const cardR = await supaFetch(
-          `${SUPABASE_URL}/rest/v1/yani_cards?card_number=eq.${encodeURIComponent(linkedCard)}&select=card_number,status,balance,total_loaded&limit=1`
+          `${SUPABASE_URL}/rest/v1/yani_cards?card_number=eq.${encodeURIComponent(linkedCard)}&select=id,card_number,status,balance,total_loaded&limit=1`
         );
         const card = cardR.ok && cardR.data?.[0];
         if (card && card.status === 'INACTIVE') {
@@ -2347,9 +2347,11 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
             activatedCardNumber = linkedCard;
 
             // 2. Insert ACTIVATE row in card_transactions (audit trail)
+            //    card_id is NOT NULL, must include the card's uuid.
             await supaFetch(`${SUPABASE_URL}/rest/v1/card_transactions`, {
               method: 'POST',
               body: JSON.stringify({
+                card_id:        card.id,
                 card_number:    linkedCard,
                 type:           'ACTIVATE',
                 amount:         tierInt,
@@ -2395,7 +2397,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
                   points:         leavesEarned,
                   balance_before: balBefore,
                   balance_after:  balAfter,
-                  description:    `+${leavesEarned} leaf${leavesEarned===1?'':'s'} from Yani Card ${linkedCard} ACTIVATE (₱${tierInt.toLocaleString()} load; ₱${tierInt.toLocaleString()} ÷ ₱${pesosPerLeaf} = ${leavesEarned} leaves)`,
+                  description:    `+${leavesEarned} ${leavesEarned===1?'leaf':'leaves'} from Yani Card ${linkedCard} ACTIVATE (₱${tierInt.toLocaleString()} load; ₱${tierInt.toLocaleString()} ÷ ₱${pesosPerLeaf} = ${leavesEarned} ${leavesEarned===1?'leaf':'leaves'})`,
                   processed_by:   auth.userId || 'OWNER',
                   created_at:     nowISO,
                 }),
