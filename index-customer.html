@@ -2469,6 +2469,34 @@ function renderCheckoutPage() {
   pmHtml += '</div></div>';
   html += pmHtml;
 
+  // ─── YANI CARD AWARENESS BANNER (Spot 3) ─────────────────────────────
+  // Sits right under the Mode-of-Payment buttons. Customers who AREN'T
+  // already paying with a YANI Card see two clickable CTAs that open the
+  // landing page in a NEW TAB (target=_blank + noopener), so they keep
+  // their cart + order intact. No "Roots Rewards" branding lead — the
+  // message is benefit-first (10% off + free food). Hidden once a YANI
+  // Card is validated on this order.
+  var isCardHolder = (state.yaniCardValid && state.yaniCardNumber) || state.checkoutPayMethod === 'yani_card';
+  if (!isCardHolder) {
+    html += '<div style="background:linear-gradient(135deg,#FFFBEB,#FEF3C7);border:1.5px solid #FCD34D;border-radius:14px;padding:14px 16px;margin:14px 0;font-family:var(--font-body)">' +
+      '<div style="font-size:.84rem;color:#78350F;line-height:1.55;text-align:center;margin-bottom:10px">' +
+        '💡 <strong>YANI Card holders save 10%</strong> on every order' +
+        '<br>+ earn 🍃 leaves for <strong>free food</strong>' +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
+        '<a href="https://yanigardencafe.com/rewards" target="_blank" rel="noopener" ' +
+          'style="display:block;padding:10px 4px;text-align:center;background:var(--white);color:var(--forest-deep);border:1.5px solid #FBBF24;border-radius:10px;font-size:.78rem;font-weight:700;text-decoration:none;font-family:var(--font-body)">' +
+          '📖 Learn How →' +
+        '</a>' +
+        '<a href="https://yanigardencafe.com/join" target="_blank" rel="noopener" ' +
+          'style="display:block;padding:10px 4px;text-align:center;background:var(--forest);color:#fff;border:1.5px solid var(--forest);border-radius:10px;font-size:.78rem;font-weight:700;text-decoration:none;font-family:var(--font-body)">' +
+          '🌱 Get Yours →' +
+        '</a>' +
+      '</div>' +
+    '</div>';
+  }
+  // ─────────────────────────────────────────────────────────────────────
+
   var gcash = state.checkoutPayMethod === 'gcash';
   var btnLabel = gcash ? 'Pay via GCash — ' + peso(total) : 'Place Order — ' + peso(total);
   // Store discounted total for placeOrder to use
