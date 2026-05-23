@@ -3288,21 +3288,33 @@ function renderStatusPage() {
       + '</div>';
   }
   if (state.loyaltyAccount && (s === 'NEW' || s === 'PREPARING' || s === 'READY')) {
-    // Estimate leaves from PRE-DISCOUNT total. We use orderTotal which is the
-    // discounted final; for an exact estimate we'd want the pre-discount value
-    // — but since most orders don't have a Yani Card discount, this is close.
-    var pesosPerLeaf = 300; // mirror of LEAVES_PESOS_PER_LEAF setting
-    var estLeaves = Math.floor((state.orderTotal || 0) / pesosPerLeaf);
-    if (estLeaves > 0) {
-      html += '<div style="background:#FFFBEB;border:1.5px solid #F59E0B;border-radius:14px;padding:12px 14px;margin-bottom:12px;text-align:center">'
-        + '<div style="font-size:.82rem;color:#78350F">🍃 You\'ll earn ~<strong>' + estLeaves + ' leaf' + (estLeaves===1?'':'s') + '</strong> from this order</div>'
+    // Yani Card payment: leaves were ALREADY earned when the card was loaded.
+    // We don't show an estimate on consumption to avoid customer confusion.
+    var paidWithYaniCard = state.checkoutPayMethod === 'yani_card';
+    if (paidWithYaniCard) {
+      html += '<div style="background:#F0F9FF;border:1.5px solid #93C5FD;border-radius:14px;padding:12px 14px;margin-bottom:12px;text-align:center">'
+        + '<div style="font-size:.8rem;color:#1E40AF">🍃 Leaves for Yani Card orders are earned when you <strong>load</strong> the card — not at consumption</div>'
         + '</div>';
+    } else {
+      // Estimate leaves from PRE-DISCOUNT total. We use orderTotal which is the
+      // discounted final; for an exact estimate we'd want the pre-discount value
+      // — but since most non-card orders have no discount, this is close.
+      var pesosPerLeaf = 300; // mirror of LEAVES_PESOS_PER_LEAF setting
+      var estLeaves = Math.floor((state.orderTotal || 0) / pesosPerLeaf);
+      if (estLeaves > 0) {
+        html += '<div style="background:#FFFBEB;border:1.5px solid #F59E0B;border-radius:14px;padding:12px 14px;margin-bottom:12px;text-align:center">'
+          + '<div style="font-size:.82rem;color:#78350F">🍃 You\'ll earn ~<strong>' + estLeaves + ' leaf' + (estLeaves===1?'':'s') + '</strong> from this order</div>'
+          + '</div>';
+      }
     }
   }
   if (state.loyaltyAccount && s === 'COMPLETED') {
-    html += '<div style="background:#F0FDF4;border:1.5px solid #10B981;border-radius:14px;padding:12px 14px;margin-bottom:12px;text-align:center">'
-      + '<div style="font-size:.82rem;color:#065F46;font-weight:600">🌿 Leaves earned! See your progress on your next visit.</div>'
-      + '</div>';
+    var paidWithCardCompleted = state.checkoutPayMethod === 'yani_card';
+    if (!paidWithCardCompleted) {
+      html += '<div style="background:#F0FDF4;border:1.5px solid #10B981;border-radius:14px;padding:12px 14px;margin-bottom:12px;text-align:center">'
+        + '<div style="font-size:.82rem;color:#065F46;font-weight:600">🌿 Leaves earned! See your progress on your next visit.</div>'
+        + '</div>';
+    }
   }
   // ─────────────────────────────────────────────────────────────────────
 

@@ -189,6 +189,104 @@ async function verifyOwnerPin(pin) {
   return r.ok && Array.isArray(r.data) && r.data.length > 0;
 }
 
+// ─── Card LOAD → Leaves earn ─────────────────────────────────────────────
+// When a customer activates or reloads a Yani Card, leaves are credited to
+// the cardholder's loyalty account at the standard rate (₱300 = 1 leaf).
+//
+// Why card-load and NOT card-charge: Yani Card is prepaid. The customer
+// paid real money at LOAD time. When they later spend from the card balance,
+// it would be double-counting to earn leaves AGAIN on the consumption.
+//
+// Counterpart in pos.js: the order auto-earn block now skips when
+// payment_method='YANI_CARD' (leaves were already earned at load time).
+//
+// Fire-and-forget — never blocks the card transaction. If the loyalty account
+// doesn't exist yet, the parallel auto-link/auto-create branch in activateCard
+// creates it; for reload calls, we lazy-create here if needed.
+async function _creditLeavesForCardLoad({ cardNumber, amount, eventType, performedBy }) {
+  try {
+    const amt = parseFloat(amount);
+    if (!amt || amt <= 0) return;
+
+    // Get pesosPerLeaf setting (default 300)
+    const sR = await supa(`/rest/v1/settings?key=eq.LEAVES_PESOS_PER_LEAF&select=value&limit=1`);
+    const pesosPerLeaf = parseInt(sR.data?.[0]?.value || '300') || 300;
+    const leavesEarned = Math.floor(amt / pesosPerLeaf);
+    if (leavesEarned <= 0) return;
+
+    // Find the cardholder + their loyalty account (by holder_email)
+    const cardR = await supa(`/rest/v1/yani_cards?card_number=eq.${encodeURIComponent(cardNumber)}&select=holder_name,holder_email,holder_phone`);
+    const card = cardR.data?.[0];
+    if (!card || !card.holder_email) return;  // no email = no loyalty (business rule)
+    const cleanEmail = String(card.holder_email).trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) return;
+
+    // Find or create the loyalty account
+    let accountId = null;
+    const accR = await supa(`/rest/v1/loyalty_accounts?email=eq.${encodeURIComponent(cleanEmail)}&select=id,points_balance,total_points_earned,linked_card_number&limit=1`);
+    let acc = accR.data?.[0];
+    if (acc) {
+      accountId = acc.id;
+      // Backfill linkage if missing
+      if (!acc.linked_card_number) {
+        await supa(`/rest/v1/loyalty_accounts?id=eq.${encodeURIComponent(accountId)}`, {
+          method: 'PATCH', headers: { 'Prefer':'return=minimal' },
+          body: JSON.stringify({ linked_card_number: cardNumber, updated_at: new Date().toISOString() })
+        });
+      }
+    } else if (card.holder_name) {
+      // Create
+      const createR = await supa(`/rest/v1/loyalty_accounts`, {
+        method: 'POST',
+        body: JSON.stringify({
+          name:               card.holder_name,
+          email:              cleanEmail,
+          phone:              card.holder_phone ? String(card.holder_phone).replace(/\D/g,'') : null,
+          linked_card_number: cardNumber,
+          points_balance:     0, total_points_earned: 0, total_points_redeemed: 0,
+          tier:               'BRONZE',
+          total_spent:        0, visit_count: 0, is_active: true,
+        }),
+      });
+      if (createR.ok && createR.data?.[0]) {
+        acc = createR.data[0];
+        accountId = acc.id;
+      }
+    }
+    if (!accountId) return;
+
+    // Credit the leaves
+    const balBefore   = acc.points_balance || 0;
+    const balAfter    = balBefore + leavesEarned;
+    const lifetime    = (acc.total_points_earned || 0) + leavesEarned;
+    await supa(`/rest/v1/loyalty_accounts?id=eq.${encodeURIComponent(accountId)}`, {
+      method: 'PATCH', headers: { 'Prefer':'return=minimal' },
+      body: JSON.stringify({
+        points_balance:      balAfter,
+        total_points_earned: lifetime,
+        last_earn_at:        new Date().toISOString(),
+        updated_at:          new Date().toISOString(),
+      })
+    });
+    await supa(`/rest/v1/points_transactions`, {
+      method: 'POST', headers: { 'Prefer':'return=minimal' },
+      body: JSON.stringify({
+        account_id:     accountId,
+        order_id:       null,
+        type:           'EARN',
+        points:         leavesEarned,
+        balance_before: balBefore,
+        balance_after:  balAfter,
+        description:    `Earned ${leavesEarned} leaf${leavesEarned===1?'':'s'} from Yani Card ${eventType} ${cardNumber} (₱${amt.toFixed(2)} ÷ ₱${pesosPerLeaf})`,
+        processed_by:   performedBy || 'STAFF',
+      })
+    });
+  } catch(e) {
+    console.error('_creditLeavesForCardLoad error:', e.message);
+    // swallow — never block the card transaction
+  }
+}
+
 export default async function handler(req, res) {
   cors(req, res);
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -316,6 +414,20 @@ export default async function handler(req, res) {
           }
         }
       } catch(e) { console.error('Loyalty auto-link/create error:', e.message); }
+
+      // Earn leaves for the activation amount (prepaid model — leaves earned
+      // at LOAD time, not at consumption). Fire-and-forget after auto-link.
+      try {
+        const activatedAmount = r.data?.balance_after ?? r.data?.balance ?? 0;
+        if (activatedAmount > 0) {
+          await _creditLeavesForCardLoad({
+            cardNumber:  body.card_number.trim().toUpperCase(),
+            amount:      activatedAmount,
+            eventType:   'ACTIVATE',
+            performedBy: performed_by || 'STAFF',
+          });
+        }
+      } catch(e) { console.error('Activate leaves-earn error:', e.message); }
 
       return res.status(200).json(r.data);
     }
@@ -458,6 +570,17 @@ export default async function handler(req, res) {
           }
         }
       } catch(e) { console.error('Reload email error:', e.message); }
+
+      // Earn leaves for the reload amount (prepaid model — see _creditLeavesForCardLoad)
+      try {
+        await _creditLeavesForCardLoad({
+          cardNumber:  card_number.trim().toUpperCase(),
+          amount:      amt,
+          eventType:   'RELOAD',
+          performedBy: performed_by || 'STAFF',
+        });
+      } catch(e) { console.error('Reload leaves-earn error:', e.message); }
+
       return res.status(200).json(r.data);
     }
 

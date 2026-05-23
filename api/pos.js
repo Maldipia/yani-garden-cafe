@@ -1467,7 +1467,21 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
               `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=total,discounted_total,loyalty_account_id,points_earned,customer_name,customer_phone,customer_email,payment_method,table_no,is_test&limit=1`
             );
             const ord = fullOrder.data?.[0];
-            if (ord && !ord.is_test && !ord.points_earned) {
+            // Yani Card payment: leaves were ALREADY earned when the card was
+            // loaded (see _creditLeavesForCardLoad in api/card.js). Earning
+            // again on consumption would double-count. Skip the auto-earn
+            // entirely for card-paid orders.
+            const paidWithYaniCard = ord && String(ord.payment_method||'').toUpperCase() === 'YANI_CARD';
+            if (paidWithYaniCard) {
+              // Still mark as processed so we don't loop on subsequent COMPLETED
+              // events (defensive). Set points_earned=0 to indicate intentional.
+              if (ord && !ord.points_earned) {
+                await supaFetch(`${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}`, {
+                  method: 'PATCH', body: JSON.stringify({ points_earned: 0 })
+                });
+                auditLog({ orderId, action: 'LEAVES_SKIPPED_YANI_CARD_PAYMENT', details: { reason: 'leaves earned at load time, not consumption' } });
+              }
+            } else if (ord && !ord.is_test && !ord.points_earned) {
               // ── Resolve loyalty account (same email-priority chain as before) ───
               let resolvedAccountId = ord.loyalty_account_id;
 
