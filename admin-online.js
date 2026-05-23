@@ -2108,10 +2108,13 @@ function renderLoyaltyView() {
   var el = document.getElementById('loyaltyView');
   if (!el) return;
 
+  var pesosPerLeaf = parseInt(_loyaltySettings.LEAVES_PESOS_PER_LEAF || '300');
+  var leavesEnabled= _loyaltySettings.LEAVES_ENABLED !== 'false';
+  // Legacy keys kept for backward compat with the existing admin modal
   var earnRate   = parseFloat(_loyaltySettings.LOYALTY_EARN_RATE || '1');
   var redeemRate = parseInt(_loyaltySettings.LOYALTY_REDEEM_RATE || '100');
   var minRedeem  = parseInt(_loyaltySettings.LOYALTY_MIN_REDEEM  || '500');
-  var enabled    = _loyaltySettings.LOYALTY_ENABLED !== 'false';
+  var enabled    = leavesEnabled;
 
   var tierColors = { BRONZE:'#CD7F32', SILVER:'#94a3b8', GOLD:'#F59E0B', PLATINUM:'#7C3AED' };
   var tierBg     = { BRONZE:'#FEF3E2', SILVER:'#F1F5F9', GOLD:'#FFFBEB', PLATINUM:'#F5F3FF' };
@@ -2128,8 +2131,8 @@ function renderLoyaltyView() {
 
   // Header
   html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">';
-  html += '<div><div style="font-weight:800;font-size:1.1rem;color:var(--forest-deep)">⭐ Loyalty Points</div>';
-  html += '<div style="font-size:.78rem;color:var(--timber);margin-top:2px">' + total + ' members · ₱1 = ' + earnRate + ' pt · ' + redeemRate + ' pts = ₱1</div></div>';
+  html += '<div><div style="font-weight:800;font-size:1.1rem;color:var(--forest-deep)">🌿 YANI Roots Rewards</div>';
+  html += '<div style="font-size:.78rem;color:var(--timber);margin-top:2px">' + total + ' members · ₱' + pesosPerLeaf + ' = 1 leaf 🍃 · running tally, no expiry deductions</div></div>';
   html += '<div style="display:flex;gap:8px">';
   html += '<button onclick="openLoyaltySettings()" style="padding:8px 14px;background:#f8f8f4;color:var(--forest-deep);border:1.5px solid var(--mist);border-radius:10px;font-size:.8rem;font-weight:700;cursor:pointer">⚙️ Settings</button>';
   html += '<button onclick="openAddLoyaltyModal()" style="padding:9px 16px;background:var(--forest);color:#fff;border:none;border-radius:10px;font-size:.82rem;font-weight:700;cursor:pointer;font-family:var(--font-body)">+ Enroll Member</button>';
