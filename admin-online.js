@@ -2192,7 +2192,7 @@ function renderLoyaltyRows(list) {
       + '<div style="font-size:.75rem;color:var(--timber);margin-top:2px">📞 ' + esc(a.phone) + (a.email ? ' · ✉️ ' + esc(a.email) : '') + '</div>'
       + '</div>'
       + '<div style="text-align:right;flex-shrink:0">'
-      + '<div style="font-weight:800;font-size:.95rem;color:' + tc + '">' + (a.points_balance||0).toLocaleString() + ' pts</div>'
+      + '<div style="font-weight:800;font-size:.95rem;color:' + tc + '">' + (a.points_balance||0).toLocaleString() + ' 🍃</div>'
       + '<div style="font-size:.68rem;color:var(--timber)">' + a.tier + ' · ' + (a.visit_count||0) + ' visits</div>'
       + '<div style="font-size:.65rem;color:var(--timber)">Last: ' + lastVisit + '</div>'
       + '</div></div>';
@@ -2231,7 +2231,7 @@ async function openLoyaltyDetail(id) {
     + '</div>'
     // Tier badge + points
     + '<div style="background:' + tc + ';color:#fff;border-radius:10px;padding:14px 16px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">'
-    + '<div><div style="font-size:.72rem;opacity:.85">' + a.tier + ' MEMBER</div><div style="font-size:1.8rem;font-weight:800">' + (a.points_balance||0).toLocaleString() + '<span style="font-size:.9rem;font-weight:400"> pts</span></div>'
+    + '<div><div style="font-size:.72rem;opacity:.85">' + a.tier + ' MEMBER</div><div style="font-size:1.8rem;font-weight:800">' + (a.points_balance||0).toLocaleString() + '<span style="font-size:.9rem;font-weight:400"> 🍃</span></div>'
     + '<div style="font-size:.72rem;opacity:.85;margin-top:2px">Worth ₱' + redeemValue.toFixed(2) + ' in discounts</div></div>'
     + '<div style="text-align:right;font-size:.72rem;opacity:.85"><div>' + (a.visit_count||0) + ' visits</div><div>₱' + parseFloat(a.total_spent||0).toLocaleString() + ' spent</div></div>'
     + '</div>'
@@ -2239,15 +2239,14 @@ async function openLoyaltyDetail(id) {
     + '<div style="background:#f8fafc;border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:.8rem;display:flex;flex-direction:column;gap:4px">'
     + '<div>📞 ' + esc(a.phone) + '</div>'
     + (a.email ? '<div>✉️ ' + esc(a.email) + '</div>' : '')
-    + '<div style="color:var(--timber)">Total earned: ' + (a.total_points_earned||0).toLocaleString() + ' pts</div>'
-    + '<div style="color:var(--timber)">Total redeemed: ' + (a.total_points_redeemed||0).toLocaleString() + ' pts</div>'
+    + '<div style="color:var(--timber)">Total earned: ' + (a.total_points_earned||0).toLocaleString() + ' 🍃 lifetime</div>'
+    + '<div style="color:var(--timber)">Total redeemed: ' + (a.total_points_redeemed||0).toLocaleString() + ' 🍃</div>'
     + '</div>'
-    // Action buttons
-    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">'
-    + '<button onclick="openEarnPointsModal(\'' + a.id + '\')" style="padding:10px;background:#D1FAE5;color:#065F46;border:none;border-radius:10px;font-size:.8rem;font-weight:700;cursor:pointer">➕ Add Points</button>'
-    + (a.points_balance >= minRedeem
-        ? '<button onclick="openRedeemModal(\'' + a.id + '\',' + a.points_balance + ')" style="padding:10px;background:#FEF3C7;color:#92400E;border:none;border-radius:10px;font-size:.8rem;font-weight:700;cursor:pointer">💰 Redeem Points</button>'
-        : '<div style="padding:10px;background:#f3f4f6;color:#9ca3af;border-radius:10px;font-size:.75rem;text-align:center">Need ' + minRedeem + ' pts to redeem</div>')
+    // Action buttons — single Adjust Leaves button (owner manual correction).
+    // The old Redeem Points cashback button is gone; redemption is now a
+    // tier-claim flow done by the customer at checkout (see customer POS).
+    + '<div style="margin-bottom:14px">'
+    + '<button onclick="openEarnPointsModal(\'' + a.id + '\')" style="width:100%;padding:10px;background:#DCFCE7;color:#065F46;border:none;border-radius:10px;font-size:.85rem;font-weight:700;cursor:pointer">🍃 Adjust Leaves</button>'
     + '</div>'
     // Transaction history
     + '<div style="font-weight:700;font-size:.83rem;color:var(--forest-deep);margin-bottom:8px">Transaction History</div>'
@@ -2262,7 +2261,7 @@ async function openLoyaltyDetail(id) {
               + '<div><div style="font-weight:600;color:' + col + '">' + tx.type + '</div>'
               + '<div style="color:var(--timber);font-size:.7rem">' + esc(tx.description||'') + '</div>'
               + '<div style="color:var(--timber);font-size:.65rem">' + new Date(tx.created_at).toLocaleDateString('en-PH',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) + '</div></div>'
-              + '<div style="text-align:right"><div style="font-weight:700;color:' + col + '">' + sign + tx.points + ' pts</div>'
+              + '<div style="text-align:right"><div style="font-weight:700;color:' + col + '">' + sign + tx.points + ' 🍃</div>'
               + '<div style="font-size:.65rem;color:var(--timber)">Bal: ' + tx.balance_after + '</div></div>'
               + '</div>';
           }).join(''));
@@ -2303,12 +2302,12 @@ async function saveNewLoyaltyMember() {
 
 function openEarnPointsModal(accountId) {
   document.getElementById('loyaltyDetailModal').style.display = 'none';
-  var pts = prompt('Add how many points? (Manual adjustment)');
+  var pts = prompt('🍃 Adjust leaves manually\n\nEnter a positive number to add leaves, or a negative number to deduct.\nExample: 5 = +5 leaves, -2 = remove 2 leaves');
   if (!pts || isNaN(parseInt(pts))) return;
-  var reason = prompt('Reason (optional):') || 'Manual adjustment';
+  var reason = prompt('Reason (logged for audit):') || 'Manual adjustment by owner';
   api('adjustPoints', { userId: currentUser && currentUser.userId, accountId: accountId, points: parseInt(pts), reason: reason })
     .then(function(r) {
-      if (r.ok) { showToast('✅ Points updated! New balance: ' + r.balanceAfter); loadLoyaltyView(); }
+      if (r.ok) { showToast('✅ Leaves updated — new balance: ' + r.balanceAfter + ' 🍃'); loadLoyaltyView(); }
       else showToast('❌ ' + (r.error||'Failed'), 'error');
     });
 }

@@ -2400,12 +2400,30 @@ function renderCheckoutPage() {
         + '</div>';
     }
 
-    // Pending redemptions (claimed before, not yet fulfilled)
+    // Pending tier redemptions (claimed before, not yet fulfilled)
     if (pending && pending.length) {
       loyaltyHtml += '<div style="background:#FFF7ED;border:1px solid #FB923C;border-radius:8px;padding:8px 10px;font-size:.78rem;color:#9A3412;margin-bottom:6px">'
         + '⏳ Pending pickup: '
         + pending.map(function(p){ return esc(p.reward_name); }).join(', ')
         + '</div>';
+    }
+
+    // Pending SURPRISE rewards (Soul Searcher, Rainy Day, etc — auto-issued)
+    // These didn't require a claim button — they appeared because of conditions
+    // (visits / weather / time-of-day). Show them so customer knows to ask staff.
+    var surprises = acc.pending_surprises || [];
+    if (surprises && surprises.length) {
+      var emojiFor = { SOUL_SEARCHER:'💜', RAINY_DAY:'🌧️', MANUAL_GIFT:'🎁' };
+      surprises.forEach(function(s){
+        var ico = emojiFor[s.reward_type] || '🎁';
+        var reason = s.reward_type === 'SOUL_SEARCHER' ? 'For visiting often'
+                   : s.reward_type === 'RAINY_DAY'     ? 'For coming despite the rain'
+                   : 'A gift from YANI';
+        loyaltyHtml += '<div style="background:#FAF5FF;border:1.5px solid #A855F7;border-radius:8px;padding:10px 12px;font-size:.82rem;color:#581C87;margin-bottom:6px">'
+          + '<div style="font-weight:700">' + ico + ' Surprise: ' + esc(s.reward_name) + '</div>'
+          + '<div style="font-size:.72rem;margin-top:2px">' + reason + ' — show this to staff to redeem</div>'
+          + '</div>';
+      });
     }
   } else {
     // Branch B — not joined yet
@@ -2414,7 +2432,7 @@ function renderCheckoutPage() {
       + '<label class="form-label" style="margin:0;font-weight:700">YANI Roots Rewards</label>'
       + '</div>'
       + '<div style="font-size:.78rem;color:var(--timber);margin-bottom:10px;line-height:1.5">'
-      + 'Every ₱300 plants a leaf 🍃 — the more you return, the more YANI gives back. Free ice cream at <strong>5 🍃</strong>, fries at <strong>10 🍃</strong>, and more.'
+      + 'Every ₱300 plants a leaf 🍃 — the more you return, the more YANI gives back. Free ice cream at <strong>5 🍃</strong>, fries at <strong>10 🍃</strong>, and more. Plus 🌅 sunset bonuses + 💜 surprise rewards for regulars.'
       + '</div>'
       + '<input id="loyaltyEmailInput" type="email" autocomplete="email" placeholder="Email (e.g. juan@email.com)" '
       + 'value="' + esc(state.customerEmail || '') + '" '
