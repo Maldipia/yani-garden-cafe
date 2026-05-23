@@ -2441,20 +2441,25 @@ window.openPendingCardRequests = function() {
     var tier = a.card_tier_request || 0;
     var leavesAtActivation = Math.floor(tier / 500);
     var when = a.created_at ? new Date(a.created_at).toLocaleDateString('en-PH', {month:'short', day:'numeric', year:'numeric'}) : '—';
+    var assignedCard = a.linked_card_number || '';
+    var nameSafe = esc(a.name || '').replace(/\\?'/g, "\\'");
     return ''
       + '<div style="padding:14px 16px;border-bottom:1px solid var(--mist-light);display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center">'
       +   '<div>'
       +     '<div style="font-weight:700;font-size:.95rem;color:var(--forest-deep)">' + esc(a.name || '—') + '</div>'
       +     '<div style="font-size:.78rem;color:var(--timber);margin-top:3px">✉️ ' + esc(a.email || '—')
       +       (a.phone ? ' · 📞 ' + esc(a.phone) : '') + '</div>'
+      +     (assignedCard
+            ? '<div style="font-size:.8rem;color:var(--forest-deep);margin-top:6px;font-weight:700">💳 Reserved card: <span style="background:#dcfce7;color:#14532d;padding:2px 8px;border-radius:6px;font-family:monospace">' + esc(assignedCard) + '</span></div>'
+            : '<div style="font-size:.75rem;color:#dc2626;margin-top:6px;font-weight:600">⚠️ No card reserved (legacy signup — assign manually)</div>')
       +     (a.signup_notes ? '<div style="font-size:.74rem;color:var(--timber);margin-top:5px;background:#f9f7f2;padding:6px 9px;border-radius:6px;border-left:2px solid var(--gold)">📝 ' + esc(a.signup_notes) + '</div>' : '')
       +     '<div style="font-size:.7rem;color:#94918a;margin-top:5px">Signed up ' + esc(when) + '</div>'
       +   '</div>'
       +   '<div style="text-align:right">'
       +     '<div style="font-weight:800;color:var(--forest);font-size:1rem">₱' + tier.toLocaleString() + '</div>'
       +     '<div style="font-size:.72rem;color:var(--gold-deep);margin-bottom:8px">+' + leavesAtActivation + ' 🍃 at activation</div>'
-      +     '<button onclick="markCardRequestFulfilled(\'' + a.id + '\', \'' + esc(a.name || '').replace(/\\?\'/g, "\\\\'") + '\')" '
-      +       'style="padding:6px 12px;background:var(--forest);color:#fff;border:none;border-radius:7px;font-size:.74rem;font-weight:700;cursor:pointer;font-family:var(--font-body)">✓ Mark Fulfilled</button>'
+      +     '<button onclick="markCardRequestFulfilled(\'' + a.id + '\', \'' + nameSafe + '\', \'' + esc(assignedCard) + '\', \'' + tier + '\')" '
+      +       'style="padding:6px 12px;background:var(--forest);color:#fff;border:none;border-radius:7px;font-size:.74rem;font-weight:700;cursor:pointer;font-family:var(--font-body)">⚡ Activate & Fulfill</button>'
       +     ' <button onclick="cancelCardRequest(\'' + a.id + '\')" '
       +       'style="padding:6px 10px;background:#fff;color:#991B1B;border:1.5px solid #FECACA;border-radius:7px;font-size:.74rem;font-weight:700;cursor:pointer;font-family:var(--font-body)">✕</button>'
       +   '</div>'
@@ -2483,8 +2488,16 @@ window.openPendingCardRequests = function() {
   document.body.appendChild(m);
 };
 
-window.markCardRequestFulfilled = async function(accountId, name) {
-  if (!confirm('Mark this card request as FULFILLED? Use this after you\'ve handed the physical card to ' + (name || 'the customer') + ' and activated it.')) return;
+window.markCardRequestFulfilled = async function(accountId, name, cardNumber, tier) {
+  var cardLabel = cardNumber || 'their card';
+  var tierLabel = tier ? '₱' + parseInt(tier).toLocaleString() : '';
+  var msg = 'Activate ' + cardLabel + (tierLabel ? ' (' + tierLabel + ')' : '') + ' for ' + (name || 'this customer') + '?\n\n' +
+            'This will:\n' +
+            '• Mark the card ACTIVE with balance ' + tierLabel + '\n' +
+            '• Credit the customer\'s leaves\n' +
+            '• Clear them from the pending queue\n\n' +
+            'Only do this AFTER you\'ve verified payment.';
+  if (!confirm(msg)) return;
   try {
     var r = await fetch('/api/pos', {
       method: 'POST',
@@ -2492,12 +2505,18 @@ window.markCardRequestFulfilled = async function(accountId, name) {
       body: JSON.stringify({
         action: 'updateCardRequestStatus',
         accountId: accountId,
-        status: 'FULFILLED'
+        status: 'FULFILLED',
+        userId: currentUser && currentUser.userId
       })
     });
     var data = await r.json();
     if (!data.ok) { alert('Error: ' + (data.error || 'Could not update')); return; }
-    showToast('✅ Marked as fulfilled', 'success');
+    var successMsg = '✅ Card activated';
+    if (data.activated_card_number) {
+      successMsg = '✅ ' + data.activated_card_number + ' activated';
+      if (data.leaves_earned) successMsg += ' · +' + data.leaves_earned + ' 🍃 credited';
+    }
+    showToast(successMsg, 'success');
     await loadLoyaltyAccounts();
     var modal = document.getElementById('pendingCardModal');
     if (modal) modal.remove();
@@ -2508,7 +2527,7 @@ window.markCardRequestFulfilled = async function(accountId, name) {
 };
 
 window.cancelCardRequest = async function(accountId) {
-  if (!confirm('Cancel this card request? The customer\'s loyalty account stays — only the physical card request gets cancelled.')) return;
+  if (!confirm('Cancel this card request? The customer\'s loyalty account stays — only the physical card request gets cancelled and the reserved card returns to inventory.')) return;
   try {
     var r = await fetch('/api/pos', {
       method: 'POST',
@@ -2516,12 +2535,13 @@ window.cancelCardRequest = async function(accountId) {
       body: JSON.stringify({
         action: 'updateCardRequestStatus',
         accountId: accountId,
-        status: 'CANCELLED'
+        status: 'CANCELLED',
+        userId: currentUser && currentUser.userId
       })
     });
     var data = await r.json();
     if (!data.ok) { alert('Error: ' + (data.error || 'Could not update')); return; }
-    showToast('✕ Request cancelled', 'info');
+    showToast('✕ Request cancelled · card returned to inventory', 'info');
     await loadLoyaltyAccounts();
     var modal = document.getElementById('pendingCardModal');
     if (modal) modal.remove();

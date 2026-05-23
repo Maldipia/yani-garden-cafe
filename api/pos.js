@@ -2105,8 +2105,56 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
         }
       }
 
-      // Auto-link to a Yani Card if one exists with the same email (same
-      // priority logic as joinLoyalty: name-match → active → any).
+      // ─── AUTO-ASSIGN A YANI CARD ─────────────────────────────────────
+      // When a customer reserves a card via /rewards, grab the next free
+      // INACTIVE card from the inventory and "reserve" it by writing the
+      // customer's holder_name/email/phone onto it. The card stays INACTIVE
+      // (no balance, no transactions) until staff fulfills the request
+      // after verifying payment — that's when it flips to ACTIVE.
+      //
+      // Preference order:
+      //   1. INACTIVE card where tier already matches the request (no tier flip needed)
+      //   2. Fallback: lowest-numbered INACTIVE card, update its tier to match
+      //
+      // We auto-assign for BOTH new signups and existing accounts that are
+      // upgrading from no-card to wanting-card.
+      async function reserveNextCard() {
+        if (!tierInt) return null;
+        // Try matching-tier first
+        let r = await supaFetch(
+          `${SUPABASE_URL}/rest/v1/yani_cards?status=eq.INACTIVE&holder_name=is.null&tier=eq.${tierInt}&select=card_number,tier&order=card_number.asc&limit=1`
+        );
+        let chosen = r.ok && r.data?.[0];
+        // Fallback: any INACTIVE unassigned card
+        if (!chosen) {
+          r = await supaFetch(
+            `${SUPABASE_URL}/rest/v1/yani_cards?status=eq.INACTIVE&holder_name=is.null&select=card_number,tier&order=card_number.asc&limit=1`
+          );
+          chosen = r.ok && r.data?.[0];
+        }
+        if (!chosen) return null;  // inventory empty — staff needs to add more cards
+        // Reserve it: write holder details + flip tier to requested
+        const upd = await supaFetch(
+          `${SUPABASE_URL}/rest/v1/yani_cards?card_number=eq.${encodeURIComponent(chosen.card_number)}`,
+          {
+            method: 'PATCH',
+            body: JSON.stringify({
+              holder_name:  cleanName,
+              holder_email: cleanEmail,
+              holder_phone: cleanPhone,
+              tier:         String(tierInt),
+              updated_at:   new Date().toISOString(),
+            }),
+            headers: { 'Prefer': 'return=minimal' }
+          }
+        );
+        if (!upd.ok) return null;
+        return chosen.card_number;
+      }
+
+      // Auto-link to an EXISTING active Yani Card if one already has this email
+      // (different scenario from auto-assigning a fresh card — this is a customer
+      // who already had an ACTIVE card from a prior in-person activation).
       let linkedCardNumber = null;
       const allCards = await supaFetch(
         `${SUPABASE_URL}/rest/v1/yani_cards?holder_email=eq.${encodeURIComponent(cleanEmail)}&select=card_number,holder_name,status,activated_at`
@@ -2126,11 +2174,16 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       const existing = await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts?email=eq.${encodeURIComponent(cleanEmail)}&select=*&limit=1`);
       if (existing.ok && existing.data?.length) {
         const acc = existing.data[0];
-        // If they now want a card and didn't before, upgrade the request
+        // If they now want a card and didn't before, upgrade the request + auto-assign
         const upgrades = {};
+        let reservedCardNumber = null;
         if (tierInt && !acc.card_tier_request) {
           upgrades.card_tier_request   = tierInt;
           upgrades.card_request_status = 'PENDING';
+          reservedCardNumber = await reserveNextCard();
+          if (reservedCardNumber && !acc.linked_card_number) {
+            upgrades.linked_card_number = reservedCardNumber;
+          }
         }
         if (cleanPhone && !acc.phone) upgrades.phone = cleanPhone;
         if (cleanNotes) upgrades.signup_notes = cleanNotes;
@@ -2144,11 +2197,15 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
           ok: true,
           already_existed: true,
           account: { ...acc, ...upgrades },
+          assigned_card_number: reservedCardNumber || acc.linked_card_number || null,
           message: tierInt
-            ? `🌱 Welcome back, ${cleanName.split(' ')[0]}! We will prepare your ₱${tierInt.toLocaleString()} card. Visit us at YANI in Amadeo to claim it.`
+            ? `🌱 Welcome back, ${cleanName.split(' ')[0]}!${reservedCardNumber ? ' Card ' + reservedCardNumber + ' is reserved for you.' : ''} Visit us at YANI in Amadeo to claim your ₱${tierInt.toLocaleString()} card.`
             : `🌱 Welcome back, ${cleanName.split(' ')[0]}! Your leaves are still growing.`,
         });
       }
+
+      // Reserve a card BEFORE inserting the loyalty_account so we can set linked_card_number atomically.
+      const reservedCardNumber = await reserveNextCard();
 
       // New signup
       const r = await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts`, {
@@ -2157,7 +2214,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
           name:                  cleanName,
           email:                 cleanEmail,
           phone:                 cleanPhone,
-          linked_card_number:    linkedCardNumber,
+          linked_card_number:    reservedCardNumber || linkedCardNumber,
           points_balance:        0,
           total_points_earned:   0,
           total_points_redeemed: 0,
@@ -2172,14 +2229,27 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
         }),
         headers: { 'Prefer': 'return=representation' }
       });
-      if (!r.ok) return res.status(500).json({ ok: false, error: r.data?.message || 'Failed to create account' });
+      if (!r.ok) {
+        // Rollback the card reservation if we got one but couldn't create the account
+        if (reservedCardNumber) {
+          await supaFetch(`${SUPABASE_URL}/rest/v1/yani_cards?card_number=eq.${encodeURIComponent(reservedCardNumber)}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ holder_name: null, holder_email: null, holder_phone: null }),
+            headers: { 'Prefer': 'return=minimal' }
+          });
+        }
+        return res.status(500).json({ ok: false, error: r.data?.message || 'Failed to create account' });
+      }
 
       return res.status(200).json({
         ok: true,
         already_existed: false,
         account: r.data[0],
+        assigned_card_number: reservedCardNumber || null,
         message: tierInt
-          ? `🌱 Welcome to Roots Rewards! Visit us at YANI in Amadeo to claim your ₱${tierInt.toLocaleString()} card.`
+          ? (reservedCardNumber
+              ? `🌱 Welcome to Roots Rewards! Card ${reservedCardNumber} is reserved for you. Visit us at YANI in Amadeo to claim your ₱${tierInt.toLocaleString()} card.`
+              : `🌱 Welcome to Roots Rewards! Visit us at YANI in Amadeo to claim your ₱${tierInt.toLocaleString()} card.`)
           : `🌱 Welcome to Roots Rewards! Enter your email at checkout to start earning leaves.`,
       });
     }
@@ -2192,7 +2262,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       const auth = await checkAuth(['OWNER','ADMIN','CASHIER']);
       if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
       const r = await supaFetch(
-        `${SUPABASE_URL}/rest/v1/loyalty_accounts?card_request_status=eq.PENDING&select=id,name,email,phone,card_tier_request,signup_notes,registration_source,created_at&order=created_at.desc`
+        `${SUPABASE_URL}/rest/v1/loyalty_accounts?card_request_status=eq.PENDING&select=id,name,email,phone,card_tier_request,linked_card_number,signup_notes,registration_source,created_at&order=created_at.desc`
       );
       if (!r.ok) return res.status(500).json({ ok: false, error: 'DB error' });
       return res.status(200).json({ ok: true, requests: r.data || [] });
@@ -2216,13 +2286,16 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       return res.status(200).json({ ok: true, account: r.data?.[0] });
     }
 
-    // ── updateCardRequestStatus (ADMIN/OWNER — clears pending queue) ─────
-    // Called when staff marks a website signup's card request as:
-    //   FULFILLED — physical card was handed off + activated in person
-    //   CANCELLED — customer changed mind / no-show
-    // Does NOT touch the loyalty_account itself (the customer keeps their
-    // email-based loyalty profile + any leaves earned). Only mutates the
-    // card_request_status field so it drops out of the admin queue.
+    // ── updateCardRequestStatus (ADMIN/OWNER — activate or cancel) ───────
+    // Two paths:
+    //   FULFILLED  → ACTIVATE the linked card. Sets status ACTIVE, balance
+    //                = tier, total_loaded = tier, activated_at = now. Inserts
+    //                an ACTIVATE row in card_transactions, credits the leaves
+    //                that match floor(tier/500), and writes the EARN row to
+    //                points_transactions. After this the card is fully live
+    //                and the customer can transact with it.
+    //   CANCELLED  → un-reserve the linked card (clear holder fields,
+    //                status stays INACTIVE so it returns to the inventory).
     if (action === 'updateCardRequestStatus') {
       const auth = await checkAuth(['OWNER','ADMIN','CASHIER']);
       if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
@@ -2233,6 +2306,131 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
         return res.status(400).json({ ok: false, error: 'status must be PENDING, FULFILLED, or CANCELLED' });
       }
 
+      // Load the loyalty account to find the linked card + tier
+      const accR = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/loyalty_accounts?id=eq.${encodeURIComponent(accountId)}&select=*&limit=1`
+      );
+      const acc = accR.ok && accR.data?.[0];
+      if (!acc) return res.status(404).json({ ok: false, error: 'Account not found' });
+
+      const linkedCard = acc.linked_card_number;
+      const tierStr    = acc.card_tier_request ? String(acc.card_tier_request) : null;
+      const tierInt    = acc.card_tier_request ? parseInt(acc.card_tier_request) : 0;
+      let activatedCardNumber = null;
+      let leavesEarned = 0;
+
+      if (status === 'FULFILLED' && linkedCard && tierInt > 0) {
+        // Look up the card — must be INACTIVE (haven't been activated already)
+        const cardR = await supaFetch(
+          `${SUPABASE_URL}/rest/v1/yani_cards?card_number=eq.${encodeURIComponent(linkedCard)}&select=card_number,status,balance,total_loaded&limit=1`
+        );
+        const card = cardR.ok && cardR.data?.[0];
+        if (card && card.status === 'INACTIVE') {
+          const nowISO = new Date().toISOString();
+          // 1. Activate the card
+          const actR = await supaFetch(
+            `${SUPABASE_URL}/rest/v1/yani_cards?card_number=eq.${encodeURIComponent(linkedCard)}`,
+            {
+              method: 'PATCH',
+              body: JSON.stringify({
+                status:        'ACTIVE',
+                tier:          tierStr,
+                balance:       tierInt,
+                total_loaded:  tierInt,
+                activated_at:  nowISO,
+                updated_at:    nowISO,
+              }),
+              headers: { 'Prefer': 'return=minimal' }
+            }
+          );
+          if (actR.ok) {
+            activatedCardNumber = linkedCard;
+
+            // 2. Insert ACTIVATE row in card_transactions (audit trail)
+            await supaFetch(`${SUPABASE_URL}/rest/v1/card_transactions`, {
+              method: 'POST',
+              body: JSON.stringify({
+                card_number:    linkedCard,
+                type:           'ACTIVATE',
+                amount:         tierInt,
+                balance_before: 0,
+                balance_after:  tierInt,
+                description:    `Card activated via /rewards web signup (₱${tierInt.toLocaleString()} initial load)`,
+                performed_by:   auth.userId || 'OWNER',
+                created_at:     nowISO,
+              }),
+              headers: { 'Prefer': 'return=minimal' }
+            });
+
+            // 3. Credit leaves: floor(tier/500). Lookup the pesos-per-leaf
+            //    setting in case it ever changes (current value: 500).
+            const settR = await supaFetch(`${SUPABASE_URL}/rest/v1/settings?key=eq.LEAVES_PESOS_PER_LEAF&select=value&limit=1`);
+            const pesosPerLeaf = parseInt(settR.data?.[0]?.value || '500') || 500;
+            leavesEarned = Math.floor(tierInt / pesosPerLeaf);
+
+            if (leavesEarned > 0) {
+              const balBefore = parseInt(acc.points_balance || 0);
+              const balAfter  = balBefore + leavesEarned;
+              const liftBefore = parseInt(acc.total_points_earned || 0);
+              const liftAfter  = liftBefore + leavesEarned;
+
+              // 3a. Update loyalty_account balance + lifetime + last_earn_at
+              await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts?id=eq.${accountId}`, {
+                method: 'PATCH',
+                body: JSON.stringify({
+                  points_balance:      balAfter,
+                  total_points_earned: liftAfter,
+                  last_earn_at:        nowISO,
+                  updated_at:          nowISO,
+                }),
+                headers: { 'Prefer': 'return=minimal' }
+              });
+
+              // 3b. Audit row in points_transactions
+              await supaFetch(`${SUPABASE_URL}/rest/v1/points_transactions`, {
+                method: 'POST',
+                body: JSON.stringify({
+                  account_id:     accountId,
+                  type:           'EARN',
+                  points:         leavesEarned,
+                  balance_before: balBefore,
+                  balance_after:  balAfter,
+                  description:    `+${leavesEarned} leaf${leavesEarned===1?'':'s'} from Yani Card ${linkedCard} ACTIVATE (₱${tierInt.toLocaleString()} load; ₱${tierInt.toLocaleString()} ÷ ₱${pesosPerLeaf} = ${leavesEarned} leaves)`,
+                  processed_by:   auth.userId || 'OWNER',
+                  created_at:     nowISO,
+                }),
+                headers: { 'Prefer': 'return=minimal' }
+              });
+            }
+          }
+        }
+      } else if (status === 'CANCELLED' && linkedCard) {
+        // Un-reserve the card if it's still INACTIVE (don't touch active cards)
+        const cardR = await supaFetch(
+          `${SUPABASE_URL}/rest/v1/yani_cards?card_number=eq.${encodeURIComponent(linkedCard)}&select=status&limit=1`
+        );
+        const card = cardR.ok && cardR.data?.[0];
+        if (card && card.status === 'INACTIVE') {
+          await supaFetch(`${SUPABASE_URL}/rest/v1/yani_cards?card_number=eq.${encodeURIComponent(linkedCard)}`, {
+            method: 'PATCH',
+            body: JSON.stringify({
+              holder_name:  null,
+              holder_email: null,
+              holder_phone: null,
+              updated_at:   new Date().toISOString(),
+            }),
+            headers: { 'Prefer': 'return=minimal' }
+          });
+        }
+        // Also clear linked_card_number from the loyalty_account so it's clean
+        await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts?id=eq.${accountId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ linked_card_number: null }),
+          headers: { 'Prefer': 'return=minimal' }
+        });
+      }
+
+      // Finally, update card_request_status
       const r = await supaFetch(
         `${SUPABASE_URL}/rest/v1/loyalty_accounts?id=eq.${encodeURIComponent(accountId)}`,
         {
@@ -2242,7 +2440,13 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
         }
       );
       if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to update card request' });
-      return res.status(200).json({ ok: true, account: r.data?.[0] || null });
+
+      return res.status(200).json({
+        ok: true,
+        account: r.data?.[0] || null,
+        activated_card_number: activatedCardNumber,
+        leaves_earned: leavesEarned,
+      });
     }
 
     // ── redeemPointsToCard (CUSTOMER-FACING — requires email match w/ card) ─

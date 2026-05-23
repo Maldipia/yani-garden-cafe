@@ -1027,7 +1027,16 @@ async function submitRewardsRegistration() {
     if (data.message) $('successMsg').textContent = data.message;
 
     if (cardTier) {
-      $('nextSteps').innerHTML =
+      // Show the assigned card number prominently if the API returned one
+      var cardBadge = '';
+      if (data.assigned_card_number) {
+        cardBadge = '<div style="margin:14px 0 18px;padding:14px 18px;background:linear-gradient(135deg,#fef3c7,#fde68a);border:2px solid #d4a017;border-radius:12px;text-align:center">' +
+          '<div style="font-size:.72rem;color:#78350f;letter-spacing:.08em;text-transform:uppercase;font-weight:700;margin-bottom:4px">Your card is reserved</div>' +
+          '<div style="font-family:ui-monospace,monospace;font-size:1.4rem;font-weight:800;color:#78350f;letter-spacing:.02em">' + data.assigned_card_number + '</div>' +
+          '<div style="font-size:.78rem;color:#92400e;margin-top:6px">Mention this card number when you visit or send your payment proof</div>' +
+        '</div>';
+      }
+      $('nextSteps').innerHTML = cardBadge +
         '✓ Visit us at <strong>YANI Garden Café</strong> in Amadeo, Cavite<br>' +
         '✓ Ask for your <strong>₱' + cardTier.toLocaleString() + ' YANI Card</strong> at the counter<br>' +
         '✓ Pay ₱' + cardTier.toLocaleString() + ' to activate — your ' +
