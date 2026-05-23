@@ -1,3 +1,13 @@
+> ⚠️ **HISTORICAL — DO NOT TRUST FOR CURRENT STATE**
+>
+> This document describes the **pre-migration architecture** when YANI ran on Google Apps Script + Google Sheets.
+> The system has since migrated to **Supabase + Vercel serverless functions**.
+>
+> See `README.md` and `ARCHITECTURE.md` for the current architecture.
+>
+> Retained here only as historical context.
+
+
 # Yani Garden Cafe POS — System Architecture
 
 **Author:** Manus AI
