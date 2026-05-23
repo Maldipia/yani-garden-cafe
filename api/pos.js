@@ -2209,17 +2209,17 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
     // ── expireLeaves (CRON or OWNER manual trigger) ──────────────────────
     // Calls the expire_leaves() DB function. Two paths to invoke:
     //   1. Vercel cron → header authorization: bearer <CRON_SECRET>
-    //   2. Owner manual → body { pin: '2026' }
+    //   2. Owner manual → standard staff auth (OWNER role required)
     if (action === 'expireLeaves') {
       const cronSecret = process.env.CRON_SECRET || '';
       const authHeader = req.headers?.authorization || '';
       const fromCron   = cronSecret && authHeader === 'Bearer ' + cronSecret;
       let fromOwner    = false;
-      if (!fromCron && body.pin) {
-        const pinR = await supaFetch(`${SUPABASE_URL}/rest/v1/users?pin=eq.${encodeURIComponent(body.pin)}&role=eq.OWNER&select=id&limit=1`);
-        fromOwner = pinR.ok && pinR.data && pinR.data.length > 0;
+      if (!fromCron) {
+        const auth = await checkAuth(['OWNER']);
+        fromOwner = !!auth.ok;
       }
-      if (!fromCron && !fromOwner) return res.status(403).json({ ok: false, error: 'Owner PIN or CRON_SECRET required' });
+      if (!fromCron && !fromOwner) return res.status(403).json({ ok: false, error: 'Owner login or CRON_SECRET required' });
 
       const r = await supaFetch(`${SUPABASE_URL}/rest/v1/rpc/expire_leaves`, {
         method: 'POST', body: JSON.stringify({})
