@@ -41,7 +41,7 @@ const TABLES = [
   // Menu
   'menu_categories',
   'menu_items',
-  'menu_item_addons',
+  'menu_addons',
 
   // Orders
   'dine_in_orders',

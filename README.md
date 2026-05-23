@@ -114,7 +114,7 @@ Admin endpoints require `userId` in request body (format `USR_\d{3,6}`). Backend
 | Table | Purpose |
 |---|---|
 | `staff_users` | Staff PIN auth |
-| `menu_categories`, `menu_items`, `menu_item_addons` | Menu structure |
+| `menu_categories`, `menu_items`, `menu_addons` | Menu structure |
 | `dine_in_orders`, `dine_in_order_items` | Active + historical orders |
 | `yani_cards` | Prepaid loyalty cards (20 total: 2 ACTIVE, 3 SUSPENDED, 15 INACTIVE) |
 | `card_transactions` | Audit log per card (ACTIVATE, RELOAD, CHARGE, ADJUST, REVERSE, SUSPEND, EDIT) |
