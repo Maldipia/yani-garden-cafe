@@ -1033,17 +1033,41 @@ async function submitRewardsRegistration() {
         cardBadge = '<div style="margin:14px 0 18px;padding:14px 18px;background:linear-gradient(135deg,#fef3c7,#fde68a);border:2px solid #d4a017;border-radius:12px;text-align:center">' +
           '<div style="font-size:.72rem;color:#78350f;letter-spacing:.08em;text-transform:uppercase;font-weight:700;margin-bottom:4px">Your card is reserved</div>' +
           '<div style="font-family:ui-monospace,monospace;font-size:1.4rem;font-weight:800;color:#78350f;letter-spacing:.02em">' + data.assigned_card_number + '</div>' +
-          '<div style="font-size:.78rem;color:#92400e;margin-top:6px">Mention this card number when you visit or send your payment proof</div>' +
+          '<div style="font-size:.78rem;color:#92400e;margin-top:6px">Mention this card number when you message us or visit</div>' +
         '</div>';
       }
-      $('nextSteps').innerHTML = cardBadge +
-        '✓ Visit us at <strong>YANI Garden Café</strong> in Amadeo, Cavite<br>' +
-        '✓ Ask for your <strong>₱' + cardTier.toLocaleString() + ' YANI Card</strong> at the counter<br>' +
-        '✓ Pay ₱' + cardTier.toLocaleString() + ' to activate — your ' +
-        (cardTier === 500 ? '1 leaf' :
-         cardTier === 1000 ? '2 leaves' :
-         cardTier === 2000 ? '4 leaves' : '6 leaves') +
-        ' will appear immediately';
+
+      var leafCount = (cardTier === 500 ? '1 leaf' :
+                       cardTier === 1000 ? '2 leaves' :
+                       cardTier === 2000 ? '4 leaves' : '6 leaves');
+      var tierStr = cardTier.toLocaleString();
+      var fbRef = 'rewards_signup_' + cardTier;
+
+      // PRIMARY PATH: FB Messenger instant activation
+      var fbCta = '<div style="margin:18px 0 14px;padding:18px;background:linear-gradient(135deg,#e0f2fe,#dbeafe);border:2px solid #2563eb;border-radius:14px">' +
+        '<div style="font-size:.7rem;color:#1e40af;letter-spacing:.1em;text-transform:uppercase;font-weight:800;margin-bottom:10px;text-align:center">⚡ Activate instantly via Facebook</div>' +
+        '<div style="font-size:.86rem;color:#1e3a8a;line-height:1.7;margin-bottom:14px">' +
+          '<strong>1.</strong> Pay <strong>₱' + tierStr + '</strong> via GCash or bank transfer<br>' +
+          '<strong>2.</strong> Tap the button below to message us<br>' +
+          '<strong>3.</strong> Send your payment screenshot + mention your registered email<br>' +
+          '<strong>4.</strong> We activate your card → <strong>' + leafCount + '</strong> credited 🍃' +
+        '</div>' +
+        '<div style="text-align:center">' +
+          '<a href="https://m.me/yanigardencafe?ref=' + fbRef + '" target="_blank" rel="noopener" ' +
+             'style="display:inline-flex;align-items:center;gap:8px;background:#1877f2;color:#fff;font-weight:700;font-size:.98rem;padding:14px 24px;border-radius:10px;text-decoration:none;box-shadow:0 4px 14px rgba(24,119,242,.35);transition:transform .15s">' +
+            '💬 Message YANI on Facebook →' +
+          '</a>' +
+        '</div>' +
+      '</div>';
+
+      // SECONDARY PATH: in-person
+      var visitCta = '<div style="margin-top:16px;padding:14px 16px;background:#f5f3ef;border-radius:10px;font-size:.84rem;color:#5a4a3a;text-align:center;line-height:1.55">' +
+        '<strong>Or visit us in person —</strong><br>' +
+        'YANI Garden Café, Amadeo, Cavite<br>' +
+        '<span style="opacity:.75">Pay at the counter, pick up your physical card</span>' +
+      '</div>';
+
+      $('nextSteps').innerHTML = cardBadge + fbCta + visitCta;
     }
 
     // Scroll to success
