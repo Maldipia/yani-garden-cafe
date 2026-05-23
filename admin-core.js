@@ -1049,7 +1049,7 @@ function openMembersHub(tab) {
   // Render tab strip (re-renders so active styling updates)
   var TABS = [
     { k:'customers', ico:'👥', label:'Customers' },
-    { k:'loyalty',   ico:'⭐', label:'Loyalty Points' },
+    { k:'loyalty',   ico:'🌿', label:'Roots Rewards' },
     { k:'cards',     ico:'💳', label:'Yani Cards' },
   ];
   strip.innerHTML = '<div style="display:flex;gap:6px;flex-wrap:wrap">'

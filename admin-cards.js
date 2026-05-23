@@ -294,11 +294,13 @@ function _cardsRender() {
     html+='<td style="padding:9px 10px;font-weight:700;font-family:monospace;color:var(--forest-deep)">'+_esc(c.card_number)+(c.card_pin?'<span style="color:#9CA3AF;font-size:.78rem">-'+_esc(c.card_pin)+'</span>':'')+'</td>';
     // Holder cell — append ⭐+points badge when a loyalty account exists for this email.
     // Email is the new loyalty identity key (phone is no longer unique).
+    // Holder cell — append 🍃+leaves badge when a loyalty account exists for this email.
     var loyAcc = c.holder_email ? _loyaltyByEmail[String(c.holder_email).trim().toLowerCase()] : null;
+    var loyLeaves = loyAcc ? (loyAcc.total_points_earned || loyAcc.points_balance || 0) : 0;
     var loyBadge = loyAcc
-      ? '<span title="Loyalty: '+_esc(loyAcc.tier)+' · '+(loyAcc.points_balance||0)+' pts · '+_esc(loyAcc.email)+'" '
-        + 'style="margin-left:6px;display:inline-block;background:#FEF3C7;color:#92400E;border-radius:8px;padding:1px 6px;font-size:.66rem;font-weight:700;cursor:default">'
-        + '⭐ '+(loyAcc.points_balance||0)+' · '+_esc(loyAcc.tier)+'</span>'
+      ? '<span title="YANI Roots Rewards · '+loyLeaves+' leaves · '+_esc(loyAcc.email)+'" '
+        + 'style="margin-left:6px;display:inline-block;background:#DCFCE7;color:#065F46;border-radius:8px;padding:1px 6px;font-size:.66rem;font-weight:700;cursor:default">'
+        + '🍃 '+loyLeaves+'</span>'
       : '';
     html+='<td style="padding:9px 10px">'+(c.holder_name?_esc(c.holder_name)+loyBadge:'<span style="color:#9CA3AF;font-style:italic">—</span>')+'</td>';
     html+='<td style="padding:9px 10px;color:var(--timber)">'+(c.holder_phone?_esc(c.holder_phone):'—')+'</td>';

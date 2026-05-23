@@ -1516,15 +1516,14 @@ let state = {
   yaniCardNumber: '',    // optional Yani Card for 10% discount
   yaniCardValid:  false, // validated against API
 
-  // ── Loyalty (email-keyed) ────────────────────────────────
+  // ── Loyalty (Leaves system) ────────────────────────────────
   customerPhone:   '',     // contact info, NOT the loyalty identity
   customerEmail:   '',     // THE loyalty identity (lowercased on input)
   loyaltyConsent:  false,  // opt-in checkbox state
-  loyaltyAccount:  null,   // { id, points_balance, tier, ... } if found/joined
+  loyaltyAccount:  null,   // full profile from getLeavesProfile (includes next_reward, claimed_tiers, etc)
   _loyaltyLookupEmail: '', // last email we looked up (avoid spam-lookups)
-  pointsToRedeem:  0,      // user-typed amount to redeem
-  pointsRedeemed:  0,      // confirmed redeemed (after API call)
-  pointsRedeemValue: 0,    // pesos credited from redemption
+  leafRewards:     [],     // list from listLeafRewards — the tier ladder
+  claimedThisSession: null,// { tier_order, reward_name, redemption_id } when customer just claimed
 
   statusInterval: null
 };
@@ -2178,26 +2177,34 @@ function _yaniCheck() {
   else { state._yaniCardStatus = '⚠️ Enter all 6 digits from your card'; state.yaniCardValid = false; renderCheckoutPage(); }
 }
 
-// ── LOYALTY HANDLERS ────────────────────────────────────────────────────
-// Email is the loyalty identity. We auto-lookup once the email looks valid
-// (has @ and a dot after) — no per-keystroke spam.
+// ── LOYALTY HANDLERS (Leaves system) ────────────────────────────────────
 function _looksLikeEmail(s) {
   return typeof s === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 }
 
+// Lazy-load the reward ladder once per session — used to render UI even
+// before the customer has joined (so they can SEE what they'd be earning).
+async function _ensureLeafRewards() {
+  if (state.leafRewards && state.leafRewards.length) return;
+  try {
+    var r = await api('listLeafRewards', {});
+    if (r && r.ok) state.leafRewards = r.rewards || [];
+  } catch(e) { /* non-critical */ }
+}
+
+// Auto-lookup loyalty profile when email looks valid. Uses the new
+// getLeavesProfile endpoint which returns the account + progress + claimed
+// tiers + pending redemptions in one call.
 async function _maybeLookupLoyalty() {
   var email = (state.customerEmail || '').toLowerCase().trim();
   if (!_looksLikeEmail(email)) return;
-  if (email === state._loyaltyLookupEmail) return; // already looked up
+  if (email === state._loyaltyLookupEmail) return;
   state._loyaltyLookupEmail = email;
+  await _ensureLeafRewards();
   try {
-    var r = await api('lookupLoyalty', { email: email });
-    if (r && r.ok && r.account) {
-      state.loyaltyAccount = r.account;
-    } else {
-      state.loyaltyAccount = null; // not found
-    }
-  } catch(e) { /* swallow — non-critical */ }
+    var r = await api('getLeavesProfile', { email: email });
+    state.loyaltyAccount = (r && r.ok && r.account) ? r.account : null;
+  } catch(e) { /* swallow */ }
   renderCheckoutPage();
 }
 
@@ -2208,6 +2215,7 @@ async function _joinLoyaltyNow() {
   if (!name) { alert('Please enter your name above first.'); return; }
   if (!_looksLikeEmail(email)) { alert('Please enter a valid email address.'); return; }
   if (!state.loyaltyConsent) { alert('Please tick the consent checkbox.'); return; }
+  await _ensureLeafRewards();
   try {
     var r = await api('joinLoyalty', {
       name:    name,
@@ -2216,43 +2224,39 @@ async function _joinLoyaltyNow() {
       consent: true,
     });
     if (r && r.ok && r.account) {
-      state.loyaltyAccount = r.account;
+      // Re-fetch via getLeavesProfile so we get full progress info, not just bare account
+      var prof = await api('getLeavesProfile', { accountId: r.account.id });
+      state.loyaltyAccount = (prof && prof.ok) ? prof.account : r.account;
       renderCheckoutPage();
     } else {
-      alert('❌ ' + ((r && r.error) || 'Could not join loyalty program'));
+      alert('❌ ' + ((r && r.error) || 'Could not join'));
     }
   } catch(e) { alert('❌ ' + e.message); }
 }
 
-async function _redeemPoints() {
+// Claim the next-tier reward. Server enforces threshold + one-time per tier.
+async function _claimLeafReward(tierOrder) {
   if (!state.loyaltyAccount) return;
-  if (!state.yaniCardValid || !state.yaniCardNumber) {
-    alert('Enter your Yani Card above to redeem points.');
-    return;
-  }
-  var input = document.getElementById('redeemPtsInput');
-  var pts = parseInt(input && input.value);
-  if (isNaN(pts) || pts < 500) { alert('Minimum 500 points to redeem.'); return; }
-  if (pts > parseInt(state.loyaltyAccount.points_balance||0)) {
-    alert('You only have ' + state.loyaltyAccount.points_balance + ' points.');
-    return;
-  }
-  pts = Math.floor(pts / 100) * 100;
-  if (!confirm('Redeem ' + pts + ' pts → ₱' + (pts/100).toFixed(2) + ' credit to ' + state.yaniCardNumber + '?')) return;
+  var tierInt = parseInt(tierOrder);
+  if (!tierInt) return;
+  var reward = (state.leafRewards || []).find(function(x){ return x.tier_order === tierInt; });
+  var rewardName = reward ? reward.reward_name : 'reward';
+  if (!confirm('Claim "' + rewardName + '"? Show the confirmation to staff at the counter to receive it.')) return;
   try {
-    var r = await api('redeemPointsToCard', {
-      accountId:  state.loyaltyAccount.id,
-      cardNumber: state.yaniCardNumber,
-      points:     pts,
+    var r = await api('claimLeafReward', {
+      accountId:   state.loyaltyAccount.id,
+      tierOrder:   tierInt,
       performedBy: 'CUSTOMER',
+      orderId:     state.orderId || undefined,
     });
     if (r && r.ok) {
-      state.pointsRedeemed     = r.points_redeemed;
-      state.pointsRedeemValue  = parseFloat(r.value_credited);
-      state.loyaltyAccount.points_balance = r.points_balance_after;
+      state.claimedThisSession = { tier_order: r.tier_order, reward_name: r.reward_name, redemption_id: r.redemption_id };
+      // Refresh full profile so the UI moves to "next reward"
+      var prof = await api('getLeavesProfile', { accountId: state.loyaltyAccount.id });
+      if (prof && prof.ok) state.loyaltyAccount = prof.account;
       renderCheckoutPage();
     } else {
-      alert('❌ ' + ((r && r.error) || 'Redemption failed'));
+      alert('❌ ' + ((r && r.error) || 'Claim failed'));
     }
   } catch(e) { alert('❌ ' + e.message); }
 }
@@ -2333,55 +2337,84 @@ function renderCheckoutPage() {
       + '</div>';
   }
 
-  // ─── LOYALTY POINTS (Stage 2/3) ──────────────────────────────────────────
-  // Two states:
-  //   (a) No loyalty account found yet  → show "Join Loyalty?" opt-in section
-  //   (b) Account found / just joined  → show points balance + tier + redeem UI
+  // ─── YANI ROOTS REWARDS (Leaves) ─────────────────────────────────────────
+  // Branch A: account known → show leaves balance, progress bar to next tier,
+  //          and unlocked tier(s) the customer can claim
+  // Branch B: not joined yet → show email + opt-in + reward ladder preview
   var loyaltyHtml = '<div class="form-group" style="background:var(--white);border-radius:var(--r-md);padding:14px;box-shadow:var(--shadow-sm);margin-top:10px">';
+
   if (state.loyaltyAccount) {
     var acc = state.loyaltyAccount;
-    var tierColors = { BRONZE:'#92400E', SILVER:'#6B7280', GOLD:'#B45309', PLATINUM:'#5B21B6' };
-    var tierClr = tierColors[acc.tier] || '#92400E';
-    var ptsBal = parseInt(acc.points_balance || 0);
-    var canRedeem = state.yaniCardValid && ptsBal >= 500; // min 500 pts; require active Yani Card
-    loyaltyHtml += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">'
-      + '<span style="font-size:1.4rem">⭐</span>'
+    var lifetime = parseInt(acc.lifetime_leaves || acc.total_points_earned || 0);
+    var nextR    = acc.next_reward || null;
+    var claimed  = acc.claimed_tiers || [];
+    var pending  = acc.pending_redemptions || [];
+
+    // Header
+    loyaltyHtml += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">'
+      + '<span style="font-size:1.5rem">🌿</span>'
       + '<div style="flex:1">'
       +   '<div style="font-weight:800;color:var(--forest-deep);font-size:.95rem">' + esc(acc.name) + '</div>'
-      +   '<div style="font-size:.78rem;color:var(--timber)">' + ptsBal + ' points · '
-      +     '<span style="background:' + tierClr + ';color:#fff;border-radius:8px;padding:1px 6px;font-size:.68rem;font-weight:700">' + esc(acc.tier) + '</span>'
-      +   '</div>'
+      +   '<div style="font-size:.78rem;color:var(--timber)">YANI Roots Rewards · <strong style="color:var(--forest-deep)">' + lifetime + ' leaf' + (lifetime===1?'':'s') + '</strong> 🍃</div>'
       + '</div>'
       + '</div>';
 
-    if (state.pointsRedeemed > 0) {
-      // Already redeemed this session
-      loyaltyHtml += '<div style="background:#F0FDF4;border-radius:8px;padding:10px 12px;font-size:.85rem;color:#065F46;font-weight:700">'
-        + '✅ Redeemed ' + state.pointsRedeemed + ' pts → ₱' + state.pointsRedeemValue.toFixed(2) + ' credited to ' + esc(state.yaniCardNumber)
+    // Progress bar to next tier
+    if (nextR && nextR.threshold) {
+      var prevThreshold = 0;
+      // Find the previous tier's threshold for accurate bar fill
+      (state.leafRewards || []).forEach(function(r){
+        if (r.threshold < nextR.threshold && r.threshold > prevThreshold) prevThreshold = r.threshold;
+      });
+      var pct = Math.max(0, Math.min(100,
+        ((lifetime - prevThreshold) / (nextR.threshold - prevThreshold)) * 100
+      ));
+      var leavesToGo = Math.max(0, nextR.threshold - lifetime);
+      loyaltyHtml += '<div style="margin-bottom:10px">'
+        + '<div style="font-size:.78rem;color:var(--timber);margin-bottom:4px">Next: <strong style="color:var(--forest-deep)">' + esc(nextR.reward_name) + '</strong> at ' + nextR.threshold + ' 🍃'
+        + (leavesToGo > 0 ? ' (' + leavesToGo + ' to go)' : '')
+        + '</div>'
+        + '<div style="background:var(--mist-light);border-radius:8px;height:10px;overflow:hidden">'
+        +   '<div style="background:linear-gradient(90deg,#10B981,#34D399);height:100%;width:' + pct.toFixed(0) + '%;transition:width .4s"></div>'
+        + '</div>'
         + '</div>';
-    } else if (canRedeem) {
-      // 100 pts = ₱1
-      var maxPts = Math.floor(ptsBal / 100) * 100; // largest 100-multiple ≤ balance
-      var inputVal = state.pointsToRedeem || maxPts;
-      loyaltyHtml += '<div style="font-size:.78rem;color:var(--timber);margin-bottom:6px">100 pts = ₱1 · min 500 pts · credited to your Yani Card</div>'
-        + '<div style="display:flex;gap:8px">'
-        + '<input id="redeemPtsInput" type="number" min="500" step="100" max="' + ptsBal + '" value="' + inputVal + '" '
-        + 'style="flex:1;padding:9px 12px;border:1.5px solid var(--mist);border-radius:8px;font-size:.9rem;font-family:var(--font-body);box-sizing:border-box">'
-        + '<button type="button" onclick="_redeemPoints()" style="padding:9px 16px;background:var(--forest);color:#fff;border:none;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer">Redeem</button>'
-        + '</div>';
-    } else if (ptsBal >= 500 && !state.yaniCardValid) {
-      loyaltyHtml += '<div style="font-size:.78rem;color:var(--timber);font-style:italic">💡 Enter your Yani Card above to redeem ' + ptsBal + ' pts for cafe credit.</div>';
+
+      // Unlock claim button if qualified AND not yet claimed
+      if (lifetime >= nextR.threshold) {
+        loyaltyHtml += '<button type="button" onclick="_claimLeafReward(' + nextR.tier_order + ')" '
+          + 'style="width:100%;padding:10px;background:var(--forest);color:#fff;border:none;border-radius:8px;font-size:.85rem;font-weight:700;cursor:pointer;margin-bottom:8px">'
+          + '🎁 Claim "' + esc(nextR.reward_name) + '"'
+          + '</button>';
+      }
     } else {
-      loyaltyHtml += '<div style="font-size:.78rem;color:var(--timber)">Earn ' + (500 - ptsBal) + ' more pts to redeem!</div>';
+      // No next reward — customer has maxed out the ladder
+      loyaltyHtml += '<div style="background:#FEF3C7;border-radius:8px;padding:10px 12px;font-size:.85rem;color:#78350F;font-weight:700;margin-bottom:8px">'
+        + '🌳 You have unlocked every reward — welcome to the Garden Circle, ' + esc(acc.name.split(' ')[0]) + '!'
+        + '</div>';
+    }
+
+    // Just-claimed confirmation (within this session)
+    if (state.claimedThisSession) {
+      loyaltyHtml += '<div style="background:#F0FDF4;border:1.5px solid #10B981;border-radius:8px;padding:10px 12px;font-size:.85rem;color:#065F46;font-weight:700;margin-bottom:8px">'
+        + '✅ Claimed: ' + esc(state.claimedThisSession.reward_name) + ' — show this to staff at the counter!'
+        + '</div>';
+    }
+
+    // Pending redemptions (claimed before, not yet fulfilled)
+    if (pending && pending.length) {
+      loyaltyHtml += '<div style="background:#FFF7ED;border:1px solid #FB923C;border-radius:8px;padding:8px 10px;font-size:.78rem;color:#9A3412;margin-bottom:6px">'
+        + '⏳ Pending pickup: '
+        + pending.map(function(p){ return esc(p.reward_name); }).join(', ')
+        + '</div>';
     }
   } else {
-    // Not joined yet
+    // Branch B — not joined yet
     loyaltyHtml += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
-      + '<span style="font-size:1rem">⭐</span>'
-      + '<label class="form-label" style="margin:0;font-weight:700">Loyalty Points <span style="font-weight:400;color:var(--timber);font-size:.78rem">(earn 1 pt per ₱1)</span></label>'
+      + '<span style="font-size:1.2rem">🌿</span>'
+      + '<label class="form-label" style="margin:0;font-weight:700">YANI Roots Rewards</label>'
       + '</div>'
-      + '<div style="font-size:.78rem;color:var(--timber);margin-bottom:10px;line-height:1.4">'
-      + '🎁 Yani Card holders earn <strong>2x points</strong> when paying with their card. Redeem 500+ pts for cafe credit anytime.'
+      + '<div style="font-size:.78rem;color:var(--timber);margin-bottom:10px;line-height:1.5">'
+      + 'Every ₱300 plants a leaf 🍃 — the more you return, the more YANI gives back. Free Luntian bread at <strong>5 🍃</strong>, ice cream at <strong>10 🍃</strong>, and more.'
       + '</div>'
       + '<input id="loyaltyEmailInput" type="email" autocomplete="email" placeholder="Email (e.g. juan@email.com)" '
       + 'value="' + esc(state.customerEmail || '') + '" '
@@ -2395,10 +2428,13 @@ function renderCheckoutPage() {
       + '<input type="checkbox" id="loyaltyConsentBox" ' + (state.loyaltyConsent ? 'checked' : '') + ' '
       + 'onchange="state.loyaltyConsent=this.checked;renderCheckoutPage()" '
       + 'style="width:16px;height:16px;cursor:pointer">'
-      + '<span>Join YANI Rewards — I agree to be enrolled to earn points on this order.</span>'
+      + '<span>Plant my first leaf — I agree to join YANI Roots Rewards.</span>'
       + '</label>';
     if (state.loyaltyConsent && state.customerEmail && _looksLikeEmail(state.customerEmail)) {
-      loyaltyHtml += '<button type="button" onclick="_joinLoyaltyNow()" style="margin-top:8px;width:100%;padding:9px;background:var(--forest);color:#fff;border:none;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer">⭐ Join Now</button>';
+      loyaltyHtml += '<button type="button" onclick="_joinLoyaltyNow()" '
+        + 'style="margin-top:10px;width:100%;padding:10px;background:var(--forest);color:#fff;border:none;border-radius:8px;font-size:.85rem;font-weight:700;cursor:pointer">'
+        + '🌿 Start growing'
+        + '</button>';
     }
   }
   loyaltyHtml += '</div>';
@@ -3222,37 +3258,32 @@ function renderStatusPage() {
     (state.tableNo ? '<div style="margin-top:4px;font-size:.82rem;color:var(--timber)">Table ' + esc(state.tableNo) + '</div>' : '') +
   '</div>';
 
-  // ── Loyalty summary on status page ───────────────────────────────────
-  // Two blocks:
-  //   (a) Points-redemption confirmation if we successfully redeemed during checkout
-  //   (b) Points-to-be-earned estimate when this order completes
-  if (state.pointsRedeemed > 0) {
-    html += '<div style="background:#F0FDF4;border:1.5px solid #065F46;border-radius:14px;padding:14px;margin-bottom:12px;text-align:center">'
-      + '<div style="font-size:1.4rem;margin-bottom:4px">💰</div>'
-      + '<div style="font-size:.88rem;font-weight:700;color:#065F46">Redeemed ' + state.pointsRedeemed + ' pts → ' + peso(state.pointsRedeemValue) + '</div>'
-      + '<div style="font-size:.75rem;color:#065F46;margin-top:2px">credited to ' + esc(state.yaniCardNumber) + '</div>'
+  // ── Roots Rewards summary on status page ─────────────────────────────
+  // (a) Just-claimed reward (carries from checkout to status page)
+  // (b) Leaves-to-be-earned estimate when this order completes
+  // (c) Earned confirmation on COMPLETED
+  if (state.claimedThisSession) {
+    html += '<div style="background:#F0FDF4;border:1.5px solid #10B981;border-radius:14px;padding:14px;margin-bottom:12px;text-align:center">'
+      + '<div style="font-size:1.4rem;margin-bottom:4px">🎁</div>'
+      + '<div style="font-size:.88rem;font-weight:700;color:#065F46">' + esc(state.claimedThisSession.reward_name) + ' claimed!</div>'
+      + '<div style="font-size:.75rem;color:#065F46;margin-top:2px">Show this screen to staff at the counter</div>'
       + '</div>';
   }
   if (state.loyaltyAccount && (s === 'NEW' || s === 'PREPARING' || s === 'READY')) {
-    // Estimate points that will be earned. Floor(total × earnRate × multiplier).
-    // We don't know exact discounted_total yet; use orderTotal which is post-discount.
-    var earnRate = 1; // Frontend mirror of LOYALTY_EARN_RATE
-    var mult = (state.yaniCardValid && state.yaniCardNumber) ? 2 : 1;
-    var estPts = Math.floor(state.orderTotal * earnRate * mult);
-    if (estPts > 0) {
+    // Estimate leaves from PRE-DISCOUNT total. We use orderTotal which is the
+    // discounted final; for an exact estimate we'd want the pre-discount value
+    // — but since most orders don't have a Yani Card discount, this is close.
+    var pesosPerLeaf = 300; // mirror of LEAVES_PESOS_PER_LEAF setting
+    var estLeaves = Math.floor((state.orderTotal || 0) / pesosPerLeaf);
+    if (estLeaves > 0) {
       html += '<div style="background:#FFFBEB;border:1.5px solid #F59E0B;border-radius:14px;padding:12px 14px;margin-bottom:12px;text-align:center">'
-        + '<div style="font-size:.78rem;color:#78350F">⭐ You\'ll earn ~<strong>' + estPts + ' pts</strong>'
-        + (mult > 1 ? ' (<strong>' + mult + 'x Yani Card bonus</strong>)' : '')
-        + ' when this order completes</div>'
+        + '<div style="font-size:.82rem;color:#78350F">🍃 You\'ll earn ~<strong>' + estLeaves + ' leaf' + (estLeaves===1?'':'s') + '</strong> from this order</div>'
         + '</div>';
     }
   }
   if (state.loyaltyAccount && s === 'COMPLETED') {
-    // Final earned message — we don't know exact figure without re-fetching,
-    // but the order is now COMPLETE so auto-earn fired server-side. Show a
-    // friendly nudge to check balance on next visit.
     html += '<div style="background:#F0FDF4;border:1.5px solid #10B981;border-radius:14px;padding:12px 14px;margin-bottom:12px;text-align:center">'
-      + '<div style="font-size:.82rem;color:#065F46;font-weight:600">⭐ Points earned! Check your balance on your next order.</div>'
+      + '<div style="font-size:.82rem;color:#065F46;font-weight:600">🌿 Leaves earned! See your progress on your next visit.</div>'
       + '</div>';
   }
   // ─────────────────────────────────────────────────────────────────────
