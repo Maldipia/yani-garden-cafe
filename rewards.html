@@ -657,7 +657,10 @@
 <!-- ─── NAV ─── -->
 <nav class="top">
   <div class="nav-inner">
-    <div class="logo">🌿 YANI</div>
+    <div class="logo">
+      <img src="/images/yani-logo.png" alt="" style="height:34px;width:auto;vertical-align:middle;margin-right:6px;display:inline-block">
+      <span style="vertical-align:middle">YANI</span>
+    </div>
     <a href="#register" class="nav-cta">Join Roots Rewards</a>
   </div>
 </nav>
@@ -1043,6 +1046,40 @@ async function submitRewardsRegistration() {
       var tierStr = cardTier.toLocaleString();
       var fbRef = 'rewards_signup_' + cardTier;
 
+      // ─── PAYMENT METHODS (MOP) ──────────────────────────────────────
+      // Same payment info as the order checkout flow: GCash, BDO, BPI,
+      // UnionBank. Customer pays via any of these → sends screenshot via
+      // FB Messenger → staff matches in Pending Card Requests + activates.
+      // Tap-to-copy on account numbers makes it painless on mobile.
+      var paymentMethods = [
+        { name: 'GCash',     icon: '💚', acctName: 'LEGERYN PIA', acctNum: '0966 960 6060', img: '/images/pay-gcash.jpg',     numLabel: 'GCash Number', brand: '#0066D9' },
+        { name: 'BDO',       icon: '🔵', acctName: 'LEGERYN PIA', acctNum: '0126-000-62617', img: '/images/pay-bdo.jpg',       numLabel: 'Account Number', brand: '#003B7A' },
+        { name: 'BPI',       icon: '🔴', acctName: 'LEGERYN PIA', acctNum: '1539-235-628',   img: '/images/pay-bpi.png',       numLabel: 'Account Number', brand: '#B4203F' },
+        { name: 'UnionBank', icon: '🟠', acctName: 'LEGERYN PIA', acctNum: '1093-2100-0528', img: '/images/pay-unionbank.jpg', numLabel: 'Account Number', brand: '#F47B20' }
+      ];
+
+      var mopCards = paymentMethods.map(function(p) {
+        return '<div style="display:grid;grid-template-columns:96px 1fr;gap:12px;padding:12px;margin-bottom:10px;background:#fff;border-radius:10px;border:1.5px solid #e6e0d3;align-items:center">' +
+          '<img src="' + p.img + '" alt="' + p.name + ' QR" style="width:96px;height:96px;object-fit:contain;border-radius:6px;background:#fafaf7" loading="lazy">' +
+          '<div style="min-width:0">' +
+            '<div style="font-weight:800;color:' + p.brand + ';font-size:.92rem;display:flex;align-items:center;gap:4px">' + p.icon + ' ' + p.name + '</div>' +
+            '<div style="font-size:.68rem;color:#888;letter-spacing:.04em;text-transform:uppercase;margin-top:6px;font-weight:600">Account Name</div>' +
+            '<div style="font-weight:700;font-size:.84rem;color:#333">' + p.acctName + '</div>' +
+            '<div style="font-size:.68rem;color:#888;letter-spacing:.04em;text-transform:uppercase;margin-top:5px;font-weight:600">' + p.numLabel + '</div>' +
+            '<div onclick="copyMopNumber(this, \'' + p.acctNum.replace(/[^\\d]/g,'') + '\')" style="font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-weight:800;font-size:.92rem;color:var(--emerald-deep);cursor:copy;user-select:all;word-break:break-all" title="Tap to copy">' + p.acctNum + '</div>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+
+      var mopSection = '<div style="margin:18px 0 14px;padding:16px;background:linear-gradient(180deg,#fefbf5,#faf6ec);border:1.5px solid #e6d9b8;border-radius:14px">' +
+        '<div style="text-align:center;margin-bottom:14px">' +
+          '<img src="/images/yani-logo.png" alt="YANI Garden Café" style="height:54px;width:auto;display:inline-block">' +
+          '<div style="font-size:.72rem;color:#92400e;letter-spacing:.1em;text-transform:uppercase;font-weight:800;margin-top:6px">Pay ₱' + tierStr + ' via</div>' +
+          '<div style="font-size:.74rem;color:#a16207;margin-top:2px;font-style:italic">Tap account number to copy</div>' +
+        '</div>' +
+        mopCards +
+      '</div>';
+
       // PRIMARY PATH: FB Messenger instant activation
       var fbCta = '<div style="margin:18px 0 14px;padding:18px;background:linear-gradient(135deg,#e0f2fe,#dbeafe);border:2px solid #2563eb;border-radius:14px">' +
         '<div style="font-size:.7rem;color:#1e40af;letter-spacing:.1em;text-transform:uppercase;font-weight:800;margin-bottom:10px;text-align:center">⚡ Activate instantly via Facebook</div>' +
@@ -1067,7 +1104,7 @@ async function submitRewardsRegistration() {
         '<span style="opacity:.75">Pay at the counter, pick up your physical card</span>' +
       '</div>';
 
-      $('nextSteps').innerHTML = cardBadge + fbCta + visitCta;
+      $('nextSteps').innerHTML = cardBadge + mopSection + fbCta + visitCta;
     }
 
     // Scroll to success
@@ -1104,6 +1141,44 @@ document.querySelectorAll('#rfName, #rfEmail, #rfPhone').forEach(el => {
     }
   });
 });
+
+// ─── Tap-to-copy on MOP account numbers ──────────────────────────────
+// Used by the payment methods cards in the success state. Visual feedback
+// flashes the number green + flips text to "Copied!" briefly.
+window.copyMopNumber = async function(el, digitsOnly) {
+  var original = el.textContent;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(digitsOnly);
+    } else {
+      // Fallback for older mobile browsers
+      var ta = document.createElement('textarea');
+      ta.value = digitsOnly;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    var origColor = el.style.color;
+    var origBg = el.style.background;
+    el.textContent = '✓ Copied!';
+    el.style.color = '#15803d';
+    el.style.background = '#dcfce7';
+    el.style.padding = '2px 6px';
+    el.style.borderRadius = '4px';
+    setTimeout(function() {
+      el.textContent = original;
+      el.style.color = origColor;
+      el.style.background = origBg;
+      el.style.padding = '';
+      el.style.borderRadius = '';
+    }, 1500);
+  } catch (e) {
+    // Silent fail; user can still long-press to select naturally
+  }
+};
 </script>
 
 </body>
