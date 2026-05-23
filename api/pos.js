@@ -74,6 +74,141 @@ async function auditLog({ orderId, action, actor, oldValue, newValue, details } 
   } catch (_) { /* never block the main action */ }
 }
 
+// ── Surprise rewards (Soul Searcher + Rainy Day) ─────────────────────────
+// Both are fire-and-forget. They check their own settings flag + cooldown
+// so the caller doesn't need to gate them. Insert one row into
+// surprise_rewards when triggered; staff fulfills at counter.
+
+async function _maybeFireSoulSearcher(accountId, orderId, sett) {
+  if ((sett.SURPRISE_SOUL_SEARCHER_ENABLED || 'true') === 'false') return;
+  const visitsNeeded = parseInt(sett.SURPRISE_SOUL_SEARCHER_VISITS         || '5');
+  const windowDays   = parseInt(sett.SURPRISE_SOUL_SEARCHER_WINDOW_DAYS    || '30');
+  const cooldownDays = parseInt(sett.SURPRISE_SOUL_SEARCHER_COOLDOWN_DAYS  || '30');
+  const expiryDays   = parseInt(sett.SURPRISE_REWARD_EXPIRY_DAYS           || '30');
+
+  // Count EARN transactions in the last `windowDays` days
+  const since = new Date(Date.now() - windowDays * 24 * 3600 * 1000).toISOString();
+  const earnsR = await supaFetch(
+    `${SUPABASE_URL}/rest/v1/points_transactions?account_id=eq.${encodeURIComponent(accountId)}&type=eq.EARN&created_at=gte.${encodeURIComponent(since)}&select=order_id`
+  );
+  if (!earnsR.ok) return;
+  // Count UNIQUE order_ids — protects against accidental double-EARNs on
+  // the same order (shouldn't happen, but cheap defense)
+  const uniqueOrders = new Set((earnsR.data || []).map(r => r.order_id).filter(Boolean));
+  if (uniqueOrders.size < visitsNeeded) return;
+
+  // Cooldown check — has Soul Searcher already fired in last `cooldownDays`?
+  const cdSince = new Date(Date.now() - cooldownDays * 24 * 3600 * 1000).toISOString();
+  const recentR = await supaFetch(
+    `${SUPABASE_URL}/rest/v1/surprise_rewards?account_id=eq.${encodeURIComponent(accountId)}&reward_type=eq.SOUL_SEARCHER&triggered_at=gte.${encodeURIComponent(cdSince)}&select=id&limit=1`
+  );
+  if (recentR.ok && recentR.data && recentR.data.length > 0) return;
+
+  // Fire it
+  const expiresAt = new Date(Date.now() + expiryDays * 24 * 3600 * 1000).toISOString();
+  await supaFetch(`${SUPABASE_URL}/rest/v1/surprise_rewards`, {
+    method: 'POST',
+    headers: { 'Prefer': 'return=minimal' },
+    body: JSON.stringify({
+      account_id:             accountId,
+      reward_type:            'SOUL_SEARCHER',
+      reward_name:            'Free Drink Upgrade',
+      reward_value:           'FREE_DRINK_UPGRADE',
+      status:                 'PENDING',
+      triggered_by_order_id:  orderId,
+      expires_at:             expiresAt,
+      notes:                  `${uniqueOrders.size} visits in last ${windowDays} days`,
+    })
+  });
+  await auditLog({ orderId, action: 'SURPRISE_SOUL_SEARCHER', details: { accountId, visits: uniqueOrders.size, windowDays } });
+}
+
+// Rainy Day: needs weather data. Looks at weather_cache for today's PHT date;
+// if missing, queries OpenWeatherMap (free tier) and caches the result. If
+// WEATHER_API_KEY env var is unset, the whole feature is dormant.
+async function _maybeFireRainyDay(accountId, orderId, sett) {
+  if ((sett.SURPRISE_RAINY_DAY_ENABLED || 'true') === 'false') return;
+  const apiKey = process.env.WEATHER_API_KEY || process.env.OPENWEATHERMAP_API_KEY;
+  if (!apiKey) return; // dormant until owner adds the key
+
+  const threshold = parseFloat(sett.SURPRISE_RAINY_DAY_PRECIP_MM || '1.0');
+  const expiryDays = parseInt(sett.SURPRISE_REWARD_EXPIRY_DAYS  || '30');
+
+  // PHT date (Asia/Manila, UTC+8)
+  const phtDate = new Date(Date.now() + 8*3600*1000).toISOString().slice(0,10);
+
+  // Check cache
+  let precipMm = null;
+  let conditions = null;
+  const cacheR = await supaFetch(`${SUPABASE_URL}/rest/v1/weather_cache?cache_date=eq.${phtDate}&select=precipitation_mm,conditions&limit=1`);
+  if (cacheR.ok && cacheR.data && cacheR.data.length > 0) {
+    precipMm   = cacheR.data[0].precipitation_mm;
+    conditions = cacheR.data[0].conditions;
+  } else {
+    // Fetch from OpenWeatherMap (current weather endpoint, free tier)
+    const lat = sett.WEATHER_LAT || '14.1747';
+    const lon = sett.WEATHER_LON || '120.9243';
+    try {
+      const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`;
+      const wr  = await fetch(url, { signal: AbortSignal.timeout(5000) });
+      if (wr.ok) {
+        const wd = await wr.json();
+        // OpenWeatherMap puts rain in wd.rain['1h'] or wd.rain['3h'] (mm)
+        precipMm   = (wd.rain && (wd.rain['1h'] || wd.rain['3h'])) || 0;
+        conditions = (wd.weather && wd.weather[0] && wd.weather[0].main) || 'Unknown';
+        // Cache result for the rest of the day
+        await supaFetch(`${SUPABASE_URL}/rest/v1/weather_cache`, {
+          method: 'POST',
+          headers: { 'Prefer': 'return=minimal' },
+          body: JSON.stringify({
+            cache_date:       phtDate,
+            location:         sett.WEATHER_CITY || 'Amadeo,PH',
+            precipitation_mm: precipMm,
+            conditions:       conditions,
+            raw_response:     wd,
+          })
+        });
+      } else {
+        // Insert a NULL row so we don't retry on every order today
+        await supaFetch(`${SUPABASE_URL}/rest/v1/weather_cache`, {
+          method: 'POST', headers: { 'Prefer': 'return=minimal' },
+          body: JSON.stringify({ cache_date: phtDate, precipitation_mm: null, conditions: 'API_ERROR' })
+        });
+        return;
+      }
+    } catch (e) {
+      console.error('Weather fetch error:', e.message);
+      return;
+    }
+  }
+
+  if (precipMm == null || precipMm < threshold) return;
+
+  // One Rainy Day reward per account per PHT date
+  const todayStart = phtDate + 'T00:00:00+08:00';
+  const dupR = await supaFetch(
+    `${SUPABASE_URL}/rest/v1/surprise_rewards?account_id=eq.${encodeURIComponent(accountId)}&reward_type=eq.RAINY_DAY&triggered_at=gte.${encodeURIComponent(todayStart)}&select=id&limit=1`
+  );
+  if (dupR.ok && dupR.data && dupR.data.length > 0) return;
+
+  const expiresAt = new Date(Date.now() + expiryDays * 24 * 3600 * 1000).toISOString();
+  await supaFetch(`${SUPABASE_URL}/rest/v1/surprise_rewards`, {
+    method: 'POST',
+    headers: { 'Prefer': 'return=minimal' },
+    body: JSON.stringify({
+      account_id:             accountId,
+      reward_type:            'RAINY_DAY',
+      reward_name:            'Free Luntian Pastry',
+      reward_value:           'FREE_LUNTIAN_PASTRY',
+      status:                 'PENDING',
+      triggered_by_order_id:  orderId,
+      expires_at:             expiresAt,
+      notes:                  `Rain ${precipMm}mm (${conditions || 'rainy'}) on ${phtDate}`,
+    })
+  });
+  await auditLog({ orderId, action: 'SURPRISE_RAINY_DAY', details: { accountId, precipMm, conditions, date: phtDate } });
+}
+
 // ── Receipt email sender ───────────────────────────────────────────────────
 function buildReceiptHTML({ order, items, isBIR }) {
   const fmt = (n) => `₱${parseFloat(n||0).toFixed(2)}`;
@@ -1413,14 +1548,43 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
 
               if (resolvedAccountId) {
                 // ── LEAVES EARN FORMULA ─────────────────────────────────────
-                // Leaves count the PRE-DISCOUNT ticket (Yani Card 10% off doesn't
-                // shrink earn rate). Formula: floor(total ÷ pesosPerLeaf).
-                // No card multiplier — the 10% off IS the card perk.
+                // 1. Base earn: floor(pre-discount total ÷ ₱300)
+                // 2. Sunset bonus: order completed during sunset window → 2x multiplier
+                //    (4-7 PM PHT by default, configurable via SURPRISE_SUNSET_*)
+                // 3. After leaves are written, fire Soul Searcher + Rainy Day
+                //    checks (both create surprise_rewards rows for staff fulfillment)
                 const preDiscountTotal = parseFloat(ord.total || 0);
                 const actualTotal      = parseFloat(ord.discounted_total || ord.total || 0);
-                const pplR = await supaFetch(`${SUPABASE_URL}/rest/v1/settings?key=eq.LEAVES_PESOS_PER_LEAF&select=value&limit=1`);
-                const pesosPerLeaf = parseInt(pplR.data?.[0]?.value || '300') || 300;
-                const leavesEarned = Math.floor(preDiscountTotal / pesosPerLeaf);
+
+                // Load all settings needed in one call
+                const settKeys = '("LEAVES_PESOS_PER_LEAF","SURPRISE_SUNSET_ENABLED","SURPRISE_SUNSET_HOUR_START","SURPRISE_SUNSET_HOUR_END","SURPRISE_SUNSET_MULTIPLIER","SURPRISE_SOUL_SEARCHER_ENABLED","SURPRISE_SOUL_SEARCHER_VISITS","SURPRISE_SOUL_SEARCHER_WINDOW_DAYS","SURPRISE_SOUL_SEARCHER_COOLDOWN_DAYS","SURPRISE_RAINY_DAY_ENABLED","SURPRISE_RAINY_DAY_PRECIP_MM","SURPRISE_REWARD_EXPIRY_DAYS","WEATHER_LAT","WEATHER_LON")';
+                const settR = await supaFetch(`${SUPABASE_URL}/rest/v1/settings?key=in.${settKeys}&select=key,value`);
+                const sett = {};
+                (settR.data||[]).forEach(s => { sett[s.key] = s.value; });
+
+                const pesosPerLeaf = parseInt(sett.LEAVES_PESOS_PER_LEAF || '300') || 300;
+                let leavesEarned   = Math.floor(preDiscountTotal / pesosPerLeaf);
+
+                // ─── SUNSET MULTIPLIER (4-7 PM PHT by default) ─────────────
+                // Get the order's hour in Manila time. Use the actual ord.completed
+                // time which is "right now" — we're in the order-completion handler.
+                let sunsetApplied = false;
+                let sunsetBonus   = 0;
+                if (leavesEarned > 0 && sett.SURPRISE_SUNSET_ENABLED !== 'false') {
+                  // Parse PHT hour from current UTC time
+                  const phtHourStr = new Date().toLocaleString('en-US', {
+                    hour: 'numeric', hour12: false, timeZone: 'Asia/Manila'
+                  });
+                  const phtHour  = parseInt(phtHourStr);
+                  const startH   = parseInt(sett.SURPRISE_SUNSET_HOUR_START || '16');
+                  const endH     = parseInt(sett.SURPRISE_SUNSET_HOUR_END   || '19');
+                  const multiplier = parseInt(sett.SURPRISE_SUNSET_MULTIPLIER || '2');
+                  if (!isNaN(phtHour) && phtHour >= startH && phtHour < endH && multiplier > 1) {
+                    sunsetBonus    = leavesEarned * (multiplier - 1);  // extra leaves on top of base
+                    leavesEarned  += sunsetBonus;
+                    sunsetApplied  = true;
+                  }
+                }
 
                 if (leavesEarned > 0) {
                   const accR = await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts?id=eq.${encodeURIComponent(resolvedAccountId)}&select=points_balance,total_points_earned,total_spent,visit_count&limit=1`);
@@ -1439,11 +1603,14 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
                         total_spent:         newTotalSpent,
                         visit_count:         newVisits,
                         last_visit:          new Date().toISOString(),
-                        last_earn_at:        new Date().toISOString(),  // expiry anchor
+                        last_earn_at:        new Date().toISOString(),
                         updated_at:          new Date().toISOString(),
                       })
                     });
 
+                    const descSuffix = sunsetApplied
+                      ? ` · 🌅 Sunset bonus (+${sunsetBonus} leaf${sunsetBonus===1?'':'s'})`
+                      : '';
                     await supaFetch(`${SUPABASE_URL}/rest/v1/points_transactions`, {
                       method: 'POST', body: JSON.stringify({
                         account_id:     resolvedAccountId,
@@ -1452,7 +1619,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
                         points:         leavesEarned,
                         balance_before: balBefore,
                         balance_after:  balAfter,
-                        description:    `Earned ${leavesEarned} leaf${leavesEarned===1?'':'s'} from order ${orderId} (₱${preDiscountTotal.toFixed(2)} ÷ ₱${pesosPerLeaf})`,
+                        description:    `Earned ${leavesEarned} leaf${leavesEarned===1?'':'s'} from order ${orderId} (₱${preDiscountTotal.toFixed(2)} ÷ ₱${pesosPerLeaf})` + descSuffix,
                         processed_by:   userId
                       })
                     });
@@ -1462,7 +1629,18 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
                     await supaFetch(`${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}`, {
                       method: 'PATCH', body: JSON.stringify(patchPayload)
                     });
-                    auditLog({ orderId, action: 'LEAVES_EARNED', details: { accountId: resolvedAccountId, leavesEarned, balAfter, lifetime: newTotalEarned, preDiscountTotal, paidWithCard: paidWithCardInit } });
+                    auditLog({ orderId, action: 'LEAVES_EARNED', details: { accountId: resolvedAccountId, leavesEarned, balAfter, lifetime: newTotalEarned, preDiscountTotal, paidWithCard: paidWithCardInit, sunsetApplied, sunsetBonus } });
+
+                    // ─── SURPRISE REWARDS (post-earn triggers) ───────────────────
+                    // Both run fire-and-forget; failures here never affect the order.
+                    // They check their own settings flags + cooldowns so we don't
+                    // need to gate them at the call site.
+                    try {
+                      await _maybeFireSoulSearcher(resolvedAccountId, orderId, sett);
+                    } catch(e) { console.error('Soul Searcher error:', e.message); }
+                    try {
+                      await _maybeFireRainyDay(resolvedAccountId, orderId, sett);
+                    } catch(e) { console.error('Rainy Day error:', e.message); }
                   }
                 }
               }
@@ -1998,6 +2176,57 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       );
       if (!r.ok) return res.status(500).json({ ok: false, error: 'DB error' });
       return res.status(200).json({ ok: true, redemptions: r.data || [] });
+    }
+
+    // ── fulfillSurpriseReward (STAFF — mark a surprise as delivered) ─────
+    // Surprises (Soul Searcher / Rainy Day) auto-fire on the customer's account.
+    // Customer doesn't claim them — they just show up in their profile. Staff
+    // fulfills at counter and confirms via this endpoint.
+    if (action === 'fulfillSurpriseReward') {
+      const auth = await checkAuth(['OWNER','ADMIN','CASHIER','KITCHEN']);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      const { surpriseId, orderId: applyOrderId } = body;
+      if (!surpriseId) return res.status(400).json({ ok: false, error: 'surpriseId required' });
+      const r = await supaFetch(`${SUPABASE_URL}/rest/v1/rpc/fulfill_surprise_reward`, {
+        method: 'POST',
+        body: JSON.stringify({ p_surprise_id: surpriseId, p_performed_by: auth.userId || 'STAFF', p_order_id: applyOrderId || null }),
+      });
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'DB error' });
+      return res.status(200).json(r.data);
+    }
+
+    // ── listPendingSurprises (STAFF — fulfillment queue for surprises) ───
+    if (action === 'listPendingSurprises') {
+      const auth = await checkAuth(['OWNER','ADMIN','CASHIER','KITCHEN']);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/surprise_rewards?status=eq.PENDING&select=id,reward_type,reward_name,triggered_at,expires_at,notes,account_id,triggered_by_order_id,loyalty_accounts(name,email,phone,linked_card_number)&order=triggered_at.asc`
+      );
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'DB error' });
+      return res.status(200).json({ ok: true, surprises: r.data || [] });
+    }
+
+    // ── expireLeaves (CRON or OWNER manual trigger) ──────────────────────
+    // Calls the expire_leaves() DB function. Two paths to invoke:
+    //   1. Vercel cron → header authorization: bearer <CRON_SECRET>
+    //   2. Owner manual → body { pin: '2026' }
+    if (action === 'expireLeaves') {
+      const cronSecret = process.env.CRON_SECRET || '';
+      const authHeader = req.headers?.authorization || '';
+      const fromCron   = cronSecret && authHeader === 'Bearer ' + cronSecret;
+      let fromOwner    = false;
+      if (!fromCron && body.pin) {
+        const pinR = await supaFetch(`${SUPABASE_URL}/rest/v1/users?pin=eq.${encodeURIComponent(body.pin)}&role=eq.OWNER&select=id&limit=1`);
+        fromOwner = pinR.ok && pinR.data && pinR.data.length > 0;
+      }
+      if (!fromCron && !fromOwner) return res.status(403).json({ ok: false, error: 'Owner PIN or CRON_SECRET required' });
+
+      const r = await supaFetch(`${SUPABASE_URL}/rest/v1/rpc/expire_leaves`, {
+        method: 'POST', body: JSON.stringify({})
+      });
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'DB error' });
+      await auditLog({ action: 'LEAVES_EXPIRY_SWEEP', details: { ...r.data, source: fromCron ? 'CRON' : 'OWNER_MANUAL' } });
+      return res.status(200).json(r.data);
     }
 
     // ── getLoyaltyAccounts (admin list) ───────────────────────────────────

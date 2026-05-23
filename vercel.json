@@ -44,6 +44,9 @@
     },
     "api/events-inquiry.js": {
       "maxDuration": 15
+    },
+    "api/cron-leaves-expiry.js": {
+      "maxDuration": 30
     }
   },
   "rewrites": [
@@ -204,6 +207,10 @@
     {
       "path": "/api/low-stock",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron-leaves-expiry",
+      "schedule": "0 18 * * *"
     }
   ],
   "regions": [
