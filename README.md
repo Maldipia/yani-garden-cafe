@@ -156,11 +156,11 @@ open('/tmp/check.js','w').write(m.group(1) if m else '')
 # Push
 git push origin main
 
-# Wait ~60s for Vercel deploy
-# Verify live: curl + check rendered HTML matches local
+# Wait ~60s for Vercel deploy, then verify nothing broke
+./scripts/smoke-test.sh   # 14 read-only checks in ~10s, exit 0 = clean
 ```
 
-**Cache-busting:** Vercel sets `cache-control: public, max-age=0, must-revalidate` on HTML so browsers always revalidate. But aggressive caches (FB Messenger webview, in-app browsers) sometimes hold stale versions for hours. To force revalidation, a whitespace commit to `README.md` busts Vercel's edge cache.
+**Cache-busting:** Vercel sets `cache-control: no-store, no-cache, must-revalidate` on HTML so browsers and in-app webviews always fetch fresh. JS/CSS use `must-revalidate` (validate every request) for performance. To force a complete edge cache flush, a whitespace commit to `README.md` busts Vercel's edge cache.
 
 ---
 
