@@ -157,6 +157,26 @@
     {
       "source": "/demo/",
       "destination": "/demo.html"
+    },
+    {
+      "source": "/rewards",
+      "destination": "/rewards.html"
+    },
+    {
+      "source": "/rewards/",
+      "destination": "/rewards.html"
+    },
+    {
+      "source": "/join",
+      "destination": "/rewards.html"
+    },
+    {
+      "source": "/loyalty",
+      "destination": "/rewards.html"
+    },
+    {
+      "source": "/roots",
+      "destination": "/rewards.html"
     }
   ],
   "headers": [

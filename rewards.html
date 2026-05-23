@@ -1,0 +1,1077 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5">
+  <title>YANI Roots Rewards — Plant a leaf with every visit · YANI Garden Café</title>
+  <meta name="description" content="Get your YANI Card. Every ₱500 plants a leaf 🍃. Cash in leaves for free food, every visit. 10% off every order, forever.">
+
+  <!-- Open Graph (Facebook / Messenger / IG link previews) -->
+  <meta property="og:title" content="🌿 YANI Roots Rewards — Plant a leaf with every visit">
+  <meta property="og:description" content="Every ₱500 plants a leaf 🍃. Free ice cream at 5 leaves. Free crispy chicken at 40. Plus 10% off every order, forever. Reserve your YANI Card now.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://yanigardencafe.com/rewards">
+  <meta property="og:image" content="https://yanigardencafe.com/images/yani-og-rewards.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&family=Dancing+Script:wght@500;600&display=swap" rel="stylesheet">
+
+  <link rel="icon" href="/images/yani-logo.png" type="image/png">
+
+  <style>
+  :root {
+    --emerald: #1a3a0f;
+    --emerald-deep: #0d2a07;
+    --emerald-soft: #2d5a18;
+    --emerald-bright: #3d7a23;
+    --ivory: #F5F1E8;
+    --ivory-soft: #FAF7F0;
+    --gold: #B8956A;
+    --gold-soft: #D4B896;
+    --gold-deep: #8a6a48;
+    --charcoal: #1A1A1A;
+    --charcoal-soft: #4A4A4A;
+    --line: rgba(184, 149, 106, 0.25);
+    --leaf-bg: rgba(45, 90, 24, 0.06);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+  body {
+    font-family: 'Inter', sans-serif;
+    color: var(--charcoal);
+    background: var(--ivory);
+    font-weight: 300;
+    line-height: 1.7;
+    font-size: 16px;
+    overflow-x: hidden;
+  }
+  h1, h2, h3, h4 {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-weight: 500;
+    letter-spacing: -0.005em;
+    color: var(--emerald);
+  }
+  .script { font-family: 'Dancing Script', cursive; font-weight: 500; }
+  a { color: inherit; text-decoration: none; transition: opacity 0.2s; }
+  a:hover { opacity: 0.7; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+  .small-caps {
+    font-size: 0.7rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--gold);
+  }
+  .hairline {
+    width: 60px;
+    height: 1px;
+    background: var(--gold);
+    margin: 24px auto;
+    opacity: 0.6;
+    border: none;
+  }
+
+  /* ─── NAV ─── */
+  nav.top {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(245, 241, 232, 0.92);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+  }
+  nav.top .nav-inner {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 24px; max-width: 1100px; margin: 0 auto;
+  }
+  nav.top .logo {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.3rem; font-weight: 600; color: var(--emerald);
+    letter-spacing: 0.02em;
+  }
+  nav.top .nav-cta {
+    background: var(--emerald); color: var(--ivory-soft);
+    padding: 8px 18px; border-radius: 22px;
+    font-size: 0.78rem; font-weight: 600;
+    transition: background 0.2s;
+  }
+  nav.top .nav-cta:hover { background: var(--emerald-deep); opacity: 1; }
+
+  /* ─── HERO ─── */
+  .hero {
+    padding: 80px 0 60px;
+    text-align: center;
+    background:
+      radial-gradient(ellipse at top, rgba(45, 90, 24, 0.08) 0%, transparent 60%),
+      var(--ivory);
+    position: relative;
+  }
+  .hero .leaf-bg {
+    position: absolute; top: 20px; right: -40px;
+    font-size: 14rem; opacity: 0.04;
+    pointer-events: none; user-select: none;
+    transform: rotate(15deg);
+  }
+  .hero .leaf-bg-2 {
+    position: absolute; bottom: 10px; left: -50px;
+    font-size: 12rem; opacity: 0.04;
+    pointer-events: none; user-select: none;
+    transform: rotate(-25deg);
+  }
+  .hero h1 {
+    font-size: clamp(2.3rem, 7vw, 4.2rem);
+    line-height: 1.05; margin: 18px 0 22px;
+    color: var(--emerald);
+    position: relative;
+  }
+  .hero h1 .leaf-accent {
+    color: var(--emerald-bright);
+    display: inline-block;
+    animation: leafSway 3s ease-in-out infinite;
+  }
+  @keyframes leafSway {
+    0%, 100% { transform: rotate(-5deg); }
+    50% { transform: rotate(8deg); }
+  }
+  .hero .tagline {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: clamp(1.1rem, 3vw, 1.5rem);
+    color: var(--charcoal-soft);
+    max-width: 640px;
+    margin: 0 auto 32px;
+    line-height: 1.5;
+  }
+  .hero .hero-ctas {
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 12px;
+    margin-top: 28px;
+  }
+  .btn-primary, .btn-secondary {
+    padding: 14px 30px;
+    border-radius: 28px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    transition: all 0.2s;
+    cursor: pointer;
+    border: none;
+    font-family: 'Inter', sans-serif;
+  }
+  .btn-primary {
+    background: var(--emerald); color: var(--ivory-soft);
+  }
+  .btn-primary:hover {
+    background: var(--emerald-deep);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(26, 58, 15, 0.25);
+    opacity: 1;
+  }
+  .btn-secondary {
+    background: transparent;
+    color: var(--emerald);
+    border: 1.5px solid var(--gold);
+  }
+  .btn-secondary:hover {
+    background: var(--emerald);
+    color: var(--ivory-soft);
+    border-color: var(--emerald);
+    opacity: 1;
+  }
+
+  /* ─── SECTIONS ─── */
+  section {
+    padding: 70px 0;
+  }
+  section.alt {
+    background: var(--ivory-soft);
+  }
+  .section-head {
+    text-align: center;
+    margin-bottom: 48px;
+  }
+  .section-head h2 {
+    font-size: clamp(1.8rem, 5vw, 2.8rem);
+    line-height: 1.15;
+    margin-top: 12px;
+  }
+
+  /* ─── HOW IT WORKS (3 steps) ─── */
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 32px;
+  }
+  .step {
+    text-align: center;
+    padding: 32px 20px;
+    background: var(--ivory);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    position: relative;
+  }
+  .step .step-num {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 3.5rem;
+    font-weight: 500;
+    color: var(--gold);
+    line-height: 1;
+    margin-bottom: 6px;
+    opacity: 0.7;
+  }
+  .step .step-icon {
+    font-size: 2.6rem;
+    margin: 8px 0 16px;
+    display: block;
+  }
+  .step h3 {
+    font-size: 1.4rem;
+    margin-bottom: 12px;
+  }
+  .step p {
+    color: var(--charcoal-soft);
+    font-size: 0.92rem;
+  }
+  .step .step-detail {
+    margin-top: 14px;
+    font-size: 0.82rem;
+    color: var(--gold-deep);
+    font-weight: 500;
+  }
+  @media (max-width: 768px) {
+    .steps { grid-template-columns: 1fr; gap: 18px; }
+    .step { padding: 28px 18px; }
+  }
+
+  /* ─── REWARD LADDER ─── */
+  .ladder {
+    max-width: 720px;
+    margin: 0 auto;
+  }
+  .ladder-item {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 20px;
+    padding: 22px 24px;
+    background: var(--ivory);
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    margin-bottom: 12px;
+    transition: transform 0.2s, box-shadow 0.2s;
+    position: relative;
+  }
+  .ladder-item:hover {
+    transform: translateX(6px);
+    box-shadow: 0 6px 20px rgba(26, 58, 15, 0.08);
+  }
+  .ladder-leaves {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.8rem;
+    font-weight: 600;
+    color: var(--emerald);
+    min-width: 78px;
+  }
+  .ladder-leaves .leaf-icon {
+    font-size: 1.4rem;
+  }
+  .ladder-reward {
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: var(--charcoal);
+  }
+  .ladder-reward .reward-emoji {
+    font-size: 1.4rem;
+    margin-right: 6px;
+  }
+  .ladder-reward .reward-sub {
+    display: block;
+    font-size: 0.78rem;
+    color: var(--gold-deep);
+    margin-top: 2px;
+    font-weight: 400;
+  }
+  .ladder-spend {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1rem;
+    color: var(--charcoal-soft);
+    white-space: nowrap;
+    font-weight: 500;
+  }
+  @media (max-width: 600px) {
+    .ladder-item {
+      grid-template-columns: auto 1fr;
+      gap: 14px;
+      padding: 18px 20px;
+    }
+    .ladder-spend {
+      grid-column: 1 / -1;
+      text-align: right;
+      font-size: 0.85rem;
+      padding-top: 4px;
+      border-top: 1px solid var(--line);
+      margin-top: 4px;
+    }
+    .ladder-leaves { min-width: 60px; font-size: 1.5rem; }
+    .ladder-reward { font-size: 0.98rem; }
+  }
+
+  /* ─── SURPRISE MAGIC ─── */
+  .surprises {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 24px;
+    max-width: 760px;
+    margin: 0 auto;
+  }
+  .surprise-card {
+    background: linear-gradient(135deg, rgba(45,90,24,0.04), rgba(184,149,106,0.06));
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 28px 24px;
+    text-align: center;
+  }
+  .surprise-card .s-icon {
+    font-size: 2.4rem;
+    display: block;
+    margin-bottom: 10px;
+  }
+  .surprise-card h3 {
+    font-size: 1.3rem;
+    margin-bottom: 8px;
+  }
+  .surprise-card p {
+    color: var(--charcoal-soft);
+    font-size: 0.92rem;
+  }
+  @media (max-width: 600px) {
+    .surprises { grid-template-columns: 1fr; }
+  }
+
+  /* ─── CARD TIERS ─── */
+  .tiers {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  .tier-card {
+    background: var(--ivory);
+    border: 1.5px solid var(--line);
+    border-radius: 14px;
+    padding: 28px 18px;
+    text-align: center;
+    transition: all 0.25s;
+    position: relative;
+  }
+  .tier-card.popular {
+    border-color: var(--emerald);
+    box-shadow: 0 8px 24px rgba(26, 58, 15, 0.1);
+  }
+  .tier-card.popular::before {
+    content: 'MOST LOADED';
+    position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
+    background: var(--emerald); color: var(--ivory-soft);
+    padding: 4px 12px; border-radius: 12px;
+    font-size: 0.62rem; font-weight: 700; letter-spacing: 0.15em;
+    white-space: nowrap;
+  }
+  .tier-card:hover {
+    transform: translateY(-3px);
+    border-color: var(--gold);
+  }
+  .tier-card.popular:hover { border-color: var(--emerald-bright); }
+  .tier-price {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 2.2rem;
+    font-weight: 600;
+    color: var(--emerald);
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .tier-leaves {
+    font-size: 0.88rem;
+    color: var(--gold-deep);
+    font-weight: 500;
+    margin-bottom: 16px;
+  }
+  .tier-perks {
+    list-style: none;
+    text-align: left;
+    font-size: 0.82rem;
+    color: var(--charcoal-soft);
+  }
+  .tier-perks li {
+    padding: 4px 0;
+    padding-left: 18px;
+    position: relative;
+  }
+  .tier-perks li::before {
+    content: '🍃';
+    position: absolute; left: 0;
+    font-size: 0.78rem;
+  }
+  @media (max-width: 768px) {
+    .tiers { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 460px) {
+    .tiers { grid-template-columns: 1fr; }
+  }
+
+  /* ─── FORM ─── */
+  .form-wrap {
+    max-width: 560px;
+    margin: 0 auto;
+    background: var(--ivory);
+    border-radius: 18px;
+    padding: 42px 32px;
+    box-shadow: 0 10px 40px rgba(26, 58, 15, 0.06);
+    border: 1px solid var(--line);
+  }
+  .form-wrap h2 {
+    font-size: 2.2rem;
+    text-align: center;
+    margin-bottom: 8px;
+  }
+  .form-wrap .form-tagline {
+    text-align: center;
+    color: var(--charcoal-soft);
+    font-size: 0.95rem;
+    margin-bottom: 32px;
+  }
+  .field {
+    margin-bottom: 18px;
+  }
+  .field label {
+    display: block;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--emerald);
+    margin-bottom: 6px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .field input[type="text"],
+  .field input[type="email"],
+  .field input[type="tel"],
+  .field textarea {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1.5px solid var(--line);
+    border-radius: 10px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.95rem;
+    background: var(--ivory-soft);
+    color: var(--charcoal);
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .field input:focus, .field textarea:focus {
+    outline: none;
+    border-color: var(--emerald);
+    background: #fff;
+    box-shadow: 0 0 0 3px rgba(45, 90, 24, 0.08);
+  }
+  .field textarea {
+    resize: vertical;
+    min-height: 80px;
+    line-height: 1.5;
+  }
+  .field-hint {
+    font-size: 0.74rem;
+    color: var(--charcoal-soft);
+    margin-top: 4px;
+    font-style: italic;
+  }
+  .tier-radios {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+  }
+  .tier-radio {
+    position: relative;
+  }
+  .tier-radio input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .tier-radio label {
+    display: block;
+    padding: 12px 4px;
+    border: 1.5px solid var(--line);
+    border-radius: 10px;
+    text-align: center;
+    cursor: pointer;
+    background: var(--ivory-soft);
+    color: var(--charcoal);
+    font-size: 0.78rem;
+    font-weight: 600;
+    transition: all 0.18s;
+    margin-bottom: 0;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .tier-radio input:checked + label {
+    background: var(--emerald);
+    color: var(--ivory-soft);
+    border-color: var(--emerald);
+  }
+  .tier-radio label:hover {
+    border-color: var(--gold);
+  }
+  .tier-radio input:checked + label:hover { border-color: var(--emerald); }
+  @media (max-width: 480px) {
+    .tier-radios { grid-template-columns: repeat(3, 1fr); }
+    .tier-radio:nth-child(4) { grid-column: 1 / 2; }
+    .tier-radio:nth-child(5) { grid-column: 2 / 4; }
+  }
+  .consent {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin: 20px 0 24px;
+    font-size: 0.85rem;
+    color: var(--charcoal-soft);
+    cursor: pointer;
+  }
+  .consent input[type="checkbox"] {
+    margin-top: 4px;
+    width: 18px;
+    height: 18px;
+    accent-color: var(--emerald);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .btn-submit {
+    width: 100%;
+    padding: 16px;
+    background: var(--emerald);
+    color: var(--ivory-soft);
+    border: none;
+    border-radius: 12px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-submit:hover:not(:disabled) {
+    background: var(--emerald-deep);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(26, 58, 15, 0.2);
+  }
+  .btn-submit:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+  .form-error {
+    background: #FEF2F2;
+    color: #991B1B;
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-size: 0.86rem;
+    margin-bottom: 16px;
+    border: 1px solid #FECACA;
+    display: none;
+  }
+  .form-error.show { display: block; }
+
+  /* SUCCESS STATE */
+  .success-state {
+    text-align: center;
+    padding: 24px 8px;
+    display: none;
+  }
+  .success-state.show { display: block; }
+  .success-state .success-leaf {
+    font-size: 4.5rem;
+    animation: leafGrow 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+    display: inline-block;
+  }
+  @keyframes leafGrow {
+    0% { transform: scale(0) rotate(-30deg); opacity: 0; }
+    100% { transform: scale(1) rotate(0); opacity: 1; }
+  }
+  .success-state h3 {
+    font-size: 1.9rem;
+    margin: 18px 0 12px;
+  }
+  .success-state p {
+    color: var(--charcoal-soft);
+    margin-bottom: 24px;
+    font-size: 0.95rem;
+  }
+  .success-state .next-steps {
+    background: var(--leaf-bg);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: left;
+    font-size: 0.88rem;
+    color: var(--emerald-deep);
+    line-height: 1.7;
+    border: 1px solid var(--line);
+  }
+
+  /* ─── FOOTER ─── */
+  footer.bottom {
+    background: var(--emerald-deep);
+    color: var(--ivory-soft);
+    padding: 50px 0 30px;
+    text-align: center;
+  }
+  footer.bottom .footer-logo {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.6rem;
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+  footer.bottom .footer-tagline {
+    font-family: 'Dancing Script', cursive;
+    font-size: 1.1rem;
+    color: var(--gold-soft);
+    margin-bottom: 24px;
+  }
+  footer.bottom .footer-info {
+    font-size: 0.84rem;
+    opacity: 0.85;
+    margin-bottom: 6px;
+  }
+  footer.bottom .footer-links {
+    margin-top: 18px;
+    font-size: 0.78rem;
+    opacity: 0.75;
+  }
+  footer.bottom .footer-links a {
+    color: var(--gold-soft);
+    margin: 0 10px;
+  }
+  </style>
+</head>
+<body>
+
+<!-- ─── NAV ─── -->
+<nav class="top">
+  <div class="nav-inner">
+    <div class="logo">🌿 YANI</div>
+    <a href="#register" class="nav-cta">Join Roots Rewards</a>
+  </div>
+</nav>
+
+<!-- ─── HERO ─── -->
+<section class="hero">
+  <div class="leaf-bg">🌿</div>
+  <div class="leaf-bg-2">🍃</div>
+  <div class="container">
+    <div class="small-caps">YANI Roots Rewards</div>
+    <h1>Every visit plants<br>a <span class="leaf-accent">leaf</span> 🍃</h1>
+    <p class="tagline">
+      Get your YANI Card. Load it up. Earn leaves with every peso.
+      Cash in leaves for free food — every visit gets sweeter,
+      every leaf grows the garden.
+    </p>
+    <hr class="hairline">
+    <div class="hero-ctas">
+      <a href="#register" class="btn-primary">Plant My First Leaf 🌱</a>
+      <a href="#how" class="btn-secondary">How It Works</a>
+    </div>
+  </div>
+</section>
+
+<!-- ─── HOW IT WORKS ─── -->
+<section id="how" class="alt">
+  <div class="container">
+    <div class="section-head">
+      <div class="small-caps">3 simple steps</div>
+      <h2>How Roots Rewards grows</h2>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">01</div>
+        <span class="step-icon">💳</span>
+        <h3>Get Your YANI Card</h3>
+        <p>Visit us in Amadeo and reserve your card. Starts at ₱500. The card is yours to keep, reload, and re-earn forever.</p>
+        <div class="step-detail">Available: ₱500 / ₱1,000 / ₱2,000 / ₱3,000</div>
+      </div>
+      <div class="step">
+        <div class="step-num">02</div>
+        <span class="step-icon">🍃</span>
+        <h3>Load &amp; Earn Leaves</h3>
+        <p>Every ₱500 you load plants 1 leaf. Plus 10% off every order, automatically — every visit, walang catch.</p>
+        <div class="step-detail">₱500 = 1 🍃 · ₱1,000 = 2 🍃 · ₱2,000 = 4 🍃</div>
+      </div>
+      <div class="step">
+        <div class="step-num">03</div>
+        <span class="step-icon">🎁</span>
+        <h3>Redeem Free Food</h3>
+        <p>Hit a milestone, claim a free item on the house. Tell our staff when you're ready and we'll serve it up.</p>
+        <div class="step-detail">5 🍃 → Free Ice Cream · 40 🍃 → Free Crispy Chicken</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── REWARD LADDER ─── -->
+<section>
+  <div class="container">
+    <div class="section-head">
+      <div class="small-caps">The garden grows</div>
+      <h2>What your leaves unlock</h2>
+    </div>
+    <div class="ladder">
+      <div class="ladder-item">
+        <div class="ladder-leaves"><span class="leaf-icon">🍃</span>×5</div>
+        <div class="ladder-reward">
+          <span class="reward-emoji">🍨</span>Free Ice Cream
+          <span class="reward-sub">A scoop on the house — your first milestone</span>
+        </div>
+        <div class="ladder-spend">₱2,500 loaded</div>
+      </div>
+      <div class="ladder-item">
+        <div class="ladder-leaves"><span class="leaf-icon">🍃</span>×10</div>
+        <div class="ladder-reward">
+          <span class="reward-emoji">🍟</span>Free French Fries
+          <span class="reward-sub">Crispy, golden, salted just right</span>
+        </div>
+        <div class="ladder-spend">₱5,000 loaded</div>
+      </div>
+      <div class="ladder-item">
+        <div class="ladder-leaves"><span class="leaf-icon">🍃</span>×15</div>
+        <div class="ladder-reward">
+          <span class="reward-emoji">🍞</span>Free Luntian Bread
+          <span class="reward-sub">Our signature pandesal — fresh from the oven</span>
+        </div>
+        <div class="ladder-spend">₱7,500 loaded</div>
+      </div>
+      <div class="ladder-item">
+        <div class="ladder-leaves"><span class="leaf-icon">🍃</span>×25</div>
+        <div class="ladder-reward">
+          <span class="reward-emoji">🥞</span>Free French Toast
+          <span class="reward-sub">Brioche, syrup, and butter the proper way</span>
+        </div>
+        <div class="ladder-spend">₱12,500 loaded</div>
+      </div>
+      <div class="ladder-item">
+        <div class="ladder-leaves"><span class="leaf-icon">🍃</span>×40</div>
+        <div class="ladder-reward">
+          <span class="reward-emoji">🍗</span>Free Crispy Chicken
+          <span class="reward-sub">The full-meal milestone — you've made it</span>
+        </div>
+        <div class="ladder-spend">₱20,000 loaded</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── SURPRISE MAGIC ─── -->
+<section class="alt">
+  <div class="container">
+    <div class="section-head">
+      <div class="small-caps">Bonus rewards</div>
+      <h2>A little surprise magic</h2>
+      <p style="color: var(--charcoal-soft); max-width: 580px; margin: 14px auto 0; font-size: 0.95rem;">
+        Roots Rewards isn't just the ladder. Show up at the right moments and we'll surprise you.
+      </p>
+    </div>
+    <div class="surprises">
+      <div class="surprise-card">
+        <span class="s-icon">🌅</span>
+        <h3>Sunset Hour</h3>
+        <p>Visit any day between <strong>4–7 PM</strong> and your leaves <strong>double</strong>. Same load, twice the harvest.</p>
+      </div>
+      <div class="surprise-card">
+        <span class="s-icon">💜</span>
+        <h3>Soul Searcher</h3>
+        <p>Come back <strong>5 times in 30 days</strong> and we'll surprise you with a <strong>free drink upgrade</strong>, on us.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── CARD TIERS ─── -->
+<section>
+  <div class="container">
+    <div class="section-head">
+      <div class="small-caps">Pick your starting tier</div>
+      <h2>Available YANI Cards</h2>
+    </div>
+    <div class="tiers">
+      <div class="tier-card">
+        <div class="tier-price">₱500</div>
+        <div class="tier-leaves">Starter · 1 🍃 at activation</div>
+        <ul class="tier-perks">
+          <li>10% off every order</li>
+          <li>Earn leaves on every reload</li>
+          <li>Surprise rewards eligible</li>
+        </ul>
+      </div>
+      <div class="tier-card popular">
+        <div class="tier-price">₱1,000</div>
+        <div class="tier-leaves">Most popular · 2 🍃</div>
+        <ul class="tier-perks">
+          <li>10% off every order</li>
+          <li>2 leaves to start</li>
+          <li>3 more loads = first reward</li>
+        </ul>
+      </div>
+      <div class="tier-card">
+        <div class="tier-price">₱2,000</div>
+        <div class="tier-leaves">Garden · 4 🍃</div>
+        <ul class="tier-perks">
+          <li>10% off every order</li>
+          <li>4 leaves to start</li>
+          <li>Just 1 more load = Free Ice Cream</li>
+        </ul>
+      </div>
+      <div class="tier-card">
+        <div class="tier-price">₱3,000</div>
+        <div class="tier-leaves">Grove · 6 🍃</div>
+        <ul class="tier-perks">
+          <li>10% off every order</li>
+          <li>6 leaves to start</li>
+          <li>Best value, biggest head-start</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── REGISTRATION FORM ─── -->
+<section id="register" class="alt">
+  <div class="container">
+    <div class="form-wrap">
+      <div id="formState">
+        <h2>Plant Your First Leaf 🌱</h2>
+        <p class="form-tagline">
+          Reserve your YANI Card and join Roots Rewards.
+          Visit us in Amadeo to claim your card in person.
+        </p>
+
+        <div id="formError" class="form-error"></div>
+
+        <div class="field">
+          <label for="rfName">Your Name *</label>
+          <input type="text" id="rfName" placeholder="e.g. Juan Dela Cruz" maxlength="100" autocomplete="name">
+        </div>
+
+        <div class="field">
+          <label for="rfEmail">Email *</label>
+          <input type="email" id="rfEmail" placeholder="e.g. juan@email.com" autocomplete="email">
+          <div class="field-hint">This is your loyalty ID — used to track your leaves.</div>
+        </div>
+
+        <div class="field">
+          <label for="rfPhone">Phone <span style="opacity:.7;font-weight:400">(optional)</span></label>
+          <input type="tel" id="rfPhone" placeholder="09xx xxx xxxx" maxlength="13" inputmode="numeric" autocomplete="tel">
+        </div>
+
+        <div class="field">
+          <label>Preferred Card Tier <span style="opacity:.7;font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>
+          <div class="tier-radios">
+            <div class="tier-radio">
+              <input type="radio" name="rfTier" id="tier-none" value="" checked>
+              <label for="tier-none">Skip<br><span style="font-size:.7rem;opacity:.7">(no card)</span></label>
+            </div>
+            <div class="tier-radio">
+              <input type="radio" name="rfTier" id="tier-500" value="500">
+              <label for="tier-500">₱500<br><span style="font-size:.7rem;opacity:.7">1 🍃</span></label>
+            </div>
+            <div class="tier-radio">
+              <input type="radio" name="rfTier" id="tier-1000" value="1000">
+              <label for="tier-1000">₱1,000<br><span style="font-size:.7rem;opacity:.7">2 🍃</span></label>
+            </div>
+            <div class="tier-radio">
+              <input type="radio" name="rfTier" id="tier-2000" value="2000">
+              <label for="tier-2000">₱2,000<br><span style="font-size:.7rem;opacity:.7">4 🍃</span></label>
+            </div>
+            <div class="tier-radio">
+              <input type="radio" name="rfTier" id="tier-3000" value="3000">
+              <label for="tier-3000">₱3,000<br><span style="font-size:.7rem;opacity:.7">6 🍃</span></label>
+            </div>
+          </div>
+          <div class="field-hint">Pick a tier to reserve a physical card. Or skip — you can still earn leaves on cash orders by entering your email at checkout.</div>
+        </div>
+
+        <div class="field">
+          <label for="rfNotes">Anything we should know? <span style="opacity:.7;font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>
+          <textarea id="rfNotes" placeholder="e.g. I'd like to pick up my card on Saturday, or a gift card for my partner..." maxlength="500"></textarea>
+        </div>
+
+        <label class="consent">
+          <input type="checkbox" id="rfConsent">
+          <span>I agree to join YANI Roots Rewards and receive occasional updates about my leaves and rewards. We'll never spam — just the good stuff.</span>
+        </label>
+
+        <button type="button" class="btn-submit" id="rfSubmit" onclick="submitRewardsRegistration()">
+          Plant My First Leaf 🌱
+        </button>
+      </div>
+
+      <!-- SUCCESS STATE (hidden by default) -->
+      <div id="successState" class="success-state">
+        <span class="success-leaf">🌱</span>
+        <h3>Your first leaf is planted!</h3>
+        <p id="successMsg">Welcome to Roots Rewards. We can't wait to grow your garden with you.</p>
+        <div class="next-steps">
+          <strong>What's next:</strong><br>
+          <span id="nextSteps">
+            ✓ Visit us at <strong>YANI Garden Café</strong> in Amadeo, Cavite<br>
+            ✓ Mention your email at the counter to claim your card<br>
+            ✓ Or just order — enter your email at checkout and start earning 🍃
+          </span>
+        </div>
+        <div style="margin-top: 28px;">
+          <a href="https://yanigardencafe.com" class="btn-secondary" style="display:inline-block;text-decoration:none">Visit YANI Café</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── FOOTER ─── -->
+<footer class="bottom">
+  <div class="container">
+    <div class="footer-logo">🌿 YANI Garden Café</div>
+    <div class="footer-tagline">A garden, a café, a small piece of joy.</div>
+    <div class="footer-info">📍 Amadeo, Cavite, Philippines</div>
+    <div class="footer-info">☕ Coffee · Pastries · Meals · Conversations</div>
+    <div class="footer-links">
+      <a href="https://yanigardencafe.com">Visit Café</a> ·
+      <a href="https://yanigardencafe.com/events">Events</a> ·
+      <a href="https://facebook.com/yanigardencafe">Facebook</a>
+    </div>
+    <div style="margin-top: 24px; font-size: 0.72rem; opacity: 0.6;">
+      © 2026 YANI Garden Café · Made with 🌿 in Amadeo
+    </div>
+  </div>
+</footer>
+
+<script>
+// ─── REGISTRATION FORM SUBMISSION ─────────────────────────────────────
+// Submits to /api/pos with action=registerForRewards. Creates loyalty
+// account immediately (so the customer can earn leaves on cash orders
+// by entering their email at checkout). If they pick a card tier,
+// staff sees the request in admin → Members → Pending Card Requests.
+
+async function submitRewardsRegistration() {
+  const $ = (id) => document.getElementById(id);
+  const showError = (msg) => {
+    const err = $('formError');
+    err.textContent = msg;
+    err.classList.add('show');
+    err.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+  const clearError = () => $('formError').classList.remove('show');
+
+  clearError();
+
+  const name    = $('rfName').value.trim();
+  const email   = $('rfEmail').value.trim().toLowerCase();
+  const phone   = $('rfPhone').value.replace(/\D/g, '');
+  const notes   = $('rfNotes').value.trim();
+  const consent = $('rfConsent').checked;
+  const tierEl  = document.querySelector('input[name="rfTier"]:checked');
+  const tierVal = tierEl ? tierEl.value : '';
+  const cardTier = tierVal ? parseInt(tierVal) : null;
+
+  // Client-side validation — server validates again, this is just UX
+  if (!name || name.length < 2) {
+    showError('Please tell us your name — at least 2 letters.');
+    $('rfName').focus();
+    return;
+  }
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    showError('Please enter a valid email address.');
+    $('rfEmail').focus();
+    return;
+  }
+  if (!consent) {
+    showError('Please tick the consent box to join Roots Rewards.');
+    return;
+  }
+
+  const btn = $('rfSubmit');
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Planting your leaf… 🌱';
+
+  try {
+    const resp = await fetch('/api/pos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'registerForRewards',
+        name, email, phone: phone || null,
+        cardTier, notes: notes || null, consent
+      })
+    });
+
+    const data = await resp.json();
+
+    if (!resp.ok || !data.ok) {
+      showError(data.error || 'Could not register. Please try again or visit us at the café.');
+      btn.disabled = false;
+      btn.textContent = originalText;
+      return;
+    }
+
+    // SUCCESS — swap form for success state
+    $('formState').style.display = 'none';
+    const ss = $('successState');
+    ss.classList.add('show');
+
+    if (data.message) $('successMsg').textContent = data.message;
+
+    if (cardTier) {
+      $('nextSteps').innerHTML =
+        '✓ Visit us at <strong>YANI Garden Café</strong> in Amadeo, Cavite<br>' +
+        '✓ Ask for your <strong>₱' + cardTier.toLocaleString() + ' YANI Card</strong> at the counter<br>' +
+        '✓ Pay ₱' + cardTier.toLocaleString() + ' to activate — your ' +
+        (cardTier === 500 ? '1 leaf' :
+         cardTier === 1000 ? '2 leaves' :
+         cardTier === 2000 ? '4 leaves' : '6 leaves') +
+        ' will appear immediately';
+    }
+
+    // Scroll to success
+    ss.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    // Track conversion (if FB pixel or analytics exists)
+    if (typeof window.fbq === 'function') {
+      window.fbq('track', 'Lead', {
+        content_name: 'YANI Roots Rewards',
+        value: cardTier || 0,
+        currency: 'PHP'
+      });
+    }
+
+  } catch (e) {
+    showError('Network error. Please check your connection and try again.');
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+}
+
+// Keyboard convenience: Enter in any text field submits
+document.querySelectorAll('#rfName, #rfEmail, #rfPhone').forEach(el => {
+  el.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const order = ['rfName', 'rfEmail', 'rfPhone'];
+      const idx = order.indexOf(el.id);
+      if (idx >= 0 && idx < order.length - 1) {
+        document.getElementById(order[idx + 1]).focus();
+      } else {
+        submitRewardsRegistration();
+      }
+    }
+  });
+});
+</script>
+
+</body>
+</html>

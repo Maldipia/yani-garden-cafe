@@ -194,14 +194,14 @@ async function verifyOwnerPin(pin) {
 // the cardholder's loyalty account using a CUMULATIVE formula so the
 // customer doesn't lose fractional pesos when splitting loads:
 //
-//   leaves_owed_after_this_load = floor(total_loaded_lifetime / 300)
+//   leaves_owed_after_this_load = floor(total_loaded_lifetime / 500)
 //   leaves_to_credit_now        = leaves_owed_after - leaves_owed_before
 //
-// Example (₱300/leaf):
-//   ACTIVATE ₱1000 → total 1000, owed 3, prior 0  → credit 3 leaves
-//   RELOAD ₱500    → total 1500, owed 5, prior 3  → credit 2 leaves
-//   RELOAD ₱1000   → total 2500, owed 8, prior 5  → credit 3 leaves
-//   Total: 8 leaves (matches floor(2500/300) — fractions never lost)
+// Example (₱500/leaf):
+//   ACTIVATE ₱1000 → total 1000, owed 2, prior 0  → credit 2 leaves
+//   RELOAD ₱500    → total 1500, owed 3, prior 2  → credit 1 leaf
+//   RELOAD ₱1000   → total 2500, owed 5, prior 3  → credit 2 leaves
+//   Total: 5 leaves (matches floor(2500/500) — fractions never lost)
 //
 // Why card LOAD not card CHARGE: Yani Card is prepaid. The customer
 // paid real money at LOAD time. Earning at consumption would double-count.
@@ -213,9 +213,9 @@ async function _creditLeavesForCardLoad({ cardNumber, amount, eventType, perform
     const amt = parseFloat(amount);
     if (!amt || amt <= 0) return;
 
-    // Get pesosPerLeaf setting (default 300)
+    // Get pesosPerLeaf setting (default 500 — aligned with card tier minimum)
     const sR = await supa(`/rest/v1/settings?key=eq.LEAVES_PESOS_PER_LEAF&select=value&limit=1`);
-    const pesosPerLeaf = parseInt(sR.data?.[0]?.value || '300') || 300;
+    const pesosPerLeaf = parseInt(sR.data?.[0]?.value || '500') || 500;
 
     // Cumulative math: sum ALL ACTIVATE+RELOAD amounts for this card. This
     // includes the just-inserted row, so priorLoaded = totalLoaded - amt.

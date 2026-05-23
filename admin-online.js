@@ -2108,7 +2108,7 @@ function renderLoyaltyView() {
   var el = document.getElementById('loyaltyView');
   if (!el) return;
 
-  var pesosPerLeaf = parseInt(_loyaltySettings.LEAVES_PESOS_PER_LEAF || '300');
+  var pesosPerLeaf = parseInt(_loyaltySettings.LEAVES_PESOS_PER_LEAF || '500');
   var leavesEnabled= _loyaltySettings.LEAVES_ENABLED !== 'false';
   // Legacy keys kept for backward compat with the existing admin modal
   var earnRate   = parseFloat(_loyaltySettings.LOYALTY_EARN_RATE || '1');
@@ -2146,6 +2146,24 @@ function renderLoyaltyView() {
   html += _lyStatCard('🥇 Gold', gold, '#D97706');
   html += _lyStatCard('💎 Platinum', plat, '#7C3AED');
   html += '</div>';
+
+  // ── PENDING CARD REQUESTS BANNER ────────────────────────────────────
+  // Surfaces website signups from /rewards landing page where the user
+  // selected a physical-card tier. Staff needs to prepare the card and
+  // hand it off in person — clicking "View" opens a list of pending
+  // requests with name / email / phone / requested tier.
+  var pendingRequests = _loyaltyAccounts.filter(function(a) {
+    return a.card_request_status === 'PENDING';
+  });
+  if (pendingRequests.length > 0) {
+    html += '<div style="background:linear-gradient(135deg,#fef3c7,#fde68a);border:1.5px solid #f59e0b;border-radius:12px;padding:14px 18px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">';
+    html += '<div>';
+    html += '<div style="font-weight:800;font-size:.88rem;color:#78350f">🎁 ' + pendingRequests.length + ' pending card request' + (pendingRequests.length === 1 ? '' : 's') + ' from /rewards</div>';
+    html += '<div style="font-size:.74rem;color:#92400e;margin-top:2px">Web signups waiting for a physical YANI Card to be prepared</div>';
+    html += '</div>';
+    html += '<button onclick="openPendingCardRequests()" style="padding:8px 16px;background:#92400e;color:#fff;border:none;border-radius:8px;font-size:.78rem;font-weight:700;cursor:pointer;font-family:var(--font-body)">View Requests</button>';
+    html += '</div>';
+  }
 
   // Search
   html += '<div style="position:relative;margin-bottom:14px">';
@@ -2395,3 +2413,120 @@ function _ensureLoyaltyModals() {
     document.body.appendChild(m2);
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// PENDING CARD REQUESTS (web signups from /rewards landing page)
+// ═══════════════════════════════════════════════════════════════════════
+// Customers who registered at yanigardencafe.com/rewards and selected
+// a physical card tier (₱500/₱1000/₱2000/₱3000) appear here. Staff
+// prepares the card, then marks the request FULFILLED once activated
+// in person. Same Members list — just filtered to card_request_status
+// = 'PENDING' and sorted oldest-first (FIFO queue).
+window.openPendingCardRequests = function() {
+  var pending = _loyaltyAccounts.filter(function(a) {
+    return a.card_request_status === 'PENDING';
+  }).sort(function(a, b) {
+    return new Date(a.created_at) - new Date(b.created_at);
+  });
+
+  var existing = document.getElementById('pendingCardModal');
+  if (existing) existing.remove();
+
+  var m = document.createElement('div');
+  m.id = 'pendingCardModal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px';
+  m.onclick = function(e) { if (e.target === m) m.remove(); };
+
+  var rows = pending.map(function(a) {
+    var tier = a.card_tier_request || 0;
+    var leavesAtActivation = Math.floor(tier / 500);
+    var when = a.created_at ? new Date(a.created_at).toLocaleDateString('en-PH', {month:'short', day:'numeric', year:'numeric'}) : '—';
+    return ''
+      + '<div style="padding:14px 16px;border-bottom:1px solid var(--mist-light);display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center">'
+      +   '<div>'
+      +     '<div style="font-weight:700;font-size:.95rem;color:var(--forest-deep)">' + esc(a.name || '—') + '</div>'
+      +     '<div style="font-size:.78rem;color:var(--timber);margin-top:3px">✉️ ' + esc(a.email || '—')
+      +       (a.phone ? ' · 📞 ' + esc(a.phone) : '') + '</div>'
+      +     (a.signup_notes ? '<div style="font-size:.74rem;color:var(--timber);margin-top:5px;background:#f9f7f2;padding:6px 9px;border-radius:6px;border-left:2px solid var(--gold)">📝 ' + esc(a.signup_notes) + '</div>' : '')
+      +     '<div style="font-size:.7rem;color:#94918a;margin-top:5px">Signed up ' + esc(when) + '</div>'
+      +   '</div>'
+      +   '<div style="text-align:right">'
+      +     '<div style="font-weight:800;color:var(--forest);font-size:1rem">₱' + tier.toLocaleString() + '</div>'
+      +     '<div style="font-size:.72rem;color:var(--gold-deep);margin-bottom:8px">+' + leavesAtActivation + ' 🍃 at activation</div>'
+      +     '<button onclick="markCardRequestFulfilled(\'' + a.id + '\', \'' + esc(a.name || '').replace(/\\?\'/g, "\\\\'") + '\')" '
+      +       'style="padding:6px 12px;background:var(--forest);color:#fff;border:none;border-radius:7px;font-size:.74rem;font-weight:700;cursor:pointer;font-family:var(--font-body)">✓ Mark Fulfilled</button>'
+      +     ' <button onclick="cancelCardRequest(\'' + a.id + '\')" '
+      +       'style="padding:6px 10px;background:#fff;color:#991B1B;border:1.5px solid #FECACA;border-radius:7px;font-size:.74rem;font-weight:700;cursor:pointer;font-family:var(--font-body)">✕</button>'
+      +   '</div>'
+      + '</div>';
+  }).join('');
+
+  if (pending.length === 0) {
+    rows = '<div style="padding:40px 24px;text-align:center;color:var(--timber)">'
+      + '<div style="font-size:2.5rem;opacity:.4;margin-bottom:10px">🌿</div>'
+      + '<div style="font-weight:600;font-size:.95rem;color:var(--forest-deep)">No pending card requests</div>'
+      + '<div style="font-size:.8rem;margin-top:6px">Web signups will appear here as soon as customers reserve a card at <code style="font-size:.78rem;background:#f5f1e8;padding:2px 6px;border-radius:4px">yanigardencafe.com/rewards</code></div>'
+      + '</div>';
+  }
+
+  m.innerHTML = ''
+    + '<div style="background:#fff;border-radius:14px;max-width:640px;width:100%;max-height:85vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3)">'
+    +   '<div style="padding:18px 20px;border-bottom:1px solid var(--mist);display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#fef3c7,#fde68a)">'
+    +     '<div>'
+    +       '<div style="font-weight:800;color:#78350f;font-size:1.05rem">🎁 Pending Card Requests</div>'
+    +       '<div style="font-size:.78rem;color:#92400e;margin-top:2px">' + pending.length + ' customer' + (pending.length === 1 ? '' : 's') + ' waiting · oldest first</div>'
+    +     '</div>'
+    +     '<button onclick="document.getElementById(\'pendingCardModal\').remove()" style="background:none;border:none;font-size:1.5rem;cursor:pointer;color:#78350f;line-height:1">&times;</button>'
+    +   '</div>'
+    +   '<div style="flex:1;overflow-y:auto">' + rows + '</div>'
+    + '</div>';
+  document.body.appendChild(m);
+};
+
+window.markCardRequestFulfilled = async function(accountId, name) {
+  if (!confirm('Mark this card request as FULFILLED? Use this after you\'ve handed the physical card to ' + (name || 'the customer') + ' and activated it.')) return;
+  try {
+    var r = await fetch('/api/pos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'updateCardRequestStatus',
+        accountId: accountId,
+        status: 'FULFILLED'
+      })
+    });
+    var data = await r.json();
+    if (!data.ok) { alert('Error: ' + (data.error || 'Could not update')); return; }
+    showToast('✅ Marked as fulfilled', 'success');
+    await loadLoyaltyAccounts();
+    var modal = document.getElementById('pendingCardModal');
+    if (modal) modal.remove();
+    openPendingCardRequests();
+  } catch (e) {
+    alert('Network error: ' + e.message);
+  }
+};
+
+window.cancelCardRequest = async function(accountId) {
+  if (!confirm('Cancel this card request? The customer\'s loyalty account stays — only the physical card request gets cancelled.')) return;
+  try {
+    var r = await fetch('/api/pos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'updateCardRequestStatus',
+        accountId: accountId,
+        status: 'CANCELLED'
+      })
+    });
+    var data = await r.json();
+    if (!data.ok) { alert('Error: ' + (data.error || 'Could not update')); return; }
+    showToast('✕ Request cancelled', 'info');
+    await loadLoyaltyAccounts();
+    var modal = document.getElementById('pendingCardModal');
+    if (modal) modal.remove();
+    openPendingCardRequests();
+  } catch (e) {
+    alert('Network error: ' + e.message);
+  }
+};

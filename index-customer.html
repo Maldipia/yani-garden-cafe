@@ -2432,7 +2432,7 @@ function renderCheckoutPage() {
       + '<label class="form-label" style="margin:0;font-weight:700">YANI Roots Rewards</label>'
       + '</div>'
       + '<div style="font-size:.78rem;color:var(--timber);margin-bottom:10px;line-height:1.5">'
-      + 'Every ₱300 plants a leaf 🍃 — the more you return, the more YANI gives back. Free ice cream at <strong>5 🍃</strong>, fries at <strong>10 🍃</strong>, and more. Plus 🌅 sunset bonuses + 💜 surprise rewards for regulars.'
+      + 'Every ₱500 plants a leaf 🍃 — the more you return, the more YANI gives back. Free ice cream at <strong>2 🍃</strong>, fries at <strong>5 🍃</strong>, and more. Plus 🌅 sunset bonuses + 💜 surprise rewards for regulars.'
       + '</div>'
       + '<input id="loyaltyEmailInput" type="email" autocomplete="email" placeholder="Email (e.g. juan@email.com)" '
       + 'value="' + esc(state.customerEmail || '') + '" '
@@ -3299,7 +3299,7 @@ function renderStatusPage() {
       // Estimate leaves from PRE-DISCOUNT total. We use orderTotal which is the
       // discounted final; for an exact estimate we'd want the pre-discount value
       // — but since most non-card orders have no discount, this is close.
-      var pesosPerLeaf = 300; // mirror of LEAVES_PESOS_PER_LEAF setting
+      var pesosPerLeaf = 500; // mirror of LEAVES_PESOS_PER_LEAF setting
       var estLeaves = Math.floor((state.orderTotal || 0) / pesosPerLeaf);
       if (estLeaves > 0) {
         html += '<div style="background:#FFFBEB;border:1.5px solid #F59E0B;border-radius:14px;padding:12px 14px;margin-bottom:12px;text-align:center">'

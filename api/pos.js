@@ -1562,7 +1562,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
 
               if (resolvedAccountId) {
                 // ── LEAVES EARN FORMULA ─────────────────────────────────────
-                // 1. Base earn: floor(pre-discount total ÷ ₱300)
+                // 1. Base earn: floor(pre-discount total ÷ ₱500)
                 // 2. Sunset bonus: order completed during sunset window → 2x multiplier
                 //    (4-7 PM PHT by default, configurable via SURPRISE_SUNSET_*)
                 // 3. After leaves are written, fire Soul Searcher + Rainy Day
@@ -1576,7 +1576,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
                 const sett = {};
                 (settR.data||[]).forEach(s => { sett[s.key] = s.value; });
 
-                const pesosPerLeaf = parseInt(sett.LEAVES_PESOS_PER_LEAF || '300') || 300;
+                const pesosPerLeaf = parseInt(sett.LEAVES_PESOS_PER_LEAF || '500') || 500;
                 let leavesEarned   = Math.floor(preDiscountTotal / pesosPerLeaf);
 
                 // ─── SUNSET MULTIPLIER (4-7 PM PHT by default) ─────────────
@@ -2066,6 +2066,311 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://pos.yanigardenc
       });
       if (!r.ok) return res.status(500).json({ ok: false, error: r.data?.message || 'Failed to create account' });
       return res.status(200).json({ ok: true, account: r.data[0], already_existed: false });
+    }
+
+    // ── registerForRewards ──────────────────────────────────────────────────
+    // Public endpoint used by the /rewards landing page. Same idea as
+    // joinLoyalty but captures three extra signals: registration_source
+    // (always 'website' here), card_tier_request (which physical card tier
+    // they want, if any), and free-form signup_notes. If a card tier is
+    // chosen we flip card_request_status to 'PENDING' so it lands in the
+    // staff "Pending Card Requests" queue.
+    //
+    // Idempotency: if the email already exists we DO NOT overwrite the
+    // existing account — but we do upgrade card_tier_request from NULL to
+    // a chosen tier (lets a customer change their mind from "no card" to
+    // "yes I want one"). We never downgrade.
+    if (action === 'registerForRewards') {
+      const { name, email, phone, cardTier, notes, consent } = body;
+      if (!name || !email) return res.status(400).json({ ok: false, error: 'name and email required' });
+      if (consent !== true) return res.status(400).json({ ok: false, error: 'consent required' });
+
+      const cleanEmail = String(email).trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+        return res.status(400).json({ ok: false, error: 'Invalid email format' });
+      }
+      const cleanName  = String(name).trim();
+      if (cleanName.length < 2 || cleanName.length > 100) {
+        return res.status(400).json({ ok: false, error: 'name must be 2-100 characters' });
+      }
+      const cleanPhone = phone ? String(phone).replace(/\D/g,'').substring(0,13) : null;
+      const cleanNotes = notes ? String(notes).trim().substring(0, 500) : null;
+
+      // Validate card tier — only the four published options (or no card).
+      let tierInt = null;
+      if (cardTier !== undefined && cardTier !== null && cardTier !== '' && cardTier !== 0) {
+        tierInt = parseInt(cardTier);
+        if (![500,1000,2000,3000].includes(tierInt)) {
+          return res.status(400).json({ ok: false, error: 'cardTier must be 500, 1000, 2000, or 3000' });
+        }
+      }
+
+      // Auto-link to a Yani Card if one exists with the same email (same
+      // priority logic as joinLoyalty: name-match → active → any).
+      let linkedCardNumber = null;
+      const allCards = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/yani_cards?holder_email=eq.${encodeURIComponent(cleanEmail)}&select=card_number,holder_name,status,activated_at`
+      );
+      if (allCards.ok && allCards.data?.length) {
+        const cards = allCards.data;
+        const nameLC = cleanName.toLowerCase();
+        let pick = cards.find(c => c.status === 'ACTIVE' && c.holder_name && String(c.holder_name).trim().toLowerCase() === nameLC);
+        if (!pick) {
+          const active = cards.filter(c => c.status === 'ACTIVE').sort((a,b) => new Date(b.activated_at||0) - new Date(a.activated_at||0));
+          pick = active[0] || cards[0];
+        }
+        if (pick) linkedCardNumber = pick.card_number;
+      }
+
+      // Idempotency: returning visitor with same email
+      const existing = await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts?email=eq.${encodeURIComponent(cleanEmail)}&select=*&limit=1`);
+      if (existing.ok && existing.data?.length) {
+        const acc = existing.data[0];
+        // If they now want a card and didn't before, upgrade the request
+        const upgrades = {};
+        if (tierInt && !acc.card_tier_request) {
+          upgrades.card_tier_request   = tierInt;
+          upgrades.card_request_status = 'PENDING';
+        }
+        if (cleanPhone && !acc.phone) upgrades.phone = cleanPhone;
+        if (cleanNotes) upgrades.signup_notes = cleanNotes;
+        if (Object.keys(upgrades).length) {
+          await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts?id=eq.${acc.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(upgrades),
+          });
+        }
+        return res.status(200).json({
+          ok: true,
+          already_existed: true,
+          account: { ...acc, ...upgrades },
+          message: tierInt
+            ? `🌱 Welcome back, ${cleanName.split(' ')[0]}! We will prepare your ₱${tierInt.toLocaleString()} card. Visit us at YANI in Amadeo to claim it.`
+            : `🌱 Welcome back, ${cleanName.split(' ')[0]}! Your leaves are still growing.`,
+        });
+      }
+
+      // New signup
+      const r = await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts`, {
+        method: 'POST',
+        body: JSON.stringify({
+          name:                  cleanName,
+          email:                 cleanEmail,
+          phone:                 cleanPhone,
+          linked_card_number:    linkedCardNumber,
+          points_balance:        0,
+          total_points_earned:   0,
+          total_points_redeemed: 0,
+          tier:                  'BRONZE',
+          total_spent:           0,
+          visit_count:           0,
+          is_active:             true,
+          registration_source:   'website',
+          card_tier_request:     tierInt,
+          card_request_status:   tierInt ? 'PENDING' : null,
+          signup_notes:          cleanNotes,
+        }),
+        headers: { 'Prefer': 'return=representation' }
+      });
+      if (!r.ok) return res.status(500).json({ ok: false, error: r.data?.message || 'Failed to create account' });
+
+      return res.status(200).json({
+        ok: true,
+        already_existed: false,
+        account: r.data[0],
+        message: tierInt
+          ? `🌱 Welcome to Roots Rewards! Visit us at YANI in Amadeo to claim your ₱${tierInt.toLocaleString()} card.`
+          : `🌱 Welcome to Roots Rewards! Enter your email at checkout to start earning leaves.`,
+      });
+    }
+
+    // ── listPendingCardRequests (staff) ─────────────────────────────────────
+    // Powers the "Pending Card Requests" badge in the admin Members hub.
+    // Returns rows where someone signed up via /rewards and asked for a
+    // physical card tier but hasn't been fulfilled yet.
+    if (action === 'listPendingCardRequests') {
+      const auth = await checkAuth(['OWNER','ADMIN','CASHIER']);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/loyalty_accounts?card_request_status=eq.PENDING&select=id,name,email,phone,card_tier_request,signup_notes,registration_source,created_at&order=created_at.desc`
+      );
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'DB error' });
+      return res.status(200).json({ ok: true, requests: r.data || [] });
+    }
+
+    // ── markCardRequestFulfilled (staff) ────────────────────────────────────
+    // After staff has activated the physical card for a customer who
+    // signed up online, flip their card_request_status to FULFILLED.
+    if (action === 'markCardRequestFulfilled') {
+      const auth = await checkAuth(['OWNER','ADMIN','CASHIER']);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      const { accountId, status } = body;
+      if (!accountId) return res.status(400).json({ ok: false, error: 'accountId required' });
+      const newStatus = (status === 'CANCELLED') ? 'CANCELLED' : 'FULFILLED';
+      const r = await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts?id=eq.${accountId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ card_request_status: newStatus }),
+        headers: { 'Prefer': 'return=representation' }
+      });
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'DB error' });
+      return res.status(200).json({ ok: true, account: r.data?.[0] });
+    }
+
+    // ── registerForRewards (PUBLIC — /rewards landing page form) ─────────
+    // Like joinLoyalty but adds website-signup metadata: source, optional
+    // physical-card-tier preference (₱500/₱1000/₱2000/₱3000), and a notes
+    // textarea. If cardTier is provided, card_request_status='PENDING'
+    // surfaces this signup in the admin's "Pending Card Requests" badge so
+    // staff can prepare a physical card before the customer visits.
+    //
+    // Idempotency: same email + new cardTier → update existing row's
+    // card_tier_request/status; same email + same data → no-op return.
+    //
+    // No auth — this is the public signup endpoint. Email/name validation
+    // mirrors joinLoyalty. Phone optional. Consent required (mirrors
+    // LOYALTY_REQUIRE_CONSENT setting).
+    if (action === 'registerForRewards') {
+      const { name, email, phone, cardTier, notes, consent } = body;
+
+      if (!name || !email) {
+        return res.status(400).json({ ok: false, error: 'Name and email are required' });
+      }
+      const cleanName = String(name).trim();
+      if (cleanName.length < 2 || cleanName.length > 100) {
+        return res.status(400).json({ ok: false, error: 'Name must be 2–100 characters' });
+      }
+      const cleanEmail = String(email).trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+        return res.status(400).json({ ok: false, error: 'Please enter a valid email address' });
+      }
+
+      const requireConsent = await getSetting('LOYALTY_REQUIRE_CONSENT');
+      if (requireConsent === 'true' && consent !== true) {
+        return res.status(400).json({ ok: false, error: 'Please agree to join Roots Rewards to continue' });
+      }
+
+      const cleanPhone = phone ? String(phone).replace(/\D/g, '').substring(0, 13) : null;
+
+      // Validate cardTier if provided. Allowed: 500, 1000, 2000, 3000.
+      let tierInt = null;
+      if (cardTier !== undefined && cardTier !== null && cardTier !== '' && cardTier !== 0) {
+        tierInt = parseInt(cardTier);
+        if (![500, 1000, 2000, 3000].includes(tierInt)) {
+          return res.status(400).json({ ok: false, error: 'Card tier must be 500, 1000, 2000, or 3000' });
+        }
+      }
+
+      const cleanNotes = notes ? String(notes).trim().substring(0, 500) : null;
+
+      // Idempotency by email — existing account gets card request added
+      // (or updated to PENDING if newly requested).
+      const existing = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/loyalty_accounts?email=eq.${encodeURIComponent(cleanEmail)}&select=*&limit=1`
+      );
+
+      if (existing.ok && existing.data?.length) {
+        const acc = existing.data[0];
+
+        // Build an update payload. Only fields newly provided by the form
+        // overwrite existing values — preserves data from prior signups.
+        const updates = {};
+        if (!acc.phone && cleanPhone) updates.phone = cleanPhone;
+        if (tierInt && !acc.card_tier_request) {
+          updates.card_tier_request = tierInt;
+          updates.card_request_status = 'PENDING';
+        }
+        if (cleanNotes && !acc.signup_notes) updates.signup_notes = cleanNotes;
+
+        if (Object.keys(updates).length > 0) {
+          await supaFetch(
+            `${SUPABASE_URL}/rest/v1/loyalty_accounts?id=eq.${acc.id}`,
+            { method: 'PATCH', body: JSON.stringify(updates), headers: { 'Prefer': 'return=minimal' } }
+          );
+        }
+
+        return res.status(200).json({
+          ok: true,
+          account: { ...acc, ...updates },
+          already_existed: true,
+          message: tierInt
+            ? '✅ Your card request was added to your existing account. Visit us at YANI to claim it.'
+            : '✅ You\'re already part of Roots Rewards! Just enter your email at checkout to earn leaves.',
+        });
+      }
+
+      // Try to auto-link a Yani Card if one exists with this email
+      const allCards = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/yani_cards?holder_email=eq.${encodeURIComponent(cleanEmail)}&select=card_number,status&order=activated_at.desc.nullslast&limit=1`
+      );
+      const linkedCardNumber = (allCards.ok && allCards.data?.[0]) ? allCards.data[0].card_number : null;
+
+      // Insert new loyalty account with website-signup metadata
+      const r = await supaFetch(`${SUPABASE_URL}/rest/v1/loyalty_accounts`, {
+        method: 'POST',
+        body: JSON.stringify({
+          name:                  cleanName,
+          email:                 cleanEmail,
+          phone:                 cleanPhone,
+          linked_card_number:    linkedCardNumber,
+          points_balance:        0,
+          total_points_earned:   0,
+          total_points_redeemed: 0,
+          tier:                  'BRONZE',
+          total_spent:           0,
+          visit_count:           0,
+          is_active:             true,
+          registration_source:   'website',
+          card_tier_request:     tierInt,
+          card_request_status:   tierInt ? 'PENDING' : null,
+          signup_notes:          cleanNotes,
+        }),
+        headers: { 'Prefer': 'return=representation' }
+      });
+
+      if (!r.ok) {
+        return res.status(500).json({
+          ok: false,
+          error: r.data?.message || 'Could not create your account. Please try again.',
+        });
+      }
+
+      return res.status(200).json({
+        ok: true,
+        account: r.data[0],
+        already_existed: false,
+        message: tierInt
+          ? `🌱 Welcome to Roots Rewards! Visit us at YANI in Amadeo to claim your ₱${tierInt.toLocaleString()} card.`
+          : '🌱 Welcome to Roots Rewards! Your first leaf is ready to grow — enter your email at checkout to start earning.',
+      });
+    }
+
+    // ── updateCardRequestStatus (ADMIN/OWNER — clears pending queue) ─────
+    // Called when staff marks a website signup's card request as:
+    //   FULFILLED — physical card was handed off + activated in person
+    //   CANCELLED — customer changed mind / no-show
+    // Does NOT touch the loyalty_account itself (the customer keeps their
+    // email-based loyalty profile + any leaves earned). Only mutates the
+    // card_request_status field so it drops out of the admin queue.
+    if (action === 'updateCardRequestStatus') {
+      const auth = await checkAuth(['OWNER','ADMIN','CASHIER']);
+      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+
+      const { accountId, status } = body;
+      if (!accountId) return res.status(400).json({ ok: false, error: 'accountId required' });
+      if (!['PENDING','FULFILLED','CANCELLED'].includes(status)) {
+        return res.status(400).json({ ok: false, error: 'status must be PENDING, FULFILLED, or CANCELLED' });
+      }
+
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/loyalty_accounts?id=eq.${encodeURIComponent(accountId)}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ card_request_status: status }),
+          headers: { 'Prefer': 'return=representation' }
+        }
+      );
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to update card request' });
+      return res.status(200).json({ ok: true, account: r.data?.[0] || null });
     }
 
     // ── redeemPointsToCard (CUSTOMER-FACING — requires email match w/ card) ─
