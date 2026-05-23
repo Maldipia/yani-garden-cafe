@@ -47,6 +47,9 @@
     },
     "api/cron-leaves-expiry.js": {
       "maxDuration": 30
+    },
+    "api/cron-backup.js": {
+      "maxDuration": 60
     }
   },
   "rewrites": [
@@ -231,6 +234,10 @@
     {
       "path": "/api/cron-leaves-expiry",
       "schedule": "0 18 * * *"
+    },
+    {
+      "path": "/api/cron-backup",
+      "schedule": "0 19 * * *"
     }
   ],
   "regions": [
