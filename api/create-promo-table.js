@@ -1,10 +1,10 @@
 // Temporary migration endpoint - deletes itself after running
-// POST /api/create-promo-table with {"secret": "yani-cron-2026"}
+// POST /api/create-promo-table with {"secret": "[CRON_SECRET env var]"}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
   const { secret } = req.body || {};
-  if (secret !== (process.env.CRON_SECRET || 'yani-cron-2026')) {
+  if (secret !== (process.env.CRON_SECRET || '')) {
     return res.status(403).json({ error: 'Forbidden' });
   }
 

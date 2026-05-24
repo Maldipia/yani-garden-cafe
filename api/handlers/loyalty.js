@@ -503,6 +503,8 @@ export async function routeLoyalty(action, body, auth, res) {
     //   accountId + cardNumber  → direct lookup
     //   email   + cardNumber  → resolve account by email first (customer flow)
     if (action === 'redeemPointsToCard') {
+      const authRPC = await checkAuth(['ADMIN', 'OWNER', 'CASHIER']);
+      if (!authRPC.ok) return res.status(403).json({ ok: false, error: authRPC.error });
       let { accountId, cardNumber, points, email, performedBy } = body;
       if (!cardNumber || !points) return res.status(400).json({ ok: false, error: 'cardNumber and points required' });
 

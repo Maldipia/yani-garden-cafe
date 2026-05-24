@@ -72,8 +72,13 @@ export async function routeAdmin(action, body, auth, res) {
 
     // ── verifyUserPin ──────────────────────────────────────────────────────
     if (action === 'testDriveUpload') {
-      // Diagnostic only — protected by secret key
-      if (body.secret !== 'yani-drive-test-2026') return res.status(401).json({ ok: false, error: 'Bad secret' });
+      // Diagnostic only — OWNER only OR CRON_SECRET header
+      const cronSecret = process.env.CRON_SECRET || '';
+      const fromCron = cronSecret && (req.headers?.authorization || '') === 'Bearer ' + cronSecret;
+      if (!fromCron) {
+        const authTD = await checkAuth(['OWNER']);
+        if (!authTD.ok) return res.status(403).json({ ok: false, error: authTD.error });
+      }
       const tinyPng = Buffer.from(
         'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==','base64');
       const driveResult = await uploadToGoogleDrive(tinyPng,'image/png',`TEST_${Date.now()}.png`,'1hDQlljGpRUwT9q33xHukbXvz_M8tk5lR');
@@ -630,6 +635,8 @@ export async function routeAdmin(action, body, auth, res) {
 
     // ── updateCustomerStats ────────────────────────────────────────────────
     if (action === 'updateCustomerStats') {
+      const authUCS = await checkAuth(['ADMIN', 'OWNER', 'CASHIER']);
+      if (!authUCS.ok) return res.status(403).json({ ok: false, error: authUCS.error });
       const { customerId, orderId, total } = body;
       if (!customerId) return res.status(400).json({ ok: false, error: 'customerId required' });
       const cur = await supaFetch(`${SUPABASE_URL}/rest/v1/customers?id=eq.${encodeURIComponent(customerId)}&select=total_orders,total_spent`);
@@ -717,8 +724,13 @@ export async function routeAdmin(action, body, auth, res) {
     // Called by GAS SheetsSync.gs — returns pending orders/payments to write to Sheets
     // No auth required (GAS runs as sheet owner, data is non-sensitive aggregate)
     if (action === 'getPendingSync') {
-      const secret = String(body.secret || '').trim();
-      if (secret !== 'yani-sync-2026') return res.status(403).json({ ok: false, error: 'Invalid secret' });
+      const cronSecret = process.env.CRON_SECRET || '';
+      const authHeader = (req.headers?.authorization || '');
+      const fromCron   = cronSecret && authHeader === 'Bearer ' + cronSecret;
+      if (!fromCron) {
+        const authPS = await checkAdminAuth();
+        if (!authPS.ok) return res.status(403).json({ ok: false, error: authPS.error });
+      }
 
       // Get pending sync items (limit 100 per batch)
       const batchLimit = Math.min(parseInt(body.limit) || 50, 100);
@@ -814,8 +826,16 @@ export async function routeAdmin(action, body, auth, res) {
     // ── markSynced ─────────────────────────────────────────────────────────
     // Called by GAS after successfully writing items to Sheets
     if (action === 'markSynced') {
-      const secret = String(body.secret || '').trim();
-      if (secret !== 'yani-sync-2026') return res.status(403).json({ ok: false, error: 'Invalid secret' });
+      const cronSecret = process.env.CRON_SECRET || '';
+      const authHeader = (req.headers?.authorization || '');
+      const fromCron   = cronSecret && authHeader === 'Bearer ' + cronSecret;
+      // Also accept legacy body.secret for backward compat (GAS caller)
+      const legacySecret = String(body.secret || '').trim();
+      const legacyOk     = cronSecret && legacySecret === cronSecret;
+      if (!fromCron && !legacyOk) {
+        const authMS = await checkAdminAuth();
+        if (!authMS.ok) return res.status(403).json({ ok: false, error: authMS.error });
+      }
       const ids = body.ids;
       if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ ok: false, error: 'ids array required' });
       const validIds = ids.filter(id => Number.isInteger(id) && id > 0);

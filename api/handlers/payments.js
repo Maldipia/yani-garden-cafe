@@ -415,6 +415,8 @@ export async function routePayments(action, body, auth, res) {
 
     // ── placePlatformOrder ─────────────────────────────────────────────────
     if (action === 'placePlatformOrder') {
+      const authPPO = await checkAdminAuth();
+      if (!authPPO.ok) return res.status(403).json({ ok: false, error: authPPO.error });
       const platform    = String(body.platform    || '').trim().toUpperCase();
       const platformRef = String(body.platformRef || '').trim().substring(0, 100);
       const notes       = String(body.notes       || '').trim().substring(0, 500);
@@ -860,9 +862,11 @@ export async function routePayments(action, body, auth, res) {
 
     // ── rejectPayment ──────────────────────────────────────────────────────
     if (action === 'rejectPayment') {
+      const authRP = await checkAdminAuth();
+      if (!authRP.ok) return res.status(403).json({ ok: false, error: authRP.error });
       const paymentId  = String(body.paymentId  || '').trim();
       const reason     = String(body.reason     || '').trim().substring(0, 500);
-      const verifiedBy = String(body.verifiedBy || 'Staff').trim().substring(0, 100);
+      const verifiedBy = String(body.verifiedBy || authRP.role || 'Staff').trim().substring(0, 100);
       if (!paymentId) return res.status(400).json({ ok: false, error: 'paymentId is required' });
 
       const r = await supa('PATCH', 'payments', {

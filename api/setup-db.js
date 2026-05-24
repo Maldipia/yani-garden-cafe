@@ -1,12 +1,12 @@
 // One-time DB setup endpoint - creates tables that don't exist
-// Call: POST /api/setup-db with {"secret": "yani-cron-2026"}
+// Call: POST /api/setup-db with {"secret": "[CRON_SECRET env var]"}
 import { createClient } from '@supabase/supabase-js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
   
   const { secret } = req.body || {};
-  if (secret !== (process.env.CRON_SECRET || 'yani-cron-2026')) {
+  if (secret !== (process.env.CRON_SECRET || '')) {
     return res.status(403).json({ error: 'Forbidden' });
   }
 
