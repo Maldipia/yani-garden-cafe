@@ -1,5 +1,11 @@
 // ══════════════════════════════════════════════════════════════
 // YANI POS — Image Upload Endpoint (Supabase Storage)
+
+// Raise Vercel's default 4.5MB body limit — base64 encoding adds ~33% overhead,
+// so a 5MB image becomes ~6.7MB JSON. 10MB covers photos up to ~7MB raw.
+export const config = {
+  api: { bodyParser: { sizeLimit: '10mb' } },
+};
 // Accepts a base64-encoded image, uploads to Supabase Storage
 // bucket "menu-images", and updates image_path in menu_items.
 // No GitHub token required — works permanently.
