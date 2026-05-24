@@ -2,7 +2,7 @@
 import { supaFetch, supa, auditLog, getSetting } from '../lib/db.js';
 import { invalidateMenuCache } from '../lib/cache.js';
 import { isValidOrderId, isNonEmptyString } from '../lib/validation.js';
-import { SUPABASE_URL, SERVICE_CHARGE_RATE, BUSINESS_NAME } from '../lib/config.js';
+import { SUPABASE_URL, SERVICE_CHARGE_RATE, BUSINESS_NAME, ORDER_PREFIX, SUPABASE_KEY } from '../lib/config.js';
 import { buildReceiptHTML, sendReceiptEmail } from '../lib/receipt.js';
 import { uploadToGoogleDrive } from '../lib/drive.js';
 

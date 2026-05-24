@@ -1,9 +1,9 @@
 // ── Admin, auth, analytics, inventory, staff, tables, settings, misc ──────
 import { supaFetch, supa, auditLog, getSetting, logSync } from '../lib/db.js';
 import { invalidateMenuCache, invalidateSettingsCache } from '../lib/cache.js';
-import { getCategoryName, getCategoryId } from '../lib/categories.js';
+import { getCategoryName, getCategoryId, CATEGORY_ID_TO_NAME } from '../lib/categories.js';
 import { isNonEmptyString, isValidOrderId, isValidItemCode } from '../lib/validation.js';
-import { SUPABASE_URL, BUSINESS_NAME, SERVICE_CHARGE_RATE, SUPABASE_KEY } from '../lib/config.js';
+import { SUPABASE_URL, BUSINESS_NAME, SERVICE_CHARGE_RATE, SUPABASE_KEY, FROM_EMAIL, RESEND_KEY } from '../lib/config.js';
 import { signToken, verifyToken, getJwtSecret } from '../lib/auth.js';
 import { uploadToGoogleDrive } from '../lib/drive.js';
 import { sendReceiptEmail, buildReceiptHTML } from '../lib/receipt.js';
