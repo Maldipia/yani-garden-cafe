@@ -1,5 +1,5 @@
 // ── Billing, payments, receipts, refunds, promos ──────────────────────────
-import { supaFetch, supa, auditLog, getSetting } from '../lib/db.js';
+import { supaFetch, supa, auditLog, getSetting, logSync, pushToSheets } from '../lib/db.js';
 import { invalidateMenuCache } from '../lib/cache.js';
 import { isValidOrderId, isNonEmptyString } from '../lib/validation.js';
 import { SUPABASE_URL, SERVICE_CHARGE_RATE, BUSINESS_NAME, ORDER_PREFIX, SUPABASE_KEY } from '../lib/config.js';

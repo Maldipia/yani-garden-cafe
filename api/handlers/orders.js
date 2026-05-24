@@ -1,8 +1,9 @@
 // ── Order action handlers ─────────────────────────────────────────────────
-import { supaFetch, supa, auditLog, getSetting } from '../lib/db.js';
+import { supaFetch, supa, auditLog, getSetting, logSync, pushToSheets } from '../lib/db.js';
 import { menuCache, MENU_CACHE_TTL, invalidateMenuCache } from '../lib/cache.js';
 import { getCategoryId, getCategoryName } from '../lib/categories.js';
 import { isValidOrderId, isNonEmptyString } from '../lib/validation.js';
+import { _maybeFireSoulSearcher, _maybeFireRainyDay } from '../lib/loyalty-events.js';
 import { SUPABASE_URL, SERVICE_CHARGE_RATE, ORDER_PREFIX, BUSINESS_NAME } from '../lib/config.js';
 
 export async function routeOrders(action, body, auth, req, res) {

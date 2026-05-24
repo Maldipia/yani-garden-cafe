@@ -1,5 +1,5 @@
 // ── Menu action handlers ──────────────────────────────────────────────────
-import { supaFetch, supa, auditLog } from '../lib/db.js';
+import { supaFetch, supa, auditLog, logSync } from '../lib/db.js';
 import { menuCache, MENU_CACHE_TTL, MENU_CACHE_TTL_ADMIN, invalidateMenuCache, _settingsCache, SETTINGS_CACHE_TTL } from '../lib/cache.js';
 import { getCategoryId, getCategoryName, CATEGORY_ID_TO_NAME } from '../lib/categories.js';
 import { isNonEmptyString, isValidItemCode, validateMenuPayload } from '../lib/validation.js';
