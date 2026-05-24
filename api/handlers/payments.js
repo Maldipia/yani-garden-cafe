@@ -7,7 +7,7 @@ import { buildReceiptHTML, sendReceiptEmail } from '../lib/receipt.js';
 import { uploadToGoogleDrive } from '../lib/drive.js';
 
 export async function routePayments(action, body, auth, req, res) {
-  const { checkAuth, checkAdminAuth } = auth;
+  const { checkAuth, checkAdminAuth, jwtUser } = auth;
 
     if (action === 'saveSplitBill') {
       const auth = await checkAuth(['OWNER','ADMIN','CASHIER']);

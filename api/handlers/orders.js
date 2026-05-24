@@ -7,7 +7,7 @@ import { _maybeFireSoulSearcher, _maybeFireRainyDay } from '../lib/loyalty-event
 import { SUPABASE_URL, SERVICE_CHARGE_RATE, ORDER_PREFIX, BUSINESS_NAME } from '../lib/config.js';
 
 export async function routeOrders(action, body, auth, req, res) {
-  const { checkAuth, checkAdminAuth } = auth;
+  const { checkAuth, checkAdminAuth, jwtUser } = auth;
 
     if (action === 'placeOrder') {
       const isStaffOrder = body.staffOrder === true;

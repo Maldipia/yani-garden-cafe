@@ -6,7 +6,7 @@ import { isNonEmptyString, isValidItemCode, validateMenuPayload } from '../lib/v
 import { SUPABASE_URL, BUSINESS_NAME, SERVICE_CHARGE_RATE } from '../lib/config.js';
 
 export async function routeMenu(action, body, auth, req, res) {
-  const { checkAuth, checkAdminAuth } = auth;
+  const { checkAuth, checkAdminAuth, jwtUser } = auth;
 
     if (action === 'getMenu') {
       const now = Date.now();

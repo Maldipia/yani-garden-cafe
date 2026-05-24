@@ -7,7 +7,7 @@ import { SUPABASE_URL, BUSINESS_NAME } from '../lib/config.js';
 import { _maybeFireSoulSearcher, _maybeFireRainyDay } from '../lib/loyalty-events.js';
 
 export async function routeLoyalty(action, body, auth, req, res) {
-  const { checkAuth, checkAdminAuth } = auth;
+  const { checkAuth, checkAdminAuth, jwtUser } = auth;
 
     if (action === 'getLoyaltySettings') {
       const keys = ['LOYALTY_ENABLED','LOYALTY_EARN_RATE','LOYALTY_REDEEM_RATE',
