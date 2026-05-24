@@ -18,3 +18,7 @@ export const SUPABASE_KEY = (() => {
 //   postgresql://postgres.hnynvclpvfxzlfjphefj:[PASSWORD]@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres
 // Session mode (port 5432 on pooler host) if you need SET/advisory locks.
 export const DATABASE_URL = process.env.DATABASE_URL || null;
+
+// GAS sync URL (optional - legacy, no longer needed post-Supabase migration)
+// Set in Vercel env if you still want manual GAS ping
+export const GAS_SYNC_URL = process.env.GAS_SYNC_URL || null;
