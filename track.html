@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>My Cafe — Track Order</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -212,6 +213,8 @@ var APP_CONFIG = {};
 const API = '/api/online-order';
 var pollTimer = null;
 var currentRef = '';
+var _trackChannel = null;
+var _trackSupabase = null;
 
 // ── Pre-fill from URL param ─────────────────────────────
 (function() {
@@ -254,12 +257,15 @@ async function searchOrder() {
     currentRef = raw;
     renderOrder(data.order);
 
-    // Start auto-polling for active orders
+    // Subscribe to Realtime for instant status updates
+    _startTrackRealtime(raw, data.order.status);
+
+    // 30s fallback poll (Realtime safety net)
     if (pollTimer) clearInterval(pollTimer);
     document.getElementById('refreshRow').style.display = '';
     document.getElementById('refreshBadge').style.display = '';
     if (!['COMPLETED','CANCELLED'].includes(data.order.status)) {
-      pollTimer = setInterval(function() { silentRefresh(); }, 10000);
+      pollTimer = setInterval(function() { silentRefresh(); }, 30000);
     } else {
       document.getElementById('refreshBadge').style.display = 'none';
     }
@@ -434,6 +440,45 @@ function clearError() { document.getElementById('errorBox').style.display = 'non
 function esc(str) {
   if (typeof str !== 'string') return String(str || '');
   return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ── Realtime order tracking ─────────────────────────────────────────
+async function _startTrackRealtime(orderRef, currentStatus) {
+  if (['COMPLETED','CANCELLED'].includes(currentStatus)) return;
+  // Tear down any existing subscription
+  if (_trackChannel && _trackSupabase) {
+    try { await _trackSupabase.removeChannel(_trackChannel); } catch(_) {}
+    _trackChannel = null;
+  }
+  try {
+    var cfgResp = await fetch('/api/config');
+    var cfgData = await cfgResp.json();
+    var anonKey = cfgData && cfgData.config && cfgData.config.SUPABASE_ANON_KEY;
+    if (!anonKey || !window.supabase) return;
+    _trackSupabase = window.supabase.createClient(
+      'https://hnynvclpvfxzlfjphefj.supabase.co', anonKey
+    );
+    _trackChannel = _trackSupabase
+      .channel('track-' + orderRef)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'dine_in_orders',
+        filter: 'order_id=eq.' + orderRef
+      }, function(payload) {
+        silentRefresh();
+      })
+      .subscribe(function(status) {
+        if (status === 'SUBSCRIBED') {
+          // Realtime live — slow down fallback poll
+          if (pollTimer) { clearInterval(pollTimer); }
+          pollTimer = setInterval(function() { silentRefresh(); }, 30000);
+          document.getElementById('refreshBadge').textContent = '● Watching for updates';
+        }
+      });
+  } catch(e) {
+    console.warn('[Track] Realtime init failed:', e.message);
+  }
 }
 </script>
 </body>

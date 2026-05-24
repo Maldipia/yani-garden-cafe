@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>YANI Kitchen Display</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -362,7 +363,9 @@ const API = '/api/pos';
 let userId = null;
 let soundOn = true;
 let knownOrderIds = new Set();
-let refreshInterval = null;
+let refreshInterval = null;  // fallback poll (30s safety net)
+let realtimeChannel = null;  // Supabase Realtime subscription
+let supabaseClient = null;
 let audioCtx = null;
 
 // ── PIN LOGIN ────────────────────────────────────────
@@ -460,10 +463,40 @@ function startClock() {
   tick(); setInterval(tick, 1000);
 }
 
-// ── REFRESH ──────────────────────────────────────────
-function startRefresh() {
-  loadOrders();
-  refreshInterval = setInterval(loadOrders, 5000);
+// ── REALTIME + FALLBACK REFRESH ───────────────────────
+async function startRefresh() {
+  await loadOrders();
+
+  // 1) Supabase Realtime — instant push on any order change
+  try {
+    const cfgResp = await fetch('/api/config');
+    const cfgData = await cfgResp.json();
+    const anonKey  = cfgData?.config?.SUPABASE_ANON_KEY;
+    const supaUrl  = 'https://hnynvclpvfxzlfjphefj.supabase.co';
+    if (anonKey && window.supabase) {
+      supabaseClient = window.supabase.createClient(supaUrl, anonKey);
+      realtimeChannel = supabaseClient
+        .channel('kds-orders')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'dine_in_orders' },
+          () => loadOrders()  // any INSERT or UPDATE → refresh immediately
+        )
+        .subscribe((status) => {
+          console.log('[KDS Realtime]', status);
+          if (status === 'SUBSCRIBED') {
+            // Connected — can slow down the fallback poll significantly
+            if (refreshInterval) clearInterval(refreshInterval);
+            refreshInterval = setInterval(loadOrders, 30000); // 30s safety net
+          }
+        });
+    }
+  } catch(e) {
+    console.warn('[KDS] Realtime init failed, using poll only:', e.message);
+  }
+
+  // 2) Fallback poll — 5s until Realtime confirms SUBSCRIBED, then 30s
+  if (!refreshInterval) {
+    refreshInterval = setInterval(loadOrders, 5000);
+  }
 }
 
 async function loadOrders() {

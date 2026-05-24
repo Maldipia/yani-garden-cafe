@@ -50,6 +50,9 @@
     },
     "api/cron-backup.js": {
       "maxDuration": 60
+    },
+    "api/warmup.js": {
+      "maxDuration": 5
     }
   },
   "rewrites": [
@@ -180,6 +183,10 @@
     {
       "source": "/roots",
       "destination": "/rewards.html"
+    },
+    {
+      "source": "/api/warmup",
+      "destination": "/api/warmup"
     }
   ],
   "headers": [
@@ -308,6 +315,14 @@
     {
       "path": "/api/cron-backup",
       "schedule": "0 19 * * *"
+    },
+    {
+      "path": "/api/warmup",
+      "schedule": "*/5 22-23 * * *"
+    },
+    {
+      "path": "/api/warmup",
+      "schedule": "*/5 0-15 * * *"
     }
   ],
   "regions": [
