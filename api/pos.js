@@ -61,11 +61,11 @@ export default async function handler(req, res) {
     // Each route function returns the Express res object (truthy) if it handled
     // the action, or `false` if the action isn't in its group.
     const handled =
-      await routeMenu    (action, body, auth, res) ||
-      await routeOrders  (action, body, auth, res) ||
-      await routeLoyalty (action, body, auth, res) ||
-      await routePayments(action, body, auth, res) ||
-      await routeAdmin   (action, body, auth, res);
+      await routeMenu    (action, body, auth, req, res) ||
+      await routeOrders  (action, body, auth, req, res) ||
+      await routeLoyalty (action, body, auth, req, res) ||
+      await routePayments(action, body, auth, req, res) ||
+      await routeAdmin   (action, body, auth, req, res);
 
     if (!handled) {
       return res.status(400).json({ ok: false, error: `Unknown action: ${action}` });

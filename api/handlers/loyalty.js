@@ -6,7 +6,7 @@ import { isNonEmptyString, isValidOrderId } from '../lib/validation.js';
 import { SUPABASE_URL, BUSINESS_NAME } from '../lib/config.js';
 import { _maybeFireSoulSearcher, _maybeFireRainyDay } from '../lib/loyalty-events.js';
 
-export async function routeLoyalty(action, body, auth, res) {
+export async function routeLoyalty(action, body, auth, req, res) {
   const { checkAuth, checkAdminAuth } = auth;
 
     if (action === 'getLoyaltySettings') {

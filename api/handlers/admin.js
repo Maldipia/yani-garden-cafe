@@ -9,7 +9,7 @@ import { uploadToGoogleDrive } from '../lib/drive.js';
 import { sendReceiptEmail, buildReceiptHTML } from '../lib/receipt.js';
 import bcrypt from 'bcryptjs';
 
-export async function routeAdmin(action, body, auth, res) {
+export async function routeAdmin(action, body, auth, req, res) {
   const { checkAuth, checkAdminAuth, jwtUser } = auth;
 
     if (action === 'changePin') {

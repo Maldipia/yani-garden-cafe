@@ -5,7 +5,7 @@ import { getCategoryId, getCategoryName, CATEGORY_ID_TO_NAME } from '../lib/cate
 import { isNonEmptyString, isValidItemCode, validateMenuPayload } from '../lib/validation.js';
 import { SUPABASE_URL, BUSINESS_NAME, SERVICE_CHARGE_RATE } from '../lib/config.js';
 
-export async function routeMenu(action, body, auth, res) {
+export async function routeMenu(action, body, auth, req, res) {
   const { checkAuth, checkAdminAuth } = auth;
 
     if (action === 'getMenu') {

@@ -5,7 +5,7 @@ import { getCategoryId, getCategoryName } from '../lib/categories.js';
 import { isValidOrderId, isNonEmptyString } from '../lib/validation.js';
 import { SUPABASE_URL, SERVICE_CHARGE_RATE, ORDER_PREFIX, BUSINESS_NAME } from '../lib/config.js';
 
-export async function routeOrders(action, body, auth, res) {
+export async function routeOrders(action, body, auth, req, res) {
   const { checkAuth, checkAdminAuth } = auth;
 
     if (action === 'placeOrder') {

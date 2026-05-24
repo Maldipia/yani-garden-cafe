@@ -6,7 +6,7 @@ import { SUPABASE_URL, SERVICE_CHARGE_RATE, BUSINESS_NAME, ORDER_PREFIX, SUPABAS
 import { buildReceiptHTML, sendReceiptEmail } from '../lib/receipt.js';
 import { uploadToGoogleDrive } from '../lib/drive.js';
 
-export async function routePayments(action, body, auth, res) {
+export async function routePayments(action, body, auth, req, res) {
   const { checkAuth, checkAdminAuth } = auth;
 
     if (action === 'saveSplitBill') {
