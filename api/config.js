@@ -48,7 +48,7 @@ let _cache = null;
 let _cacheAt = 0;
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   const origin = req.headers.origin || '';
   const allowed = ALLOWED.split(',').map(s => s.trim());
   if (allowed.includes(origin)) {

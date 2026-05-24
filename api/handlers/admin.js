@@ -1,17 +1,78 @@
-// ── Admin, analytics, inventory, staff, tables, settings, misc ────────────
+// ── Admin, auth, analytics, inventory, staff, tables, settings, misc ──────
 import { supaFetch, supa, auditLog, getSetting, logSync } from '../lib/db.js';
 import { invalidateMenuCache, invalidateSettingsCache } from '../lib/cache.js';
 import { getCategoryName, getCategoryId } from '../lib/categories.js';
 import { isNonEmptyString, isValidOrderId, isValidItemCode } from '../lib/validation.js';
-import { SUPABASE_URL, BUSINESS_NAME, SERVICE_CHARGE_RATE } from '../lib/config.js';
+import { SUPABASE_URL, BUSINESS_NAME, SERVICE_CHARGE_RATE, SUPABASE_KEY } from '../lib/config.js';
 import { signToken, verifyToken, getJwtSecret } from '../lib/auth.js';
 import { uploadToGoogleDrive } from '../lib/drive.js';
 import { sendReceiptEmail, buildReceiptHTML } from '../lib/receipt.js';
 import bcrypt from 'bcryptjs';
 
 export async function routeAdmin(action, body, auth, res) {
-  const { checkAuth, checkAdminAuth } = auth;
+  const { checkAuth, checkAdminAuth, jwtUser } = auth;
 
+    if (action === 'changePin') {
+      // REQUIRES VALID JWT — no legacy body.userId fallback allowed for PIN changes
+      if (!jwtUser) {
+        return res.status(403).json({ ok: false, error: 'A valid login token is required to change PINs' });
+      }
+      const authCP = await checkAuth(['OWNER','ADMIN','CASHIER','KITCHEN']);
+      if (!authCP.ok) return res.status(403).json({ ok: false, error: authCP.error });
+
+      // Requires OWNER or ADMIN to change any PIN
+      // OR the user themselves (must provide currentPin to verify identity)
+      const targetUserId = String(body.targetUserId || '').trim();
+      const newPin       = String(body.newPin || '').trim();
+      const currentPin   = String(body.currentPin || '').trim();
+
+      if (!targetUserId) return res.status(400).json({ ok: false, error: 'targetUserId is required' });
+      if (!newPin || newPin.length < 4) return res.status(400).json({ ok: false, error: 'New PIN must be at least 4 digits' });
+      if (!/^\d{4,8}$/.test(newPin)) return res.status(400).json({ ok: false, error: 'PIN must be 4-8 digits only' });
+
+      // Fetch the target user
+      const targetR = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/staff_users?user_id=eq.${encodeURIComponent(targetUserId)}&active=eq.true&select=user_id,pin_hash,role`
+      );
+      if (!targetR.ok || !targetR.data?.length) {
+        return res.status(404).json({ ok: false, error: 'User not found' });
+      }
+      const targetUser = targetR.data[0];
+
+      // Auth check: use jwtUser directly (guaranteed valid JWT from check above)
+      // NEVER use body.userId for role lookup — that was the original exploit
+      const requesterId = jwtUser.userId;         // from validated JWT — cannot be spoofed
+      const requesterRole = jwtUser.role;         // from validated JWT — cannot be spoofed
+      let authorized = false;
+
+      if (requesterRole === 'OWNER' || requesterRole === 'ADMIN') {
+        // Only OWNER/ADMIN (verified via JWT) can change any PIN without currentPin
+        authorized = true;
+      } else if (currentPin) {
+        // Non-admin changing their own PIN — must provide current PIN AND target must be themselves
+        if (targetUserId !== requesterId) {
+          return res.status(403).json({ ok: false, error: 'You can only change your own PIN' });
+        }
+        authorized = await bcrypt.compare(currentPin, targetUser.pin_hash);
+        if (!authorized) return res.status(403).json({ ok: false, error: 'Current PIN is incorrect' });
+      }
+
+      if (!authorized) return res.status(403).json({ ok: false, error: 'Unauthorized to change this PIN' });
+
+      // Hash new PIN and save
+      const newHash = await bcrypt.hash(newPin, 12);
+      const upd = await supa('PATCH', 'staff_users',
+        { pin_hash: newHash, failed_attempts: 0, locked_until: null },
+        { user_id: `eq.${targetUserId}` }
+      );
+      if (!upd.ok) return res.status(500).json({ ok: false, error: 'Failed to update PIN' });
+
+      return res.status(200).json({ ok: true, message: 'PIN updated successfully' });
+    }
+
+    // ── verifyUserPin ──────────────────────────────────────────────────────
+    if (action === 'testDriveUpload') {
+      // Diagnostic only — protected by secret key
       if (body.secret !== 'yani-drive-test-2026') return res.status(401).json({ ok: false, error: 'Bad secret' });
       const tinyPng = Buffer.from(
         'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==','base64');
@@ -1394,17 +1455,6 @@ export async function routeAdmin(action, body, auth, res) {
       });
       return res.status(200).json({ ok: true, msg: 'Migration attempted' });
     }
-
-    // ── Unknown action ─────────────────────────────────────────────────────
-    return res.status(400).json({ ok: false, error: `Unknown action: ${action}` });
-
-  } catch (err) {
-    console.error('API error:', err);
-    return res.status(500).json({ ok: false, error: 'Server error: ' + err.message });
-  }
-}
-
-// ── One-time migration endpoint (safe to call multiple times - uses IF NOT EXISTS) ──
 
   return false;
 }

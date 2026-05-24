@@ -67,4 +67,3 @@ export async function uploadToGoogleDrive(imageBuffer, mimeType, filename, folde
   } catch(e) { console.error('Drive upload error:', e.message); return { error: e.message }; }
 }
 
-export default async function handler(req, res) {

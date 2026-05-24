@@ -65,5 +65,5 @@ export function buildAuthCtx(jwtUser, body, action, getRolePermsFn) {
     return requireAuth(body, allowedRoles);
   }
   async function checkAdminAuth() { return checkAuth(['ADMIN', 'OWNER']); }
-  return { checkAuth, checkAdminAuth };
+  return { checkAuth, checkAdminAuth, jwtUser };
 }
