@@ -2406,6 +2406,7 @@ async function placeOrder() {
       total:        total,
       items:        state.cart.map(function(c){ return { code:c.code, qty:c.qty, price:c.price, size:c.size||'', sugarLevel:c.sugar||'', addons:c.addons||[] }; })
     };
+    state.orderTotal = total; // Fix: set total BEFORE opening payment page so Amount Due shows correctly
     closePage('checkout');
     openPage('payment');
     state.paymentMethod = 'qr';
@@ -2852,12 +2853,15 @@ function showQRPayment() {
 
     h += '<div style="font-family:var(--font-soul);font-size:1rem;font-weight:700;text-align:center;margin-bottom:16px">Upload Payment Proof</div>';
     h += '<div style="font-size:.78rem;color:var(--timber);text-align:center;margin-bottom:20px">All fields marked with <span style="color:var(--terra)">*</span> are required</div>';
-
     // Form fields
-    h += '<div class="pay-form-group">' +
-      '<label class="pay-form-label">Your Name <span style="color:#e04444">*</span></label>' +
-      '<input class="pay-form-input" id="payName" type="text" value="' + esc(state.customerName || '') + '" placeholder="e.g. Juan">' +
-    '</div>';
+    // Name hidden if already entered at checkout — avoids asking twice
+    if (state.customerName) {
+      h += '<div class="pay-form-group" style="display:none"><input class="pay-form-input" id="payName" type="text" value="' + esc(state.customerName) + '"></div>';
+    } else {
+      h += '<div class="pay-form-group">' +
+        '<label class="pay-form-label">Your Name <span style="color:#e04444">*</span></label>' +
+        '<input class="pay-form-input" id="payName" type="text" value="" placeholder="e.g. Juan"></div>';
+    }
 
 
 
