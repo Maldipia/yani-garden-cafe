@@ -2307,10 +2307,20 @@ function renderCheckoutPage() {
 
 function setOrderType(type) {
   state.orderType = type;
+  // Preserve whatever the customer has typed before re-rendering
+  var n = document.getElementById('custName');
+  if (n && n.value.trim()) state.customerName = n.value.trim();
+  var nt = document.getElementById('custNotes');
+  if (nt) state.orderNotes = nt.value;
   renderCheckoutPage();
 }
 function setCheckoutPay(method) {
   state.checkoutPayMethod = method;
+  // Preserve whatever the customer has typed before re-rendering
+  var n = document.getElementById('custName');
+  if (n && n.value.trim()) state.customerName = n.value.trim();
+  var nt = document.getElementById('custNotes');
+  if (nt) state.orderNotes = nt.value;
   renderCheckoutPage();
 }
 
