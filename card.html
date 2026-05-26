@@ -397,13 +397,18 @@ function renderTransactions(txns){
   el.innerHTML = txns.map(t => {
     const isCredit = ['RELOAD','ACTIVATE'].includes(t.type) || (t.type==='ADJUST' && t.amount>0);
     const sign = isCredit ? '+' : '−';
-    const phDate = new Date(t.date).toLocaleString('en-PH',{timeZone:'Asia/Manila',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+    const d = new Date(t.date);
+    const phDate = d.toLocaleString('en-PH',{timeZone:'Asia/Manila',month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'});
+    const typeLabel = t.type === 'CHARGE' ? 'Purchase' : t.type === 'RELOAD' ? 'Reload' : t.type === 'ACTIVATE' ? 'Activated' : t.type === 'ADJUST' ? 'Adjustment' : t.type;
     return `<div class="txn-item">
       <div class="txn-icon ${clss[t.type]||'txn-edit'}">${icons[t.type]||'•'}</div>
       <div class="txn-info">
-        <div class="txn-label">${esc(t.type)}${t.discountAmt>0?' <span style="font-size:.68rem;color:#16a34a">(saved '+peso(t.discountAmt)+')</span>':''}</div>
-        <div class="txn-date">${esc(phDate)}</div>
-        ${t.orderId?`<div class="txn-order">Order: ${esc(t.orderId)}</div>`:''}
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span class="txn-label">${esc(typeLabel)}</span>
+          ${t.orderId ? `<span style="background:#dcfce7;color:#14532d;font-size:.7rem;font-weight:800;padding:1px 8px;border-radius:20px">${esc(t.orderId)}</span>` : ''}
+          ${t.discountAmt>0 ? `<span style="background:#fef9c3;color:#92400e;font-size:.68rem;font-weight:700;padding:1px 7px;border-radius:20px">saved ${peso(t.discountAmt)}</span>` : ''}
+        </div>
+        <div class="txn-date" style="margin-top:3px">📅 ${esc(phDate)}</div>
       </div>
       <div>
         <div class="txn-amt ${isCredit?'credit':'debit'}">${sign}${peso(Math.abs(t.amount))}</div>
