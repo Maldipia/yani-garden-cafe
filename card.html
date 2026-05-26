@@ -265,13 +265,41 @@ let selectedMethod = 'GCASH';
 let selectedAmt = 1000;
 
 // ── PAYMENT QR CODES ──────────────────────────────────
-const PAYMENT_QRS = {
-  GCASH:     { url:'https://drive.google.com/uc?export=view&id=1ecOAJlEMPxnEz6D5VKkKZPgADiWeJrBw', note:'Scan with GCash app · Account: LEGERYN PIA' },
-  INSTAPAY:  { url:'https://drive.google.com/uc?export=view&id=1oNJOHPciP7cv5iCsaCq13lCXIHd_20Ig', note:'Scan with any InstaPay-enabled app · Account: LEGERYN PIA' },
-  BDO:       { url:'https://drive.google.com/uc?export=view&id=1zEuIcLm3LXikG4hYk0i5AH7Dh4YEyc6K', note:'BDO · 0126-000-62617 · LEGERYN PIA' },
-  BPI:       { url:'https://drive.google.com/uc?export=view&id=1k080ReFsb5dVaeGXW-VT8dK0zo9mSEiH', note:'BPI · 1539-235-628 · LEGERYN PIA' },
-  UNIONBANK: { url:'https://drive.google.com/uc?export=view&id=1l4bztfHVdOI9ERIEZd4oz_6njYlL_hwv', note:'UnionBank · 1093-2100-0528 · LEGERYN PIA' },
+// Payment QR codes — loaded from settings API on init
+var PAYMENT_QRS = {
+  GCASH:     { url:'', note:'Scan with GCash app · Account: LEGERYN PIA' },
+  INSTAPAY:  { url:'', note:'Scan with any InstaPay-enabled app · Account: LEGERYN PIA' },
+  BDO:       { url:'', note:'BDO · Account: LEGERYN PIA' },
+  BPI:       { url:'', note:'BPI · Account: LEGERYN PIA' },
+  UNIONBANK: { url:'', note:'UnionBank · Account: LEGERYN PIA' },
 };
+
+async function loadPaymentSettings() {
+  try {
+    var r = await fetch(API, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ action:'getSettings' })
+    });
+    var d = await r.json();
+    var s = {};
+    if (d.ok && d.settings) {
+      (d.settings||[]).forEach(function(x){ s[x.key] = x.value; });
+    }
+    if (s.GCASH_QR_URL)     PAYMENT_QRS.GCASH.url     = s.GCASH_QR_URL;
+    if (s.INSTAPAY_QR_URL)  PAYMENT_QRS.INSTAPAY.url  = s.INSTAPAY_QR_URL;
+    if (s.BDO_QR_URL)       PAYMENT_QRS.BDO.url       = s.BDO_QR_URL;
+    if (s.BPI_QR_URL)       PAYMENT_QRS.BPI.url        = s.BPI_QR_URL;
+    if (s.UNIONBANK_QR_URL) PAYMENT_QRS.UNIONBANK.url  = s.UNIONBANK_QR_URL;
+    if (s.ACCOUNT_NAME) {
+      var acct = s.ACCOUNT_NAME;
+      PAYMENT_QRS.GCASH.note    = 'Scan with GCash app · ' + (s.GCASH_NUMBER ? s.GCASH_NUMBER + ' · ' : '') + acct;
+      PAYMENT_QRS.INSTAPAY.note = 'Scan with any InstaPay app · ' + acct;
+      PAYMENT_QRS.BDO.note      = 'BDO · ' + (s.BDO_ACCOUNT||'') + ' · ' + acct;
+      PAYMENT_QRS.BPI.note      = 'BPI · ' + (s.BPI_ACCOUNT||'') + ' · ' + acct;
+      PAYMENT_QRS.UNIONBANK.note = 'UnionBank · ' + (s.UNIONBANK_ACCOUNT||'') + ' · ' + acct;
+    }
+  } catch(e) { console.error('Failed to load payment settings:', e); }
+}
 
 function peso(n){ return '₱'+parseFloat(n||0).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function esc(s){ const d=document.createElement('div');d.textContent=s;return d.innerHTML; }
@@ -501,6 +529,7 @@ async function submitLoad(){
 }
 
 // ── INIT ──────────────────────────────────────────────
+loadPaymentSettings();
 if(!restoreSession()){
   // Check URL params for pre-filled card number (link from admin)
   const params = new URLSearchParams(location.search);
