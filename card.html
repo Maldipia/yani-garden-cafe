@@ -15,8 +15,9 @@
   --r:14px; --shadow:0 4px 20px rgba(0,0,0,.13);
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--forest);min-height:100vh;color:var(--ink);max-width:480px;margin:0 auto}
-.screen{display:none;min-height:100vh;flex-direction:column}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--forest);min-height:100vh;color:var(--ink);margin:0}
+.portal-wrap{max-width:480px;margin:0 auto;min-height:100vh;background:var(--mist-light)}
+.screen{display:none;flex-direction:column;min-height:100vh}
 .screen.active{display:flex}
 
 /* ── LOGIN ── */
@@ -36,7 +37,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--forest);min-he
 .login-error{color:#dc2626;font-size:.82rem;text-align:center;margin-top:10px;min-height:20px}
 
 /* ── CARD PORTAL ── */
-#portalScreen{background:var(--mist-light)}
+#portalScreen{background:transparent}
 .top-bar{background:var(--forest);color:#fff;padding:16px 20px;display:flex;align-items:center;justify-content:space-between}
 .top-bar h2{font-size:1rem;font-weight:700}
 .top-bar .logout{background:rgba(255,255,255,.15);border:none;color:#fff;padding:6px 12px;border-radius:8px;font-size:.78rem;cursor:pointer;font-weight:600}
@@ -122,6 +123,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--forest);min-he
 <body>
 
 <!-- ── LOGIN ─────────────────────────────────────────── -->
+<div class="portal-wrap">
 <div class="screen active" id="loginScreen">
   <div class="login-box">
     <div class="brand">
@@ -526,5 +528,6 @@ if(!restoreSession()){
   if(cn) document.getElementById('loginCard').value = cn.toUpperCase();
 }
 </script>
+</div>
 </body>
 </html>
