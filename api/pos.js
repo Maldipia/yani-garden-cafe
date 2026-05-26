@@ -8,11 +8,12 @@
 import { SUPABASE_URL, SUPABASE_KEY }   from './lib/config.js';
 import { checkRateLimit, getRolePermissions } from './lib/cache.js';
 import { verifyToken, buildAuthCtx }    from './lib/auth.js';
-import { routeMenu }     from './handlers/menu.js';
-import { routeOrders }   from './handlers/orders.js';
-import { routeLoyalty }  from './handlers/loyalty.js';
-import { routePayments } from './handlers/payments.js';
-import { routeAdmin }    from './handlers/admin.js';
+import { routeMenu }       from './handlers/menu.js';
+import { routeOrders }     from './handlers/orders.js';
+import { routeLoyalty }    from './handlers/loyalty.js';
+import { routePayments }   from './handlers/payments.js';
+import { routeAdmin }      from './handlers/admin.js';
+import { routeCardPortal } from './handlers/card-portal.js';
 
 const ALLOWED_ORIGINS = (
   process.env.ALLOWED_ORIGINS ||
@@ -61,11 +62,12 @@ export default async function handler(req, res) {
     // Each route function returns the Express res object (truthy) if it handled
     // the action, or `false` if the action isn't in its group.
     const handled =
-      await routeMenu    (action, body, auth, req, res) ||
-      await routeOrders  (action, body, auth, req, res) ||
-      await routeLoyalty (action, body, auth, req, res) ||
-      await routePayments(action, body, auth, req, res) ||
-      await routeAdmin   (action, body, auth, req, res);
+      await routeMenu       (action, body, auth, req, res) ||
+      await routeOrders     (action, body, auth, req, res) ||
+      await routeLoyalty    (action, body, auth, req, res) ||
+      await routePayments   (action, body, auth, req, res) ||
+      await routeCardPortal (action, body, auth, req, res) ||
+      await routeAdmin      (action, body, auth, req, res);
 
     if (!handled) {
       return res.status(400).json({ ok: false, error: `Unknown action: ${action}` });

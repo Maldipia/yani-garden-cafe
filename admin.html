@@ -2147,7 +2147,26 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 </div>
 
 <script src="/admin-core.js?v=20"></script>
-<script src="/admin-orders.js?v=20"></script>
+
+  <!-- Card Load Requests View -->
+  <div id="cardLoadsView" style="display:none;padding:0 0 100px">
+    <div style="padding:16px 16px 0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+      <div>
+        <div style="font-weight:800;font-size:1.1rem;color:var(--forest-deep)">🌿 Card Load Requests</div>
+        <div id="cardLoadsCount" style="font-size:.72rem;color:var(--timber);margin-top:1px">Loading…</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="loadCardLoads('PENDING')" style="padding:7px 14px;background:var(--mist-light);border:1px solid var(--mist);border-radius:8px;font-size:.78rem;font-weight:700;cursor:pointer;color:var(--forest)">Pending</button>
+        <button onclick="loadCardLoads('ALL')" style="padding:7px 14px;background:var(--mist-light);border:1px solid var(--mist);border-radius:8px;font-size:.78rem;font-weight:700;cursor:pointer;color:var(--timber)">All</button>
+        <a href="https://pos.yanigardencafe.com/card" target="_blank" style="padding:7px 14px;background:var(--forest);color:#fff;border:none;border-radius:8px;font-size:.78rem;font-weight:700;cursor:pointer;text-decoration:none">🔗 Open Portal</a>
+      </div>
+    </div>
+    <div style="padding:16px" id="cardLoadsGrid">
+      <div style="text-align:center;padding:40px;color:var(--timber)">Loading…</div>
+    </div>
+  </div>
+
+  <script src="/admin-orders.js?v=20"></script>
 <script src="/admin-payments.js?v=20"></script>
 <script src="/admin-menu.js?v=20"></script>
 <script src="/admin-online.js?v=20"></script>
@@ -2155,5 +2174,6 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 <script src="/admin-checkout.js?v=20"></script>
 <script src="/admin-costing.js?v=20"></script>
   <script src="/admin-cards.js?v=20"></script>
+  <script src="/admin-card-loads.js?v=1"></script>
 </body>
 </html>

@@ -620,6 +620,7 @@ function renderSidebar() {
   html += item('ACTIVE', '🔥', 'Order Queue', '');
   if (role !== 'KITCHEN') html += item('PAYMENTS', '💳', 'Payments', pendingPayCount || '');
   html += item('ONLINE_ORDERS', '🛵', 'Online Orders', onlineOrderPendingCount || '');
+  if (role !== 'KITCHEN') html += item('CARD_LOADS', '🌿', 'Card Loads', window._pendingCardLoads||'');
   if (isOwner) html += item('REFUNDS', '↩️', 'Refunds', '');
   if (isOwner) html += item('CASH', '💵', 'Cash Sessions', '');
 

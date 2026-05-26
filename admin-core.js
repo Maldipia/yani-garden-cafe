@@ -924,6 +924,8 @@ function setFilter(f) {
   paymentsView.style.display = 'none';
   menuManagerView.style.display = 'none';
   if (onlineOrdersView) onlineOrdersView.style.display = 'none';
+  var cardLoadsView = document.getElementById('cardLoadsView');
+  if (cardLoadsView) cardLoadsView.style.display = 'none';
 
   var sheetsView = document.getElementById('sheetsView');
   if (sheetsView) sheetsView.style.display = 'none';
@@ -983,6 +985,9 @@ function setFilter(f) {
   } else if (f === 'ONLINE_ORDERS') {
     if (onlineOrdersView) onlineOrdersView.style.display = 'block';
     loadOnlineOrders();
+  } else if (f === 'CARD_LOADS') {
+    var cardLoadsView = document.getElementById('cardLoadsView');
+    if (cardLoadsView) { cardLoadsView.style.display = 'block'; initCardLoads(); }
   } else if (f === 'SHEETS') {
     if (sheetsView) sheetsView.style.display = 'block';
     loadSheetsData();

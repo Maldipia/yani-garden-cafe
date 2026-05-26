@@ -187,6 +187,10 @@
     {
       "source": "/api/warmup",
       "destination": "/api/warmup"
+    },
+    {
+      "source": "/card",
+      "destination": "/card.html"
     }
   ],
   "headers": [
