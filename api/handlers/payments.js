@@ -164,6 +164,40 @@ export async function routePayments(action, body, auth, req, res) {
       );
       if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to apply discount' });
 
+      // ── Wire stacked discount to Yani Card balance ────────────────────────
+      // If the card was already charged at order placement, credit the additional
+      // discount back to the card balance (ADJUST transaction).
+      if (isStackingOnCard && newDiscountAmount > 0) {
+        try {
+          // Extract card number from note e.g. "Yani Card: YANI-1005"
+          const cardMatch = String(existingNote || '').match(/YANI-\d+/i);
+          if (cardMatch) {
+            const cardNum = cardMatch[0].toUpperCase();
+            // Check if card was already charged for this order
+            const chkR = await supaFetch(
+              `${SUPABASE_URL}/rest/v1/card_transactions?order_id=eq.${encodeURIComponent(orderId)}&type=eq.CHARGE&select=id&limit=1`
+            );
+            if (chkR.ok && chkR.data?.length > 0) {
+              // Card was already charged → credit the additional discount back
+              await supaFetch(`${SUPABASE_URL}/rest/v1/rpc/adjust_card_balance`, {
+                method: 'POST',
+                body: JSON.stringify({
+                  p_card_number:  cardNum,
+                  p_amount:       newDiscountAmount,
+                  p_order_id:     orderId,
+                  p_performed_by: body.userId || 'STAFF',
+                  p_description:  `Stacked ${type} discount refund +₱${newDiscountAmount} (${combinedNote})`,
+                })
+              });
+            }
+            // If not yet charged, discounted_total is already updated → charge_card_exact
+            // will be called at COMPLETED with the correct final amount
+          }
+        } catch(cardErr) {
+          console.error('Card adjust error (non-fatal):', cardErr.message);
+        }
+      }
+
       auditLog({ orderId, action: 'DISCOUNT_APPLIED', actor: { userId: body.userId, role: authD.role },
         newValue: storedType, details: { finalDiscountAmount, discountedTotal, stacked: isStackingOnCard, note: combinedNote } });
       pushToSheets('updateOrderDiscount', { orderId, discountType: storedType, discountAmount: finalDiscountAmount, discountedTotal });

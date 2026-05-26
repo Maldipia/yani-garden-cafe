@@ -755,49 +755,62 @@ export async function routeOrders(action, body, auth, req, res) {
         }
       }
 
-      // AUTO-CHARGE YANI CARD when order is COMPLETED (fire-and-forget, idempotent)
       if (newStatus === 'COMPLETED') {
         try {
           const yaniOrderR = await supaFetch(
-            `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=payment_method,discount_type,discount_note,total,is_test&limit=1`
+            `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=payment_method,discount_type,discount_note,total,discounted_total,is_test&limit=1`
           );
           const yaniOrd = yaniOrderR.data?.[0];
-          if (yaniOrd && !yaniOrd.is_test &&
-              yaniOrd.payment_method === 'YANI_CARD' &&
-              yaniOrd.discount_type  === 'YANI_CARD' &&
-              yaniOrd.discount_note) {
-            // Extract card number from discount_note e.g. "Yani Card: YANI-1001"
+          const isYaniCardOrder = yaniOrd && !yaniOrd.is_test &&
+            yaniOrd.payment_method === 'YANI_CARD' &&
+            (yaniOrd.discount_type === 'YANI_CARD' ||
+              (yaniOrd.discount_type === 'CUSTOM' && String(yaniOrd.discount_note || '').toLowerCase().includes('yani card')) ||
+              String(yaniOrd.discount_type || '').startsWith('YANI_CARD+'));
+
+          if (isYaniCardOrder && yaniOrd.discount_note) {
             const cardNumMatch = String(yaniOrd.discount_note).match(/YANI-\d+/i);
             if (cardNumMatch) {
-              const cardNum   = cardNumMatch[0].toUpperCase();
-              const grossAmt  = parseFloat(yaniOrd.total || 0);
-              // Idempotency check: skip if already charged for this order
+              const cardNum = cardNumMatch[0].toUpperCase();
+              // Idempotency: skip if already charged
               const existR = await supaFetch(
                 `${SUPABASE_URL}/rest/v1/card_transactions?order_id=eq.${encodeURIComponent(orderId)}&type=eq.CHARGE&select=id&limit=1`
               );
-              if (!existR.data?.length && grossAmt > 0) {
-                // Resolve QR token from card number
+              if (!existR.data?.length) {
                 const cardR = await supaFetch(
-                  `${SUPABASE_URL}/rest/v1/yani_cards?card_number=eq.${encodeURIComponent(cardNum)}&select=qr_token,status&limit=1`
+                  `${SUPABASE_URL}/rest/v1/yani_cards?card_number=eq.${encodeURIComponent(cardNum)}&select=qr_token,status,discount_pct&limit=1`
                 );
                 const cardRow = cardR.data?.[0];
                 if (cardRow && cardRow.status === 'ACTIVE' && cardRow.qr_token) {
-                  // Call charge_card RPC
-                  await supaFetch(`${SUPABASE_URL}/rest/v1/rpc/charge_card`, {
-                    method: 'POST',
-                    body: JSON.stringify({
-                      p_qr_token:     cardRow.qr_token,
-                      p_gross_amount: grossAmt,
-                      p_order_id:     orderId,
-                      p_performed_by: userId || 'SYSTEM',
-                    })
-                  });
+                  const isStacked = String(yaniOrd.discount_type || '').includes('+');
+                  if (isStacked && yaniOrd.discounted_total) {
+                    // Stacked discount: charge exact final amount (no extra 10%)
+                    await supaFetch(`${SUPABASE_URL}/rest/v1/rpc/charge_card_exact`, {
+                      method: 'POST',
+                      body: JSON.stringify({
+                        p_qr_token:     cardRow.qr_token,
+                        p_net_amount:   parseFloat(yaniOrd.discounted_total),
+                        p_order_id:     orderId,
+                        p_performed_by: userId || 'SYSTEM',
+                        p_description:  `Order ${orderId} — stacked discount final ₱${yaniOrd.discounted_total}`,
+                      })
+                    });
+                  } else {
+                    // Normal Yani Card: charge via RPC (applies 10% automatically)
+                    await supaFetch(`${SUPABASE_URL}/rest/v1/rpc/charge_card`, {
+                      method: 'POST',
+                      body: JSON.stringify({
+                        p_qr_token:     cardRow.qr_token,
+                        p_gross_amount: parseFloat(yaniOrd.total),
+                        p_order_id:     orderId,
+                        p_performed_by: userId || 'SYSTEM',
+                      })
+                    });
+                  }
                 }
               }
             }
           }
         } catch(yaniErr) {
-          // Never fail the order completion because of card charge error
           console.error('Yani Card auto-charge error:', yaniErr.message);
         }
       }
