@@ -288,6 +288,29 @@ a { color: var(--terra); text-decoration: none }
 }
 .menu-unavailable { opacity: .45; pointer-events: none }
 .menu-unavailable::after {
+
+/* ── Category color stripe ── */
+.menu-cat-stripe {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 4px;
+  z-index: 3;
+  border-radius: 0 0 4px 4px;
+}
+.menu-cat-dot {
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+/* Colors per category */
+.cat-ice   { background: #3b82f6; }   /* blue  — ICE AND ICE BLENDED */
+.cat-hot   { background: #ef4444; }   /* red   — HOT */
+.cat-meal  { background: #f97316; }   /* orange — MEALS */
+.cat-beans { background: #92400e; }   /* brown — BEANS */
+.cat-other { background: #9ca3af; }   /* grey  — everything else */
   content: 'Unavailable';
   position: absolute;
   top: 50%;
@@ -1702,6 +1725,15 @@ function getCategoryIcon(cat) {
   var icons = { 'HOT':'☕', 'ICE AND ICE BLENDED':'🧊', 'PASTRY':'🥐', 'PASTA':'🍝', 'WRAP':'🌯', 'OTHER':'🍽️', 'BEST WITH':'🍱', 'MEALS':'🍗', 'PASALUBONG':'🎁', 'BEANS':'☕' };
   return icons[cat] || '🍃';
 }
+function getCategoryColorClass(cat) {
+  if (!cat) return 'cat-other';
+  var c = cat.toUpperCase();
+  if (c === 'ICE AND ICE BLENDED') return 'cat-ice';
+  if (c === 'HOT')   return 'cat-hot';
+  if (c === 'MEALS') return 'cat-meal';
+  if (c === 'BEANS') return 'cat-beans';
+  return 'cat-other';
+}
 
 // ══════════════════════════════════════════════════════════
 // API (via Vercel proxy → Apps Script)
@@ -1788,20 +1820,24 @@ function renderMenu() {
       priceStr = '<span class="menu-price">' + peso(item.price) + '</span>';
     }
 
-    return '<div class="menu-card' + unavail + '">' +
-      '<div class="menu-img-wrap">' +
-        (imgUrl ? '<img class="menu-img" src="' + imgUrl + '" alt="" loading="lazy" onerror="this.style.display=\'none\'">' : '') +
-        '<div class="menu-img-placeholder">' + getCategoryIcon(item.category) + '</div>' +
-        (item.isSignature ? '<div class="menu-sig-badge"><span>★</span> Yani\'s Signature</div>' : '') +
-      '</div>' +
-      '<div class="menu-info">' +
-        '<div class="menu-name">' + esc(item.name) + '</div>' +
-        '<div>' + priceStr + '</div>' +
-      '</div>' +
-      '<button class="menu-add-btn" onclick="addItem(\'' + item.code + '\')" aria-label="Add ' + esc(item.name) + '">' +
-        badge + '+' +
-      '</button>' +
-    '</div>';
+     return '<div class="menu-card' + unavail + '">' +
+       '<div class="menu-img-wrap">' +
+         (imgUrl ? '<img class="menu-img" src="' + imgUrl + '" alt="" loading="lazy" onerror="this.style.display=\'none\'">' : '') +
+         '<div class="menu-img-placeholder">' + getCategoryIcon(item.category) + '</div>' +
+         (item.isSignature ? '<div class="menu-sig-badge"><span>★</span> Yani\'s Signature</div>' : '') +
+         '<div class="menu-cat-stripe ' + getCategoryColorClass(item.category) + '"></div>' +
+       '</div>' +
+       '<div class="menu-info">' +
+         '<div class="menu-name">' + esc(item.name) + '</div>' +
+         '<div style="display:flex;align-items:center">' +
+           '<span class="menu-cat-dot ' + getCategoryColorClass(item.category) + '"></span>' +
+           priceStr +
+         '</div>' +
+       '</div>' +
+       '<button class="menu-add-btn" onclick="addItem(\'' + item.code + '\')" aria-label="Add ' + esc(item.name) + '">' +
+         badge + '+' +
+       '</button>' +
+     '</div>';
   }).join('');
 }
 
