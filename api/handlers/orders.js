@@ -410,6 +410,18 @@ export async function routeOrders(action, body, auth, req, res) {
           `${SUPABASE_URL}/rest/v1/dine_in_order_items?order_id=in.(${orderIds.map(id => `"${id}"`).join(',')})&order=id.asc&select=id,order_id,item_code,item_name,unit_price,qty,size_choice,sugar_choice,item_notes,prepared,addons,created_at,prepared_at`
         );
         if (itemsR.ok && Array.isArray(itemsR.data)) {
+          // Fetch categories for all unique item codes in one request
+          const uniqueCodes = [...new Set(itemsR.data.map(it => it.item_code))];
+          let catMap = {};
+          try {
+            const catR = await supaFetch(
+              `${SUPABASE_URL}/rest/v1/menu_items?item_code=in.(${uniqueCodes.map(c => `"${c}"`).join(',')})&select=item_code,category_id`
+            );
+            if (catR.ok && Array.isArray(catR.data)) {
+              catR.data.forEach(m => { catMap[m.item_code] = getCategoryName(m.category_id); });
+            }
+          } catch(_) {}
+
           itemsR.data.forEach(it => {
             if (!itemsMap[it.order_id]) itemsMap[it.order_id] = [];
             let parsedAddons = [];
@@ -418,6 +430,7 @@ export async function routeOrders(action, body, auth, req, res) {
               id:       it.id,
               code:     it.item_code,
               name:     it.item_name,
+              category: catMap[it.item_code] || '',
               price:    parseFloat(it.unit_price) || 0,
               qty:      it.qty,
               size:     it.size_choice || '',

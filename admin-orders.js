@@ -1,6 +1,17 @@
 // ══════════════════════════════════════════════════════════
 // RENDER ORDERS
 // ══════════════════════════════════════════════════════════
+
+// ── Category color dot for order items ───────────────────
+function _itemCatColor(category) {
+  var cat = (category || '').toUpperCase();
+  if (cat === 'ICE AND ICE BLENDED') return '#3b82f6';
+  if (cat === 'HOT')   return '#ef4444';
+  if (cat === 'MEALS') return '#f97316';
+  if (cat === 'BEANS') return '#92400e';
+  return null;
+}
+
 function renderOrders() {
   var filtered = allOrders.filter(function(o) {
     if (currentFilter === 'ALL') return true;
@@ -166,7 +177,10 @@ function renderOrders() {
           '<span style="font-size:1.3rem;margin-right:6px;flex-shrink:0;line-height:1;">' + prepIcon + '</span>' +
           '<div class="oc-item-qty">' + (it.qty || 1) + '×</div>' +
           '<div class="oc-item-info">' +
-            '<div class="oc-item-name">' + esc(it.name) + '</div>' +
+            '<div class="oc-item-name">' +
+              (function(){ var col = _itemCatColor(it.category); return col ? '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + col + ';margin-right:5px;vertical-align:middle;flex-shrink:0"></span>' : ''; })() +
+              esc(it.name) +
+            '</div>' +
             addedAtBadge +
             preparedBadge +
             pillsHtml +

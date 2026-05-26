@@ -623,7 +623,7 @@ function buildCard(o) {
       <div class="item-check">${checkIcon}</div>
       <div class="item-qty">${it.qty}×</div>
       <div class="item-details">
-        <div class="item-name">${it.name}</div>
+        <div class="item-name">${(function(){ var c=(it.category||'').toUpperCase(); var col=c==='ICE AND ICE BLENDED'?'#3b82f6':c==='HOT'?'#ef4444':c==='MEALS'?'#f97316':c==='BEANS'?'#92400e':null; return col?`<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${col};margin-right:6px;vertical-align:middle;flex-shrink:0"></span>`:''; })()}${it.name}</div>
         <div class="item-opts">${sizeTag}${sugarTag}</div>
         ${addonTags}
         ${noteHtml}
