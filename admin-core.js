@@ -880,6 +880,36 @@ function closeSidebarMobile() {
   if (ov) ov.classList.remove('open');
 }
 
+// ── jumpToOrder: close any modal, go to Order Queue, highlight the order ──
+function jumpToOrder(orderId) {
+  // Close any open card modals
+  ['cardManageModal','cardQRModal','cardTxnModal','memberModal'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  // Switch to Order Queue (ALL filter so we can find any order)
+  setFilter('ALL');
+  // Wait one tick for the grid to render, then scroll to + flash the order card
+  setTimeout(function() {
+    var cards = document.querySelectorAll('.order-card');
+    for (var i = 0; i < cards.length; i++) {
+      var title = cards[i].querySelector('.oc-order-id, [data-order-id]');
+      var text = cards[i].textContent || '';
+      if (text.indexOf(orderId) !== -1) {
+        cards[i].scrollIntoView({ behavior: 'smooth', block: 'center' });
+        cards[i].style.transition = 'box-shadow .3s, outline .3s';
+        cards[i].style.outline = '3px solid var(--forest)';
+        cards[i].style.boxShadow = '0 0 0 6px rgba(45,90,58,.25)';
+        setTimeout(function(c) {
+          c.style.outline = '';
+          c.style.boxShadow = '';
+        }, 2500, cards[i]);
+        break;
+      }
+    }
+  }, 300);
+}
+
 function setFilter(f) {
   currentFilter = f;
   renderFilters();

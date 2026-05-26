@@ -208,6 +208,70 @@ export async function routeAdmin(action, body, auth, req, res) {
       return res.status(200).json({ ok: true, orders });
     }
 
+    // ── updateOnlineOrderStatus ────────────────────────────────────────────
+    if (action === 'updateOnlineOrderStatus') {
+      const authR = await checkAdminAuth();
+      if (!authR.ok) return res.status(403).json({ ok: false, error: authR.error });
+      const { orderRef, status, updatedBy } = body;
+      if (!orderRef || !status) return res.status(400).json({ ok: false, error: 'orderRef and status are required' });
+      const VALID_STATUSES = ['PENDING','CONFIRMED','PREPARING','READY','COMPLETED','CANCELLED'];
+      if (!VALID_STATUSES.includes(status))
+        return res.status(400).json({ ok: false, error: `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}` });
+      const r = await supa('PATCH', 'online_orders',
+        { status, admin_notes: updatedBy ? `Status set to ${status} by ${updatedBy}` : undefined, updated_at: new Date().toISOString() },
+        { order_ref: `eq.${orderRef}` }
+      );
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to update online order status' });
+      auditLog({ orderId: orderRef, action: `ONLINE_ORDER_${status}`, actor: { userId: body.userId, displayName: updatedBy } });
+      return res.status(200).json({ ok: true, orderRef, status });
+    }
+
+    // ── editOnlineOrder ────────────────────────────────────────────────────
+    if (action === 'editOnlineOrder') {
+      const authR = await checkAdminAuth();
+      if (!authR.ok) return res.status(403).json({ ok: false, error: authR.error });
+      const { orderRef, adminNotes, deliveryFee, deliveryZone, pickupTime, paymentStatus } = body;
+      if (!orderRef) return res.status(400).json({ ok: false, error: 'orderRef is required' });
+      const patch = { updated_at: new Date().toISOString() };
+      if (adminNotes   !== undefined) patch.admin_notes    = adminNotes;
+      if (deliveryFee  !== undefined) patch.delivery_fee   = parseFloat(deliveryFee) || 0;
+      if (deliveryZone !== undefined) patch.delivery_zone  = deliveryZone;
+      if (pickupTime   !== undefined) patch.pickup_time    = pickupTime || null;
+      if (paymentStatus !== undefined) patch.payment_status = paymentStatus;
+      const r = await supa('PATCH', 'online_orders', patch, { order_ref: `eq.${orderRef}` });
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to update online order' });
+      auditLog({ orderId: orderRef, action: 'ONLINE_ORDER_EDITED', actor: { userId: body.userId } });
+      return res.status(200).json({ ok: true, orderRef });
+    }
+
+    // ── sendReadySMS ───────────────────────────────────────────────────────
+    if (action === 'sendReadySMS') {
+      const authR = await checkAdminAuth();
+      if (!authR.ok) return res.status(403).json({ ok: false, error: authR.error });
+      const { orderRef, customerPhone, customerName } = body;
+      if (!orderRef || !customerPhone) return res.status(400).json({ ok: false, error: 'orderRef and customerPhone are required' });
+      // Mark sms_sent in DB regardless (SMS provider not configured — log only)
+      await supa('PATCH', 'online_orders', { sms_sent: true, updated_at: new Date().toISOString() }, { order_ref: `eq.${orderRef}` });
+      auditLog({ orderId: orderRef, action: 'SMS_READY_SENT', actor: { userId: body.userId }, details: { phone: customerPhone, name: customerName } });
+      // TODO: wire to Semaphore / Globe Labs / Twilio when SMS provider is configured
+      return res.status(200).json({ ok: true, orderRef, smsSent: true, note: 'SMS logged. Connect SMS provider in Settings to send actual messages.' });
+    }
+
+    // ── retryDead ──────────────────────────────────────────────────────────
+    if (action === 'retryDead') {
+      const authR = await checkAdminAuth();
+      if (!authR.ok) return res.status(403).json({ ok: false, error: authR.error });
+      const { orderRef, queueId } = body;
+      if (!orderRef) return res.status(400).json({ ok: false, error: 'orderRef is required' });
+      // Reset queue item for retry
+      const patch = { status: 'PENDING', retry_count: 0, error_message: null, updated_at: new Date().toISOString() };
+      const filter = queueId ? { id: `eq.${queueId}` } : { order_ref: `eq.${orderRef}`, status: `eq.DEAD` };
+      const r = await supa('PATCH', 'order_queue', patch, filter);
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to retry dead order' });
+      auditLog({ orderId: orderRef, action: 'DEAD_ORDER_RETRY', actor: { userId: body.userId } });
+      return res.status(200).json({ ok: true, orderRef, retried: true });
+    }
+
     // ── getCustomers ───────────────────────────────────────────────────────
     // ── createReservation ─────────────────────────────────────────────────
     if (action === 'createReservation') {
