@@ -124,7 +124,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--forest);min-he
 
 <!-- ── LOGIN ─────────────────────────────────────────── -->
 <div class="portal-wrap">
-<div class="screen active" id="loginScreen">
+<div class="screen" id="loginScreen">
   <div class="login-box">
     <div class="brand">
       <span class="leaf">🌿</span>
@@ -308,6 +308,8 @@ function restoreSession(){
     const s = localStorage.getItem('yanicardSession');
     if(s){ session = JSON.parse(s); showPortal(); return true; }
   } catch(_){}
+  // No session — show login screen
+  document.getElementById('loginScreen').classList.add('active');
   return false;
 }
 async function doLogin(){
