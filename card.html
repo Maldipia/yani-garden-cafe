@@ -200,12 +200,9 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--forest);min-he
       <div class="section-body">
         <div class="field">
           <label>Payment Method</label>
-          <div class="load-methods">
-            <button class="method-btn selected" onclick="selectMethod('GCASH',this)">GCash</button>
-            <button class="method-btn" onclick="selectMethod('INSTAPAY',this)">InstaPay</button>
-            <button class="method-btn" onclick="selectMethod('BDO',this)">BDO</button>
-            <button class="method-btn" onclick="selectMethod('BPI',this)">BPI</button>
-            <button class="method-btn" onclick="selectMethod('UNIONBANK',this)">UnionBank</button>
+          <div style="background:var(--mist-light);border-radius:10px;padding:10px 14px;font-size:.8rem;color:var(--timber)">
+            📱 GCash &nbsp;·&nbsp; InstaPay &nbsp;·&nbsp; BDO &nbsp;·&nbsp; BPI &nbsp;·&nbsp; UnionBank<br>
+            <span style="font-size:.72rem">Scan the QR code below to pay</span>
           </div>
         </div>
         <div class="field">
@@ -285,19 +282,10 @@ async function loadPaymentSettings() {
     if (d.ok && d.settings) {
       (d.settings||[]).forEach(function(x){ s[x.key] = x.value; });
     }
-    if (s.GCASH_QR_URL)     PAYMENT_QRS.GCASH.url     = s.GCASH_QR_URL;
-    if (s.INSTAPAY_QR_URL)  PAYMENT_QRS.INSTAPAY.url  = s.INSTAPAY_QR_URL;
-    if (s.BDO_QR_URL)       PAYMENT_QRS.BDO.url       = s.BDO_QR_URL;
-    if (s.BPI_QR_URL)       PAYMENT_QRS.BPI.url        = s.BPI_QR_URL;
-    if (s.UNIONBANK_QR_URL) PAYMENT_QRS.UNIONBANK.url  = s.UNIONBANK_QR_URL;
-    if (s.ACCOUNT_NAME) {
-      var acct = s.ACCOUNT_NAME;
-      PAYMENT_QRS.GCASH.note    = 'Scan with GCash app · ' + (s.GCASH_NUMBER ? s.GCASH_NUMBER + ' · ' : '') + acct;
-      PAYMENT_QRS.INSTAPAY.note = 'Scan with any InstaPay app · ' + acct;
-      PAYMENT_QRS.BDO.note      = 'BDO · ' + (s.BDO_ACCOUNT||'') + ' · ' + acct;
-      PAYMENT_QRS.BPI.note      = 'BPI · ' + (s.BPI_ACCOUNT||'') + ' · ' + acct;
-      PAYMENT_QRS.UNIONBANK.note = 'UnionBank · ' + (s.UNIONBANK_ACCOUNT||'') + ' · ' + acct;
-    }
+    // Use single combined payment image (same as POS checkout)
+    if (s.PAYMENT_IMAGE_URL) window._paymentImageUrl = s.PAYMENT_IMAGE_URL;
+    if (s.ACCOUNT_NAME)      window._accountName     = s.ACCOUNT_NAME;
+    if (s.GCASH_NUMBER)      window._gcashNumber      = s.GCASH_NUMBER;
   } catch(e) { console.error('Failed to load payment settings:', e); }
 }
 
@@ -475,11 +463,16 @@ function updateLoadPreview(){
   document.getElementById('loadPreview').style.display='block';
   document.getElementById('loadPreview').innerHTML = `Load ${peso(amt)} → saves you ${peso(save)} per ₱${amt} spent (${disc}% off)`;
   selectedAmt = amt;
-  const qrInfo = PAYMENT_QRS[selectedMethod];
-  if(qrInfo){
+  // Show single combined payment image (same as POS checkout)
+  var imgUrl = window._paymentImageUrl || '';
+  if(imgUrl){
     document.getElementById('paymentQRSection').style.display='block';
-    document.getElementById('paymentQRImg').src = qrInfo.url;
-    document.getElementById('paymentQRNote').textContent = 'Send exactly ' + peso(amt) + ' · ' + qrInfo.note;
+    document.getElementById('paymentQRImg').src = imgUrl;
+    var acct = window._accountName || 'LEGERYN PIA';
+    var gcash = window._gcashNumber ? window._gcashNumber + ' · ' : '';
+    document.getElementById('paymentQRNote').innerHTML =
+      'Send exactly <strong>' + peso(amt) + '</strong> · ' + gcash + acct +
+      '<br><span style="font-size:.7rem;color:var(--timber)">GCash · InstaPay · BDO · BPI · UnionBank</span>';
   }
 }
 function handleProofFile(input){
