@@ -93,7 +93,9 @@ export async function routePayments(action, body, auth, req, res) {
       // If a Yani Card discount is already applied and staff is adding PWD/Senior/Promo/Custom,
       // compute the new discount on the POST-card total (not the original total).
       // Final = originalTotal - cardDisc - pwdDisc
-      const isStackingOnCard = existingDiscType === 'YANI_CARD' &&
+      const isYaniCardDiscount = existingDiscType === 'YANI_CARD' ||
+        (existingDiscType === 'CUSTOM' && existingNote.toLowerCase().includes('yani card'));
+      const isStackingOnCard = isYaniCardDiscount &&
         ['PWD','SENIOR','BOTH','PROMO','CUSTOM'].includes(type);
 
       // Base for the incoming discount calculation

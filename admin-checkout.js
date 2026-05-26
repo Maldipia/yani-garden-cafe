@@ -727,7 +727,7 @@ function openDiscountModal(orderId) {
   dmSelectedType = null;
   var order = allOrders.find(function(o){ return o.orderId === orderId; });
   var _ot = order ? parseFloat(order.total) : 0;
-  var _hc = order && order.discountType === 'YANI_CARD';
+  var _hc = order && (order.discountType === 'YANI_CARD' || (order.discountType === 'CUSTOM' && (order.discountNote || '').toLowerCase().includes('yani card')));
   var _ac = _hc ? Math.max(0, _ot - parseFloat(order.discountAmount || 0)) : _ot;
   if (_hc) {
     document.getElementById('dmOrderLabel').innerHTML = 'Order: ' + orderId + ' — Total: ₱' + _ot.toFixed(2)
@@ -769,7 +769,7 @@ function updateDmPreview() {
   var order = allOrders.find(function(o){ return o.orderId === dmCurrentOrder; });
   if (!order || !dmSelectedType || dmSelectedType === 'REMOVE') return;
   var total = parseFloat(order.total) || 0;
-  var _hCard = order.discountType === 'YANI_CARD';
+  var _hCard = order.discountType === 'YANI_CARD' || (order.discountType === 'CUSTOM' && (order.discountNote || '').toLowerCase().includes('yani card'));
   var _cDisc = _hCard ? parseFloat(order.discountAmount || 0) : 0;
   var baseTotal = _hCard ? Math.max(0, total - _cDisc) : total;
   var discount = 0; var tp = 1; var qp = 1; var pct = 0;
