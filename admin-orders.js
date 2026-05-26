@@ -173,14 +173,20 @@ function renderOrders() {
           }
         } catch(e) {}
 
-        html += '<div class="oc-item" data-item-id="' + (it.id||'') + '" data-order-created="' + esc(o.createdAt||'') + '" style="' + prepStyle + 'cursor:pointer;user-select:none;" title="' + (it.prepared ? 'Tap to unmark' : 'Tap to mark prepared') + '" onclick="adminTogglePrep(this,\'' + esc(o.orderId) + '\',' + (it.id||0) + ',' + (it.prepared ? 1 : 0) + ')">' +
+        var catClass = (function(cat){
+          var c = (cat||'').toUpperCase();
+          if (c==='ICE AND ICE BLENDED') return ' oc-cat-ice';
+          if (c==='HOT')   return ' oc-cat-hot';
+          if (c==='MEALS') return ' oc-cat-meal';
+          if (c==='BEANS') return ' oc-cat-beans';
+          return '';
+        })(it.category);
+
+        html += '<div class="oc-item' + catClass + '" data-item-id="' + (it.id||'') + '" data-order-created="' + esc(o.createdAt||'') + '" style="' + prepStyle + 'cursor:pointer;user-select:none;" title="' + (it.prepared ? 'Tap to unmark' : 'Tap to mark prepared') + '" onclick="adminTogglePrep(this,\'' + esc(o.orderId) + '\',' + (it.id||0) + ',' + (it.prepared ? 1 : 0) + ')">' +
           '<span style="font-size:1.3rem;margin-right:6px;flex-shrink:0;line-height:1;">' + prepIcon + '</span>' +
           '<div class="oc-item-qty">' + (it.qty || 1) + '×</div>' +
           '<div class="oc-item-info">' +
-            '<div class="oc-item-name">' +
-              (function(){ var col = _itemCatColor(it.category); return col ? '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + col + ';margin-right:5px;vertical-align:middle;flex-shrink:0"></span>' : ''; })() +
-              esc(it.name) +
-            '</div>' +
+            '<div class="oc-item-name">' + esc(it.name) + '</div>' +
             addedAtBadge +
             preparedBadge +
             pillsHtml +

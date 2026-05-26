@@ -236,8 +236,11 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 
 .oc-items { padding:0 16px }
 .oc-item {
-  padding:8px 0; border-top:1px solid var(--mist-light);
+  padding:8px 6px 8px 10px; border-top:1px solid var(--mist-light);
   display:flex; align-items:flex-start; gap:8px;
+  border-left:4px solid transparent;
+  border-radius:0 6px 6px 0;
+  margin-left:-2px;
 }
 .oc-item:first-child { border-top:none }
 .oc-item-qty {
@@ -249,6 +252,12 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 .oc-item-name { font-size:.82rem; font-weight:600 }
 .oc-item-opts { font-size:.7rem; color:var(--terra); font-weight:500; margin-top:1px }
 .oc-item-notes { font-size:.68rem; color:var(--timber); font-style:italic; margin-top:2px }
+
+/* Category color borders on order items */
+.oc-cat-ice   { border-left-color:#3b82f6 !important; background:rgba(59,130,246,.06) }
+.oc-cat-hot   { border-left-color:#ef4444 !important; background:rgba(239,68,68,.06) }
+.oc-cat-meal  { border-left-color:#f97316 !important; background:rgba(249,115,22,.06) }
+.oc-cat-beans { border-left-color:#92400e !important; background:rgba(146,64,14,.06) }
 
 .oc-total {
   padding:10px 16px; font-size:.82rem; font-weight:700; text-align:right;
