@@ -176,7 +176,7 @@ export async function routeCardPortal(action, body, auth, req, res) {
     const amt = parseFloat(amount);
     if (isNaN(amt) || amt < 100 || amt > 10000)
       return res.status(400).json({ ok: false, error: 'Amount must be between ₱100 and ₱10,000' });
-    const VALID_METHODS = ['GCASH','BDO','BPI','UNIONBANK','INSTAPAY'];
+    const VALID_METHODS = ['GCASH','BDO','BPI','UNIONBANK','INSTAPAY','QR'];
     const method = String(paymentMethod || 'GCASH').toUpperCase();
     if (!VALID_METHODS.includes(method))
       return res.status(400).json({ ok: false, error: 'Invalid payment method' });
