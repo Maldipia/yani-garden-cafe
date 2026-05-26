@@ -726,8 +726,17 @@ function openDiscountModal(orderId) {
   dmCurrentOrder = orderId;
   dmSelectedType = null;
   var order = allOrders.find(function(o){ return o.orderId === orderId; });
-  document.getElementById('dmOrderLabel').textContent = 'Order: ' + orderId
-    + (order ? ' — Total: ₱' + parseFloat(order.total).toFixed(2) : '');
+  var _ot = order ? parseFloat(order.total) : 0;
+  var _hc = order && order.discountType === 'YANI_CARD';
+  var _ac = _hc ? Math.max(0, _ot - parseFloat(order.discountAmount || 0)) : _ot;
+  if (_hc) {
+    document.getElementById('dmOrderLabel').innerHTML = 'Order: ' + orderId + ' — Total: ₱' + _ot.toFixed(2)
+      + '<br><span style="background:#dcfce7;color:#1a3a2a;font-size:.78rem;padding:2px 8px;border-radius:8px;font-weight:700">'
+      + 'Yani Card 10% applied (−₱' + parseFloat(order.discountAmount).toFixed(2)
+      + ') → ₱' + _ac.toFixed(2) + ' — next discount stacks on ₱' + _ac.toFixed(2) + '</span>';
+  } else {
+    document.getElementById('dmOrderLabel').textContent = 'Order: ' + orderId + ' — Total: ₱' + _ot.toFixed(2);
+  }
   document.querySelectorAll('.dm-type-btn').forEach(function(b){ b.classList.remove('selected'); });
   document.getElementById('dmPaxSection').style.display = 'none';
   document.getElementById('dmPromoSection').style.display = 'none';
@@ -760,21 +769,46 @@ function updateDmPreview() {
   var order = allOrders.find(function(o){ return o.orderId === dmCurrentOrder; });
   if (!order || !dmSelectedType || dmSelectedType === 'REMOVE') return;
   var total = parseFloat(order.total) || 0;
-  var discount = 0;
+  var _hCard = order.discountType === 'YANI_CARD';
+  var _cDisc = _hCard ? parseFloat(order.discountAmount || 0) : 0;
+  var baseTotal = _hCard ? Math.max(0, total - _cDisc) : total;
+  var discount = 0; var tp = 1; var qp = 1; var pct = 0;
   if (dmSelectedType === 'PWD' || dmSelectedType === 'SENIOR' || dmSelectedType === 'BOTH') {
-    var tp = parseInt(document.getElementById('dmTotalPax').value) || 1;
-    var qp = parseInt(document.getElementById('dmQualPax').value)  || 1;
-    discount = Math.round((total / Math.max(tp,1)) * qp * 0.20 * 100) / 100;
+    tp = parseInt(document.getElementById('dmTotalPax').value) || 1;
+    qp = parseInt(document.getElementById('dmQualPax').value)  || 1;
+    discount = Math.round((baseTotal / Math.max(tp,1)) * qp * 0.20 * 100) / 100;
   } else if (dmSelectedType === 'PROMO') {
-    var pct = parseFloat(document.getElementById('dmPromoPct').value) || 0;
-    discount = Math.round(total * (pct/100) * 100) / 100;
+    pct = parseFloat(document.getElementById('dmPromoPct').value) || 0;
+    discount = Math.round(baseTotal * (pct/100) * 100) / 100;
   } else if (dmSelectedType === 'CUSTOM') {
     discount = parseFloat(document.getElementById('dmCustomAmt').value) || 0;
   }
-  var finalTotal = Math.max(0, Math.round((total - discount) * 100) / 100);
+  var finalTotal = Math.max(0, Math.round((baseTotal - discount) * 100) / 100);
   var breakdownHtml = '';
+  if (_hCard && dmSelectedType !== 'REMOVE') {
+    var _perPH = baseTotal / Math.max(tp, 1);
+    var _tlH = dmSelectedType === 'BOTH' ? 'PWD+Senior' : dmSelectedType;
+    breakdownHtml = '<div style="font-size:.78rem;color:#166534;line-height:1.9;font-family:monospace">'
+      + 'Original: ' + total.toFixed(2) + '<br>'
+      + 'Yani Card 10%: -' + _cDisc.toFixed(2) + '<br>'
+      + 'After card: ' + baseTotal.toFixed(2) + '<br>';
+    if (dmSelectedType === 'PWD' || dmSelectedType === 'SENIOR' || dmSelectedType === 'BOTH') {
+      breakdownHtml += baseTotal.toFixed(2) + ' / ' + tp + ' pax = ' + _perPH.toFixed(2) + '/person<br>'
+        + _perPH.toFixed(2) + ' x 20% x ' + qp + ' ' + _tlH + ' = <strong style="color:#DC2626">-' + discount.toFixed(2) + '</strong><br>';
+    } else if (dmSelectedType === 'PROMO') {
+      breakdownHtml += baseTotal.toFixed(2) + ' x ' + pct + '% = <strong style="color:#DC2626">-' + discount.toFixed(2) + '</strong><br>';
+    } else {
+      breakdownHtml += _tlH + ': <strong style="color:#DC2626">-' + discount.toFixed(2) + '</strong><br>';
+    }
+    breakdownHtml += '<span style="border-top:2px solid #86EFAC;display:block;margin-top:4px;padding-top:4px">'
+      + 'Total discount: <strong style="color:#DC2626">-' + (_cDisc+discount).toFixed(2) + '</strong> | '
+      + 'FINAL: <strong style="font-size:1rem;color:#14532d">' + finalTotal.toFixed(2) + '</strong></span></div>';
+    document.getElementById('dmPreviewText').innerHTML = breakdownHtml;
+    document.getElementById('dmPreview').style.display = 'block';
+    return;
+  }
   if (dmSelectedType === 'PWD' || dmSelectedType === 'SENIOR' || dmSelectedType === 'BOTH') {
-    var perPax = total / Math.max(tp, 1);
+    var perPax = baseTotal / Math.max(tp, 1);
     var typeLabel = dmSelectedType === 'BOTH' ? 'PWD+Senior' : dmSelectedType;
     breakdownHtml =
       '<div style="font-size:.78rem;color:#166534;line-height:1.7;font-family:monospace">' +

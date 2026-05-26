@@ -66,9 +66,9 @@ export async function routePayments(action, body, auth, req, res) {
       const orderId   = String(body.orderId || '').trim();
       const type      = String(body.discountType || '').toUpperCase(); // PWD | SENIOR | BOTH | PROMO | CUSTOM
       const totalPax  = parseInt(body.totalPax, 10) || 1;
-      const qualPax   = parseInt(body.qualifiedPax, 10) || 1; // how many PWD/Senior
-      const promoPct  = parseFloat(body.promoPct) || 0;       // % for PROMO
-      const customAmt = parseFloat(body.customAmt) || 0;      // fixed ₱ for CUSTOM
+      const qualPax   = parseInt(body.qualifiedPax, 10) || 1;
+      const promoPct  = parseFloat(body.promoPct) || 0;
+      const customAmt = parseFloat(body.customAmt) || 0;
       const note      = String(body.note || '').trim().slice(0, 200);
 
       if (!orderId) return res.status(400).json({ ok: false, error: 'orderId required' });
@@ -76,19 +76,30 @@ export async function routePayments(action, body, auth, req, res) {
       if (!['PWD','SENIOR','BOTH','PROMO','CUSTOM','REMOVE','YANI_CARD'].includes(type))
         return res.status(400).json({ ok: false, error: 'Invalid discountType' });
 
-      // Fetch current order total
+      // Fetch current order — need both original total AND any existing discount
       const orderR = await supaFetch(
-        `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=total`
+        `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=total,discount_type,discount_amount,discounted_total,discount_note`
       );
       if (!orderR.ok || !orderR.data?.length)
         return res.status(404).json({ ok: false, error: 'Order not found' });
-      const total = parseFloat(orderR.data[0].total) || 0;
 
-      let discountAmount = 0;
-      let discountPct = 0;
+      const originalTotal   = parseFloat(orderR.data[0].total) || 0;
+      const existingDiscType  = orderR.data[0].discount_type || null;
+      const existingDiscAmt   = parseFloat(orderR.data[0].discount_amount) || 0;
+      const existingDiscTotal = parseFloat(orderR.data[0].discounted_total) || originalTotal;
+      const existingNote      = orderR.data[0].discount_note || '';
+
+      // ── Stacking logic ────────────────────────────────────────────────────
+      // If a Yani Card discount is already applied and staff is adding PWD/Senior/Promo/Custom,
+      // compute the new discount on the POST-card total (not the original total).
+      // Final = originalTotal - cardDisc - pwdDisc
+      const isStackingOnCard = existingDiscType === 'YANI_CARD' &&
+        ['PWD','SENIOR','BOTH','PROMO','CUSTOM'].includes(type);
+
+      // Base for the incoming discount calculation
+      const baseForCalc = isStackingOnCard ? existingDiscTotal : originalTotal;
 
       if (type === 'REMOVE') {
-        // Remove discount entirely
         const r = await supa('PATCH', 'dine_in_orders',
           { discount_type: null, discount_pax: 0, discount_pct: 0, discount_amount: 0,
             discounted_total: null, discount_note: null, updated_at: new Date().toISOString() },
@@ -99,40 +110,75 @@ export async function routePayments(action, body, auth, req, res) {
         return res.status(200).json({ ok: true, orderId, discountRemoved: true });
       }
 
+      let newDiscountAmount = 0;
+      let discountPct = 0;
+
       if (type === 'PWD' || type === 'SENIOR') {
-        // 20% per qualifying person, split equally among all pax
-        const perPerson = total / Math.max(totalPax, 1);
-        discountAmount  = Math.round(perPerson * qualPax * 0.20 * 100) / 100;
-        discountPct     = 20;
+        const perPerson  = baseForCalc / Math.max(totalPax, 1);
+        newDiscountAmount = Math.round(perPerson * qualPax * 0.20 * 100) / 100;
+        discountPct = 20;
       } else if (type === 'BOTH') {
-        // Both PWD and Senior in same party
-        const perPerson = total / Math.max(totalPax, 1);
-        discountAmount  = Math.round(perPerson * qualPax * 0.20 * 100) / 100;
-        discountPct     = 20;
+        const perPerson  = baseForCalc / Math.max(totalPax, 1);
+        newDiscountAmount = Math.round(perPerson * qualPax * 0.20 * 100) / 100;
+        discountPct = 20;
       } else if (type === 'PROMO') {
-        discountPct    = Math.min(promoPct, 100);
-        discountAmount = Math.round(total * (discountPct / 100) * 100) / 100;
+        discountPct      = Math.min(promoPct, 100);
+        newDiscountAmount = Math.round(baseForCalc * (discountPct / 100) * 100) / 100;
       } else if (type === 'CUSTOM') {
-        discountAmount = Math.min(customAmt, total);
-        discountPct    = Math.round((discountAmount / total) * 100 * 100) / 100;
+        newDiscountAmount = Math.min(customAmt, baseForCalc);
+        discountPct      = Math.round((newDiscountAmount / baseForCalc) * 100 * 100) / 100;
       } else if (type === 'YANI_CARD') {
-        // 10% flat on total — card charge handled separately by client
-        discountPct    = 10;
-        discountAmount = Math.round(total * 0.10 * 100) / 100;
+        discountPct      = 10;
+        newDiscountAmount = Math.round(originalTotal * 0.10 * 100) / 100;
       }
 
-      const discountedTotal = Math.max(0, Math.round((total - discountAmount) * 100) / 100);
+      // ── Combined totals when stacking ─────────────────────────────────────
+      let finalDiscountAmount, discountedTotal, combinedNote, storedType;
+
+      if (isStackingOnCard) {
+        // Stack: total - cardDisc - newDisc
+        finalDiscountAmount = Math.round((existingDiscAmt + newDiscountAmount) * 100) / 100;
+        discountedTotal     = Math.max(0, Math.round((originalTotal - finalDiscountAmount) * 100) / 100);
+        // Label: "YANI_CARD+PWD", "YANI_CARD+SENIOR", etc.
+        storedType          = `YANI_CARD+${type}`;
+        // Build combined note
+        const cardNote   = existingNote ? existingNote : 'Yani Card 10%';
+        const addNote    = note || `${type} ${qualPax}/${totalPax} pax`;
+        combinedNote     = `${cardNote} | ${addNote}`;
+      } else {
+        finalDiscountAmount = newDiscountAmount;
+        discountedTotal     = Math.max(0, Math.round((originalTotal - finalDiscountAmount) * 100) / 100);
+        storedType          = type;
+        combinedNote        = (type === 'YANI_CARD' && body.yaniCardNumber
+          ? 'Yani Card: ' + String(body.yaniCardNumber).trim().toUpperCase()
+          : note) || null;
+      }
 
       const r = await supa('PATCH', 'dine_in_orders',
-        { discount_type: type, discount_pax: qualPax, discount_pct: discountPct,
-          discount_amount: discountAmount, discounted_total: discountedTotal,
-          discount_note: (type === 'YANI_CARD' && body.yaniCardNumber ? 'Yani Card: ' + String(body.yaniCardNumber).trim().toUpperCase() : note) || null, updated_at: new Date().toISOString() },
+        { discount_type: storedType, discount_pax: qualPax, discount_pct: discountPct,
+          discount_amount: finalDiscountAmount, discounted_total: discountedTotal,
+          discount_note: combinedNote, updated_at: new Date().toISOString() },
         { order_id: `eq.${encodeURIComponent(orderId)}` }
       );
       if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to apply discount' });
-      auditLog({ orderId, action: 'DISCOUNT_APPLIED', actor: { userId: body.userId, role: authD.role }, newValue: type, details: { discountAmount, discountedTotal, note: body.note || null } });
-      pushToSheets('updateOrderDiscount', { orderId, discountType: type, discountAmount, discountedTotal });
-      return res.status(200).json({ ok: true, orderId, type, discountAmount, discountedTotal, total });
+
+      auditLog({ orderId, action: 'DISCOUNT_APPLIED', actor: { userId: body.userId, role: authD.role },
+        newValue: storedType, details: { finalDiscountAmount, discountedTotal, stacked: isStackingOnCard, note: combinedNote } });
+      pushToSheets('updateOrderDiscount', { orderId, discountType: storedType, discountAmount: finalDiscountAmount, discountedTotal });
+
+      return res.status(200).json({
+        ok: true, orderId, type: storedType,
+        discountAmount: finalDiscountAmount,
+        discountedTotal, total: originalTotal,
+        stacked: isStackingOnCard,
+        breakdown: isStackingOnCard ? {
+          originalTotal,
+          cardDiscount:  existingDiscAmt,
+          afterCard:     existingDiscTotal,
+          pwdDiscount:   newDiscountAmount,
+          finalTotal:    discountedTotal,
+        } : null
+      });
     }
 
     // ── getShiftSummary ────────────────────────────────────────────────────
