@@ -198,13 +198,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--forest);min-he
     <!-- Load Tab -->
     <div class="tab-content" id="tab-load">
       <div class="section-body">
-        <div class="field">
-          <label>Payment Method</label>
-          <div style="background:var(--mist-light);border-radius:10px;padding:10px 14px;font-size:.8rem;color:var(--timber)">
-            📱 GCash &nbsp;·&nbsp; InstaPay &nbsp;·&nbsp; BDO &nbsp;·&nbsp; BPI &nbsp;·&nbsp; UnionBank<br>
-            <span style="font-size:.72rem">Scan the QR code below to pay</span>
-          </div>
-        </div>
+
         <div class="field">
           <label>Amount</label>
           <div class="load-amt-row">
@@ -258,18 +252,11 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--forest);min-he
 const API = '/api/pos';
 let session = null; // { token, cardNumber, card }
 let proofB64 = null, proofExt = null;
-let selectedMethod = 'GCASH';
+
 let selectedAmt = 1000;
 
 // ── PAYMENT QR CODES ──────────────────────────────────
-// Payment QR codes — loaded from settings API on init
-var PAYMENT_QRS = {
-  GCASH:     { url:'', note:'Scan with GCash app · Account: LEGERYN PIA' },
-  INSTAPAY:  { url:'', note:'Scan with any InstaPay-enabled app · Account: LEGERYN PIA' },
-  BDO:       { url:'', note:'BDO · Account: LEGERYN PIA' },
-  BPI:       { url:'', note:'BPI · Account: LEGERYN PIA' },
-  UNIONBANK: { url:'', note:'UnionBank · Account: LEGERYN PIA' },
-};
+
 
 async function loadPaymentSettings() {
   try {
@@ -447,12 +434,7 @@ function switchTab(name){
 }
 
 // ── LOAD CARD ─────────────────────────────────────────
-function selectMethod(m, el){
-  selectedMethod=m;
-  document.querySelectorAll('.method-btn').forEach(b=>b.classList.remove('selected'));
-  el.classList.add('selected');
-  updateLoadPreview();
-}
+
 function selectAmt(a, el){
   selectedAmt=a;
   document.getElementById('loadAmt').value=a;
@@ -462,22 +444,23 @@ function selectAmt(a, el){
 }
 function updateLoadPreview(){
   const amt = parseFloat(document.getElementById('loadAmt')?.value||0);
-  if(!amt || amt<100){ document.getElementById('loadPreview').style.display='none'; document.getElementById('paymentQRSection').style.display='none'; return; }
+  if(!amt || amt<100){
+    document.getElementById('loadPreview').style.display='none';
+    document.getElementById('paymentQRSection').style.display='none';
+    return;
+  }
   const disc = session ? parseFloat(session.card?.discountPct||10) : 10;
   const save = (amt*disc/100).toFixed(2);
+  selectedAmt = amt;
   document.getElementById('loadPreview').style.display='block';
   document.getElementById('loadPreview').innerHTML = `Load ${peso(amt)} → saves you ${peso(save)} per ₱${amt} spent (${disc}% off)`;
-  selectedAmt = amt;
-  // Show single combined payment image (same as POS checkout)
-  var imgUrl = window._paymentImageUrl || '';
+  const imgUrl = window._paymentImageUrl || '';
+  const acct   = window._accountName || 'LEGERYN PIA';
   if(imgUrl){
     document.getElementById('paymentQRSection').style.display='block';
     document.getElementById('paymentQRImg').src = imgUrl;
-    var acct = window._accountName || 'LEGERYN PIA';
-    var gcash = window._gcashNumber ? window._gcashNumber + ' · ' : '';
     document.getElementById('paymentQRNote').innerHTML =
-      'Send exactly <strong>' + peso(amt) + '</strong> · ' + gcash + acct +
-      '<br><span style="font-size:.7rem;color:var(--timber)">GCash · InstaPay · BDO · BPI · UnionBank</span>';
+      'Send exactly <strong>' + peso(amt) + '</strong> to ' + acct;
   }
 }
 function handleProofFile(input){
@@ -507,7 +490,7 @@ async function submitLoad(){
       cardNumber:    session.cardNumber,
       sessionToken:  session.token,
       amount:        amt,
-      paymentMethod: selectedMethod,
+      paymentMethod: 'QR',
       proofBase64:   proofB64,
       proofExt:      proofExt,
     });
