@@ -175,8 +175,9 @@ export async function routeOrders(action, body, auth, req, res) {
 
       // Generate order ID using sequence — with self-healing retry on duplicate key
       const TEST_TABLES = ['T99'];
-      // Only specific programmatic test names — NOT 'guest' (real customers don't enter names)
-      const TEST_NAMES  = ['e2e test', 'price test', 'logtest', 'healthcheck', 'audit', 'audit_test', 'fix_test', 'disc_test', 'stack_test'];
+      // ONLY flag orders that are clearly automated/system tests.
+      // NEVER use generic names — real customers could be named anything.
+      const TEST_NAMES  = ['e2e_test_auto', 'price_test_auto', 'healthcheck_auto', 'audit_auto'];
       const isTest = TEST_TABLES.includes(tableNo.toUpperCase()) ||
                      TEST_NAMES.includes(customerName.toLowerCase());
 
