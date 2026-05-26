@@ -174,9 +174,9 @@ export async function routeOrders(action, body, auth, req, res) {
       }
 
       // Generate order ID using sequence — with self-healing retry on duplicate key
-      const TEST_TABLES = ['T99', '0', 'T0'];
+      const TEST_TABLES = ['T99'];
       // Only specific programmatic test names — NOT 'guest' (real customers don't enter names)
-      const TEST_NAMES  = ['e2e test', 'price test', 'logtest', 'healthcheck'];
+      const TEST_NAMES  = ['e2e test', 'price test', 'logtest', 'healthcheck', 'audit', 'audit_test', 'fix_test', 'disc_test', 'stack_test'];
       const isTest = TEST_TABLES.includes(tableNo.toUpperCase()) ||
                      TEST_NAMES.includes(customerName.toLowerCase());
 
