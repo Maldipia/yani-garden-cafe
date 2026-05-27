@@ -112,6 +112,21 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--forest);min-he
 
 .empty{text-align:center;color:var(--timber);font-size:.82rem;padding:24px 0}
 
+/* Roots Rewards */
+.rewards-section{background:#fff;margin:0 12px 12px;border-radius:14px;overflow:hidden}
+.rewards-hdr{padding:12px 16px;border-bottom:1px solid var(--mist);display:flex;align-items:center;gap:8px}
+.rewards-hdr h3{font-size:.82rem;font-weight:800;color:var(--forest);text-transform:uppercase;letter-spacing:.06em;flex:1}
+.rewards-hdr .leaf-count{background:var(--forest);color:#fff;font-size:.72rem;font-weight:700;padding:2px 10px;border-radius:20px}
+.reward-row{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--mist-light)}
+.reward-row:last-child{border-bottom:none}
+.reward-check{width:18px;height:18px;border-radius:50%;border:2px solid var(--mist);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:.7rem}
+.reward-check.earned{background:var(--forest);border-color:var(--forest);color:#fff}
+.reward-info{flex:1}
+.reward-name{font-size:.82rem;font-weight:700;color:var(--ink)}
+.reward-threshold{font-size:.7rem;color:var(--timber)}
+.reward-action{font-size:.72rem;color:var(--timber);text-align:right;white-space:nowrap}
+.reward-action.claimable{background:var(--forest);color:#fff;padding:5px 12px;border-radius:20px;font-weight:700;cursor:pointer;border:none}
+
 /* Toast */
 #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 20px;border-radius:10px;font-size:.82rem;font-weight:600;opacity:0;transition:opacity .3s;z-index:999;pointer-events:none;white-space:nowrap}
 #toast.show{opacity:1}
@@ -187,6 +202,15 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--forest);min-he
       <div class="stat-val" id="statLeaves" style="color:#1a3a2a">🌿 0</div>
       <div class="stat-lbl">Leaves</div>
     </div>
+  </div>
+
+  <!-- Roots Rewards -->
+  <div class="rewards-section" id="rootsRewards" style="display:none">
+    <div class="rewards-hdr">
+      <h3>🌿 Roots Rewards</h3>
+      <span class="leaf-count" id="rewardsLeafCount">0 leaves</span>
+    </div>
+    <div id="rewardsList"></div>
   </div>
 
   <!-- Tabs -->
@@ -385,6 +409,7 @@ async function loadPortalData(){
       return;
     }
     renderCard(r.card);
+    renderRewards(r.card.leafBalance || 0, r.leafRewards || []);
     session.card = r.card;
     localStorage.setItem('yanicardSession', JSON.stringify(session));
     renderTransactions(r.transactions);
@@ -437,6 +462,33 @@ function renderLoadRequests(reqs){
       <span class="req-badge req-${r.status.toLowerCase()}">${r.status}</span>
     </div>`;
   }).join('');
+}
+
+// ── ROOTS REWARDS ────────────────────────────────────
+function renderRewards(leafBalance, leafRewards) {
+  if(!leafRewards || !leafRewards.length) { document.getElementById('rootsRewards').style.display='none'; return; }
+  document.getElementById('rootsRewards').style.display='block';
+  document.getElementById('rewardsLeafCount').textContent = leafBalance + ' leaf' + (leafBalance===1?'':'s');
+  const list = document.getElementById('rewardsList');
+  list.innerHTML = leafRewards.map(function(r) {
+    const earned   = leafBalance >= r.threshold;
+    const canClaim = earned; // simplified — could check claimed status
+    const needed   = r.threshold - leafBalance;
+    return '<div class="reward-row">'
+      + '<div class="reward-check' + (earned?' earned':'') + '">' + (earned?'✓':'') + '</div>'
+      + '<div class="reward-info">'
+      +   '<div class="reward-name">' + esc(r.reward_emoji) + ' ' + esc(r.reward_name) + '</div>'
+      +   '<div class="reward-threshold">Tier ' + r.tier_order + ' — ' + r.threshold + ' 🌿</div>'
+      + '</div>'
+      + (earned
+        ? '<button class="reward-action claimable" onclick="claimReward('' + esc(r.reward_name) + '')">Claim now</button>'
+        : '<div class="reward-action">needs ' + needed + ' more 🌿</div>')
+      + '</div>';
+  }).join('');
+}
+
+function claimReward(rewardName) {
+  toast('Show this to staff to claim: ' + rewardName + ' 🌿');
 }
 
 // ── TABS ──────────────────────────────────────────────

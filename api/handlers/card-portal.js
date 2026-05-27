@@ -150,6 +150,15 @@ export async function routeCardPortal(action, body, auth, req, res) {
       }
     } catch(_) {}
 
+    // Fetch leaf rewards tiers
+    let leafRewards = [];
+    try {
+      const rewardsR = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/leaf_rewards?is_active=eq.true&order=tier_order.asc&select=tier_order,threshold,reward_name,reward_emoji`
+      );
+      if (rewardsR.ok && rewardsR.data) leafRewards = rewardsR.data;
+    } catch(_) {}
+
     const card = cardR.data[0];
     return res.status(200).json({
       ok: true,
@@ -167,6 +176,7 @@ export async function routeCardPortal(action, body, auth, req, res) {
         leafBalance,
         leafTier,
       },
+      leafRewards,
       transactions: (txnR.ok && txnR.data) ? txnR.data.map(t => ({
         type:          t.type,
         amount:        parseFloat(t.amount),
