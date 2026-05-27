@@ -227,8 +227,10 @@ export async function routeCardPortal(action, body, auth, req, res) {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`,
+              'apikey':        process.env.SUPABASE_SECRET_KEY,
               'Content-Type':  ext === 'png' ? 'image/png' : 'image/jpeg',
               'x-upsert':      'true',
+              'Cache-Control': '3600',
             },
             body: imgBuf,
           }
