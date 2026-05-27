@@ -481,7 +481,7 @@ function renderRewards(leafBalance, leafRewards) {
       +   '<div class="reward-threshold">Tier ' + r.tier_order + ' — ' + r.threshold + ' 🌿</div>'
       + '</div>'
       + (earned
-        ? '<button class="reward-action claimable" onclick="claimReward('' + esc(r.reward_name) + '')">Claim now</button>'
+        ? '<button class="reward-action claimable" onclick="claimReward(this.dataset.rn)" data-rn="' + esc(r.reward_name) + '">Claim now</button>'
         : '<div class="reward-action">needs ' + needed + ' more 🌿</div>')
       + '</div>';
   }).join('');
