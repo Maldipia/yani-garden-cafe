@@ -218,11 +218,11 @@ export async function routeCardPortal(action, body, auth, req, res) {
     if (proofBase64 && proofExt) {
       try {
         const ext      = String(proofExt).toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,4) || 'jpg';
-        const filename = `LOAD_${cardNumber}_${Date.now()}.${ext}`;
-        const bucket   = 'menu-images'; // reuse existing bucket
+        const filename = `CARDLOAD_${cardNumber.replace('-','')}_${Date.now()}.${ext}`;
+        const bucket   = 'menu-images';
         const imgBuf   = Buffer.from(proofBase64, 'base64');
         const upR = await fetch(
-          `${SUPABASE_URL}/storage/v1/object/${bucket}/card-loads/${filename}`,
+          `${SUPABASE_URL}/storage/v1/object/${bucket}/${filename}`,
           {
             method: 'POST',
             headers: {
@@ -234,7 +234,7 @@ export async function routeCardPortal(action, body, auth, req, res) {
           }
         );
         if (upR.ok) {
-          proofUrl      = `${SUPABASE_URL}/storage/v1/object/public/${bucket}/card-loads/${filename}`;
+          proofUrl      = `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${filename}`;
           proofFilename = filename;
         }
       } catch(e) { console.error('Proof upload error:', e.message); }
