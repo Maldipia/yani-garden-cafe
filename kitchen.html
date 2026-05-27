@@ -185,24 +185,23 @@
   }
   .item-row {
     display: flex; align-items: flex-start;
-    padding: 10px 10px 10px 12px;
+    padding: 10px 0;
     border-bottom: 1px solid #222;
-    border-left: 5px solid transparent;
     gap: 12px;
     cursor: pointer;
-    border-radius: 0 6px 6px 0;
+    border-radius: 6px;
     transition: background 0.15s;
-    margin-left: -2px;
   }
   .item-row:hover { background: rgba(255,255,255,0.04); }
   .item-row:last-child { border-bottom: none; }
   .item-row-done { opacity: 0.45; }
   .item-row-done .item-name { text-decoration: line-through; color: #27ae60 !important; }
-  /* Category color borders */
-  .kds-cat-ice   { border-left-color:#3b82f6 !important; background:rgba(59,130,246,.07) }
-  .kds-cat-hot   { border-left-color:#ef4444 !important; background:rgba(239,68,68,.07) }
-  .kds-cat-meal  { border-left-color:#f97316 !important; background:rgba(249,115,22,.07) }
-  .kds-cat-beans { border-left-color:#92400e !important; background:rgba(146,64,14,.07) }
+  /* Category color dots */
+  .kds-cat-dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:7px; vertical-align:middle; flex-shrink:0 }
+  .kds-cat-ice   { background:#3b82f6 }
+  .kds-cat-hot   { background:#ef4444 }
+  .kds-cat-meal  { background:#f97316 }
+  .kds-cat-beans { background:#92400e }
   .item-check {
     font-size: 1.2rem; min-width: 24px; text-align: center;
     margin-top: 3px; user-select: none;
@@ -626,19 +625,19 @@ function buildCard(o) {
     const noteHtml = it.notes ? `<div class="item-note">⚠ ${esc(it.notes)}</div>` : '';
     const doneClass = it.prepared ? ' item-row-done' : '';
     const checkIcon = it.prepared ? '✅' : '⬜';
-    const catClass = (function(cat){
+    const kdsCatDot = (function(cat){
       const c = (cat||'').toUpperCase();
-      if (c==='ICE AND ICE BLENDED') return ' kds-cat-ice';
-      if (c==='HOT')   return ' kds-cat-hot';
-      if (c==='MEALS') return ' kds-cat-meal';
-      if (c==='BEANS') return ' kds-cat-beans';
+      if (c==='ICE AND ICE BLENDED') return '<span class="kds-cat-dot kds-cat-ice"></span>';
+      if (c==='HOT')   return '<span class="kds-cat-dot kds-cat-hot"></span>';
+      if (c==='MEALS') return '<span class="kds-cat-dot kds-cat-meal"></span>';
+      if (c==='BEANS') return '<span class="kds-cat-dot kds-cat-beans"></span>';
       return '';
     })(it.category);
-    return `<div class="item-row${catClass}${doneClass}" data-item-id="${it.id}" onclick="toggleItemPrep(this, '${o.orderId}', ${it.id}, ${it.prepared ? 1 : 0})" title="${it.prepared ? 'Mark as NOT prepared' : 'Mark as PREPARED'}">
+    return `<div class="item-row${doneClass}" data-item-id="${it.id}" onclick="toggleItemPrep(this, '${o.orderId}', ${it.id}, ${it.prepared ? 1 : 0})" title="${it.prepared ? 'Mark as NOT prepared' : 'Mark as PREPARED'}">
       <div class="item-check">${checkIcon}</div>
       <div class="item-qty">${it.qty}×</div>
       <div class="item-details">
-        <div class="item-name">${it.name}</div>
+        <div class="item-name">${kdsCatDot}${it.name}</div>
         <div class="item-opts">${sizeTag}${sugarTag}</div>
         ${addonTags}
         ${noteHtml}
