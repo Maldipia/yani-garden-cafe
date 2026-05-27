@@ -602,61 +602,6 @@ function renderFilters() {
   renderSidebar();
 }
 
-function renderSidebar() {
-  var role = currentUser ? currentUser.role : '';
-  var isAdmin = role === 'ADMIN' || role === 'OWNER';
-  var isOwner = role === 'OWNER';
-
-  function item(key, icon, label, badge) {
-    var active = currentFilter === key ? ' active' : '';
-    var b = badge ? '<span class="sidebar-badge">' + badge + '</span>' : '';
-    return '<button class="sidebar-item' + active + '" onclick="setFilter(\'' + key + '\');closeSidebarMobile()">' +
-      '<span class="sidebar-icon">' + icon + '</span>' +
-      '<span class="sidebar-label">' + label + '</span>' + b +
-      '</button>';
-  }
-
-  var html = '';
-
-  html += '<div class="sidebar-section-label">Operations</div>';
-  html += item('ACTIVE', '🔥', 'Order Queue', '');
-  if (role !== 'KITCHEN') html += item('PAYMENTS', '💳', 'Payments', pendingPayCount || '');
-  html += item('ONLINE_ORDERS', '🛵', 'Online Orders', onlineOrderPendingCount || '');
-  if (role !== 'KITCHEN') html += item('CARD_LOADS', '🌿', 'Card Loads', window._pendingCardLoads||'');
-  if (isOwner) html += item('REFUNDS', '↩️', 'Refunds', '');
-  if (isOwner) html += item('CASH', '💵', 'Cash Sessions', '');
-
-  if (isAdmin) {
-    html += '<div class="sidebar-divider"></div>';
-    html += '<div class="sidebar-section-label">Management</div>';
-    html += item('MENU_MANAGER', '🍽️', 'Menu & Pricing', '');
-    html += item('TABLES', '🪑', 'Tables & QR', '');
-    html += item('FLOOR_MAP', '🗺️', 'Floor Plan', '');
-    html += item('INVENTORY', '📦', 'Inventory', '');
-    html += item('ADDONS', '➕', 'Add-ons', '');
-  }
-
-  if (isAdmin) {
-    html += '<div class="sidebar-divider"></div>';
-    html += '<div class="sidebar-section-label">Insights</div>';
-    html += item('ANALYTICS', '📈', 'Analytics', '');
-    html += item('SHEETS', '📊', 'Sheets Sync', '');
-    if (isOwner) html += item('SHIFT', '📋', 'Shift Summary', '');
-    if (isOwner) html += item('LOGS', '📜', 'Activity Logs', '');
-    if (isOwner) html += item('COSTING', '🧮', 'Menu Costing', '');
-  }
-
-  if (isOwner) {
-    html += '<div class="sidebar-divider"></div>';
-    html += '<div class="sidebar-section-label">Settings</div>';
-    html += item('STAFF', '👥', 'Staff & Roles', '');
-    html += item('SETTINGS', '⚙️', 'Settings', '');
-  }
-
-  var el = document.getElementById('sidebar');
-  if (el) el.innerHTML = html;
-}
-
 function toggleSidebar() {
   var sb = document.getElementById('sidebar');
   var ov = document.getElementById('sidebarOverlay');

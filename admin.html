@@ -2131,23 +2131,6 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
     </div>
     <button class="pm-confirm" id="dmConfirmBtn" disabled onclick="submitDiscount()">✅ Apply Discount</button>
     <span class="pm-cancel-link" onclick="closeDiscountModal()">Cancel</span>
-  </div><!-- /main-content -->
-  </div><!-- /app-body -->
-</div><!-- /dashboard -->
-
-
-
-<!-- ══ GENERIC MODAL ══ -->
-<div class="pm-overlay" id="genericModal" onclick="if(event.target===this)closeModal()" style="z-index:1100">
-  <div class="pm-modal" style="max-width:420px;max-height:90vh;overflow-y:auto">
-    <div class="pm-title" id="genericModalTitle">—</div>
-    <div id="genericModalBody"></div>
-  </div>
-</div>
-
-<script src="/admin-core.js?v=20"></script>
-  <script src="/admin.js?v=2"></script>
-
   <!-- Card Load Requests View -->
   <div id="cardLoadsView" style="display:none;padding:0 0 100px">
     <div style="padding:16px 16px 0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
@@ -2165,6 +2148,23 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
       <div style="text-align:center;padding:40px;color:var(--timber)">Loading…</div>
     </div>
   </div>
+
+  </div><!-- /main-content -->
+  </div><!-- /app-body -->
+</div><!-- /dashboard -->
+
+
+
+<!-- ══ GENERIC MODAL ══ -->
+<div class="pm-overlay" id="genericModal" onclick="if(event.target===this)closeModal()" style="z-index:1100">
+  <div class="pm-modal" style="max-width:420px;max-height:90vh;overflow-y:auto">
+    <div class="pm-title" id="genericModalTitle">—</div>
+    <div id="genericModalBody"></div>
+  </div>
+</div>
+
+<script src="/admin-core.js?v=21"></script>
+  <script src="/admin.js?v=2"></script>
 
   <script src="/admin-orders.js?v=22"></script>
 <script src="/admin-payments.js?v=20"></script>
