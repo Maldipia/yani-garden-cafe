@@ -137,6 +137,19 @@ export async function routeCardPortal(action, body, auth, req, res) {
     if (!cardR.ok || !cardR.data?.length)
       return res.status(404).json({ ok: false, error: 'Card not found' });
 
+    // Fetch leaf balance from loyalty_accounts
+    let leafBalance = 0;
+    let leafTier = 'BRONZE';
+    try {
+      const loyaltyR = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/loyalty_accounts?linked_card_number=eq.${encodeURIComponent(cardNumber)}&select=points_balance,tier&limit=1`
+      );
+      if (loyaltyR.ok && loyaltyR.data?.length) {
+        leafBalance = parseInt(loyaltyR.data[0].points_balance) || 0;
+        leafTier    = loyaltyR.data[0].tier || 'BRONZE';
+      }
+    } catch(_) {}
+
     const card = cardR.data[0];
     return res.status(200).json({
       ok: true,
@@ -151,6 +164,8 @@ export async function routeCardPortal(action, body, auth, req, res) {
         discountPct: parseFloat(card.discount_pct),
         qrToken:     card.qr_token,
         status:      card.status,
+        leafBalance,
+        leafTier,
       },
       transactions: (txnR.ok && txnR.data) ? txnR.data.map(t => ({
         type:          t.type,
