@@ -2409,6 +2409,9 @@ async function validateYaniCard() {
       var name = d.card.holder_name ? ' · ' + d.card.holder_name : '';
       state._yaniCardStatus = '✅ Valid card' + name + ' · Balance: ₱' + bal.toFixed(2);
       state.yaniCardValid = true;
+      // CRITICAL: store the resolved YANI-XXXX number (not raw digits)
+      // so discount_note = "Yani Card: YANI-1009" and auto-charge works
+      if (d.card.card_number) state.yaniCardNumber = d.card.card_number;
     }
   } catch(e) {
     state._yaniCardStatus = '❌ Could not verify card. Try again.';

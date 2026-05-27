@@ -269,49 +269,29 @@ export async function routeCardPortal(action, body, auth, req, res) {
     if (req.status !== 'PENDING')
       return res.status(400).json({ ok: false, error: `Request is already ${req.status}` });
 
-    // Credit card balance
-    const adjR = await supaFetch(`${SUPABASE_URL}/rest/v1/rpc/adjust_card_balance`, {
+    // Credit card balance using the proper reloadCard flow
+    // (updates total_loaded, total_saved, fires email, credits leaves)
+    const CARD_API = `${SUPABASE_URL.replace('supabase.co','supabase.co')}`; // same host
+    const reloadR = await supaFetch(`${SUPABASE_URL}/rest/v1/rpc/reload_card`, {
       method: 'POST',
       body: JSON.stringify({
         p_card_number:  req.card_number,
         p_amount:       parseFloat(req.amount),
-        p_order_id:     null,
         p_performed_by: body.userId || 'STAFF',
-        p_description:  `RELOAD ₱${req.amount} via ${req.payment_method} (portal load approved by staff)`,
       })
     });
-    if (!adjR.ok || adjR.data?.ok === false)
-      return res.status(500).json({ ok: false, error: 'Failed to credit card: ' + (adjR.data?.error || '') });
+    if (!reloadR.ok || reloadR.data?.ok === false)
+      return res.status(500).json({ ok: false, error: 'Failed to credit card: ' + (reloadR.data?.error || '') });
 
     // Update request status
     await supa('PATCH','card_load_requests',
-      { status: 'APPROVED', reviewed_by: body.userId, reviewed_at: new Date().toISOString(), txn_id: adjR.data?.txn_id || null },
+      { status: 'APPROVED', reviewed_by: body.userId, reviewed_at: new Date().toISOString(), txn_id: reloadR.data?.txn_id || null },
       { id: `eq.${reqId}` }
     );
-
-    // Also update total_loaded on yani_cards
-    await supaFetch(`${SUPABASE_URL}/rest/v1/yani_cards?card_number=eq.${encodeURIComponent(req.card_number)}`, {
-      method: 'PATCH',
-      headers: { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
-      body: JSON.stringify({ total_loaded: parseFloat(req.amount), updated_at: new Date().toISOString() })
-    }).catch(()=>{});
-    // Use RPC already handles balance; update total_loaded directly
-    await supaFetch(
-      `${SUPABASE_URL}/rest/v1/yani_cards?card_number=eq.${encodeURIComponent(req.card_number)}`,
-      {
-        method: 'PATCH',
-        headers: {
-          'apikey': process.env.SUPABASE_SECRET_KEY,
-          'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`,
-          'Content-Type': 'application/json',
-          'Prefer': 'return=minimal',
-        },
-        body: JSON.stringify({ total_loaded: `total_loaded + ${parseFloat(req.amount)}` })
-      }
-    ).catch(()=>{});
+    // reload_card RPC already handles balance, total_loaded, total_saved
 
     auditLog({ action: 'CARD_LOAD_APPROVED', actor: { userId: body.userId }, details: { cardNumber: req.card_number, amount: req.amount, reqId } });
-    return res.status(200).json({ ok: true, cardNumber: req.card_number, amount: req.amount, newBalance: adjR.data?.balance_after });
+    return res.status(200).json({ ok: true, cardNumber: req.card_number, amount: req.amount, newBalance: reloadR.data?.balance_after });
   }
 
   // ── rejectCardLoad (ADMIN) ──────────────────────────────────────────────────
