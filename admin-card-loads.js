@@ -5,6 +5,17 @@ async function initCardLoads() {
   await loadCardLoads('PENDING');
 }
 
+async function refreshPendingCardLoadsBadge() {
+  try {
+    var r = await apiAdmin('getCardLoadRequests', { status: 'PENDING' });
+    var count = ((r && r.requests) || []).length;
+    window._pendingCardLoads = count || '';
+    // Update sidebar badge if visible
+    var badge = document.querySelector('[data-view="CARD_LOADS"] .sidebar-badge');
+    if (badge) badge.textContent = count || '';
+  } catch(_) {}
+}
+
 async function loadCardLoads(statusFilter) {
   var grid = document.getElementById('cardLoadsGrid');
   if (!grid) return;
