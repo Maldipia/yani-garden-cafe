@@ -117,8 +117,8 @@ function renderCostingShell() {
   html += '<div style="font-size:.65rem;color:var(--timber);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Critical Items</div>';
   html += '<div style="font-family:var(--font-soul);font-size:1.5rem;font-weight:700;color:' + (critical > 0 ? '#dc2626' : '#15803d') + '">' + (costed.length ? critical : '—') + '</div></div>';
   html += '</div>';
-  // Sub-tabs
-  html += '<div style="display:flex;gap:2px;border-bottom:2px solid var(--mist);margin-bottom:0">';
+  // Sub-tabs — sticky
+  html += '<div style="position:sticky;top:0;z-index:20;background:var(--cream,#faf9f6);display:flex;gap:2px;border-bottom:2px solid var(--mist);margin-bottom:0;padding:0 16px">';
   tabs.forEach(function(t) {
     var active = _costingTab === t;
     html += '<button onclick="setCostingTab(\'' + t + '\')" style="padding:9px 14px;font-size:.75rem;font-weight:700;font-family:var(--font-body);border:none;cursor:pointer;background:transparent;color:' + (active?'var(--forest)':'var(--timber)') + ';border-bottom:2px solid ' + (active?'var(--forest)':'transparent') + ';margin-bottom:-2px;white-space:nowrap">' + tabLabels[t] + '</button>';
@@ -391,8 +391,8 @@ function renderCostingRecipe(panel) {
 
   var filtered = _costingCatFilter === 'ALL' ? _costingRecipes : _costingRecipes.filter(function(r){return r.category===_costingCatFilter;});
 
-  // Category filter chips
-  var chipsHtml = '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">';
+  // Category filter chips — sticky
+  var chipsHtml = '<div style="position:sticky;top:0;z-index:10;background:var(--cream,#faf9f6);padding:8px 0 6px;margin:-4px 0 10px;border-bottom:1.5px solid var(--mist);display:flex;flex-wrap:wrap;gap:5px">';
   allCats.forEach(function(c) {
     var active = _costingCatFilter === c;
     var st = c === 'ALL' ? {bg:'var(--forest)',color:'var(--white)'} : getCostingCatStyle(c);
