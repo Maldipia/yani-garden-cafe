@@ -536,6 +536,18 @@ async function updateStatus(orderId, newStatus) {
     renderFilters();
     renderOrders();
     showToast(orderId + ' → ' + newStatus, 1800);
+
+    // Auto-delete test orders after COMPLETED — keeps sales report clean
+    if (newStatus === 'COMPLETED') {
+      var ord = allOrders.find(function(o){ return o.orderId === orderId; });
+      if (ord && ord.isTest) {
+        setTimeout(async function() {
+          await api('deleteOrder', { orderId: orderId, userId: currentUser && currentUser.userId });
+          allOrders = allOrders.filter(function(o){ return o.orderId !== orderId; });
+          renderStats(); renderFilters(); renderOrders();
+        }, 500);
+      }
+    }
   } else {
     showToast('Failed: ' + (result.error || 'Unknown error'), 'error');
   }
