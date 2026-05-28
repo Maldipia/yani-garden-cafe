@@ -1216,7 +1216,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 .s-toggle input:checked + .s-toggle-slider:before { left:23px }
 .s-save-btn { width:100%;padding:12px;background:var(--forest);color:#fff;border:none;border-radius:10px;font-size:.9rem;font-weight:700;cursor:pointer;font-family:var(--font-body);margin-top:6px;transition:background .15s }
 .s-save-btn:active { background:var(--forest-light) }
-.main-content { flex:1; min-width:0; overflow-x:hidden }
+.main-content { flex:1; min-width:0; overflow-x:clip }
 /* Professional content constraint — max-width, left-aligned */
 .main-content > div[id$="View"],
 .main-content > div[id="paymentsView"] {
@@ -2227,7 +2227,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
   </div>
 </div>
 
-<script src="/admin-core.js?v=30"></script>
+<script src="/admin-core.js?v=31"></script>
 
   <script src="/admin-orders.js?v=24"></script>
 <script src="/admin-payments.js?v=22"></script>
