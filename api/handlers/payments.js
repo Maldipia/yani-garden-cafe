@@ -944,7 +944,9 @@ export async function routePayments(action, body, auth, req, res) {
         );
         if (ordR.ok && ordR.data.length > 0) {
           const currentStatus = ordR.data[0].status;
-          if (currentStatus !== 'COMPLETED' && currentStatus !== 'CANCELLED') {
+          // Only auto-complete if order is already READY (all items prepped)
+          // If still NEW or PREPARING, payment is verified but kitchen still working
+          if (currentStatus === 'READY') {
             await supa('PATCH', 'dine_in_orders', { status: 'COMPLETED' }, { order_id: `eq.${orderId}` });
           }
         }
