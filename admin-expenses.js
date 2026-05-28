@@ -217,6 +217,7 @@ function renderLedgerTab(bizTotal) {
       html += '<div style="font-size:18px;flex-shrink:0;margin-top:2px">'+(catIcon[e.category]||'💼')+'</div>';
       html += '<div style="flex:1"><div style="font-size:.8rem;font-weight:600;color:var(--forest-deep)">'+escH(e.description)+'</div>';
       html += '<div style="font-size:.68rem;color:var(--timber);margin-top:2px">'
+        +(e.qty ? '<span style="color:var(--forest);font-weight:700">'+escH(e.qty)+'</span> · ' : '')
         +escH(e.category)+' · '+(e.expense_date||'').substring(0,10)+' · via '+escH(e.paid_via)
         +(e.reference_no ? ' · <span style="color:var(--forest)">'+escH(e.reference_no)+'</span>' : '')
         +(e.is_paid ? ' · <span style="color:#16a34a">paid</span>' : ' · <span style="color:#dc2626">unpaid</span>')
@@ -235,7 +236,10 @@ function renderLedgerTab(bizTotal) {
   html += '<div style="background:var(--white);border-radius:var(--r-lg);border:1.5px solid var(--mist);padding:16px">';
   html += '<div style="font-weight:700;font-size:.85rem;color:var(--forest-deep);margin-bottom:11px">📝 Record expense</div>';
   html += '<input id="beDesc" type="text" placeholder="Meralco bill, weekly groceries..." style="width:100%;margin-bottom:8px;font-size:.8rem;padding:7px 10px;border:1.5px solid var(--mist);border-radius:var(--r-sm)">';
-  html += '<input id="beAmt" type="number" placeholder="Amount ₱" style="width:100%;margin-bottom:8px;font-size:.8rem;padding:7px 10px;border:1.5px solid var(--mist);border-radius:var(--r-sm)">';
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">';
+  html += '<input id="beAmt" type="number" placeholder="Amount ₱" style="width:100%;font-size:.8rem;padding:7px 10px;border:1.5px solid var(--mist);border-radius:var(--r-sm)">';
+  html += '<input id="beQty" type="text" placeholder="Qty (e.g. 5 bags, 2 cases)" style="width:100%;font-size:.8rem;padding:7px 10px;border:1.5px solid var(--mist);border-radius:var(--r-sm)">';
+  html += '</div>';
   html += '<input id="beDate" type="date" value="'+new Date().toISOString().split('T')[0]+'" style="width:100%;margin-bottom:8px;font-size:.8rem;padding:7px 10px;border:1.5px solid var(--mist);border-radius:var(--r-sm)">';
   html += '<select id="beCat" style="width:100%;margin-bottom:8px;font-size:.8rem;padding:7px 10px;border:1.5px solid var(--mist);border-radius:var(--r-sm)">';
   BIZ_CATEGORIES.forEach(function(c){ html += '<option>'+c+'</option>'; });
@@ -276,6 +280,7 @@ function setBizCat(cat) {
 
 async function submitBizExpense() {
   var desc = (document.getElementById('beDesc')||{}).value?.trim();
+  var qty  = (document.getElementById('beQty')||{}).value?.trim();
   var amt  = parseFloat((document.getElementById('beAmt')||{}).value||0);
   var cat  = (document.getElementById('beCat')||{}).value;
   var paid = (document.getElementById('bePaid')||{}).value;
@@ -286,10 +291,10 @@ async function submitBizExpense() {
   if (!desc) { showToast('Enter description','error'); return; }
   if (!amt||amt<=0) { showToast('Enter valid amount','error'); return; }
 
-  var r = await api('addBusinessExpense',{ description:desc, amount:amt, category:cat, paidVia:paid, referenceNo:ref, notes:notes, expenseDate:date });
+  var r = await api('addBusinessExpense',{ description:desc, amount:amt, qty:qty, category:cat, paidVia:paid, referenceNo:ref, notes:notes, expenseDate:date });
   if (r.ok) {
     showToast('Expense recorded ✅');
-    ['beDesc','beAmt','beRef','beNotes'].forEach(function(id){ var el=document.getElementById(id); if(el)el.value=''; });
+    ['beDesc','beAmt','beQty','beRef','beNotes'].forEach(function(id){ var el=document.getElementById(id); if(el)el.value=''; });
     await loadBizExpenses();
     renderExpensesView();
   } else {

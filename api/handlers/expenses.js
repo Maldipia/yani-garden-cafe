@@ -50,7 +50,7 @@ export async function routeExpenses(action, body, auth, req, res) {
   if (action === 'addBusinessExpense') {
     const a = await checkAdminAuth();
     if (!a.ok) return res.status(403).json({ ok:false, error:a.error });
-    const { description, amount, category, paidVia, referenceNo, notes, expenseDate, isPaid } = body;
+    const { description, amount, category, paidVia, referenceNo, notes, expenseDate, isPaid, qty } = body;
     if (!description?.trim()) return res.status(400).json({ ok:false, error:'Description required' });
     const amt = parseFloat(amount);
     if (!amt || amt <= 0) return res.status(400).json({ ok:false, error:'Valid amount required' });
@@ -62,6 +62,7 @@ export async function routeExpenses(action, body, auth, req, res) {
       notes: notes ? String(notes).trim().substring(0,500) : null,
       expense_date: expenseDate || new Date().toISOString().split('T')[0],
       is_paid: isPaid !== false,
+      qty: qty ? String(qty).trim().substring(0,100) : null,
       added_by: a.userId||'staff', added_by_role: a.role||'',
     });
     if (!r.ok) return res.status(500).json({ ok:false, error:'Failed to save' });
