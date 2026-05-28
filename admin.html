@@ -193,20 +193,28 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 
 /* ── Order Grid ── */
 .order-grid {
-  display:flex; flex-direction:row; flex-wrap:nowrap;
   gap:14px; padding:12px 16px 80px;
+}
+#orderGrid {
+  display:flex; flex-direction:row; flex-wrap:nowrap;
   overflow-x:auto; overflow-y:visible;
   scroll-snap-type:x mandatory;
   -webkit-overflow-scrolling:touch;
   min-height:calc(100dvh - 160px);
 }
-.order-grid::-webkit-scrollbar { height:5px }
-.order-grid::-webkit-scrollbar-track { background:transparent }
-.order-grid::-webkit-scrollbar-thumb { background:var(--mist); border-radius:3px }
+#orderGrid::-webkit-scrollbar { height:5px }
+#orderGrid::-webkit-scrollbar-track { background:transparent }
+#orderGrid::-webkit-scrollbar-thumb { background:var(--mist); border-radius:3px }
+#payGrid {
+  display:grid;
+  grid-template-columns:repeat(auto-fill, minmax(300px, 1fr));
+}
 .order-card {
   background:var(--white); border-radius:var(--r-lg); overflow:hidden;
   box-shadow:var(--shadow-sm); border-left:4px solid var(--mist);
   transition:box-shadow .2s;
+}
+#orderGrid .order-card {
   scroll-snap-align:start;
   min-width:280px; max-width:280px; flex-shrink:0;
   align-self:flex-start;
@@ -524,8 +532,8 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 
 /* ── Responsive ── */
 @media (max-width:640px) {
-  .order-grid { flex-direction:column; overflow-x:hidden }
-  .order-card { min-width:100%; max-width:100% }
+  #orderGrid { flex-direction:column; overflow-x:hidden }
+  #orderGrid .order-card { min-width:100%; max-width:100% }
   .stats-bar { margin:12px }
   .stat-value { font-size:1.2rem }
 }
