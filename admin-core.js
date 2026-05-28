@@ -1015,7 +1015,11 @@ function setFilter(f) {
     if (cardLoadsView) { cardLoadsView.style.display = 'block'; initCardLoads(); }
   } else if (f === 'EXPENSES') {
     var expView = document.getElementById('expensesView');
-    if (expView) { expView.style.display = 'block'; initExpenses(); }
+    if (expView) {
+      expView.style.display = 'block';
+      expView.innerHTML = '<div style="padding:32px;text-align:center;color:var(--timber)">Loading expenses...</div>';
+      initExpenses();
+    }
   } else if (f === 'SHEETS') {
     if (sheetsView) sheetsView.style.display = 'block';
     loadSheetsData();
