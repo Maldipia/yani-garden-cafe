@@ -862,8 +862,23 @@ function renderSidebar() {
   html += '<button class="sidebar-signout" onclick="logout()">↩ Sign Out</button>';
   html += '</div>';
 
+  html += '<button class="sb-toggle" onclick="openSb()" title="Expand menu" aria-label="Expand sidebar">&#9776;</button>';
   var el = document.getElementById('sidebar');
   if (el) el.innerHTML = html;
+}
+
+// ── COMPACT SIDEBAR TOGGLE ─────────────────────────────────────────────────
+function openSb() {
+  var sb = document.getElementById('sidebar');
+  var ov = document.getElementById('sbOverlay');
+  if (sb) sb.classList.add('sb-open');
+  if (ov) ov.classList.add('visible');
+}
+function closeSb() {
+  var sb = document.getElementById('sidebar');
+  var ov = document.getElementById('sbOverlay');
+  if (sb) sb.classList.remove('sb-open');
+  if (ov) ov.classList.remove('visible');
 }
 
 function toggleSidebar() {
@@ -1132,3 +1147,61 @@ function openMembersHub(tab) {
     return origSetFilter.apply(this, arguments);
   };
 })();
+
+// ── INGREDIENT CALLOUT ─────────────────────────────────────────────────────
+var _ingCache = {};
+
+async function loadIngredients() {
+  if (_ingCache._loaded) return;
+  try {
+    var sb = _supabaseClient;
+    if (!sb) return;
+    var [recipes, ris, ings] = await Promise.all([
+      sb.from('costing_recipes').select('id,name,item_code,selling_price,food_cost_pct'),
+      sb.from('costing_recipe_ingredients').select('recipe_id,ingredient_id,qty_per_serving,unit'),
+      sb.from('costing_ingredients').select('id,name,unit,unit_cost')
+    ]);
+    (recipes.data || []).forEach(function(r) {
+      var ingList = (ris.data || []).filter(function(x){ return x.recipe_id === r.id; }).map(function(x) {
+        var ing = (ings.data || []).find(function(i){ return i.id === x.ingredient_id; });
+        return { name: ing ? ing.name : '?', qty: x.qty_per_serving, unit: x.unit || (ing ? ing.unit : '') };
+      });
+      _ingCache[r.item_code] = { name: r.name, ings: ingList, cost_pct: r.food_cost_pct };
+    });
+    _ingCache._loaded = true;
+  } catch(e) { console.warn('ingredient load failed', e); }
+}
+
+function showIngCallout(el, itemCode, itemName) {
+  if (!['OWNER','ADMIN'].includes(window._currentRole)) return;
+  var callout = document.getElementById('ingCallout');
+  if (!callout) return;
+  var data = _ingCache[itemCode];
+  document.getElementById('icTitle').textContent = itemName;
+  if (!data || !data.ings || !data.ings.length) {
+    document.getElementById('icBody').innerHTML = '<div style="color:rgba(255,255,255,.5);font-size:.72rem">No costing data</div>';
+  } else {
+    var rows = data.ings.map(function(i) {
+      return '<div class="ing-callout-row"><div>' + i.name + '</div><span>' + (i.qty ? i.qty + (i.unit ? ' ' + i.unit : '') : '') + '</span></div>';
+    }).join('');
+    if (data.cost_pct) {
+      rows += '<div class="ing-callout-div"></div><div class="ing-callout-cost"><span>Food cost</span><b>' + parseFloat(data.cost_pct).toFixed(1) + '%</b></div>';
+    }
+    document.getElementById('icBody').innerHTML = rows;
+  }
+  var rect = el.getBoundingClientRect();
+  callout.style.left = Math.min(rect.left + window.scrollX, window.innerWidth - 270) + 'px';
+  callout.style.top = (rect.bottom + window.scrollY + 6) + 'px';
+  callout.classList.add('show');
+  setTimeout(function() { document.addEventListener('click', hideIngCallout, {once:true}); }, 50);
+}
+
+function hideIngCallout() {
+  var c = document.getElementById('ingCallout');
+  if (c) c.classList.remove('show');
+}
+
+// Load ingredients on init
+document.addEventListener('DOMContentLoaded', function() {
+  setTimeout(function() { if (_supabaseClient) loadIngredients(); }, 2000);
+});

@@ -187,7 +187,7 @@ function renderOrders() {
           '<span style="font-size:1.3rem;margin-right:6px;flex-shrink:0;line-height:1;">' + prepIcon + '</span>' +
           '<div class="oc-item-qty">' + (it.qty || 1) + '×</div>' +
           '<div class="oc-item-info">' +
-            '<div class="oc-item-name">' + catDotHtml + esc(it.name) + '</div>' +
+            '<div class="oc-item-name" onclick="showIngCallout(this,\'' + (it.code||'').replace(/'/g,'') + '\',\'' + esc(it.name).replace(/'/g,'') + '\')">' + catDotHtml + esc(it.name) + '</div>' +
             addedAtBadge +
             preparedBadge +
             pillsHtml +

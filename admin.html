@@ -193,13 +193,23 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 
 /* ── Order Grid ── */
 .order-grid {
-  display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr));
-  gap:14px; padding:0 16px 100px;
+  display:flex; flex-direction:row; flex-wrap:nowrap;
+  gap:14px; padding:12px 16px 80px;
+  overflow-x:auto; overflow-y:visible;
+  scroll-snap-type:x mandatory;
+  -webkit-overflow-scrolling:touch;
+  min-height:calc(100dvh - 160px);
 }
+.order-grid::-webkit-scrollbar { height:5px }
+.order-grid::-webkit-scrollbar-track { background:transparent }
+.order-grid::-webkit-scrollbar-thumb { background:var(--mist); border-radius:3px }
 .order-card {
   background:var(--white); border-radius:var(--r-lg); overflow:hidden;
   box-shadow:var(--shadow-sm); border-left:4px solid var(--mist);
   transition:box-shadow .2s;
+  scroll-snap-align:start;
+  min-width:280px; max-width:280px; flex-shrink:0;
+  align-self:flex-start;
 }
 .order-card:hover { box-shadow:var(--shadow-md) }
 .order-card[data-status="NEW"] { border-left-color:#F59E0B }
@@ -514,7 +524,8 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 
 /* ── Responsive ── */
 @media (max-width:640px) {
-  .order-grid { grid-template-columns:1fr }
+  .order-grid { flex-direction:column; overflow-x:hidden }
+  .order-card { min-width:100%; max-width:100% }
   .stats-bar { margin:12px }
   .stat-value { font-size:1.2rem }
 }
@@ -1069,14 +1080,34 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
   display:flex; min-height:calc(100dvh - 60px);
 }
 .sidebar {
-  width:175px; min-width:175px; background:var(--white);
+  width:52px; min-width:52px; background:var(--white);
   border-right:1.5px solid var(--mist); height:calc(100dvh - 60px);
-  position:sticky; top:60px; overflow-y:auto; overflow-x:hidden;
+  position:sticky; top:60px; overflow:hidden;
   display:flex; flex-direction:column; gap:0;
-  scrollbar-width:thin; scrollbar-color:var(--mist) transparent;
-  transition:transform .25s ease;
-  z-index:90;
+  scrollbar-width:none;
+  transition:width .22s ease;
+  z-index:300;
 }
+.sidebar.sb-open {
+  width:175px; min-width:175px;
+  position:fixed; top:60px; left:0; height:calc(100dvh - 60px);
+}
+.sidebar .sidebar-label,.sidebar .sidebar-section-label,.sidebar .sidebar-badge {
+  opacity:0; pointer-events:none; white-space:nowrap;
+  transition:opacity .15s;
+}
+.sidebar.sb-open .sidebar-label,.sidebar.sb-open .sidebar-section-label,.sidebar.sb-open .sidebar-badge {
+  opacity:1; pointer-events:auto;
+}
+.sb-toggle {
+  margin-top:auto; padding:10px 0 14px;
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer; color:var(--timber); font-size:1.1rem;
+  border:none; background:none; width:100%;
+}
+.sb-toggle:hover { color:var(--forest) }
+#sbOverlay { display:none; position:fixed; inset:0; z-index:299; background:rgba(0,0,0,.2); }
+#sbOverlay.visible { display:block }
 .sidebar-section-label {
   font-size:.55rem; font-weight:700; letter-spacing:1.2px;
   text-transform:uppercase; color:var(--timber); opacity:.7;
@@ -1222,6 +1253,17 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
   .sidebar-overlay.open { display:block }
   .main-content { width:100% }
 }
+
+.ing-callout{position:absolute;z-index:400;min-width:200px;max-width:250px;background:#0f2017;color:#fff;border-radius:var(--r-lg);padding:12px 14px;font-size:.74rem;line-height:1.6;box-shadow:0 8px 24px rgba(0,0,0,.35);pointer-events:none;opacity:0;transition:opacity .15s,transform .15s;transform:translateY(4px)}
+.ing-callout.show{opacity:1;transform:translateY(0)}
+.ing-callout-title{font-weight:700;font-size:.78rem;color:#6ee7b7;margin-bottom:6px}
+.ing-callout-row{display:flex;justify-content:space-between;gap:12px;padding:1px 0}
+.ing-callout-row span{color:rgba(255,255,255,.45)}
+.ing-callout-div{height:1px;background:rgba(255,255,255,.12);margin:5px 0}
+.ing-callout-cost{display:flex;justify-content:space-between;font-size:.72rem}
+.ing-callout-cost b{color:#fcd34d}
+.oc-item-name{cursor:pointer}
+.oc-item-name:hover{color:var(--forest);text-decoration:underline;text-underline-offset:2px}
 </style>
 </head>
 <body>
@@ -1257,6 +1299,8 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 
   <!-- Sidebar overlay (mobile) -->
   <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+  <!-- Sidebar floating overlay for compact mode -->
+  <div id="sbOverlay" onclick="closeSb()"></div>
 
   <!-- App Body: Sidebar + Main -->
   <div class="app-body">
@@ -2163,9 +2207,9 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
   </div>
 </div>
 
-<script src="/admin-core.js?v=21"></script>
+<script src="/admin-core.js?v=22"></script>
 
-  <script src="/admin-orders.js?v=22"></script>
+  <script src="/admin-orders.js?v=23"></script>
 <script src="/admin-payments.js?v=20"></script>
 <script src="/admin-menu.js?v=20"></script>
 <script src="/admin-online.js?v=20"></script>
@@ -2174,5 +2218,6 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 <script src="/admin-costing.js?v=20"></script>
   <script src="/admin-cards.js?v=20"></script>
   <script src="/admin-card-loads.js?v=2"></script>
+<div class="ing-callout" id="ingCallout"><div class="ing-callout-title" id="icTitle"></div><div id="icBody"></div></div>
 </body>
 </html>
