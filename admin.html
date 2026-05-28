@@ -1088,24 +1088,22 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
   display:flex; min-height:calc(100dvh - 60px);
 }
 .sidebar {
-  width:52px; min-width:52px; background:var(--white);
+  width:175px; min-width:175px; background:var(--white);
   border-right:1.5px solid var(--mist); height:calc(100dvh - 60px);
-  position:sticky; top:60px; overflow:hidden;
+  position:sticky; top:60px; overflow-y:auto; overflow-x:hidden;
   display:flex; flex-direction:column; gap:0;
-  scrollbar-width:none;
+  scrollbar-width:thin; scrollbar-color:var(--mist) transparent;
   transition:width .22s ease;
   z-index:300;
 }
-.sidebar.sb-open {
-  width:175px; min-width:175px;
-  position:fixed; top:60px; left:0; height:calc(100dvh - 60px);
+.sidebar.sb-collapsed {
+  width:52px; min-width:52px; overflow:hidden;
 }
-.sidebar .sidebar-label,.sidebar .sidebar-section-label,.sidebar .sidebar-badge {
+.sidebar.sb-collapsed .sidebar-label,
+.sidebar.sb-collapsed .sidebar-section-label,
+.sidebar.sb-collapsed .sidebar-badge {
   opacity:0; pointer-events:none; white-space:nowrap;
   transition:opacity .15s;
-}
-.sidebar.sb-open .sidebar-label,.sidebar.sb-open .sidebar-section-label,.sidebar.sb-open .sidebar-badge {
-  opacity:1; pointer-events:auto;
 }
 .sb-toggle {
   margin-top:auto; padding:10px 0 14px;
@@ -2215,7 +2213,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
   </div>
 </div>
 
-<script src="/admin-core.js?v=22"></script>
+<script src="/admin-core.js?v=23"></script>
 
   <script src="/admin-orders.js?v=23"></script>
 <script src="/admin-payments.js?v=20"></script>

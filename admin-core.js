@@ -871,14 +871,20 @@ function renderSidebar() {
 function openSb() {
   var sb = document.getElementById('sidebar');
   var ov = document.getElementById('sbOverlay');
-  if (sb) sb.classList.add('sb-open');
-  if (ov) ov.classList.add('visible');
+  if (sb) sb.classList.remove('sb-collapsed');
+  if (ov) ov.classList.remove('visible');
 }
 function closeSb() {
   var sb = document.getElementById('sidebar');
+  if (sb) sb.classList.add('sb-collapsed');
   var ov = document.getElementById('sbOverlay');
-  if (sb) sb.classList.remove('sb-open');
   if (ov) ov.classList.remove('visible');
+}
+function toggleSb() {
+  var sb = document.getElementById('sidebar');
+  if (!sb) return;
+  if (sb.classList.contains('sb-collapsed')) openSb();
+  else closeSb();
 }
 
 function toggleSidebar() {
