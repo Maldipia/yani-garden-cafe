@@ -934,12 +934,24 @@ export async function routePayments(action, body, auth, req, res) {
       const payR = await supaFetch(
         `${SUPABASE_URL}/rest/v1/payments?payment_id=eq.${encodeURIComponent(paymentId)}&select=order_id`
       );
+      let orderId = null;
       if (payR.ok && payR.data.length > 0) {
-        await supa('PATCH', 'dine_in_orders', { payment_status: 'VERIFIED' }, { order_id: `eq.${payR.data[0].order_id}` });
+        orderId = payR.data[0].order_id;
+        await supa('PATCH', 'dine_in_orders', { payment_status: 'VERIFIED' }, { order_id: `eq.${orderId}` });
+        // Auto-complete the order if not already done/cancelled
+        const ordR = await supaFetch(
+          `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=status`
+        );
+        if (ordR.ok && ordR.data.length > 0) {
+          const currentStatus = ordR.data[0].status;
+          if (currentStatus !== 'COMPLETED' && currentStatus !== 'CANCELLED') {
+            await supa('PATCH', 'dine_in_orders', { status: 'COMPLETED' }, { order_id: `eq.${orderId}` });
+          }
+        }
       }
 
       logSync('payments', paymentId, 'UPDATE');
-      return res.status(200).json({ ok: true, paymentId });
+      return res.status(200).json({ ok: true, paymentId, orderId });
     }
 
     // ── rejectPayment ──────────────────────────────────────────────────────

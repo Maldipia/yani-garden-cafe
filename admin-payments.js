@@ -234,6 +234,15 @@ async function doVerifyPayment(paymentId) {
 
   var result = await api('verifyPayment', { paymentId: paymentId, verifiedBy: 'Staff', userId: currentUser && currentUser.userId });
   if (result.ok) {
+    // Auto-complete the order if it's not already done
+    var orderId = result.orderId || (allOrders.find(function(o){ return (o.payments||[]).some(function(p){ return p.paymentId===paymentId; }); })||{}).orderId;
+    if (orderId) {
+      var ord = allOrders.find(function(o){ return o.orderId===orderId; });
+      if (ord && ord.status !== 'COMPLETED' && ord.status !== 'CANCELLED') {
+        await api('updateOrderStatus', { orderId: orderId, status: 'COMPLETED', userId: currentUser && currentUser.userId });
+        showToast('Payment verified — order marked Complete ✅', 2500);
+      }
+    }
     // Refresh payments
     loadPayments();
     // Also refresh orders to update payment badges
