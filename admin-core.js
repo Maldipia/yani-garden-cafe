@@ -814,6 +814,7 @@ function renderSidebar() {
   if (role !== 'KITCHEN') html += item('PAYMENTS', '💳', 'Payments', pendingPayCount || '');
   html += item('ONLINE_ORDERS', '🛵', 'Online Orders', onlineOrderPendingCount || '', onlineOrderPendingCount > 0);
   if (role !== 'KITCHEN') html += item('CARD_LOADS', '🌿', 'Card Loads', window._pendingCardLoads||'');
+  if (role !== 'KITCHEN') html += item('EXPENSES', '💰', 'Expenses', '');
   if (isOwner) html += item('REFUNDS', '↩️', 'Refunds', '');
   if (isOwner) html += item('CASH', '💵', 'Cash Sessions', '');
 
@@ -948,6 +949,8 @@ function setFilter(f) {
   if (onlineOrdersView) onlineOrdersView.style.display = 'none';
   var cardLoadsView = document.getElementById('cardLoadsView');
   if (cardLoadsView) cardLoadsView.style.display = 'none';
+  var expensesView = document.getElementById('expensesView');
+  if (expensesView) expensesView.style.display = 'none';
 
   var sheetsView = document.getElementById('sheetsView');
   if (sheetsView) sheetsView.style.display = 'none';
@@ -1010,6 +1013,9 @@ function setFilter(f) {
   } else if (f === 'CARD_LOADS') {
     var cardLoadsView = document.getElementById('cardLoadsView');
     if (cardLoadsView) { cardLoadsView.style.display = 'block'; initCardLoads(); }
+  } else if (f === 'EXPENSES') {
+    var expView = document.getElementById('expensesView');
+    if (expView) { expView.style.display = 'block'; initExpenses(); }
   } else if (f === 'SHEETS') {
     if (sheetsView) sheetsView.style.display = 'block';
     loadSheetsData();
