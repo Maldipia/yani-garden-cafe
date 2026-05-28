@@ -1175,7 +1175,7 @@ async function loadIngredients() {
     var [recipes, ris, ings] = await Promise.all([
       sb.from('costing_recipes').select('id,name,selling_price').eq('is_active', true),
       sb.from('costing_recipe_ingredients').select('recipe_id,ingredient_id,qty,notes'),
-      sb.from('costing_ingredients').select('id,name,unit,cost_per_unit')
+      sb.from('costing_ingredients').select('id,name,brand,details,unit,cost_per_unit')
     ]);
     var ingMap = {};
     (ings.data || []).forEach(function(i){ ingMap[i.id] = i; });
@@ -1186,10 +1186,13 @@ async function loadIngredients() {
       var ingList = recipeIngs.map(function(x) {
         var ing = ingMap[x.ingredient_id];
         return {
-          name: ing ? ing.name : '?',
-          qty:  x.qty,
-          unit: ing ? ing.unit : '',
-          cost: ing ? parseFloat(ing.cost_per_unit) * parseFloat(x.qty || 0) : 0
+          name:    ing ? ing.name    : '?',
+          brand:   ing ? (ing.brand   || '') : '',
+          details: ing ? (ing.details || '') : '',
+          qty:     x.qty,
+          unit:    ing ? ing.unit    : '',
+          cost:    ing ? parseFloat(ing.cost_per_unit) * parseFloat(x.qty || 0) : 0,
+          costPu:  ing ? parseFloat(ing.cost_per_unit) : 0
         };
       });
       var totalCost = ingList.reduce(function(s, i){ return s + i.cost; }, 0);
@@ -1217,7 +1220,16 @@ function showIngCallout(el, itemCode, itemName) {
   } else {
     var rows = data.ings.map(function(i) {
       var qty = i.qty ? parseFloat(i.qty).toFixed(i.qty < 1 ? 2 : 0) + (i.unit ? ' ' + i.unit : '') : '';
-      return '<div class="ing-callout-row"><div>' + i.name + '</div><span>' + qty + '</span></div>';
+      var row = '<div class="ing-callout-row"><div style="flex:1">';
+      row += '<span style="font-weight:600">' + i.name + '</span>';
+      if (i.brand) row += ' <span style="font-size:.68rem;color:rgba(255,255,255,.45)">· ' + i.brand + '</span>';
+      if (i.details) row += '<div style="font-size:.68rem;color:rgba(255,255,255,.38);margin-top:1px">' + i.details + '</div>';
+      row += '</div>';
+      row += '<div style="text-align:right;flex-shrink:0;margin-left:8px">';
+      row += '<div style="font-size:.75rem;color:rgba(255,255,255,.8)">' + qty + '</div>';
+      if (i.costPu) row += '<div style="font-size:.65rem;color:rgba(255,255,255,.38)">₱' + i.costPu.toFixed(2) + '/' + (i.unit||'u') + '</div>';
+      row += '</div></div>';
+      return row;
     }).join('');
     if (data.costPct) {
       rows += '<div class="ing-callout-div"></div>'
