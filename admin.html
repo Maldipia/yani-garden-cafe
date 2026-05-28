@@ -112,6 +112,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 .stats-bar {
   display:flex; gap:1px; background:var(--mist); margin:16px; border-radius:var(--r-lg); overflow:hidden;
   box-shadow:var(--shadow-sm);
+  position:sticky; top:64px; z-index:90;
 }
 .stat-card {
   flex:1; background:var(--white); padding:14px 12px; text-align:center;
@@ -124,6 +125,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
   margin:0 16px 12px; border-radius:var(--r-lg); overflow:hidden;
   border:1.5px solid var(--mist); background:var(--white);
   box-shadow:var(--shadow-sm);
+  position:sticky; top:152px; z-index:80;
 }
 .queue-monitor-header {
   display:flex; align-items:center; gap:8px; padding:10px 14px;
@@ -175,8 +177,12 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 }
 /* ── Filter Tabs ── */
 .filter-bar {
-  display:flex; gap:6px; padding:0 16px 12px; overflow-x:auto;
+  display:flex; gap:6px; padding:8px 16px 10px; overflow-x:auto;
   -webkit-overflow-scrolling:touch;
+  position:sticky; top:252px; z-index:60;
+  background:var(--cream-light, #fdfcf9);
+  border-bottom:1.5px solid var(--mist);
+  margin-bottom:2px;
 }
 .filter-btn {
   padding:8px 14px; border-radius:20px; font-size:.75rem; font-weight:700;
@@ -451,6 +457,8 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 /* ── Quick Links ── */
 .quick-links {
   display:flex; gap:8px; padding:0 16px 14px; overflow-x:auto;
+  position:sticky; top:196px; z-index:70;
+  background:var(--cream-light, #fdfcf9);
 }
 .quick-link {
   display:flex; align-items:center; gap:6px;
@@ -2219,7 +2227,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
   </div>
 </div>
 
-<script src="/admin-core.js?v=29"></script>
+<script src="/admin-core.js?v=30"></script>
 
   <script src="/admin-orders.js?v=24"></script>
 <script src="/admin-payments.js?v=22"></script>
