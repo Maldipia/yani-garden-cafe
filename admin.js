@@ -5347,29 +5347,6 @@ var _costingIngredients = [];
 var _costingRecipes = [];
 var _activeRecipeId = null;
 
-async function loadCostingView() {
-  var view = document.getElementById('costingView');
-  if (!view) return;
-  view.innerHTML = '<div style="padding:24px;text-align:center;color:var(--timber)">Loading costing data...</div>';
-  try {
-    var sb = _supabaseClient;
-    var [ingRes, recRes, riRes] = await Promise.all([
-      sb.from('costing_ingredients').select('*').order('category').order('name'),
-      sb.from('costing_recipes').select('*').order('category').order('name'),
-      sb.from('costing_recipe_ingredients').select('*')
-    ]);
-    _costingIngredients = ingRes.data || [];
-    _costingRecipes = (recRes.data || []).map(function(r) {
-      r.ingredients = (riRes.data || []).filter(function(ri) { return ri.recipe_id === r.id; });
-      return r;
-    });
-  } catch(e) {
-    view.innerHTML = '<div style="padding:24px;color:var(--terra)">Error loading costing data: ' + e.message + '</div>';
-    return;
-  }
-  renderCostingShell();
-}
-
 function recipeTotalCost(r) {
   return (r.ingredients || []).reduce(function(s, ri) {
     var ing = _costingIngredients.find(function(i) { return i.id === ri.ingredient_id; });
