@@ -488,12 +488,17 @@ function renderCostingRecipe(panel) {
               }).join('')
             + '</optgroup>';
         }).join('');
-        return '<div style="display:grid;grid-template-columns:1fr 80px 90px auto;gap:8px;align-items:center;margin-bottom:8px">'
-          + '<select onchange="updateRecipeIng('+rec.id+','+idx+',\'iid\',this.value)" style="padding:6px 8px;font-size:.72rem;border:1.5px solid var(--mist);border-radius:var(--r-sm);font-family:var(--font-body);background:var(--white)">' + opts + '</select>'
+        var selId = 'ing-sel-'+rec.id+'-'+idx;
+        return '<div style="margin-bottom:8px">'
+          + '<div style="display:grid;grid-template-columns:1fr 80px 90px auto;gap:8px;align-items:center">'
+          + '<div>'
+          + '<input type="text" placeholder="\u{1F50D} Search..." oninput="filterIngSelect(this,\''+selId+'\')" style="width:100%;padding:3px 7px;font-size:.68rem;border:1.5px solid #93c5fd;border-bottom:none;border-radius:4px 4px 0 0;font-family:var(--font-body);box-sizing:border-box">'
+          + '<select id="'+selId+'" onchange="updateRecipeIng('+rec.id+','+idx+',\'iid\',this.value)" style="width:100%;padding:5px 8px;font-size:.72rem;border:1.5px solid var(--mist);border-radius:0 0 4px 4px;font-family:var(--font-body);background:var(--white)">' + opts + '</select>'
+          + '</div>'
           + '<input type="number" step="0.1" value="'+ri.qty+'" onchange="updateRecipeIng('+rec.id+','+idx+',\'qty\',this.value)" oninput="updateRecipeIng('+rec.id+','+idx+',\'qty\',this.value)" style="padding:6px 8px;font-size:.72rem;border:1.5px solid var(--mist);border-radius:var(--r-sm);text-align:right;width:100%">'
           + '<div style="font-size:.68rem;color:var(--timber);text-align:right;padding:0 4px">'+(ing?'= '+phpFmt(rowCost):'')+'</div>'
           + '<button onclick="removeRecipeIng('+rec.id+','+idx+')" style="padding:4px 8px;border:1.5px solid #fca5a5;background:transparent;border-radius:var(--r-sm);font-size:.7rem;cursor:pointer;color:#dc2626;font-family:var(--font-body)">×</button>'
-          + '</div>';
+          + '</div></div>';
       }).join('');
 
       editorHtml = '<div style="background:var(--white);border-radius:var(--r-lg);box-shadow:var(--shadow-sm);padding:16px">'
@@ -2018,4 +2023,19 @@ async function doCloseSession() {
 function showRefundFromOrder(orderId) {
   setFilter('REFUNDS');
   setTimeout(function() { openRefundForm(orderId); }, 300);
+}
+
+function filterIngSelect(inp, selId) {
+  var q = inp.value.toLowerCase().trim();
+  var sel = document.getElementById(selId);
+  if (!sel) return;
+  Array.from(sel.options).forEach(function(opt) {
+    var txt = opt.text.toLowerCase();
+    opt.style.display = (!q || txt.includes(q)) ? '' : 'none';
+  });
+  // Show/hide optgroups
+  Array.from(sel.getElementsByTagName('optgroup')).forEach(function(grp) {
+    var visCount = Array.from(grp.querySelectorAll('option')).filter(function(o){ return o.style.display !== 'none'; }).length;
+    grp.style.display = visCount > 0 ? '' : 'none';
+  });
 }
