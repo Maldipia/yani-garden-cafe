@@ -61,9 +61,14 @@ function recipeTotalCost(r) {
 }
 
 // Packaging-only = cup, lid, sleeve, straw, sticker — not a "real" costed recipe
+// Exception: BEANS category — any ingredient counts (they don't use cups/packaging)
 var PACKAGING_KEYWORDS = ['paper cup','cup lid','cup sleeve','straw','sticker','packaging'];
 function hasRealIngredients(r) {
   if (!r.ingredients || !r.ingredients.length) return false;
+  // BEANS, PASALUBONG, OTHER — any ingredient is valid (no cup/sleeve needed)
+  var exemptCats = ['BEANS','PASALUBONG','OTHER','PASTRY','PASTA','MEALS','BEST WITH','WRAP'];
+  if (exemptCats.indexOf((r.category||'').toUpperCase()) >= 0) return r.ingredients.length > 0;
+  // For drinks — must have at least one non-packaging ingredient
   return r.ingredients.some(function(ri) {
     var ing = _costingIngredients.find(function(i){ return i.id === ri.ingredient_id; });
     if (!ing) return false;
