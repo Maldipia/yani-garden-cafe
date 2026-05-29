@@ -357,6 +357,7 @@ async function deleteCostingIng(id) {
 }
 
 var _costingCatFilter = 'ALL';
+var _costingStatusFilter = 'ALL_STATUS';
 
 function getCostingCatStyle(cat) {
   var map = {
@@ -392,28 +393,55 @@ function renderCostingRecipe(panel) {
   var filtered = _costingCatFilter === 'ALL' ? _costingRecipes : _costingRecipes.filter(function(r){return r.category===_costingCatFilter;});
 
   // Category filter chips — sticky
-  var chipsHtml = '<div style="position:sticky;top:0;z-index:10;background:var(--cream,#faf9f6);padding:8px 0 6px;margin:-4px 0 10px;border-bottom:1.5px solid var(--mist);display:flex;flex-wrap:wrap;gap:5px">';
-  allCats.forEach(function(c) {
-    var active = _costingCatFilter === c;
-    var st = c === 'ALL' ? {bg:'var(--forest)',color:'var(--white)'} : getCostingCatStyle(c);
-    chipsHtml += '<button onclick="setCostingRecCat(\'' + c + '\')" style="padding:3px 10px;font-size:.62rem;font-weight:700;font-family:var(--font-body);border:1.5px solid ' + (active?(c==='ALL'?'var(--forest)':st.color):'var(--mist)') + ';background:' + (active?(c==='ALL'?'var(--forest)':st.bg):'transparent') + ';color:' + (active?(c==='ALL'?'var(--white)':st.color):'var(--timber)') + ';border-radius:20px;cursor:pointer;white-space:nowrap">' + (c==='ALL'?'All ('+_costingRecipes.length+')':c+' ('+((window._allMenuItems?window._allMenuItems.filter(function(m){return m.category===c;}).length:_costingRecipes.filter(function(r){return r.category===c;}).length))+')') + '</button>';
+  // ── STATUS TOGGLE + CATEGORY CHIPS (sticky) ──────────────────────────────
+  var statusFilter = _costingStatusFilter || 'ALL_STATUS';
+  var costedCount  = filtered.filter(function(r){ return recipeTotalCost(r)>0; }).length;
+  var missingCount = filtered.length - costedCount;
+
+  var chipsHtml = '<div style="position:sticky;top:0;z-index:10;background:var(--cream,#faf9f6);padding:8px 0 6px;margin:-4px 0 10px;border-bottom:1.5px solid var(--mist)">';
+  // Row 1 — status toggle
+  chipsHtml += '<div style="display:flex;gap:5px;margin-bottom:7px">';
+  [{k:'ALL_STATUS',l:'All ('+filtered.length+')',c:'',bg:''},{k:'COSTED',l:'✅ Costed ('+costedCount+')',c:'#16a34a',bg:'#dcfce7'},{k:'MISSING',l:'⚠️ Not set ('+missingCount+')',c:'#b45309',bg:'#fef3c7'}].forEach(function(s){
+    var on = statusFilter === s.k;
+    chipsHtml += '<button onclick="setCostingStatus(\''+s.k+'\')" style="padding:3px 11px;font-size:.65rem;font-weight:700;border:1.5px solid '+(on?(s.c||'var(--forest)'):'var(--mist)')+';background:'+(on?(s.bg||'var(--forest)'):'transparent')+';color:'+(on?(s.c||'#fff'):'var(--timber)')+';border-radius:20px;cursor:pointer">'+s.l+'</button>';
   });
   chipsHtml += '</div>';
+  // Row 2 — category chips
+  chipsHtml += '<div style="display:flex;flex-wrap:wrap;gap:4px">';
+  allCats.forEach(function(cat) {
+    var on = _costingCatFilter === cat;
+    var st = cat === 'ALL' ? {bg:'var(--forest)',color:'var(--white)'} : getCostingCatStyle(cat);
+    var cnt = cat==='ALL' ? _costingRecipes.length : (window._allMenuItems?window._allMenuItems.filter(function(m){return m.category===cat;}).length:_costingRecipes.filter(function(r){return r.category===cat;}).length);
+    chipsHtml += '<button onclick="setCostingRecCat(\''+cat+'\')" style="padding:3px 9px;font-size:.6rem;font-weight:700;font-family:var(--font-body);border:1.5px solid '+(on?(cat==='ALL'?'var(--forest)':st.color):'var(--mist)')+';background:'+(on?(cat==='ALL'?'var(--forest)':st.bg):'transparent')+';color:'+(on?(cat==='ALL'?'var(--white)':st.color):'var(--timber)')+';border-radius:20px;cursor:pointer;white-space:nowrap">'+cat+' ('+cnt+')</button>';
+  });
+  chipsHtml += '</div></div>';
 
-  var listHtml = filtered.map(function(r) {
-    var cost = recipeTotalCost(r);
-    var pct = fcPct(cost, r.selling_price);
-    var active = _activeRecipeId === r.id;
-    var st = getCostingCatStyle(r.category);
-    return '<div onclick="selectCostingRecipe(' + r.id + ')" style="cursor:pointer;padding:9px 11px;border-radius:var(--r-md);border:1.5px solid ' + (active?'var(--forest)':'var(--mist)') + ';background:' + (active?'#f0fdf4':'var(--white)') + ';margin-bottom:6px;transition:all .15s">'
+  // Apply status filter
+  var displayList = filtered.slice();
+  if (statusFilter === 'COSTED')  displayList = displayList.filter(function(r){ return recipeTotalCost(r)>0; });
+  if (statusFilter === 'MISSING') displayList = displayList.filter(function(r){ return recipeTotalCost(r)===0; });
+
+  var listHtml = displayList.map(function(r) {
+    var cost    = recipeTotalCost(r);
+    var pct     = fcPct(cost, r.selling_price);
+    var sel     = _activeRecipeId === r.id;
+    var hasCost = cost > 0;
+    var st      = getCostingCatStyle(r.category);
+    var leftCol = hasCost ? '#16a34a' : '#f59e0b';
+    var bg      = sel ? '#f0fdf4' : hasCost ? '#f7fef9' : '#fffbf5';
+    return '<div onclick="selectCostingRecipe('+r.id+')" style="cursor:pointer;padding:9px 11px;border-radius:var(--r-md);border:1px solid '+(sel?'var(--forest)':(hasCost?'#bbf7d0':'#fed7aa'))+';border-left:4px solid '+leftCol+';background:'+bg+';margin-bottom:6px;transition:all .15s">'
       + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:4px">'
-      + '<div style="font-size:.75rem;font-weight:700;color:var(--forest-deep);line-height:1.3">' + r.name + '</div>'
-      + '<span style="background:' + st.bg + ';color:' + st.color + ';font-size:.55rem;font-weight:700;padding:1px 6px;border-radius:20px;white-space:nowrap;flex-shrink:0">' + r.category + '</span>'
+      + '<div style="display:flex;align-items:center;gap:5px;flex:1;min-width:0">'
+      + '<span style="font-size:.65rem;flex-shrink:0">'+(hasCost?'✅':'⚠️')+'</span>'
+      + '<div style="font-size:.75rem;font-weight:700;color:var(--forest-deep);line-height:1.3;overflow:hidden;text-overflow:ellipsis">'+r.name+'</div>'
       + '</div>'
-      + '<div style="font-size:.65rem;color:' + (cost>0?(pct>=40?'#dc2626':pct>=35?'#b45309':'var(--timber)'):'var(--timber)') + ';margin-top:2px">'
-      + (cost > 0 ? phpFmt(cost) + ' cost · ' + (pct ? pct.toFixed(1) + '% FC' : '') : '<span style="color:var(--mist-light)">— no recipe yet</span>')
+      + '<span style="background:'+st.bg+';color:'+st.color+';font-size:.52rem;font-weight:700;padding:1px 5px;border-radius:20px;white-space:nowrap;flex-shrink:0">'+r.category+'</span>'
+      + '</div>'
+      + '<div style="font-size:.65rem;color:'+(hasCost?(pct>=40?'#dc2626':pct>=35?'#b45309':'var(--timber)'):'#d97706')+';margin-top:2px;padding-left:20px">'
+      + (hasCost ? phpFmt(cost)+' cost · '+(pct?pct.toFixed(1)+'% FC':'') : '<span style="font-weight:600">— set recipe to track cost</span>')
       + '</div></div>';
-  }).join('') || '<div style="color:var(--timber);font-size:.78rem;padding:8px 0">No items in this category</div>';
+  }).join('') || '<div style="color:var(--timber);font-size:.78rem;padding:8px 0">No items match this filter</div>';
+
 
   var editorHtml = '';
   if (_activeRecipeId) {
@@ -486,6 +514,7 @@ function renderCostingRecipe(panel) {
     + renderCostingRecModal();
 }
 
+function setCostingStatus(s) { _costingStatusFilter = s; renderCostingTab(); }
 function setCostingRecCat(cat) {
   _costingCatFilter = cat;
   _activeRecipeId = null;
