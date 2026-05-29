@@ -60,6 +60,18 @@ function recipeTotalCost(r) {
   }, 0);
 }
 
+// Packaging-only = cup, lid, sleeve, straw, sticker — not a "real" costed recipe
+var PACKAGING_KEYWORDS = ['paper cup','cup lid','cup sleeve','straw','sticker','packaging'];
+function hasRealIngredients(r) {
+  if (!r.ingredients || !r.ingredients.length) return false;
+  return r.ingredients.some(function(ri) {
+    var ing = _costingIngredients.find(function(i){ return i.id === ri.ingredient_id; });
+    if (!ing) return false;
+    var n = (ing.name || '').toLowerCase();
+    return !PACKAGING_KEYWORDS.some(function(k){ return n.includes(k); });
+  });
+}
+
 function fcPct(cost, price) {
   if (!price || price === 0) return null;
   return cost / price * 100;
@@ -395,7 +407,7 @@ function renderCostingRecipe(panel) {
   // Category filter chips — sticky
   // ── STATUS TOGGLE + CATEGORY CHIPS (sticky) ──────────────────────────────
   var statusFilter = _costingStatusFilter || 'ALL_STATUS';
-  var costedCount  = filtered.filter(function(r){ return recipeTotalCost(r)>0; }).length;
+  var costedCount  = filtered.filter(function(r){ return hasRealIngredients(r); }).length;
   var missingCount = filtered.length - costedCount;
 
   var chipsHtml = '<div style="position:sticky;top:0;z-index:10;background:var(--cream,#faf9f6);padding:8px 0 6px;margin:-4px 0 10px;border-bottom:1.5px solid var(--mist)">';
@@ -418,14 +430,14 @@ function renderCostingRecipe(panel) {
 
   // Apply status filter
   var displayList = filtered.slice();
-  if (statusFilter === 'COSTED')  displayList = displayList.filter(function(r){ return recipeTotalCost(r)>0; });
-  if (statusFilter === 'MISSING') displayList = displayList.filter(function(r){ return recipeTotalCost(r)===0; });
+  if (statusFilter === 'COSTED')  displayList = displayList.filter(function(r){ return hasRealIngredients(r); });
+  if (statusFilter === 'MISSING') displayList = displayList.filter(function(r){ return !hasRealIngredients(r); });
 
   var listHtml = displayList.map(function(r) {
     var cost    = recipeTotalCost(r);
     var pct     = fcPct(cost, r.selling_price);
     var sel     = _activeRecipeId === r.id;
-    var hasCost = cost > 0;
+    var hasCost = hasRealIngredients(r);
     var st      = getCostingCatStyle(r.category);
     var leftCol = hasCost ? '#16a34a' : '#f59e0b';
     var bg      = sel ? '#f0fdf4' : hasCost ? '#f7fef9' : '#fffbf5';
