@@ -29,7 +29,7 @@ async function loadCostingView() {
     var sb = _getSB();
     var [ingRes, recRes, riRes, menuRes] = await Promise.all([
       sb.from('costing_ingredients').select('*').order('category').order('name'),
-      sb.from('costing_recipes').select('*').order('category').order('name'),
+      sb.from('costing_recipes').select('*').eq('is_active', true).order('category').order('name'),
       sb.from('costing_recipe_ingredients').select('*'),
       sb.from('menu_items').select('item_code,name,category_id,is_active').eq('is_active',true)
     ]);
