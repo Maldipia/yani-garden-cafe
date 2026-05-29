@@ -53,6 +53,14 @@ async function loadCostingView() {
   renderCostingShell();
 }
 
+
+// Debounce — prevents DB save on every keystroke
+var _dbTimers = {};
+function dbDebounce(key, fn, delay) {
+  clearTimeout(_dbTimers[key]);
+  _dbTimers[key] = setTimeout(fn, delay || 600);
+}
+
 function recipeTotalCost(r) {
   return (r.ingredients || []).reduce(function(s, ri) {
     var ing = _costingIngredients.find(function(i) { return i.id === ri.ingredient_id; });
@@ -495,7 +503,7 @@ function renderCostingRecipe(panel) {
           + '<input type="text" placeholder="\u{1F50D} Search..." oninput="filterIngSelect(this,\''+selId+'\')" style="width:100%;padding:3px 7px;font-size:.68rem;border:1.5px solid #93c5fd;border-bottom:none;border-radius:4px 4px 0 0;font-family:var(--font-body);box-sizing:border-box">'
           + '<select id="'+selId+'" onchange="updateRecipeIng('+rec.id+','+idx+',\'iid\',this.value)" style="width:100%;padding:5px 8px;font-size:.72rem;border:1.5px solid var(--mist);border-radius:0 0 4px 4px;font-family:var(--font-body);background:var(--white)">' + opts + '</select>'
           + '</div>'
-          + '<input type="number" step="0.1" value="'+ri.qty+'" onchange="updateRecipeIng('+rec.id+','+idx+',\'qty\',this.value)" oninput="updateRecipeIng('+rec.id+','+idx+',\'qty\',this.value)" style="padding:6px 8px;font-size:.72rem;border:1.5px solid var(--mist);border-radius:var(--r-sm);text-align:right;width:100%">'
+          + '<input type="number" step="0.1" value="'+ri.qty+'" onchange="updateRecipeIng('+rec.id+','+idx+',\'qty\',this.value)" oninput="dbDebounce('ri-'+rec.id+'-'+idx,function(){updateRecipeIng('+rec.id+','+idx+',\'qty\',document.getElementById(\'qs-'+rec.id+'-'+idx+'\').value)},500)" id="qs-'+rec.id+'-'+idx+'" style="padding:6px 8px;font-size:.72rem;border:1.5px solid var(--mist);border-radius:var(--r-sm);text-align:right;width:100%">'
           + '<div style="font-size:.68rem;color:var(--timber);text-align:right;padding:0 4px">'+(ing?'= '+phpFmt(rowCost):'')+'</div>'
           + '<button onclick="removeRecipeIng('+rec.id+','+idx+')" style="padding:4px 8px;border:1.5px solid #fca5a5;background:transparent;border-radius:var(--r-sm);font-size:.7rem;cursor:pointer;color:#dc2626;font-family:var(--font-body)">×</button>'
           + '</div></div>';
