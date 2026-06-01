@@ -823,7 +823,7 @@ function renderSidebar() {
     html += item('MENU_MANAGER', '🍽️', 'Menu & Pricing', '');
     html += item('TABLES', '🪑', 'Tables & QR', '');
     html += item('FLOOR_MAP', '🗺️', 'Floor Plan', '');
-    html += item('INVENTORY', '📦', 'Inventory', '');
+    html += item('INV_COSTING', '📦', 'Inventory / Costing', '');
     html += item('ADDONS', '➕', 'Add-ons', '');
     html += item('PROMO_CODES', '🏷️', 'Promo Codes', '');
     // ── Unified Members hub ──
@@ -839,7 +839,6 @@ function renderSidebar() {
     html += item('SHEETS', '📊', 'Sheets Sync', '');
     if (isOwner) html += item('SHIFT', '📋', 'Shift Summary', '');
     if (isOwner) html += item('LOGS', '📜', 'Activity Logs', '');
-    if (isAdmin) html += item('COSTING', '🧮', 'Menu Costing', '');
   }
 
   if (isOwner) {
@@ -1031,9 +1030,8 @@ function setFilter(f) {
   } else if (f === 'FLOOR_MAP') {
     if (floorMapView) floorMapView.style.display = 'block';
     loadFloorMap();
-  } else if (f === 'INVENTORY') {
-    if (inventoryView) inventoryView.style.display = 'block';
-    loadInventoryView();
+  } else if (f === 'INV_COSTING') {
+    openInvCostingHub(_invCostActiveTab);
   } else if (f === 'ADDONS') {
     if (addonsView) addonsView.style.display = 'block';
     loadAddonsView();
@@ -1091,7 +1089,8 @@ function setFilter(f) {
 // Each underlying view (customersView / loyaltyView / yaniCardsView) and
 // its loader fn is unchanged — we just toggle visibility + render a tab
 // strip above whichever one is active.
-var _membersActiveTab = 'customers'; // persists within session
+var _membersActiveTab = 'customers';
+var _invCostActiveTab = 'inventory'; // persists within session
 
 function openMembersHub(tab) {
   if (tab) _membersActiveTab = tab;
@@ -1152,6 +1151,48 @@ function openMembersHub(tab) {
   else if (_membersActiveTab === 'card_loads' && typeof initCardLoads     === 'function') initCardLoads();
 }
 
+
+// ── INVENTORY / COSTING HUB ───────────────────────────────────────────────
+function openInvCostingHub(tab) {
+  if (tab) _invCostActiveTab = tab;
+
+  var stripId = 'invCostTabStrip';
+  var strip   = document.getElementById(stripId);
+  if (!strip) {
+    strip = document.createElement('div');
+    strip.id = stripId;
+    strip.style.cssText = 'padding:14px 20px 0;background:var(--mist-light);border-bottom:1px solid var(--mist);position:sticky;top:0;z-index:50';
+    var firstView = document.getElementById('inventoryView');
+    if (firstView && firstView.parentNode) firstView.parentNode.insertBefore(strip, firstView);
+    else document.body.appendChild(strip);
+  }
+
+  var TABS = [
+    { k:'inventory', ico:'📦', label:'Inventory' },
+    { k:'costing',   ico:'🧮', label:'Menu Costing' },
+  ];
+  strip.innerHTML = '<div style="display:flex;gap:6px">'
+    + TABS.map(function(t){
+        var on = _invCostActiveTab === t.k;
+        return '<button onclick="openInvCostingHub(\'' + t.k + '\')" '
+          + 'style="padding:8px 16px;border:none;border-radius:10px 10px 0 0;cursor:pointer;'
+          + 'font-family:var(--font-body);font-size:.85rem;font-weight:700;'
+          + (on ? 'background:#fff;color:var(--forest-deep);border-bottom:3px solid var(--forest)'
+                : 'background:transparent;color:var(--timber);border-bottom:3px solid transparent')
+          + '">' + t.ico + ' ' + t.label + '</button>';
+      }).join('')
+    + '</div>';
+  strip.style.display = 'block';
+
+  var iv = document.getElementById('inventoryView');
+  var cv = document.getElementById('costingView');
+  if (iv) iv.style.display = _invCostActiveTab === 'inventory' ? 'block' : 'none';
+  if (cv) cv.style.display = _invCostActiveTab === 'costing'   ? 'block' : 'none';
+
+  if (_invCostActiveTab === 'inventory' && typeof loadInventoryView === 'function') loadInventoryView();
+  else if (_invCostActiveTab === 'costing' && typeof loadCostingView === 'function') loadCostingView();
+}
+
 // Hide the tab strip when leaving Members hub (other views call setFilter which
 // loops through and hides view divs — but the strip lives outside those).
 // Hook into the existing setFilter flow:
@@ -1160,6 +1201,8 @@ function openMembersHub(tab) {
   if (typeof origSetFilter !== 'function') return;
   window.setFilter = function(f) {
     var strip = document.getElementById('membersTabStrip');
+    var icStrip = document.getElementById('invCostTabStrip');
+    if (icStrip && f !== 'INV_COSTING') icStrip.style.display = 'none';
     if (strip && f !== 'MEMBERS' && f !== 'LOYALTY' && f !== 'YANI_CARDS' && f !== 'CUSTOMERS' && f !== 'CARD_LOADS') {
       strip.style.display = 'none';
     }
