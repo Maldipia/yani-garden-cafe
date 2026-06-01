@@ -813,7 +813,6 @@ function renderSidebar() {
   html += item('ACTIVE', '🔥', 'Order Queue', '');
   if (role !== 'KITCHEN') html += item('PAYMENTS', '💳', 'Payments', pendingPayCount || '');
   html += item('ONLINE_ORDERS', '🛵', 'Online Orders', onlineOrderPendingCount || '', onlineOrderPendingCount > 0);
-  if (role !== 'KITCHEN') html += item('CARD_LOADS', '🌿', 'Card Loads', window._pendingCardLoads||'');
   if (role !== 'KITCHEN') html += item('EXPENSES', '💰', 'Expenses', '');
   if (isOwner) html += item('REFUNDS', '↩️', 'Refunds', '');
   if (isOwner) html += item('CASH', '💵', 'Cash Sessions', '');
@@ -1115,9 +1114,10 @@ function openMembersHub(tab) {
 
   // Render tab strip (re-renders so active styling updates)
   var TABS = [
-    { k:'customers', ico:'👥', label:'Customers' },
-    { k:'loyalty',   ico:'🌿', label:'Roots Rewards' },
-    { k:'cards',     ico:'💳', label:'Yani Cards' },
+    { k:'customers',   ico:'👥', label:'Customers' },
+    { k:'loyalty',     ico:'🌿', label:'Roots Rewards' },
+    { k:'cards',       ico:'💳', label:'Yani Cards' },
+    { k:'card_loads',  ico:'🌱', label:'Card Loads' },
   ];
   strip.innerHTML = '<div style="display:flex;gap:6px;flex-wrap:wrap">'
     + TABS.map(function(t){
@@ -1137,16 +1137,19 @@ function openMembersHub(tab) {
   var cv = document.getElementById('customersView');
   var lv = document.getElementById('loyaltyView');
   var yv = document.getElementById('yaniCardsView');
-  if (cv) cv.style.display = _membersActiveTab === 'customers' ? 'block' : 'none';
-  if (lv) lv.style.display = _membersActiveTab === 'loyalty'   ? 'block' : 'none';
-  if (yv) yv.style.display = _membersActiveTab === 'cards'     ? 'block' : 'none';
+  var clv= document.getElementById('cardLoadsView');
+  if (cv)  cv.style.display  = _membersActiveTab === 'customers'  ? 'block' : 'none';
+  if (lv)  lv.style.display  = _membersActiveTab === 'loyalty'    ? 'block' : 'none';
+  if (yv)  yv.style.display  = _membersActiveTab === 'cards'      ? 'block' : 'none';
+  if (clv) clv.style.display = _membersActiveTab === 'card_loads' ? 'block' : 'none';
 
   // Call the appropriate loader. Each loader is safe to call multiple times
   // (they fetch fresh data each call) — preferable to caching since members
   // data changes frequently (new orders, redemptions, etc).
-  if (_membersActiveTab === 'customers' && typeof loadCustomersView === 'function') loadCustomersView();
-  else if (_membersActiveTab === 'loyalty'   && typeof loadLoyaltyView   === 'function') loadLoyaltyView();
-  else if (_membersActiveTab === 'cards'     && typeof loadYaniCardsView === 'function') loadYaniCardsView();
+  if (_membersActiveTab === 'customers'  && typeof loadCustomersView === 'function') loadCustomersView();
+  else if (_membersActiveTab === 'loyalty'    && typeof loadLoyaltyView   === 'function') loadLoyaltyView();
+  else if (_membersActiveTab === 'cards'      && typeof loadYaniCardsView === 'function') loadYaniCardsView();
+  else if (_membersActiveTab === 'card_loads' && typeof initCardLoads     === 'function') initCardLoads();
 }
 
 // Hide the tab strip when leaving Members hub (other views call setFilter which
@@ -1157,7 +1160,7 @@ function openMembersHub(tab) {
   if (typeof origSetFilter !== 'function') return;
   window.setFilter = function(f) {
     var strip = document.getElementById('membersTabStrip');
-    if (strip && f !== 'MEMBERS' && f !== 'LOYALTY' && f !== 'YANI_CARDS' && f !== 'CUSTOMERS') {
+    if (strip && f !== 'MEMBERS' && f !== 'LOYALTY' && f !== 'YANI_CARDS' && f !== 'CUSTOMERS' && f !== 'CARD_LOADS') {
       strip.style.display = 'none';
     }
     return origSetFilter.apply(this, arguments);
