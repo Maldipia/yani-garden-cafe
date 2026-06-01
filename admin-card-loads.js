@@ -7,7 +7,7 @@ async function initCardLoads() {
 
 async function refreshPendingCardLoadsBadge() {
   try {
-    var r = await apiAdmin('getCardLoadRequests', { status: 'PENDING' });
+    var r = await api('getCardLoadRequests', { status: 'PENDING' });
     var count = ((r && r.requests) || []).length;
     window._pendingCardLoads = count || '';
     // Update sidebar badge if visible
@@ -21,7 +21,7 @@ async function loadCardLoads(statusFilter) {
   if (!grid) return;
   grid.innerHTML = '<div style="text-align:center;padding:40px;color:var(--timber)">Loading…</div>';
   try {
-    var r = await apiAdmin('getCardLoadRequests', { status: statusFilter || 'PENDING' });
+    var r = await api('getCardLoadRequests', { status: statusFilter || 'PENDING' });
     _cardLoadsData = (r && r.requests) || [];
     window._pendingCardLoads = _cardLoadsData.filter(function(x){ return x.status==='PENDING'; }).length || '';
     renderCardLoads();
@@ -81,7 +81,7 @@ async function approveLoad(reqId, btn) {
   if (!confirm('Approve this load request? This will credit the card immediately.')) return;
   btn.disabled = true; btn.textContent = 'Processing…';
   try {
-    var r = await apiAdmin('approveCardLoad', { requestId: reqId });
+    var r = await api('approveCardLoad', { requestId: reqId });
     if (r && r.ok) {
       showToast('✅ Card credited ₱' + (r.amount||'') + ' → New balance: ₱' + parseFloat(r.newBalance||0).toFixed(2));
       await loadCardLoads('PENDING');
@@ -97,7 +97,7 @@ async function rejectLoad(reqId, btn) {
   if (!reason || !reason.trim()) return;
   btn.disabled = true; btn.textContent = 'Rejecting…';
   try {
-    var r = await apiAdmin('rejectCardLoad', { requestId: reqId, reason: reason.trim() });
+    var r = await api('rejectCardLoad', { requestId: reqId, reason: reason.trim() });
     if (r && r.ok) {
       showToast('Request rejected.');
       await loadCardLoads('PENDING');
