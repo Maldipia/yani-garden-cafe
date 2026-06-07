@@ -830,6 +830,7 @@ function renderSidebar() {
     // Replaces 3 separate sidebar items (Loyalty Points, Yani Cards, Customers)
     // that all represent the same person. The MEMBERS view shows them as tabs.
     html += item('MEMBERS', '👥', 'Members', '');
+    html += item('DOCS', '📄', 'DOCS', '');
   }
 
   if (isAdmin) {
@@ -981,6 +982,9 @@ function setFilter(f) {
   var costingView = document.getElementById('costingView');
   if (costingView) costingView.style.display = 'none';
 
+  var docsView = document.getElementById('docsView');
+  if (docsView) docsView.style.display = 'none';
+
   var promoCodesView = document.getElementById('promoCodesView');
   if (promoCodesView) promoCodesView.style.display = 'none';
 
@@ -1062,6 +1066,10 @@ function setFilter(f) {
     var cv2 = document.getElementById('costingView');
     if (cv2) cv2.style.display = 'block';
     loadCostingView();
+  } else if (f === 'DOCS') {
+    var dv = document.getElementById('docsView');
+    if (dv) dv.style.display = 'block';
+    loadDocsView();
   } else if (f === 'PROMO_CODES') {
     if (promoCodesView) promoCodesView.style.display = 'block';
     loadPromoCodesView();
