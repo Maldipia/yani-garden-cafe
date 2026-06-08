@@ -3213,6 +3213,7 @@ function renderStatusPage() {
   }
 
   if (s === 'COMPLETED') {
+    html += reviewWidgetHTML();
     html += '<div class="text-center mt-16"><button class="btn-primary" onclick="resetOrder()">Order Again</button></div>';
   }
 
@@ -3267,6 +3268,104 @@ function renderStatusPage() {
   body.innerHTML = html;
 }
 
+// ══════════════════════════════════════════════════════════
+// POST-ORDER REVIEW FUNNEL
+// 4-5★ → log + offer public Google review.  1-3★ → private
+// feedback straight to the owner (never public). All logged.
+// ══════════════════════════════════════════════════════════
+function reviewWidgetHTML() {
+  if (state.reviewDone) {
+    return '<div id="reviewWidget" style="background:var(--white);border-radius:var(--r-lg);padding:20px;margin-top:16px;text-align:center;box-shadow:var(--shadow-sm)">' +
+      '<div style="font-size:1.5rem">💚</div>' +
+      '<div style="font-weight:700;color:#166534;margin-top:4px">Thank you for your feedback!</div>' +
+    '</div>';
+  }
+  var stars = '';
+  for (var k = 1; k <= 5; k++) {
+    stars += '<span onclick="pickRating(' + k + ')" data-star="' + k + '" ' +
+      'style="cursor:pointer;font-size:2.3rem;line-height:1;color:#D1D5DB;padding:0 4px;-webkit-tap-highlight-color:transparent">★</span>';
+  }
+  return '<div id="reviewWidget" style="background:var(--white);border-radius:var(--r-lg);padding:20px;margin-top:16px;text-align:center;box-shadow:var(--shadow-sm)">' +
+    '<div style="font-family:var(--font-soul);font-size:1.05rem;font-weight:700;color:var(--forest-deep);margin-bottom:4px">How was your visit?</div>' +
+    '<div style="font-size:.8rem;color:var(--timber);margin-bottom:12px">Tap a star to rate your experience</div>' +
+    '<div style="display:flex;justify-content:center;gap:2px">' + stars + '</div>' +
+  '</div>';
+}
+
+function setReviewCard(inner) {
+  var w = document.getElementById('reviewWidget');
+  if (w) w.innerHTML = inner;
+}
+
+async function pickRating(n) {
+  if (state.reviewDone) return;
+  // recolor stars immediately for feedback
+  var w = document.getElementById('reviewWidget');
+  if (w) {
+    var ss = w.querySelectorAll('[data-star]');
+    for (var i = 0; i < ss.length; i++) {
+      var sk = parseInt(ss[i].getAttribute('data-star'), 10);
+      ss[i].style.color = (sk <= n) ? '#F59E0B' : '#D1D5DB';
+    }
+  }
+
+  if (n >= 4) {
+    setReviewCard('<div style="font-size:.85rem;color:var(--timber);padding:8px 0">Saving your rating…</div>');
+    var resp = await api('submitReview', { orderId: state.orderId, rating: n });
+    state.reviewDone = true;
+    state.reviewRating = n;
+    var url = (resp && resp.reviewUrl) || state.reviewUrl || '';
+    var thanks = '<div style="font-size:1.7rem;margin:4px 0">🌿💚</div>' +
+      '<div style="font-weight:700;color:#166534;margin-bottom:6px;font-size:1rem">Thank you so much!</div>' +
+      '<div style="font-size:.82rem;color:var(--timber);line-height:1.6;margin-bottom:14px">We\'d love it if you shared your experience on Google — it means the world to a small café like ours.</div>';
+    if (url) {
+      thanks += '<a href="' + url + '" target="_blank" rel="noopener" ' +
+        'style="display:inline-block;background:#166534;color:#fff;text-decoration:none;font-weight:700;font-size:.9rem;padding:12px 22px;border-radius:12px">⭐ Leave a Google review</a>';
+    }
+    setReviewCard(thanks);
+  } else {
+    state.reviewRating = n;
+    var form = '<div style="font-family:var(--font-soul);font-size:1.05rem;font-weight:700;color:var(--forest-deep);margin-bottom:4px">We\'re sorry to hear that</div>' +
+      '<div style="font-size:.8rem;color:var(--timber);margin-bottom:10px">Tell us what went wrong — this goes straight to the owner, privately.</div>' +
+      '<textarea id="reviewFeedback" rows="3" placeholder="What could we have done better?" ' +
+        'style="width:100%;border:1.5px solid var(--mist);border-radius:10px;padding:10px;font-size:.85rem;font-family:inherit;resize:vertical;box-sizing:border-box"></textarea>' +
+      '<button onclick="sendLowReview()" ' +
+        'style="margin-top:10px;background:#166534;color:#fff;border:none;font-weight:700;font-size:.9rem;padding:11px 24px;border-radius:12px;cursor:pointer">Send feedback</button>' +
+      '<div style="margin-top:12px;font-size:.72rem;color:var(--timber);opacity:.8">Prefer to post publicly? ' +
+        '<a id="lowPublicLink" href="#" onclick="return false;" style="color:#166534;text-decoration:underline">Review on Google</a></div>';
+    setReviewCard(form);
+    fetchReviewUrlInto('lowPublicLink');
+  }
+}
+
+async function sendLowReview() {
+  if (state.reviewDone) return;
+  var ta = document.getElementById('reviewFeedback');
+  var fb = ta ? ta.value.trim() : '';
+  setReviewCard('<div style="font-size:.85rem;color:var(--timber);padding:8px 0">Sending…</div>');
+  await api('submitReview', { orderId: state.orderId, rating: state.reviewRating || 3, feedback: fb });
+  state.reviewDone = true;
+  setReviewCard('<div style="font-size:1.7rem;margin:4px 0">💚</div>' +
+    '<div style="font-weight:700;color:#166534;margin-bottom:6px;font-size:1rem">Thank you — we hear you.</div>' +
+    '<div style="font-size:.82rem;color:var(--timber);line-height:1.6">Your feedback goes straight to the owner. We\'ll use it to make YANI better. 🌿</div>');
+}
+
+async function fetchReviewUrlInto(id) {
+  try {
+    if (!state.reviewUrl) {
+      var r = await api('getReviewConfig', {});
+      state.reviewUrl = (r && r.reviewUrl) || '';
+    }
+    var el = document.getElementById(id);
+    if (el && state.reviewUrl) {
+      el.setAttribute('href', state.reviewUrl);
+      el.setAttribute('target', '_blank');
+      el.setAttribute('rel', 'noopener');
+      el.removeAttribute('onclick');
+    }
+  } catch (e) {}
+}
+
 function startStatusPolling() {
   renderStatusPage();
   if (state.statusInterval) clearInterval(state.statusInterval);
@@ -3297,6 +3396,8 @@ function resetOrder() {
   state.receiptName = '';
   state.receiptAddress = '';
   state.receiptTIN = '';
+  state.reviewDone = false;
+  state.reviewRating = 0;
   uploadedFile = null;
   if (state.statusInterval) clearInterval(state.statusInterval);
   closeAllPages();
