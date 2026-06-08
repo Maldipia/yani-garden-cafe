@@ -9,12 +9,45 @@
 //   submitReview     → logs a rating (+ optional private feedback) and returns
 //                      the review URL so the client can redirect happy customers
 // ───────────────────────────────────────────────────────────────────────────
-import { supa, getSetting, logSync } from '../lib/db.js';
+import { supa, supaFetch, getSetting, logSync } from '../lib/db.js';
+import { SUPABASE_URL } from '../lib/config.js';
 import { isValidOrderId } from '../lib/validation.js';
 
 const FEEDBACK_MAX = 2000;
 
 export async function routeReviews(action, body, auth, req, res) {
+  const { checkAdminAuth } = auth;
+
+  // ── getReviews (ADMIN/OWNER only) ──────────────────────────────────────
+  // The funnel deliberately has NO public read path. Reading captured reviews
+  // (including private 1-3 star feedback) requires staff auth.
+  if (action === 'getReviews') {
+    const a = await checkAdminAuth();
+    if (!a.ok) return res.status(403).json({ ok: false, error: a.error });
+
+    const r = await supaFetch(
+      `${SUPABASE_URL}/rest/v1/reviews?select=id,order_id,table_no,rating,feedback,routed_public,created_at&order=created_at.desc&limit=1000`
+    );
+    if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to load reviews' });
+    const rows = Array.isArray(r.data) ? r.data : [];
+
+    const total = rows.length;
+    const sum = rows.reduce((acc, x) => acc + (Number(x.rating) || 0), 0);
+    const avg = total ? Math.round((sum / total) * 100) / 100 : 0;
+    const dist = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    rows.forEach(x => { const n = Number(x.rating); if (dist[n] != null) dist[n]++; });
+    const low = rows.filter(x => Number(x.rating) <= 3);
+    const lowCount = low.length;
+    const withFeedback = rows.filter(x => x.feedback && String(x.feedback).trim()).length;
+    const since = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const last7 = rows.filter(x => new Date(x.created_at).getTime() >= since).length;
+
+    return res.status(200).json({
+      ok: true,
+      stats: { total, avg, dist, lowCount, withFeedback, last7 },
+      reviews: rows,
+    });
+  }
 
   // ── getReviewConfig (public) ───────────────────────────────────────────
   // Lightweight read of the Google review URL so the customer app knows where

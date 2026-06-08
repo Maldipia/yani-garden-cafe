@@ -880,6 +880,7 @@ function renderSidebar() {
     html += '<div class="sidebar-divider"></div>';
     html += '<div class="sidebar-section-label">Insights</div>';
     html += item('ANALYTICS', '📈', 'Analytics', '');
+    html += item('REVIEWS', '⭐', 'Reviews', '');
     html += item('SHEETS', '📊', 'Sheets Sync', '');
     if (isOwner) html += item('SHIFT', '📋', 'Shift Summary', '');
     if (isOwner) html += item('LOGS', '📜', 'Activity Logs', '');
@@ -1028,6 +1029,9 @@ function setFilter(f) {
   var docsView = document.getElementById('docsView');
   if (docsView) docsView.style.display = 'none';
 
+  var reviewsView = document.getElementById('reviewsView');
+  if (reviewsView) reviewsView.style.display = 'none';
+
   var promoCodesView = document.getElementById('promoCodesView');
   if (promoCodesView) promoCodesView.style.display = 'none';
 
@@ -1113,6 +1117,10 @@ function setFilter(f) {
     var dv = document.getElementById('docsView');
     if (dv) dv.style.display = 'block';
     loadDocsView();
+  } else if (f === 'REVIEWS') {
+    var rv = document.getElementById('reviewsView');
+    if (rv) rv.style.display = 'block';
+    loadReviewsView();
   } else if (f === 'PROMO_CODES') {
     if (promoCodesView) promoCodesView.style.display = 'block';
     loadPromoCodesView();
