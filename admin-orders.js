@@ -254,7 +254,7 @@ function renderOrders() {
         + '<div style="font-weight:800;font-size:.78rem">🔔 Table ' + esc(o.tableNo || '?') + ' — Please collect ' + awIcon + ' ' + esc(awLabel) + ' payment</div>'
         + '<div style="font-size:.68rem;font-weight:600;margin-top:3px;opacity:.85">Order is on hold until payment is received.</div>'
         + '</div>';
-      if (canSetPayment && o.status !== 'COMPLETED' && o.status !== 'CANCELLED') {
+      if (canSetPayment && o.status !== 'CANCELLED') {
         html += '<button class="oc-btn" style="background:var(--forest);color:#fff;border:none;font-weight:700;width:calc(100% - 32px);margin:4px 16px 6px" '
           + 'onclick="markPaymentReceived(\'' + esc(o.orderId) + '\',\'' + esc(awMethod) + '\')">✅ Payment Received</button>';
       }

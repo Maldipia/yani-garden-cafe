@@ -507,8 +507,11 @@ async function loadOrders() {
   // AUTO-COMPLETE SWEEP: orders with payment recorded but stuck in active status
   allOrders.forEach(function(o) {
     var isActive = o.status === 'NEW' || o.status === 'PREPARING' || o.status === 'READY';
-    var isPaid = o.paymentMethod && (o.paymentStatus === 'VERIFIED' || o.paymentStatus === 'PLATFORM_PAID' ||
-      (o.paymentMethod && o.paymentStatus !== 'PENDING' && o.paymentStatus !== 'SUBMITTED'));
+    // AWAITING_PAYMENT = cash/card chosen but NOT yet collected — explicitly NOT paid.
+    // Must be excluded or held orders get phantom-completed on the board.
+    var isPaid = o.paymentMethod && o.paymentStatus !== 'AWAITING_PAYMENT' &&
+      (o.paymentStatus === 'VERIFIED' || o.paymentStatus === 'PLATFORM_PAID' ||
+      (o.paymentStatus !== 'PENDING' && o.paymentStatus !== 'SUBMITTED'));
     if (isActive && isPaid && !_statusOverrides[o.orderId]) {
       _statusOverrides[o.orderId] = { status: 'COMPLETED', ts: Date.now() };
       o.status = 'COMPLETED';
