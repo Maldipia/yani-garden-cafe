@@ -20,6 +20,14 @@ async function loadReviewsView() {
     }
     _reviewsData = r;
     renderReviewsView();
+    // Mark everything currently shown as "seen" so the sidebar alert clears.
+    try {
+      var maxId = 0;
+      (r.reviews || []).forEach(function (x) { if (Number(x.id) > maxId) maxId = Number(x.id); });
+      if (maxId > 0) localStorage.setItem('reviewsLastSeenId', String(maxId));
+    } catch (e) {}
+    if (typeof reviewAlertCount !== 'undefined') reviewAlertCount = 0;
+    if (typeof renderSidebar === 'function') renderSidebar();
   } catch (e) {
     view.innerHTML = '<div style="padding:32px;text-align:center;color:#dc2626">Could not load reviews. ' +
       esc(e.message || String(e)) + '</div>';

@@ -175,6 +175,7 @@ var payFilter = 'PENDING';
 var allOnlineOrders = [];
 var onlineOrderPendingCount = 0;
 var onlineOrderFilter = 'ALL';
+var reviewAlertCount = 0;
 
 // Session data — Phase 2: JWT token added
 var currentUser = {
@@ -447,9 +448,11 @@ function startPolling() {
       // Silently refresh badge count for all roles
       _refreshOnlineCount().catch(function(){});
     }
+    if (currentFilter !== 'REVIEWS') _refreshReviewAlert().catch(function(){});
   }, 30000);
   // Load online count immediately on startup for all roles
   setTimeout(function(){ _refreshOnlineCount().catch(function(){}); }, 1500);
+  setTimeout(function(){ _refreshReviewAlert().catch(function(){}); }, 2000);
 }
 
 async function _refreshOnlineCount() {
@@ -477,6 +480,29 @@ async function _refreshOnlineCount() {
       renderFilters(); // Update badge count on tab
     }
   } catch(e) {}
+}
+
+// ── Review alert badge ──────────────────────────────────────────────────────
+// Polls for NEW low (1-3 star) reviews since the admin last opened the Reviews
+// tab (last-seen id stored per-device in localStorage). Drives a pulsing badge
+// on the Reviews sidebar item so complaints get noticed without opening it.
+async function _refreshReviewAlert() {
+  try {
+    var role = currentUser ? currentUser.role : '';
+    if (role !== 'OWNER' && role !== 'ADMIN') return; // staff-only feature
+    var lastSeen = 0;
+    try { lastSeen = parseInt(localStorage.getItem('reviewsLastSeenId') || '0', 10) || 0; } catch (e) {}
+    var r = await api('getReviewAlert', { sinceId: lastSeen });
+    if (r && r.ok) {
+      window._reviewsLatestId = r.latestId || 0;
+      var prev = reviewAlertCount;
+      reviewAlertCount = r.newLow || 0;
+      if (reviewAlertCount > prev && currentFilter !== 'REVIEWS') {
+        showToast('⭐ New customer feedback needs attention', 'warning');
+      }
+      renderSidebar();
+    }
+  } catch (e) {}
 }
 
 // ── Connection status indicator ────────────────────────────────────────────
@@ -880,7 +906,7 @@ function renderSidebar() {
     html += '<div class="sidebar-divider"></div>';
     html += '<div class="sidebar-section-label">Insights</div>';
     html += item('ANALYTICS', '📈', 'Analytics', '');
-    html += item('REVIEWS', '⭐', 'Reviews', '');
+    html += item('REVIEWS', '⭐', 'Reviews', reviewAlertCount || '', reviewAlertCount > 0);
     html += item('SHEETS', '📊', 'Sheets Sync', '');
     if (isOwner) html += item('SHIFT', '📋', 'Shift Summary', '');
     if (isOwner) html += item('LOGS', '📜', 'Activity Logs', '');

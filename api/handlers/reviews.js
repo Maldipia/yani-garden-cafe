@@ -18,7 +18,25 @@ const FEEDBACK_MAX = 2000;
 export async function routeReviews(action, body, auth, req, res) {
   const { checkAdminAuth } = auth;
 
-  // ── getReviews (ADMIN/OWNER only) ──────────────────────────────────────
+  // ── getReviewAlert (ADMIN/OWNER only) ──────────────────────────────────
+  // Lightweight badge feed: how many NEW low (1-3 star) reviews exist since the
+  // id the admin last saw, plus the latest review id so the client can mark
+  // them seen when the tab is opened.
+  if (action === 'getReviewAlert') {
+    const a = await checkAdminAuth();
+    if (!a.ok) return res.status(403).json({ ok: false, error: a.error });
+    const sinceId = Number(body.sinceId) || 0;
+    const lowR = await supaFetch(
+      `${SUPABASE_URL}/rest/v1/reviews?select=id&rating=lte.3&id=gt.${sinceId}&limit=1000`
+    );
+    const newLow = (lowR.ok && Array.isArray(lowR.data)) ? lowR.data.length : 0;
+    const maxR = await supaFetch(
+      `${SUPABASE_URL}/rest/v1/reviews?select=id&order=id.desc&limit=1`
+    );
+    const latestId = (maxR.ok && Array.isArray(maxR.data) && maxR.data[0]) ? maxR.data[0].id : 0;
+    return res.status(200).json({ ok: true, newLow, latestId });
+  }
+
   // The funnel deliberately has NO public read path. Reading captured reviews
   // (including private 1-3 star feedback) requires staff auth.
   if (action === 'getReviews') {
