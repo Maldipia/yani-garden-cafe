@@ -12,6 +12,76 @@ function _itemCatColor(category) {
   return null;
 }
 
+// ── ORDER SLA / OVERDUE ALERTS ──────────────────────────────────────────────
+// Prep times live inside item names e.g. "Latte (20 mins to prep)". An order's
+// prep window = the slowest item's explicit time, or a default when none state
+// one. A live 1s ticker flips the chip amber (due soon) / red (overdue) and
+// marks the card, so a forgotten order turns red even with no status change.
+var SLA_DEFAULT_PREP_MINS = 15;
+
+function _slaWindowMins(o) {
+  var maxExplicit = 0, found = false;
+  (o.items || []).forEach(function(it) {
+    var m = (it && it.name ? String(it.name) : '').match(/(\d+)\s*min/i);
+    if (m) { var n = parseInt(m[1], 10); if (!isNaN(n)) { found = true; if (n > maxExplicit) maxExplicit = n; } }
+  });
+  return found ? maxExplicit : SLA_DEFAULT_PREP_MINS;
+}
+
+function _slaStartMs(o) {
+  var created = o.createdAt ? new Date(o.createdAt).getTime() : Date.now();
+  if (isNaN(created)) created = Date.now();
+  var pm = (o.paymentMethod || '').toUpperCase();
+  // Cash/Card orders are held until paid — the kitchen clock starts at payment,
+  // not placement, so the hold time doesn't count as "overdue".
+  if ((pm === 'CASH' || pm === 'CARD') && o.paidAt) {
+    var paid = new Date(o.paidAt).getTime();
+    if (!isNaN(paid)) return Math.max(paid, created);
+  }
+  return created;
+}
+
+function _slaActive(o) {
+  if (!o || o.isTest || o.isDeleted) return false;
+  if (o.status !== 'NEW' && o.status !== 'PREPARING') return false;      // prep phase only
+  if ((o.paymentStatus || '').toUpperCase() === 'AWAITING_PAYMENT') return false; // on hold
+  return true;
+}
+
+function _slaChipHtml(o) {
+  if (!_slaActive(o)) return '';
+  var startMs = _slaStartMs(o);
+  var win = _slaWindowMins(o);
+  return '<span class="oc-sla" id="sla-' + esc(o.orderId) + '" data-start="' + startMs + '" data-window="' + win + '">⏱</span>';
+}
+
+// Updates every SLA chip in place from its data attributes — cheap, runs each
+// second, and works even when the board itself hasn't re-rendered.
+function updateSlaChips() {
+  var chips = document.querySelectorAll('.oc-sla');
+  var now = Date.now();
+  for (var i = 0; i < chips.length; i++) {
+    var chip = chips[i];
+    var start = parseInt(chip.getAttribute('data-start'), 10);
+    var win = parseInt(chip.getAttribute('data-window'), 10);
+    var card = chip.closest ? chip.closest('.order-card') : null;
+    if (isNaN(start) || isNaN(win) || win <= 0) { chip.style.display = 'none'; continue; }
+    var elapsed = Math.floor((now - start) / 60000);
+    if (elapsed < 0) elapsed = 0;
+    var ratio = elapsed / win;
+    chip.classList.remove('due', 'over');
+    if (ratio > 1) {
+      chip.classList.add('over');
+      chip.innerHTML = '⚠️ OVERDUE +' + (elapsed - win) + 'm';
+      if (card) card.classList.add('oc-overdue');
+    } else {
+      if (ratio >= 0.8) chip.classList.add('due');
+      chip.innerHTML = '⏱ ' + elapsed + '/' + win + 'm';
+      if (card) card.classList.remove('oc-overdue');
+    }
+  }
+}
+
 function renderOrders() {
   var filtered = allOrders.filter(function(o) {
     if (currentFilter === 'ALL') return true;
@@ -109,6 +179,7 @@ function renderOrders() {
       '<div class="oc-meta-item"><span style="background:' + typeBg + ';color:#fff;padding:2px 8px;border-radius:20px;font-size:.65rem;font-weight:800;letter-spacing:.3px">' + typeIcon + ' ' + typeLabel + '</span></div>' +
       '<div class="oc-meta-item">🕐 ' + esc(time) + '</div>' +
       '<div class="oc-meta-item" style="opacity:.6">' + esc(elapsed) + '</div>' +
+      (function(){ var c = _slaChipHtml(o); return c ? '<div class="oc-meta-item">' + c + '</div>' : ''; })() +
       editedNote +
     '</div>';
 
@@ -380,6 +451,11 @@ function renderOrders() {
     html += '</div>';
     return html;
   }).join('');
+
+  // Paint SLA chips now, and ensure the 1s ticker is running so timers stay
+  // live even when no poll-triggered re-render happens.
+  updateSlaChips();
+  if (!window._slaTicker) window._slaTicker = setInterval(updateSlaChips, 1000);
 }
 
 // ══════════════════════════════════════════════════════════

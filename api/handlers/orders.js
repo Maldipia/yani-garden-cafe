@@ -490,6 +490,7 @@ export async function routeOrders(action, body, auth, req, res) {
         discountNote:    o.discount_note    || null,
         paymentNotes:    o.payment_notes    || null,
         createdAt:     o.created_at ? (o.created_at.endsWith('Z') || o.created_at.includes('+') ? o.created_at : o.created_at + '+00:00') : null,
+        paidAt:        o.paid_at || null,
         updatedAt:     o.updated_at,
         isTest:        o.is_test || false,
         isPreorder:    o.is_preorder || false,
