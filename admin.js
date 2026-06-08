@@ -2040,7 +2040,9 @@ function spSelectTable(tno) {
 async function spLoadMenu() {
   if (spMenuItems.length === 0) {
     var r = await api('getMenu', {});
-    if (r.ok) spMenuItems = r.items || [];
+    // Only cache a non-empty result — a failed/empty fetch will retry next open
+    // instead of locking the modal on an empty "No items found" list.
+    if (r && r.ok && r.items && r.items.length) spMenuItems = r.items;
   }
   spRenderCats();
   spRenderMenu();

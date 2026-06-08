@@ -45,8 +45,23 @@ function _pollPause(pause) {
 }
 document.addEventListener('visibilitychange', function() {
   _pollActive = !document.hidden;
-  if (_pollActive && pollTimer) { clearInterval(pollTimer); startPolling(); }
+  if (_pollActive) forceRefreshNow();
 });
+// Also refresh the instant the window regains focus or the network comes back —
+// long-open tabs can have a dead Realtime socket + stalled poll, leaving the
+// board frozen on stale data. This guarantees fresh data whenever staff look.
+window.addEventListener('focus', function() { forceRefreshNow(); });
+window.addEventListener('online', function() { forceRefreshNow(); });
+
+function forceRefreshNow() {
+  if (!currentUser || !currentUser.userId || document.hidden) return;
+  // Assume the realtime socket may be stale; the active poll will keep data
+  // fresh and realtime's own subscribe callback will re-confirm + slow it again.
+  _realtimeActive = false;
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  startPolling();          // immediately calls loadOrders() + loadMenuCache(), resumes active polling
+  try { loadMenuCache(); } catch(_) {}
+}
 
 // ── Supabase Realtime ─────────────────────────────────────────────────────
 // Instant push when orders change — no polling needed when Realtime is live
@@ -464,9 +479,30 @@ async function _refreshOnlineCount() {
   } catch(e) {}
 }
 
+// ── Connection status indicator ────────────────────────────────────────────
+// Shows a "Reconnecting…" badge when order fetches start failing, so the board
+// never silently sits on stale data. Clears automatically once data flows again.
+var _fetchFails = 0;
+function _setConnBadge(show) {
+  var b = document.getElementById('connBadge');
+  if (!b && show) {
+    b = document.createElement('div');
+    b.id = 'connBadge';
+    b.textContent = '⟳ Reconnecting…';
+    b.style.cssText = 'position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#FEF3C7;color:#92400E;border:1px solid #FCD34D;border-radius:999px;padding:7px 16px;font-size:.8rem;font-weight:700;box-shadow:0 2px 12px rgba(0,0,0,.18);z-index:99999';
+    document.body.appendChild(b);
+  }
+  if (b) b.style.display = show ? 'block' : 'none';
+}
+
 async function loadOrders() {
   var result = await api('getOrders');
-  if (!result.ok || !result.orders) return;
+  if (!result || !result.ok || !result.orders) {
+    _fetchFails++;
+    if (_fetchFails >= 2) _setConnBadge(true);   // show after 2 consecutive misses (ignore single blips)
+    return;
+  }
+  if (_fetchFails) { _fetchFails = 0; _setConnBadge(false); }
 
   // Deduplicate by orderId (keep first occurrence — most recent from GAS)
   var seen = {};
