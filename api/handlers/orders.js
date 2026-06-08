@@ -512,8 +512,18 @@ export async function routeOrders(action, body, auth, req, res) {
       })();
 
       // Capture previous status for audit log
-      const prevR = await supaFetch(`${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=status&limit=1`);
-      const prevStatus = (prevR.ok && prevR.data && prevR.data[0]) ? prevR.data[0].status : null;
+      const prevR = await supaFetch(`${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=status,payment_status&limit=1`);
+      const prevStatus  = (prevR.ok && prevR.data && prevR.data[0]) ? prevR.data[0].status : null;
+      const prevPayStat = (prevR.ok && prevR.data && prevR.data[0]) ? String(prevR.data[0].payment_status || '').toUpperCase() : '';
+
+      // ── Payment hold ──────────────────────────────────────────────────────
+      // Cash/Card orders flagged AWAITING_PAYMENT cannot move forward (prepare,
+      // ready, complete) until staff confirms payment was collected at the table.
+      // Cancelling is always allowed.
+      if (prevPayStat === 'AWAITING_PAYMENT' && ['PREPARING', 'READY', 'COMPLETED'].includes(newStatus)) {
+        return res.status(409).json({ ok: false, holdForPayment: true,
+          error: 'Order is on hold until payment is received. Collect payment, then mark it received.' });
+      }
 
       const patch = { status: newStatus };
       if (newStatus === 'CANCELLED' && cancelReason) patch.cancel_reason = cancelReason;

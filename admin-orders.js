@@ -245,6 +245,19 @@ function renderOrders() {
         html += '<button class="oc-pm-change" onclick="openVerifyFromOrder(\'' + esc(o.orderId) + '\')">📸 Verify Payment</button>';
       }
       html += '</div>';
+    } else if (o.paymentStatus === 'AWAITING_PAYMENT') {
+      // Customer chose Cash/Card at the table — server must collect; order held.
+      var awMethod = (o.paymentMethod || '').toUpperCase().trim() || 'CASH';
+      var awLabel  = awMethod.charAt(0) + awMethod.slice(1).toLowerCase();
+      var awIcon   = pmIcons[awMethod] || '💰';
+      html += '<div class="oc-payment awaiting">'
+        + '<div style="font-weight:800;font-size:.78rem">🔔 Table ' + esc(o.tableNo || '?') + ' — Please collect ' + awIcon + ' ' + esc(awLabel) + ' payment</div>'
+        + '<div style="font-size:.68rem;font-weight:600;margin-top:3px;opacity:.85">Order is on hold until payment is received.</div>'
+        + '</div>';
+      if (canSetPayment && o.status !== 'COMPLETED' && o.status !== 'CANCELLED') {
+        html += '<button class="oc-btn" style="background:var(--forest);color:#fff;border:none;font-weight:700;width:calc(100% - 32px);margin:4px 16px 6px" '
+          + 'onclick="markPaymentReceived(\'' + esc(o.orderId) + '\',\'' + esc(awMethod) + '\')">✅ Payment Received</button>';
+      }
     } else {
       // Show customer's chosen payment method even before it's confirmed
       var chosenMethod = (o.paymentMethod || '').toUpperCase().trim();
@@ -403,6 +416,12 @@ async function toggleServiceCharge(orderId, hasSvc) {
 
 async function adminTogglePrep(rowEl, orderId, itemId, currentPrepared) {
   if (!itemId) return;
+  // Hold prep while payment is pending (cash/card chosen, not yet collected)
+  var _ord = allOrders.find(function(o){ return o.orderId === orderId; });
+  if (_ord && _ord.paymentStatus === 'AWAITING_PAYMENT') {
+    showToast('🔔 On hold — collect ' + (_ord.paymentMethod || 'payment') + ' first, then tap “Payment Received”.', 'error');
+    return;
+  }
   var newPrepared = currentPrepared ? 0 : 1;
   var icon = rowEl.querySelector('span');
   if (icon) icon.textContent = newPrepared ? '✅' : '⬜';
@@ -483,6 +502,26 @@ async function _completeYaniCardOrder(orderId) {
   }
 }
 
+// Staff confirms an AWAITING_PAYMENT (cash/card) order was paid at the table.
+// Sets the method VERIFIED, which releases the prep hold.
+async function markPaymentReceived(orderId, method) {
+  var m = (method || 'CASH').toUpperCase();
+  var result = await api('setPaymentMethod', {
+    orderId: orderId, method: m,
+    userId: currentUser && currentUser.userId
+  });
+  if (result && result.ok) {
+    _statusOverrides[orderId] = _statusOverrides[orderId] || {};
+    allOrders.forEach(function(o){
+      if (o.orderId === orderId) { o.paymentStatus = 'VERIFIED'; o.paymentMethod = m; }
+    });
+    renderStats(); renderFilters(); renderOrders();
+    showToast(orderId + ' — ' + m + ' payment received ✅ Order released', 2200);
+  } else {
+    showToast('❌ ' + ((result && result.error) || 'Could not confirm payment'), 'error');
+  }
+}
+
 async function updateStatus(orderId, newStatus) {
   if (newStatus === 'CANCELLED') {
     // Ask for cancel reason
@@ -549,7 +588,13 @@ async function updateStatus(orderId, newStatus) {
       }
     }
   } else {
-    showToast('Failed: ' + (result.error || 'Unknown error'), 'error');
+    if (result.holdForPayment) {
+      var ho = allOrders.find(function(o){ return o.orderId === orderId; });
+      var hm = (ho && ho.paymentMethod ? ho.paymentMethod : 'payment');
+      showToast('🔔 On hold — collect ' + hm + ' payment first, then tap “Payment Received”.', 'error');
+    } else {
+      showToast('Failed: ' + (result.error || 'Unknown error'), 'error');
+    }
   }
 }
 

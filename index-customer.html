@@ -2742,32 +2742,40 @@ function renderPaymentPage() {
 async function selectPayment(method) {
   state.paymentMethod = method;
 
-  if (method === 'cash') {
+  // Cash & Card are collected in person at the table. Online card (PayMongo)
+  // is handled separately below. For both in-person methods we flag the order
+  // so the admin board alerts a server to come collect, and the order is held
+  // from preparation until payment is confirmed.
+  if (method === 'cash' || method === 'card') {
+    var payMode = (window.APP_CONFIG && window.APP_CONFIG.CARD_PAYMENT_MODE) || 'qr';
+    if (method === 'card' && payMode === 'paymongo') {
+      await showPaymongoPayment();
+      return;
+    }
+
+    var methodLabel = method === 'cash' ? 'Cash' : 'Card';
+    var methodIcon  = method === 'cash' ? '💵' : '💳';
+
+    // Record the intended method + flag AWAITING_PAYMENT (alerts staff, holds prep)
+    try { await api('flagPaymentIntent', { orderId: state.orderId, method: method.toUpperCase() }); } catch (e) {}
+
     var body = document.getElementById('paymentBody');
     body.innerHTML = '<div class="status-card">' +
-      '<div class="status-icon">💵</div>' +
-      '<div class="status-title">Cash Payment</div>' +
-      '<div style="margin-top:16px;background:#FFFBEB;border:1.5px solid #F59E0B;border-radius:14px;padding:16px;text-align:center">' +
-        '<div style="font-size:1.5rem;margin-bottom:8px">☕</div>' +
-        '<div style="font-size:.9rem;font-weight:700;color:#92400E;margin-bottom:6px">Sit back and relax!</div>' +
-        '<div style="font-size:.82rem;color:#78350F;line-height:1.7">One of our team members will come to your table shortly to collect your cash payment.</div>' +
+      '<div class="status-icon">' + methodIcon + '</div>' +
+      '<div class="status-title">' + methodLabel + ' Payment</div>' +
+      '<div style="margin-top:16px;background:#F0FDF4;border:1.5px solid #86EFAC;border-radius:14px;padding:18px;text-align:center">' +
+        '<div style="font-size:1.6rem;margin-bottom:10px">🌿</div>' +
+        '<div style="font-size:.92rem;font-weight:700;color:#166534;margin-bottom:8px">Thank you for your order!</div>' +
+        '<div style="font-size:.83rem;color:#15803D;line-height:1.7">Our team will come to your table to assist with your payment. Preparation begins once payment is completed. Thank you for your kind understanding. 💚</div>' +
       '</div>' +
       '<div class="status-order-id" style="margin-top:14px">' + esc(state.orderId) + '</div>' +
       '<div style="font-size:1.1rem;font-weight:700;color:var(--terra);margin-top:4px">' + peso(state.orderTotal) + '</div></div>' +
       '<button class="btn-primary mt-16" onclick="closePage(\'payment\');openPage(\'status\');startStatusPolling()">Track Your Order →</button>';
-
-  } else if (method === 'card') {
-    // Route based on CARD_PAYMENT_MODE setting from DB
-    var payMode = (window.APP_CONFIG && window.APP_CONFIG.CARD_PAYMENT_MODE) || 'qr';
-    if (payMode === 'paymongo') {
-      await showPaymongoPayment();
-    } else {
-      showQRPayment();
-    }
-
-  } else {
-    showQRPayment();
+    return;
   }
+
+  // Online QR (GCash / InstaPay / bank transfer) — pay first, then upload proof
+  showQRPayment();
 }
 
 async function showPaymongoPayment() {

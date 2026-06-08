@@ -341,6 +341,17 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 .oc-payment.verified { background:#D1FAE5; color:#065F46 }
 .oc-payment.none { background:var(--mist-light); color:var(--timber) }
 .oc-payment.pending-method { background:#EFF6FF; color:#1D4ED8 }
+.oc-payment.awaiting {
+  display:block; flex:1 1 100%;
+  background:#FEE2E2; color:#991B1B;
+  border:1.5px solid #FCA5A5; border-radius:var(--r-sm);
+  padding:9px 14px; margin:0 16px 4px; line-height:1.35;
+  animation:awaitPulse 1.8s ease-in-out infinite;
+}
+@keyframes awaitPulse {
+  0%,100% { box-shadow:0 0 0 0 rgba(220,38,38,.35) }
+  50%     { box-shadow:0 0 0 5px rgba(220,38,38,0) }
+}
 .oc-payment-row {
   display:flex; align-items:center; gap:6px;
   margin:0 16px 10px;

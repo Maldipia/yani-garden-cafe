@@ -24,6 +24,45 @@ export async function routePayments(action, body, auth, req, res) {
       return res.status(200).json({ ok: true });
     }
 
+    // ── flagPaymentIntent (public — customer-facing) ───────────────────────
+    // Called when a customer chooses CASH or CARD at the table. Records the
+    // intended method and flags the order AWAITING_PAYMENT so it shows on the
+    // admin board (server is alerted to collect) and is held from preparation
+    // until staff confirms payment. Never overrides an already-confirmed payment.
+    if (action === 'flagPaymentIntent') {
+      const orderId = String(body.orderId || '').trim();
+      const method  = String(body.method  || '').trim().toUpperCase();
+      if (!orderId)                  return res.status(400).json({ ok: false, error: 'orderId required' });
+      if (!isValidOrderId(orderId))  return res.status(400).json({ ok: false, error: 'Invalid orderId' });
+      if (!['CASH', 'CARD'].includes(method))
+        return res.status(400).json({ ok: false, error: 'method must be CASH or CARD' });
+
+      // Load order — only flag live, unpaid orders. Never touch a VERIFIED /
+      // PLATFORM_PAID / SUBMITTED order or one that's already closed.
+      const ordR = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=status,payment_status&limit=1`
+      );
+      const ord = ordR.ok && ordR.data && ordR.data[0];
+      if (!ord) return res.status(404).json({ ok: false, error: 'Order not found' });
+      const curPay = String(ord.payment_status || '').toUpperCase();
+      if (['VERIFIED', 'PLATFORM_PAID', 'SUBMITTED'].includes(curPay)) {
+        return res.status(200).json({ ok: true, orderId, method, skipped: true });
+      }
+      if (['COMPLETED', 'CANCELLED'].includes(String(ord.status || '').toUpperCase())) {
+        return res.status(200).json({ ok: true, orderId, method, skipped: true });
+      }
+
+      const r = await supa('PATCH', 'dine_in_orders',
+        { payment_method: method, payment_status: 'AWAITING_PAYMENT', updated_at: new Date().toISOString() },
+        { order_id: `eq.${encodeURIComponent(orderId)}` }
+      );
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to flag payment' });
+      logSync('dine_in_orders', orderId, 'UPDATE');
+      auditLog({ orderId, action: 'PAYMENT_INTENT', newValue: method, details: { source: 'customer', held: true } });
+      pushToSheets('updateOrderPayment', { orderId, paymentMethod: method, paymentStatus: 'AWAITING_PAYMENT' });
+      return res.status(200).json({ ok: true, orderId, method });
+    }
+
     if (action === 'setPaymentMethod') {
       const authP = await checkAuth(['OWNER','ADMIN','CASHIER']);
       if (!authP.ok) return res.status(403).json({ ok: false, error: authP.error });
