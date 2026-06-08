@@ -190,6 +190,13 @@ export async function routeOrders(action, body, auth, req, res) {
         ? Math.max(0, Math.round((total - yaniDiscount) * 100) / 100)
         : null;
 
+      // Cash / in-person Card: held until paid. Flag at creation so the order
+      // surfaces on the board immediately as AWAITING_PAYMENT (alerts staff,
+      // blocks prep). Ignored when a Yani Card discount is present.
+      const paymentIntent = (!yaniDiscount && ['CASH', 'CARD'].includes(String(body.paymentIntent || '').toUpperCase()))
+        ? String(body.paymentIntent).toUpperCase()
+        : null;
+
       let orderR, orderId, orderNo;
       for (let attempt = 0; attempt < 3; attempt++) {
         const seqR = await supaFetch(
@@ -221,6 +228,10 @@ export async function routeOrders(action, body, auth, req, res) {
           notes:             notes,
           source:            isStaffOrder ? 'STAFF' : 'QR',
           is_test:           isTest,
+          ...(paymentIntent ? {
+            payment_method:   paymentIntent,
+            payment_status:   'AWAITING_PAYMENT',
+          } : {}),
           ...(yaniDiscount > 0 ? {
             discount_type:    'YANI_CARD',
             discount_pct:     10,

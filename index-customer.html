@@ -2504,6 +2504,15 @@ async function placeOrder() {
     orderPayload.discountType   = 'YANI_CARD';
     orderPayload.discountPct    = 10;
   }
+  // Cash & in-person Card are collected at the table — mark the intent so the
+  // order shows on the admin board as AWAITING PAYMENT the instant it's placed
+  // (server is alerted to collect; prep is held until payment is confirmed).
+  // Online card (PayMongo) is self-paid, so it is NOT held.
+  var _payMode = (window.APP_CONFIG && window.APP_CONFIG.CARD_PAYMENT_MODE) || 'qr';
+  if (state.checkoutPayMethod === 'cash' ||
+      (state.checkoutPayMethod === 'card' && _payMode !== 'paymongo')) {
+    orderPayload.paymentIntent = state.checkoutPayMethod.toUpperCase();
+  }
   var result = await api('placeOrder', orderPayload);
 
   if (result.ok) {
