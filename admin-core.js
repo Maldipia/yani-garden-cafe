@@ -504,16 +504,19 @@ async function loadOrders() {
     if (order) order.status = ov.status;
   });
 
-  // AUTO-COMPLETE SWEEP: only auto-close orders that are fully prepped (READY)
-  // AND paid. A paid order that isn't prepped yet (NEW/PREPARING — empty or
-  // partial checkboxes) must STAY ACTIVE so the kitchen still makes it.
+  // AUTO-COMPLETE SWEEP: close an order once it is PAID and EVERY item is
+  // prepped (all checkboxes ticked). We key off the actual checkbox state, not
+  // the READY status, because the NEW/PREPARING -> READY transition can be
+  // missed (e.g. it was attempted during the payment hold). A paid order with
+  // any unticked item stays ACTIVE so the kitchen still makes it.
   allOrders.forEach(function(o) {
-    var isReady = o.status === 'READY';
+    var isActive = o.status === 'NEW' || o.status === 'PREPARING' || o.status === 'READY';
     // AWAITING_PAYMENT = cash/card chosen but NOT yet collected — explicitly NOT paid.
     var isPaid = o.paymentMethod && o.paymentStatus !== 'AWAITING_PAYMENT' &&
       (o.paymentStatus === 'VERIFIED' || o.paymentStatus === 'PLATFORM_PAID' ||
       (o.paymentStatus !== 'PENDING' && o.paymentStatus !== 'SUBMITTED'));
-    if (isReady && isPaid && !_statusOverrides[o.orderId]) {
+    var allPrepped = o.items && o.items.length > 0 && o.items.every(function(it){ return it.prepared; });
+    if (isActive && isPaid && allPrepped && !_statusOverrides[o.orderId]) {
       _statusOverrides[o.orderId] = { status: 'COMPLETED', ts: Date.now() };
       o.status = 'COMPLETED';
       // Fire silently in background
