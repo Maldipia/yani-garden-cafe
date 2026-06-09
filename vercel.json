@@ -57,6 +57,10 @@
   },
   "rewrites": [
     {
+      "source": "/welcome",
+      "destination": "/welcome.html"
+    },
+    {
       "source": "/events",
       "destination": "/events.html"
     },
@@ -233,7 +237,7 @@
       ]
     },
     {
-      "source": "/(events|weddings|kitchen|track|reserve|saas|admin|order|offline|architecture|blueprint|preorder|demo|rewards|join|loyalty|roots)",
+      "source": "/(welcome|events|weddings|kitchen|track|reserve|saas|admin|order|offline|architecture|blueprint|preorder|demo|rewards|join|loyalty|roots)",
       "headers": [
         {
           "key": "Cache-Control",
