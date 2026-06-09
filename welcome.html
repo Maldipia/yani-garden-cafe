@@ -34,7 +34,7 @@
   header.solid .h-logo{opacity:1}
   header.solid .h-cta{color:var(--emerald);border-color:var(--gold);background:transparent}
 
-  .hero{position:relative;min-height:90vh;display:flex;flex-direction:column;justify-content:flex-end;margin-top:-62px;padding:0 24px 40px;color:#fff;overflow:hidden}
+  .hero{position:relative;min-height:90vh;min-height:90dvh;display:flex;flex-direction:column;justify-content:flex-end;margin-top:-62px;padding:0 24px 40px;color:#fff;overflow:hidden}
   .hero-bg{position:absolute;inset:0;z-index:0;background:var(--hero) center/cover no-repeat;transform:scale(1.04)}
   .hero-bg::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg, rgba(8,40,28,.28) 0%, rgba(8,40,28,.12) 38%, rgba(6,32,22,.86) 100%)}
   .hero-inner{position:relative;z-index:2}
@@ -164,6 +164,8 @@
 .fam-item:hover{border-color:var(--gold);background:rgba(200,164,106,.08)}
 .fam-n{display:block;font-weight:800;font-size:.92rem;color:#fff}
 .fam-d{display:block;font-size:.74rem;color:rgba(247,241,229,.6);margin-top:3px}
+@media (max-width:500px){.device{box-shadow:none}body{background:var(--cream)}}
+@media (max-width:360px){.hero h1{font-size:2.5rem}section{padding:46px 18px}}
 </style>
 </head>
 <body>
@@ -332,7 +334,7 @@
       <a href="https://www.instagram.com/yanigardencafe/" target="_blank" rel="noopener" aria-label="Instagram"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1.2" fill="currentColor" stroke="none"/></svg></a>
       <!-- placeholder: add Facebook page URL -->
       <a href="tel:+639674000040" aria-label="Call"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2Z"/></svg></a>
-      <!-- placeholder: add public email address -->
+      <a href="mailto:tygfsb@gmail.com" aria-label="Email"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg></a>
     </div>
     <div class="fine"><b>YANI Garden Café</b> · Amadeo, Cavite<br>Open daily till midnight · yanigardencafe.com</div>
   </footer>
