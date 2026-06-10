@@ -1,6 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // ONLINE ORDERS MANAGEMENT
 var _selectedOnlineOrders = new Set();
+var _luntianChecked = {}; // tracks per-item green checks: { 'orderId_idx': true }
 
 // ══════════════════════════════════════════════════════════
 async function loadOnlineOrders() {
@@ -155,15 +156,21 @@ function renderOnlineOrders() {
     // Items
     if (o.items && o.items.length) {
       html += '<div class="oc-items">';
-      o.items.forEach(function(item) {
+      o.items.forEach(function(item, idx) {
         var itemAddons = [];
         if (item.addons) {
           try { itemAddons = typeof item.addons === 'string' ? JSON.parse(item.addons) : item.addons; } catch(e){}
         }
-        html += '<div class="oc-item">';
+        var itemKey = String(o.id || o.order_ref || '') + '_' + idx;
+        var isDone  = _luntianChecked[itemKey] === true;
+        html += '<div class="oc-item" style="opacity:' + (isDone?'0.45':'1') + ';transition:opacity .2s">';
+        // Luntian checkbox
+        html += '<input type="checkbox" ' + (isDone?'checked':'') + ' onchange="toggleLuntian(this,\'' + itemKey + '\')" '
+          + 'title="Mark as prepared" '
+          + 'style="width:17px;height:17px;cursor:pointer;accent-color:#16a34a;flex-shrink:0;margin-right:6px;margin-top:2px">';
         html += '<div class="oc-item-qty">' + esc(String(item.quantity || 1)) + '</div>';
         html += '<div class="oc-item-info">';
-        html += '<div class="oc-item-name">' + esc(item.item_name || item.name || '') + '</div>';
+        html += '<div class="oc-item-name" style="text-decoration:' + (isDone?'line-through':'none') + '">' + esc(item.item_name || item.name || '') + '</div>';
         if (item.size && item.size !== 'REGULAR') html += '<div class="oc-item-opts">' + esc(item.size) + '</div>';
         if (itemAddons && itemAddons.length) {
           html += '<div style="margin-top:3px;display:flex;flex-wrap:wrap;gap:3px">';
@@ -2696,4 +2703,35 @@ async function bulkOnlineAction(newStatus) {
   showToast(ok + '/' + n + ' orders updated to ' + newStatus);
   _selectedOnlineOrders.clear();
   loadOnlineOrders();
+}
+
+// ── LUNTIAN — per-item green check ──────────────────────────────────────
+function toggleLuntian(cb, itemKey) {
+  _luntianChecked[itemKey] = cb.checked;
+  // Update the item row visual without full re-render
+  var row = cb.closest('.oc-item');
+  if (row) {
+    row.style.opacity    = cb.checked ? '0.45' : '1';
+    var nameEl = row.querySelector('.oc-item-name');
+    if (nameEl) nameEl.style.textDecoration = cb.checked ? 'line-through' : 'none';
+  }
+  // Check if ALL items in this order are done — auto-suggest complete
+  var orderId = itemKey.split('_')[0];
+  var orderCard = document.querySelector('[data-oid="' + orderId + '"]');
+  if (orderCard) {
+    var allCbs = Array.from(orderCard.querySelectorAll('.oc-items input[type="checkbox"]'));
+    var allDone = allCbs.length > 0 && allCbs.every(function(c){ return c.checked; });
+    var hint = orderCard.querySelector('.luntian-hint');
+    if (allDone) {
+      if (!hint) {
+        hint = document.createElement('div');
+        hint.className = 'luntian-hint';
+        hint.style.cssText = 'margin:6px 16px 0;padding:6px 12px;background:#dcfce7;border-radius:6px;font-size:.72rem;color:#14532d;font-weight:700;text-align:center';
+        hint.innerHTML = '✅ All items prepared — ready to complete?';
+        orderCard.querySelector('.oc-items').after(hint);
+      }
+    } else if (hint) {
+      hint.remove();
+    }
+  }
 }
