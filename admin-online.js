@@ -123,12 +123,10 @@ function renderOnlineOrders() {
     var timeStr = '';
     try { var d = new Date(o.created_at); timeStr = d.toLocaleString('en-PH', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit', hour12:true, timeZone:'Asia/Manila' }); } catch(e) {}
     var ordKey = String(o.id || o.order_ref || '');
-    var isChecked = _selectedOnlineOrders.has(ordKey);
     var html = '<div class="order-card" data-status="' + esc(o.status) + '" data-oid="' + esc(ordKey) + '">';
     // Header
-    html += '<div class="oc-header" style="position:relative">';
-    html += '<input type="checkbox" ' + (isChecked?'checked':'') + ' onchange="toggleOnlineSelect(this,\'' + ordKey + '\')" style="position:absolute;left:-4px;top:50%;transform:translateY(-50%);width:16px;height:16px;cursor:pointer;z-index:2">';
-    html += '<div class="oc-id" style="margin-left:22px">' + esc(o.order_ref || o.id) + '</div>';
+    html += '<div class="oc-header">';
+    html += '<div class="oc-id">' + esc(o.order_ref || o.id) + '</div>';
     html += '<span class="oc-status-badge" style="' + statusStyle + '">' + esc(displayStatus) + '</span>';
     html += '<div class="oc-time">' + esc(timeStr) + '</div>';
     html += '</div>';
