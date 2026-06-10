@@ -57,6 +57,14 @@
   },
   "rewrites": [
     {
+      "source": "/online-order",
+      "destination": "/online-order.html"
+    },
+    {
+      "source": "/online-order/",
+      "destination": "/online-order.html"
+    },
+    {
       "source": "/welcome",
       "destination": "/welcome.html"
     },
@@ -237,7 +245,7 @@
       ]
     },
     {
-      "source": "/(welcome|events|weddings|kitchen|track|reserve|saas|admin|order|offline|architecture|blueprint|preorder|demo|rewards|join|loyalty|roots)",
+      "source": "/(welcome|online-order|events|weddings|kitchen|track|reserve|saas|admin|order|offline|architecture|blueprint|preorder|demo|rewards|join|loyalty|roots)",
       "headers": [
         {
           "key": "Cache-Control",
