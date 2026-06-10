@@ -1,5 +1,7 @@
 // ══════════════════════════════════════════════════════════
 // ONLINE ORDERS MANAGEMENT
+var _selectedOnlineOrders = new Set();
+
 // ══════════════════════════════════════════════════════════
 async function loadOnlineOrders() {
   document.getElementById('onlineOrdersCount').textContent = 'Loading...';
@@ -78,7 +80,17 @@ function renderOnlineOrders() {
     document.getElementById('onlineOrdersGrid').innerHTML = '<div class="empty-state"><div class="empty-icon">🛕</div><div class="empty-text">No online orders here</div></div>';
     return;
   }
-  document.getElementById('onlineOrdersGrid').innerHTML =
+  // Build select-all toolbar
+  var selBar = '<div id="olSelBar" style="display:flex;align-items:center;gap:10px;margin-bottom:10px;padding:8px 12px;background:var(--mist-light);border-radius:var(--r-sm)">'
+    + '<input type="checkbox" id="olSelAll" onchange="toggleSelectAllOnline(this.checked)" style="width:16px;height:16px;cursor:pointer">'
+    + '<label for="olSelAll" style="font-size:.78rem;font-weight:600;color:var(--forest-deep);cursor:pointer">Select all (' + filtered.length + ')</label>'
+    + '<span id="olSelCount" style="font-size:.72rem;color:var(--timber);margin-left:4px"></span>'
+    + '<div style="flex:1"></div>'
+    + '<button id="olBulkComplete" onclick="bulkOnlineAction(\'COMPLETED\')" style="display:none;padding:5px 12px;background:#16a34a;color:#fff;border:none;border-radius:var(--r-sm);font-size:.72rem;font-weight:700;cursor:pointer">✅ Mark Completed</button>'
+    + '<button id="olBulkCancel" onclick="bulkOnlineAction(\'CANCELLED\')" style="display:none;padding:5px 12px;background:#dc2626;color:#fff;border:none;border-radius:var(--r-sm);font-size:.72rem;font-weight:700;cursor:pointer;margin-left:6px">✕ Cancel Selected</button>'
+    + '</div>';
+
+  document.getElementById('onlineOrdersGrid').innerHTML = selBar +
     '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:12px;padding:0">' +
     filtered.map(function(o) {
     var displayStatus, statusStyle;
@@ -109,10 +121,13 @@ function renderOnlineOrders() {
     }
     var timeStr = '';
     try { var d = new Date(o.created_at); timeStr = d.toLocaleString('en-PH', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit', hour12:true, timeZone:'Asia/Manila' }); } catch(e) {}
-    var html = '<div class="order-card" data-status="' + esc(o.status) + '">';
+    var ordKey = String(o.id || o.order_ref || '');
+    var isChecked = _selectedOnlineOrders.has(ordKey);
+    var html = '<div class="order-card" data-status="' + esc(o.status) + '" data-oid="' + esc(ordKey) + '">';
     // Header
-    html += '<div class="oc-header">';
-    html += '<div class="oc-id">' + esc(o.order_ref || o.id) + '</div>';
+    html += '<div class="oc-header" style="position:relative">';
+    html += '<input type="checkbox" ' + (isChecked?'checked':'') + ' onchange="toggleOnlineSelect(this,\'' + ordKey + '\')" style="position:absolute;left:-4px;top:50%;transform:translateY(-50%);width:16px;height:16px;cursor:pointer;z-index:2">';
+    html += '<div class="oc-id" style="margin-left:22px">' + esc(o.order_ref || o.id) + '</div>';
     html += '<span class="oc-status-badge" style="' + statusStyle + '">' + esc(displayStatus) + '</span>';
     html += '<div class="oc-time">' + esc(timeStr) + '</div>';
     html += '</div>';
@@ -2628,3 +2643,57 @@ window.cancelCardRequest = async function(accountId) {
     alert('Network error: ' + e.message);
   }
 };
+
+// ── ONLINE ORDER CHECKBOXES ──────────────────────────────────────────────
+function toggleOnlineSelect(cb, ordKey) {
+  if (cb.checked) _selectedOnlineOrders.add(ordKey);
+  else            _selectedOnlineOrders.delete(ordKey);
+  updateOnlineSelBar();
+}
+
+function toggleSelectAllOnline(checked) {
+  var cards = document.querySelectorAll('#onlineOrdersGrid .order-card');
+  cards.forEach(function(card) {
+    var key = card.getAttribute('data-oid');
+    var cb  = card.querySelector('input[type="checkbox"]');
+    if (key) {
+      if (checked) _selectedOnlineOrders.add(key);
+      else         _selectedOnlineOrders.delete(key);
+      if (cb) cb.checked = checked;
+    }
+  });
+  updateOnlineSelBar();
+}
+
+function updateOnlineSelBar() {
+  var n    = _selectedOnlineOrders.size;
+  var cntEl = document.getElementById('olSelCount');
+  var bComp = document.getElementById('olBulkComplete');
+  var bCanc = document.getElementById('olBulkCancel');
+  var selAll= document.getElementById('olSelAll');
+  var total = document.querySelectorAll('#onlineOrdersGrid .order-card').length;
+  if (cntEl) cntEl.textContent = n > 0 ? n + ' selected' : '';
+  if (bComp) bComp.style.display = n > 0 ? 'inline-block' : 'none';
+  if (bCanc) bCanc.style.display = n > 0 ? 'inline-block' : 'none';
+  if (selAll) selAll.checked = n > 0 && n === total;
+  if (selAll) selAll.indeterminate = n > 0 && n < total;
+}
+
+async function bulkOnlineAction(newStatus) {
+  var n = _selectedOnlineOrders.size;
+  if (!n) return;
+  if (!confirm('Mark ' + n + ' order(s) as ' + newStatus + '?')) return;
+  var ids = Array.from(_selectedOnlineOrders);
+  var ok = 0;
+  for (var i = 0; i < ids.length; i++) {
+    var r = await fetch('/api/online-order', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ action:'updateOnlineOrderStatus', id: ids[i], status: newStatus, userId: currentUser.userId })
+    });
+    var d = await r.json();
+    if (d.ok) ok++;
+  }
+  showToast(ok + '/' + n + ' orders updated to ' + newStatus);
+  _selectedOnlineOrders.clear();
+  loadOnlineOrders();
+}
