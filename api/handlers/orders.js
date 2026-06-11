@@ -818,16 +818,26 @@ export async function routeOrders(action, body, auth, req, res) {
                       })
                     });
                   } else {
-                    // Normal Yani Card: charge via RPC (applies 10% automatically)
-                    await supaFetch(`${SUPABASE_URL}/rest/v1/rpc/charge_card`, {
+                    // Normal Yani Card: charge exact discounted_total (10% already applied)
+                    const netCharge = parseFloat(yaniOrd.discounted_total || (yaniOrd.total * 0.9));
+                    const chargeResult = await supaFetch(`${SUPABASE_URL}/rest/v1/rpc/charge_card_exact`, {
                       method: 'POST',
                       body: JSON.stringify({
                         p_qr_token:     cardRow.qr_token,
-                        p_gross_amount: parseFloat(yaniOrd.total),
+                        p_net_amount:   netCharge,
                         p_order_id:     orderId,
                         p_performed_by: userId || 'SYSTEM',
+                        p_description:  `Order ${orderId} — Yani Card 10% discount final ₱${netCharge}`,
                       })
                     });
+                    if (chargeResult.ok) {
+                      await supaFetch(`${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}`, {
+                        method: 'PATCH',
+                        body: JSON.stringify({ paid_at: new Date().toISOString() })
+                      });
+                    } else {
+                      console.error('Yani Card charge failed for ' + orderId + ':', JSON.stringify(chargeResult));
+                    }
                   }
                 }
               }
