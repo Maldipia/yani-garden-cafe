@@ -448,6 +448,24 @@ export default async function handler(req, res) {
     if (action === 'chargeCard') {
       const { qr_token, gross_amount, order_id, performed_by } = body;
 
+      // ── AUTH GUARD — must be staff OR have valid qr_token ────────────────
+      // qr_token is only obtainable via authenticated cardPortalLogin session.
+      // If no qr_token, caller must be authenticated staff (OWNER/ADMIN/CASHIER).
+      if (!qr_token) {
+        // No qr_token means caller must be authenticated staff
+        const callerUserId = String(body.userId || performed_by || '');
+        const VALID_USER_ID = /^USR_\d{3,6}$/;
+        if (!VALID_USER_ID.test(callerUserId)) {
+          return res.status(403).json({ ok: false, error: 'Staff userId required to charge a card without qr_token' });
+        }
+        // Verify userId is a real active staff member with sufficient role
+        const staffR = await supa(`/rest/v1/staff?user_id=eq.${encodeURIComponent(callerUserId)}&select=role,is_active&limit=1`);
+        const staffRow = staffR.data?.[0];
+        if (!staffRow || !staffRow.is_active || !['OWNER','ADMIN','CASHIER'].includes(staffRow.role)) {
+          return res.status(403).json({ ok: false, error: 'Insufficient permissions to charge a card' });
+        }
+      }
+
       // ── IDEMPOTENCY CHECK FIRST ──────────────────────────────────────────
       // Order-level check needs only order_id, not the card. Doing this BEFORE
       // card resolution means "Change Payment" on an already-charged order
