@@ -160,10 +160,11 @@ function renderOnlineOrders() {
           try { itemAddons = typeof item.addons === 'string' ? JSON.parse(item.addons) : item.addons; } catch(e){}
         }
         var itemKey = String(o.id || o.order_ref || '') + '_' + idx;
-        var isDone  = _luntianChecked[itemKey] === true;
+        var isDone  = item.prepared === true || _luntianChecked[itemKey] === true;
         html += '<div class="oc-item" style="opacity:' + (isDone?'0.45':'1') + ';transition:opacity .2s">';
         // Luntian checkbox
-        html += '<input type="checkbox" ' + (isDone?'checked':'') + ' onchange="toggleLuntian(this,\'' + itemKey + '\')" '
+        var itemDbId = item.id || '';
+        html += '<input type="checkbox" ' + (isDone?'checked':'') + ' onchange="toggleLuntian(this,\'' + itemKey + '\',\'' + itemDbId + '\')" '
           + 'title="Mark as prepared" '
           + 'style="width:17px;height:17px;cursor:pointer;accent-color:#16a34a;flex-shrink:0;margin-right:6px;margin-top:2px">';
         html += '<div class="oc-item-qty">' + esc(String(item.quantity || 1)) + '</div>';
@@ -2704,7 +2705,7 @@ async function bulkOnlineAction(newStatus) {
 }
 
 // ── LUNTIAN — per-item green check ──────────────────────────────────────
-function toggleLuntian(cb, itemKey) {
+async function toggleLuntian(cb, itemKey, itemId) {
   _luntianChecked[itemKey] = cb.checked;
   // Update the item row visual without full re-render
   var row = cb.closest('.oc-item');
@@ -2712,6 +2713,16 @@ function toggleLuntian(cb, itemKey) {
     row.style.opacity    = cb.checked ? '0.45' : '1';
     var nameEl = row.querySelector('.oc-item-name');
     if (nameEl) nameEl.style.textDecoration = cb.checked ? 'line-through' : 'none';
+  }
+  // Save to DB — persists on refresh
+  if (itemId) {
+    try {
+      await fetch('/api/pos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'markItemPrepared', itemId: itemId, prepared: cb.checked, userId: currentUser ? currentUser.userId : 'USR_001' })
+      });
+    } catch(e) { console.warn('Failed to save prepared state', e); }
   }
   // Check if ALL items in this order are done — auto-suggest complete
   var orderId = itemKey.split('_')[0];
