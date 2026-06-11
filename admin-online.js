@@ -2720,7 +2720,7 @@ async function toggleLuntian(cb, itemKey, itemId) {
       await fetch('/api/pos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'markItemPrepared', itemId: itemId, prepared: cb.checked, userId: currentUser ? currentUser.userId : 'USR_001' })
+        body: JSON.stringify({ action: 'toggleItemPrepared', itemId: itemId, prepared: cb.checked, userId: currentUser ? currentUser.userId : 'USR_001' })
       });
     } catch(e) { console.warn('Failed to save prepared state', e); }
   }
