@@ -165,10 +165,11 @@ export async function routeLoyalty(action, body, auth, req, res) {
       // We auto-assign for BOTH new signups and existing accounts that are
       // upgrading from no-card to wanting-card.
       async function reserveNextCard() {
-        if (!tierInt) return null;
+        // Always reserve a slot even if no tier chosen — default to 500
+        const requestedTier = tierInt || 500;
         // Try matching-tier first
         let r = await supaFetch(
-          `${SUPABASE_URL}/rest/v1/yani_cards?status=eq.INACTIVE&holder_name=is.null&tier=eq.${tierInt}&select=card_number,tier&order=card_number.asc&limit=1`
+          `${SUPABASE_URL}/rest/v1/yani_cards?status=eq.INACTIVE&holder_name=is.null&tier=eq.${requestedTier}&select=card_number,tier&order=card_number.asc&limit=1`
         );
         let chosen = r.ok && r.data?.[0];
         // Fallback: any INACTIVE unassigned card
@@ -188,7 +189,7 @@ export async function routeLoyalty(action, body, auth, req, res) {
               holder_name:  cleanName,
               holder_email: cleanEmail,
               holder_phone: cleanPhone,
-              tier:         String(tierInt),
+              tier:         String(requestedTier),
               updated_at:   new Date().toISOString(),
             }),
             headers: { 'Prefer': 'return=minimal' }
