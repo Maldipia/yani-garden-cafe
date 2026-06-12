@@ -766,7 +766,7 @@ export async function routeLoyalty(action, body, auth, req, res) {
       const auth = await checkAuth(['OWNER','ADMIN','CASHIER']);
       if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
       const { search, limit = 100 } = body;
-      let url = `${SUPABASE_URL}/rest/v1/loyalty_accounts?select=*&order=total_points_earned.desc&limit=${limit}`;
+      let url = `${SUPABASE_URL}/rest/v1/loyalty_accounts?select=*&order=created_at.desc&limit=${limit}`;
       if (search) url += `&or=(name.ilike.*${encodeURIComponent(search)}*,phone.ilike.*${encodeURIComponent(search)}*)`;
       const r = await supaFetch(url);
       return res.status(200).json({ ok: true, accounts: r.data || [] });
