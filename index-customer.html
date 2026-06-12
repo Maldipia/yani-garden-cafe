@@ -1665,6 +1665,11 @@ window.addEventListener('DOMContentLoaded', async function() {
   // Show loading spinner while fetching live menu
   showMenuLoading();
   fetchMenuFromAPI();
+
+  // Auto-refresh menu every 2 minutes so deactivated items disappear promptly
+  setInterval(function() {
+    fetchMenuFromAPI(true); // silent=true, no spinner
+  }, 2 * 60 * 1000);
 });
 
 function showMenuLoading() {
@@ -1677,7 +1682,7 @@ function showMenuLoading() {
   document.getElementById('emptyState').style.display = 'none';
 }
 
-async function fetchMenuFromAPI() {
+async function fetchMenuFromAPI(silent) {
   try {
     var [menuResult, addonsResult] = await Promise.all([
       api('getMenu', {}),
@@ -1685,18 +1690,24 @@ async function fetchMenuFromAPI() {
     ]);
     if (menuResult && menuResult.ok && Array.isArray(menuResult.items) && menuResult.items.length > 0) {
       MENU_DATA = menuResult.items.map(apiItemToMenuData);
+      if (!silent) renderMenu(); // re-render only if visible
+      else { renderMenu(); } // always re-render to remove deactivated items
     } else {
-      console.warn('Menu API failed, using fallback:', menuResult && menuResult.error);
-      MENU_DATA = MENU_DATA_FALLBACK.slice();
-      toast('Menu loaded from cache. Prices may vary.', 4000);
+      if (!silent) {
+        console.warn('Menu API failed, using fallback:', menuResult && menuResult.error);
+        MENU_DATA = MENU_DATA_FALLBACK.slice();
+        toast('Menu loaded from cache. Prices may vary.', 4000);
+      }
     }
     if (addonsResult && addonsResult.ok) {
       ADDONS_DATA = addonsResult.addons || [];
     }
   } catch (e) {
-    console.error('fetchMenuFromAPI error:', e);
-    MENU_DATA = MENU_DATA_FALLBACK.slice();
-    toast('Offline mode — prices may vary.', 4000);
+    if (!silent) {
+      console.error('fetchMenuFromAPI error:', e);
+      MENU_DATA = MENU_DATA_FALLBACK.slice();
+      toast('Offline mode — prices may vary.', 4000);
+    }
   }
   renderCategories();
   renderMenu();
@@ -2530,7 +2541,20 @@ async function placeOrder() {
     toast('⏱ Taking too long — your order may have gone through. Please show this to staff and they will check.', 6000);
   } else {
     state._placingOrder = false;
-    toast('Order failed: ' + (result.error || 'Please try again'));
+    var errMsg = result.error || 'Please try again';
+    // Item was deactivated after customer loaded the page — refresh menu
+    if (errMsg.includes('no longer available') || errMsg.includes('refresh the menu')) {
+      toast('⚠️ An item in your cart is no longer available. Updating menu...', 4000);
+      fetchMenuFromAPI(true);
+      // Remove unavailable item from cart
+      var unavailCode = errMsg.match(/Item "([^"]+)"/);
+      if (unavailCode && unavailCode[1]) {
+        state.cart = state.cart.filter(function(c){ return c.code !== unavailCode[1]; });
+        setTimeout(function(){ renderCartPage(); }, 1200);
+      }
+    } else {
+      toast('Order failed: ' + errMsg);
+    }
     if (btn) { btn.disabled = false; btn.textContent = 'Place Order — ' + peso(total); }
   }
 }

@@ -3,7 +3,7 @@ import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
 
 // ── Menu cache (15-min TTL, 1-min admin TTL, stale-while-valid fallback) ──
 export const menuCache = { public: null, admin: null, tsPublic: 0, tsAdmin: 0 };
-export const MENU_CACHE_TTL       = 15 * 60 * 1000;
+export const MENU_CACHE_TTL       =  2 * 60 * 1000; // 2 min — items deactivated show quickly
 export const MENU_CACHE_TTL_ADMIN =  1 * 60 * 1000;
 export function invalidateMenuCache() {
   menuCache.public = null; menuCache.admin = null;

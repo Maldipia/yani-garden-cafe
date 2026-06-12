@@ -115,7 +115,10 @@ export async function routeOrders(action, body, auth, req, res) {
       let subtotal = 0;
       for (const item of items) {
         const menuItem = menuMap[item.code];
-        if (!menuItem) continue; // skip unknown items
+        if (!menuItem) {
+          // Item not found in active menu — it was deactivated after customer loaded the page
+          return res.status(400).json({ ok: false, error: `Item "${item.code}" is no longer available. Please refresh the menu.` });
+        }
         let unitPrice = parseFloat(menuItem.base_price) || 0;
         if (menuItem.has_sizes && item.size) {
           const sizeKey = { SHORT: 'price_short', MEDIUM: 'price_medium', TALL: 'price_tall' }[String(item.size).toUpperCase()];
