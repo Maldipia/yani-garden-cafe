@@ -192,22 +192,29 @@ a { color: var(--terra); text-decoration: none }
   position: relative;
 }
 .menu-card:active { transform: scale(.97) }
+.menu-card.sig-card {
+  border: 2px solid #c9a84c;
+  box-shadow: 0 2px 12px rgba(183,134,30,.18);
+}
 .menu-sig-badge {
   position: absolute;
   top: 7px;
   left: 7px;
-  background: #3B1F0A;
-  color: #F5E6C8;
-  font-size: .6rem;
-  font-weight: 700;
-  padding: 3px 8px;
+  background: linear-gradient(135deg,#b7861e,#e8c84a,#b7861e);
+  color: #1a1000;
+  font-size: .65rem;
+  font-weight: 800;
+  padding: 4px 10px;
   border-radius: 20px;
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   z-index: 2;
-  letter-spacing: .03em;
+  letter-spacing: .04em;
   white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(183,134,30,.55);
+  text-transform: uppercase;
+}
 }
 .menu-img-wrap {
   width: 100%;
@@ -1831,11 +1838,11 @@ function renderMenu() {
       priceStr = '<span class="menu-price">' + peso(item.price) + '</span>';
     }
 
-     return '<div class="menu-card' + unavail + '">' +
+     return '<div class="menu-card' + unavail + (item.isSignature ? ' sig-card' : '') + '">' +
        '<div class="menu-img-wrap">' +
          (imgUrl ? '<img class="menu-img" src="' + imgUrl + '" alt="" loading="lazy" onerror="this.style.display=\'none\'">' : '') +
          '<div class="menu-img-placeholder">' + getCategoryIcon(item.category) + '</div>' +
-         (item.isSignature ? '<div class="menu-sig-badge"><span>★</span> Yani\'s Signature</div>' : '') +
+         (item.isSignature ? '<div class="menu-sig-badge">⭐ YANI\'s Signature</div>' : '') +
          '<div class="menu-cat-stripe ' + getCategoryColorClass(item.category) + '"></div>' +
        '</div>' +
        '<div class="menu-info">' +
