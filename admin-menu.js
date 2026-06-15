@@ -364,19 +364,22 @@ function onMenuPhotoFileChange(input) {
     return;
   }
   _menuPhotoFile = file;
-  _menuPhotoBase64 = null; // will be encoded at upload time, not now
+  _menuPhotoBase64 = null;
   document.getElementById('menuEditFileLabel').textContent = file.name;
 
-  // Instant preview using createObjectURL — zero blocking, no FileReader
+  // Instant preview
   if (_menuObjectUrl) { URL.revokeObjectURL(_menuObjectUrl); }
   _menuObjectUrl = URL.createObjectURL(file);
   previewMenuImageData(_menuObjectUrl);
 
-  // Show Upload button immediately — no processing needed at this point
+  // Auto-upload immediately — no manual Upload button click needed
   var btn = document.getElementById('menuEditUploadBtn');
-  btn.style.display = 'inline-block';
-  btn.disabled = false;
-  btn.textContent = 'Upload';
+  btn.style.display = 'none'; // hide manual button, auto-uploading
+  var statusEl = document.getElementById('menuEditUploadStatus');
+  statusEl.style.display = 'block';
+  statusEl.style.color = 'var(--timber)';
+  statusEl.textContent = '⏫ Uploading image...';
+  uploadMenuPhoto(); // auto-trigger
 }
 
 // Base64 encode via FileReader — simple, works on all browsers
@@ -430,6 +433,9 @@ async function uploadMenuPhoto() {
   statusEl.textContent = 'Processing...';
   uploadBtn.disabled = true;
   uploadBtn.textContent = 'Uploading...';
+  // Disable Save so staff can't save old image path while upload runs
+  var saveBtn3 = document.getElementById('menuEditSaveBtn');
+  if (saveBtn3) { saveBtn3.disabled = true; saveBtn3.textContent = 'Uploading image...'; }
 
   // Yield to the browser to paint the disabled state BEFORE any heavy work
   await new Promise(function(r) { requestAnimationFrame(function() { requestAnimationFrame(r); }); });
@@ -448,7 +454,10 @@ async function uploadMenuPhoto() {
     var result = await resp.json();
     if (result.ok) {
       statusEl.style.color = '#065F46';
-      statusEl.textContent = '✓ Uploaded! Image is live immediately.';
+      statusEl.textContent = '✓ Uploaded! Image is live — click Save to apply.';
+      // Re-enable Save now that image path is ready
+      var saveBtn2 = document.getElementById('menuEditSaveBtn');
+      if (saveBtn2) { saveBtn2.disabled = false; saveBtn2.textContent = 'Save Changes'; }
       // Auto-fill the URL field with the local path
       document.getElementById('menuEditImage').value = result.path;
       previewMenuImage(result.path);
