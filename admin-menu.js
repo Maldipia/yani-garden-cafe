@@ -155,6 +155,17 @@ function renderMenuMgrGrid() {
 async function quickToggleItem(itemCode, currentlyActive) {
   var item = menuMgrItems.find(function(i){ return i.code === itemCode; });
   if (!item) return;
+
+  // If DEACTIVATING — confirm first to prevent accidental taps
+  if (currentlyActive) {
+    var confirmed = confirm('Remove "' + item.name + '" from the menu?\n\nCustomers will no longer see this item.');
+    if (!confirmed) {
+      // Revert the toggle visually (browser already flipped it)
+      renderMenuMgrGrid();
+      return;
+    }
+  }
+
   var newStatus = currentlyActive ? 'INACTIVE' : 'ACTIVE';
   var label     = currentlyActive ? 'unavailable' : 'available';
 
