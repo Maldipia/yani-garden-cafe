@@ -56,6 +56,7 @@ function _dUser() {
 var _DOCS_BUCKET_STYLE = {
   CASH:         { bg: '#dcfce7', fg: '#166534', label: 'CASH' },
   CARD:         { bg: '#ede9fe', fg: '#5b21b6', label: 'CARD' },
+  YANI_CARD:    { bg: '#d1fae5', fg: '#065f46', label: 'YANI CARD' },
   QR:           { bg: '#dbeafe', fg: '#1e40af', label: 'QR' },
   SPLIT:        { bg: '#fef3c7', fg: '#92400e', label: 'SPLIT' },
   UNCLASSIFIED: { bg: '#f1f5f9', fg: '#475569', label: 'N/A' }
@@ -130,7 +131,7 @@ function _renderLedgerPanelShell() {
   var active = _docsLedger.filter(function (r) { return r.status === 'ACTIVE'; });
   var sum = function (k) { return active.reduce(function (a, r) { return a + Number(r[k] || 0); }, 0); };
   var net = sum('net_total'), disc = sum('discount_amount');
-  var byBucket = { CASH: 0, CARD: 0, QR: 0 };
+  var byBucket = { CASH: 0, CARD: 0, YANI_CARD: 0, QR: 0 };
   active.forEach(function (r) { if (byBucket[r.payment_bucket] != null) byBucket[r.payment_bucket] += Number(r.net_total || 0); });
 
   var h = '';
@@ -150,6 +151,7 @@ function _renderLedgerPanelShell() {
   h += _docsStat('Invoices', String(active.length) + (_docsLedger.length - active.length ? '  +' + (_docsLedger.length - active.length) + ' void' : ''), 'var(--forest)');
   h += _docsStat('Cash', _dPeso(byBucket.CASH), '#166534');
   h += _docsStat('Card', _dPeso(byBucket.CARD), '#5b21b6');
+  h += _docsStat('Yani Card', _dPeso(byBucket.YANI_CARD), '#065f46');
   h += _docsStat('QR', _dPeso(byBucket.QR), '#1e40af');
   h += _docsStat('Discounts', '-' + _dPeso(disc), '#dc2626');
   h += '</div>';
@@ -195,7 +197,7 @@ function _renderEntryForm() {
   h += '<div><label style="font-size:.62rem;color:var(--timber)">Order # (optional)</label>' + inp('docsOrderRef', 'YANI-1043', 'text', '') + '</div>';
   h += '<div><label style="font-size:.62rem;color:var(--timber)">Payment</label>' +
     '<select id="docsBucket" style="width:100%;font-size:.8rem;padding:7px 9px;border:1.5px solid var(--mist);border-radius:var(--r-sm)">' +
-    '<option value="CASH">CASH</option><option value="CARD">CARD</option><option value="QR">QR</option></select></div>';
+    '<option value="CASH">CASH</option><option value="CARD">CARD</option><option value="YANI_CARD">YANI_CARD</option><option value="QR">QR</option></select></div>';
   h += '</div>';
 
   h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:8px">';
@@ -267,7 +269,7 @@ function _renderLivePanel() {
   var el = document.getElementById('docsLivePanel');
   if (!el) return;
   var isToday = _docsDate === _dTodayManila();
-  var bucket = { CARD: { n: 0, amt: 0 }, QR: { n: 0, amt: 0 }, CASH: { n: 0, amt: 0 } };
+  var bucket = { CARD: { n: 0, amt: 0 }, YANI_CARD: { n: 0, amt: 0 }, QR: { n: 0, amt: 0 }, CASH: { n: 0, amt: 0 } };
   var liveTotal = 0;
   _docsLive.forEach(function (r) {
     liveTotal += Number(r.total || 0);
@@ -291,7 +293,8 @@ function _renderLivePanel() {
       '<span style="color:' + s.fg + ';font-weight:700">' + _dPeso(b.amt) + ' <span style="font-size:.7rem;font-weight:400">· ' + b.n + '</span></span></div>';
   };
   h += '<div style="padding:14px 16px 6px">';
-  h += row('CARD', '\ud83d\udcb3', 'Card (Yani Card)');
+  h += row('CARD', '\ud83d\udcb3', 'Card Payment');
+  h += row('YANI_CARD', '\ud83c\udf3f', 'Yani Card');
   h += row('QR', '\ud83d\udcf1', 'QR (GCash / bank)');
   h += row('CASH', '\ud83d\udcb5', 'Cash');
   h += '</div>';
