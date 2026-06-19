@@ -1,5 +1,43 @@
 
 
+// ════════════════════════════════════════════════════════════════════════
+// PAYMENT METHOD COLORS — single source of truth for all payment badges
+// Used across Order Queue, DOCS, Payments, Online Orders, Checkout
+// ════════════════════════════════════════════════════════════════════════
+var PM_STYLE = {
+  CASH:          { bg:'#fef3c7', fg:'#92400e', icon:'💵', label:'Cash' },
+  GCASH:         { bg:'#dbeafe', fg:'#1e40af', icon:'📱', label:'GCash / QR' },
+  CARD:          { bg:'#ede9fe', fg:'#5b21b6', icon:'💳', label:'Card' },
+  YANI_CARD:     { bg:'#d1fae5', fg:'#065f46', icon:'🌿', label:'Yani Card' },
+  QR:            { bg:'#dbeafe', fg:'#1e40af', icon:'📱', label:'QR / GCash' },
+  INSTAPAY:      { bg:'#dbeafe', fg:'#1e40af', icon:'🏦', label:'InstaPay' },
+  BDO:           { bg:'#dbeafe', fg:'#1e40af', icon:'🏦', label:'BDO' },
+  BPI:           { bg:'#dbeafe', fg:'#1e40af', icon:'🏦', label:'BPI' },
+  UNIONBANK:     { bg:'#dbeafe', fg:'#1e40af', icon:'🏦', label:'UnionBank' },
+  MAYA:          { bg:'#dbeafe', fg:'#1e40af', icon:'📲', label:'Maya' },
+  SPLIT:         { bg:'#ffedd5', fg:'#9a3412', icon:'🔀', label:'Split' },
+  OTHER:         { bg:'#f3f4f6', fg:'#374151', icon:'💰', label:'Other' },
+  UNCLASSIFIED:  { bg:'#f3f4f6', fg:'#6b7280', icon:'❓', label:'—' },
+};
+
+// Returns a colored inline badge span for any payment method
+function pmBadge(method) {
+  var key = String(method||'').toUpperCase().replace('GCASH','GCASH');
+  var s = PM_STYLE[key] || PM_STYLE.UNCLASSIFIED;
+  return '<span style="display:inline-flex;align-items:center;gap:3px;' +
+    'background:' + s.bg + ';color:' + s.fg + ';' +
+    'font-size:.65rem;font-weight:700;padding:2px 8px;border-radius:20px;' +
+    'letter-spacing:.03em;white-space:nowrap">' +
+    s.icon + ' ' + s.label.toUpperCase() + '</span>';
+}
+
+// Returns style object for a payment method
+function pmStyle(method) {
+  var key = String(method||'').toUpperCase();
+  return PM_STYLE[key] || PM_STYLE.UNCLASSIFIED;
+}
+
+
   // ═══════════════════════════════════════════════════════
   // WHITE-LABEL CONFIG
   // ═══════════════════════════════════════════════════════

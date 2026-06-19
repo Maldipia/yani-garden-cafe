@@ -186,7 +186,7 @@ async function openVerifyFromOrder(orderId) {
   inner.style.cssText = 'background:#fff;border-radius:16px;padding:20px;max-width:92vw;width:500px;text-align:center';
   inner.innerHTML =
     '<div style="font-weight:700;font-size:1rem;margin-bottom:4px">Payment Proof</div>' +
-    '<div style="font-size:.82rem;color:#6B7280;margin-bottom:12px">' + esc(orderId) + ' · ' + esc(payment.method || '') + ' ' + amtStr + '</div>' +
+    '<div style="font-size:.82rem;color:#6B7280;margin-bottom:8px;display:flex;align-items:center;gap:6px">' + esc(orderId) + ' ' + pmBadge(payment.method) + ' ' + amtStr + '</div>' +
     '<div id="proofImgWrap2"><div style="color:#9CA3AF;padding:10px">Loading...</div></div>' +
     '<div style="display:flex;gap:10px;margin-top:16px;justify-content:center">' +
       '<button id="vfVerifyBtn" style="flex:1;max-width:160px;padding:10px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer;font-size:.9rem">Verify</button>' +

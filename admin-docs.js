@@ -54,7 +54,7 @@ function _dUser() {
   catch (e) { return 'admin'; }
 }
 var _DOCS_BUCKET_STYLE = {
-  CASH:         { bg: '#dcfce7', fg: '#166534', label: 'CASH' },
+  CASH:         { bg: '#fef3c7', fg: '#92400e', label: 'CASH' },
   CARD:         { bg: '#ede9fe', fg: '#5b21b6', label: 'CARD' },
   YANI_CARD:    { bg: '#d1fae5', fg: '#065f46', label: 'YANI CARD' },
   QR:           { bg: '#dbeafe', fg: '#1e40af', label: 'QR' },
@@ -62,6 +62,7 @@ var _DOCS_BUCKET_STYLE = {
   UNCLASSIFIED: { bg: '#f1f5f9', fg: '#475569', label: 'N/A' }
 };
 function _docsBadge(bucket) {
+  if (typeof pmBadge === 'function') return pmBadge(bucket === 'QR' ? 'GCASH' : bucket);
   var s = _DOCS_BUCKET_STYLE[bucket] || _DOCS_BUCKET_STYLE.UNCLASSIFIED;
   return '<span style="font-size:.62rem;font-weight:700;padding:2px 8px;border-radius:20px;background:' +
     s.bg + ';color:' + s.fg + '">' + s.label + '</span>';

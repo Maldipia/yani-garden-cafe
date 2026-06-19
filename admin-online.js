@@ -198,7 +198,7 @@ function renderOnlineOrders() {
     html += '<div style="display:flex;justify-content:space-between;font-size:.9rem;font-weight:800;color:var(--forest-deep)">'
       + '<span>Total</span><span>₱' + grandTotal.toFixed(0) + '</span></div>';
     if (o.payment_method) {
-      html += '<div style="font-size:.72rem;color:var(--timber);margin-top:4px">💳 ' + esc(o.payment_method.toUpperCase()) + '</div>';
+      html += '<div style="margin-top:4px">' + pmBadge(o.payment_method) + '</div>';
     }
     html += '</div>';
     // Payment proof
@@ -581,6 +581,7 @@ async function loadAnalytics() {
       // Payment method breakdown (30d)
       (function() {
         var pmIcons = {CASH:'💵',CARD:'💳',GCASH:'📱',MAYA:'📲',INSTAPAY:'🏦',BDO:'🏛️',BPI:'🏛️',UNIONBANK:'🏛️',OTHER:'💰',UNRECORDED:'⚠️'};
+        // pmBadge() from admin-core.js gives colored badges
         var pb = r.paymentBreakdown || {};
         var pmKeys = Object.keys(pb).sort();
         var pmTotalRev = pmKeys.reduce(function(acc,k){ return acc + (pb[k].revenue||0); }, 0);

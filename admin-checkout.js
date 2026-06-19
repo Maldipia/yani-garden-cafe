@@ -510,7 +510,7 @@ function selectPM(pmKey, ev) {
   if (!pmSelectedMethod) {
     // ── First selection ─────────────────────────────
     pmSelectedMethod = pmKey;
-    if (btn)   btn.className = 'pm-btn selected';
+    if (btn)   btn.className = 'pm-btn selected sel-' + pmKey;
     if (badge) { badge.textContent = '1st'; badge.style.display = ''; }
     var si = document.getElementById('pmSplitInfo');
     if (si) si.classList.add('show');

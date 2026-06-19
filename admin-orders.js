@@ -295,6 +295,7 @@ function renderOrders() {
     // Payment status + method selector
     var canSetPayment = (currentUser.role === 'OWNER' || currentUser.role === 'ADMIN' || currentUser.role === 'CASHIER');
     var pmIcons = { CASH:'💵', CARD:'💳', GCASH:'📱', INSTAPAY:'🏦', BDO:'🏦', BPI:'🏦', UNIONBANK:'🏦', MAYA:'📱', OTHER:'💰' };
+    // Payment badge helper (uses global pmBadge from admin-core.js)
     if (o.paymentStatus === 'PLATFORM_PAID') {
       html += '<div class="oc-payment verified">📦 Platform Handles Payment</div>';
     } else if (o.paymentStatus === 'VERIFIED' && o.paymentMethod) {
@@ -336,7 +337,7 @@ function renderOrders() {
         // Yani Card: pre-set by customer — show card ref + direct Complete button
         var cardRef = (o.discountNote || '').replace('Yani Card: ', '') || 'Yani Card';
         html += '<div class="oc-payment-row">'
-          + '<div class="oc-payment pending-method">🌿 ' + esc(cardRef) + ' · Card payment</div>';
+          + '<div class="oc-payment pending-method">' + pmBadge('YANI_CARD') + ' ' + esc(cardRef) + '</div>';
         if (canSetPayment && o.status !== 'COMPLETED' && o.status !== 'CANCELLED') {
           html += '<button class="oc-pm-set" style="background:var(--forest);color:#fff;border:none;font-weight:700" '
             + 'onclick="_completeYaniCardOrder(\'' + esc(o.orderId) + '\')">✅ Complete</button>';
