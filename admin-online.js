@@ -476,10 +476,26 @@ var currentSheetsTab = 'orders';
 // ══════════════════════════════════════════════════════════
 function fmt(n) { return '₱' + Number(n).toLocaleString('en-PH', {minimumFractionDigits:2,maximumFractionDigits:2}); }
 
-async function loadAnalytics() {
+var _analyticsTimer = null;
+
+function startAnalyticsAutoRefresh() {
+  stopAnalyticsAutoRefresh();
+  _analyticsTimer = setInterval(function() {
+    var el = document.getElementById('analyticsContent');
+    if (el && el.closest && el.closest('[style*="display: none"]') === null) {
+      loadAnalytics(true); // silent refresh
+    }
+  }, 3 * 60 * 1000); // every 3 minutes
+}
+
+function stopAnalyticsAutoRefresh() {
+  if (_analyticsTimer) { clearInterval(_analyticsTimer); _analyticsTimer = null; }
+}
+
+async function loadAnalytics(silent) {
   var el = document.getElementById('analyticsContent');
   if (!el) return;
-  el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--forest-mid)">Loading...</div>';
+  if (!silent) el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--forest-mid)">Loading...</div>';
 
   try {
     var r = await api('getAnalytics', { userId: currentUser && currentUser.userId });

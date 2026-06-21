@@ -1139,6 +1139,7 @@ function setFilter(f) {
   } else if (f === 'ANALYTICS') {
     if (analyticsView) analyticsView.style.display = 'block';
     loadAnalytics();
+    if (typeof startAnalyticsAutoRefresh === 'function') startAnalyticsAutoRefresh();
   } else if (f === 'TABLES') {
     if (tablesView) tablesView.style.display = 'block';
     loadOrders().then(function() { loadTablesView(); });
@@ -1326,7 +1327,8 @@ function openInvCostingHub(tab) {
     var strip = document.getElementById('membersTabStrip');
     var icStrip = document.getElementById('invCostTabStrip');
     if (icStrip && f !== 'INV_COSTING') icStrip.style.display = 'none';
-    if (strip && f !== 'MEMBERS' && f !== 'LOYALTY' && f !== 'YANI_CARDS' && f !== 'CUSTOMERS' && f !== 'CARD_LOADS') {
+    if (f !== 'ANALYTICS' && typeof stopAnalyticsAutoRefresh === 'function') stopAnalyticsAutoRefresh();
+  if (strip && f !== 'MEMBERS' && f !== 'LOYALTY' && f !== 'YANI_CARDS' && f !== 'CUSTOMERS' && f !== 'CARD_LOADS') {
       strip.style.display = 'none';
     }
     return origSetFilter.apply(this, arguments);
