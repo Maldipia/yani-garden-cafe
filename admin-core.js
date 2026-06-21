@@ -712,6 +712,20 @@ function renderStats() {
   var avgEl = document.getElementById('statAvg');
   if (avgEl) avgEl.textContent = completed > 0 ? '₱' + Math.round(totalSales / completed).toLocaleString() : '—';
 
+  // Fallback: if allOrders doesn't have enough today orders, pull from API
+  // This fixes analytics not showing on days with 200+ orders in the queue
+  if (completed === 0 && allOrders.length > 0) {
+    // Silent refresh from API
+    api('getAnalytics', { userId: currentUser && currentUser.userId }).then(function(r) {
+      if (r && r.ok && r.todaySales) {
+        var el = document.getElementById('statSales');
+        var el2 = document.getElementById('statOrders');
+        if (el) el.textContent = '₱' + Math.round(r.todaySales).toLocaleString();
+        if (el2) el2.textContent = r.todayOrders || 0;
+      }
+    }).catch(function(){});
+  }
+
   // Count pending payments across all orders
   // Count orders with SUBMITTED payment (waiting for verification)
   var pendingPayments = allOrders.filter(function(o){ return o.paymentStatus === 'SUBMITTED' && !o.isTest }).length;

@@ -3472,13 +3472,28 @@ var currentSheetsTab = 'orders';
 // ══════════════════════════════════════════════════════════
 function fmt(n) { return '₱' + Number(n).toLocaleString('en-PH', {minimumFractionDigits:2,maximumFractionDigits:2}); }
 
+var _analyticsTimer = null;
+
 async function loadAnalytics() {
   var el = document.getElementById('analyticsContent');
   if (!el) return;
-  el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--forest-mid)">Loading...</div>';
+
+  // Auto-refresh every 60 seconds while Analytics tab is open
+  if (!_analyticsTimer) {
+    _analyticsTimer = setInterval(function() {
+      var el2 = document.getElementById('analyticsContent');
+      if (!el2) { clearInterval(_analyticsTimer); _analyticsTimer = null; return; }
+      loadAnalytics();
+    }, 60000);
+  }
+
+  var isFirstLoad = el.innerHTML.includes('Loading...');
+  if (isFirstLoad) {
+    el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--forest-mid)">Loading...</div>';
+  }
 
   try {
-    var r = await api('getAnalytics', { userId: currentUser && currentUser.userId });
+    var r = await api('getAnalytics', { userId: currentUser && currentUser.userId, range: 'today' });
     if (!r || !r.ok) throw new Error(r && r.error || 'Failed');
 
     var s   = r.summary;
