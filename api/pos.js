@@ -16,6 +16,7 @@ import { routeAdmin }      from './handlers/admin.js';
 import { routeCardPortal } from './handlers/card-portal.js';
 import { routeExpenses }  from './handlers/expenses.js';
 import { routeReviews }    from './handlers/reviews.js';
+import { routeDocs }       from './handlers/docs.js';
 
 const ALLOWED_ORIGINS = (
   process.env.ALLOWED_ORIGINS ||
@@ -71,6 +72,7 @@ export default async function handler(req, res) {
       await routeCardPortal (action, body, auth, req, res) ||
       await routeExpenses   (action, body, auth, req, res) ||
       await routeReviews    (action, body, auth, req, res) ||
+      await routeDocs       (action, body, auth, req, res) ||
       await routeAdmin      (action, body, auth, req, res);
 
     if (!handled) {

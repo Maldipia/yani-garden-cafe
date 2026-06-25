@@ -85,19 +85,14 @@ async function loadDocsView() {
 }
 
 async function loadDocsLedger() {
-  var sb = _docsSb(); if (!sb) { _docsLedger = []; return; }
-  var r = await sb.from('docs_daily_sales').select('*').eq('sale_date', _docsDate).order('si_no', { ascending: true });
-  if (r.error) throw r.error;
-  _docsLedger = r.data || [];
+  var r = await api('getDocsLedger', { date: _docsDate, userId: currentUser && currentUser.userId });
+  if (!r || !r.ok) throw new Error((r && r.error) || 'Failed to load ledger');
+  _docsLedger = r.rows || [];
 }
 async function loadDocsLive() {
-  var sb = _docsSb(); if (!sb) { _docsLive = []; return; }
-  var today = _dTodayManila();
-  var r = await sb.from('v_docs_daily_transactions').select('*')
-    .eq('sale_date', today).eq('status', 'COMPLETED')
-    .order('created_at', { ascending: false });
-  if (r.error) throw r.error;
-  _docsLive = r.data || [];
+  var r = await api('getDocsLive', { date: _dTodayManila(), userId: currentUser && currentUser.userId });
+  if (!r || !r.ok) throw new Error((r && r.error) || 'Failed to load live sales');
+  _docsLive = r.rows || [];
 }
 
 // ── Live panel auto-refresh (stops itself when the view is hidden) ─────────
@@ -354,12 +349,11 @@ async function docsPrefillFromOrder() {
   var oid = (document.getElementById('docsPrefillOrder') || {}).value;
   if (!oid) return;
   oid = oid.trim();
-  var sb = _docsSb(); if (!sb) { alert('Not connected.'); return; }
   try {
-    var r = await sb.from('v_docs_daily_transactions').select('*').eq('order_id', oid).limit(1);
-    if (r.error) throw r.error;
-    if (!r.data || !r.data.length) { alert('Order ' + oid + ' not found in current sales.'); return; }
-    var o = r.data[0];
+    var r = await api('lookupDocsOrder', { order_id: oid, userId: currentUser && currentUser.userId });
+    if (!r || !r.ok) throw new Error((r && r.error) || 'Lookup failed');
+    if (!r.row) { alert('Order ' + oid + ' not found in current sales.'); return; }
+    var o = r.row;
     var set = function (id, v) { var e = document.getElementById(id); if (e) e.value = (v == null ? '' : v); };
     set('docsOrderRef', o.order_id);
     set('docsCustName', o.receipt_name || o.customer_name || '');
@@ -404,16 +398,10 @@ async function docsSaveEntry() {
   };
 
   try {
-    var res;
-    if (_docsEditId) {
-      rec.updated_at = new Date().toISOString();
-      res = await sb.from('docs_daily_sales').update(rec).eq('id', _docsEditId);
-    } else {
-      res = await sb.from('docs_daily_sales').insert(rec);
-    }
-    if (res.error) {
-      if (res.error.code === '23505') { alert('SI No. ' + siNo + ' is already used. Each serial can only be logged once.'); return; }
-      throw res.error;
+    var res = await api('saveDocsEntry', { record: rec, id: _docsEditId || null, userId: currentUser && currentUser.userId });
+    if (!res || !res.ok) {
+      if (res && res.error === 'DUPLICATE_SI') { alert('SI No. ' + siNo + ' is already used. Each serial can only be logged once.'); return; }
+      throw new Error((res && res.error) || 'Save failed');
     }
     _docsResetFormState();
     await loadDocsLedger();
@@ -442,10 +430,9 @@ async function docsVoidEntry(id) {
   if (!row) return;
   var reason = prompt('Void SI No. ' + String(row.si_no).padStart(7, '0') + '? The serial stays in the ledger (not deleted).\n\nReason:');
   if (reason === null) return;
-  var sb = _docsSb(); if (!sb) { alert('Not connected.'); return; }
   try {
-    var res = await sb.from('docs_daily_sales').update({ status: 'VOID', void_reason: reason || 'voided', updated_at: new Date().toISOString() }).eq('id', id);
-    if (res.error) throw res.error;
+    var res = await api('voidDocsEntry', { id: id, reason: reason || 'voided', userId: currentUser && currentUser.userId });
+    if (!res || !res.ok) throw new Error((res && res.error) || 'Void failed');
     await loadDocsLedger();
     renderDocsView();
   } catch (e) { alert('Void failed: ' + (e.message || e)); }
