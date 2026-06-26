@@ -62,6 +62,13 @@ export async function routeMenu(action, body, auth, req, res) {
           image:          m.image_path || '',
           category:       getCategoryName(m.category_id),
           isSignature:    !!m.is_signature,
+          hasCoffee:      !!m.has_coffee,
+          hasTea:         !!m.has_tea,
+          hasChocolate:   !!m.has_chocolate,
+          hasMatcha:      !!m.has_matcha,
+          hasCaffeine:    !!m.has_caffeine,
+          isCaffeineFree: !!m.is_caffeine_free,
+          isFood:         !!m.is_food,
           available,
           availableFrom:  m.available_from || null,
           availableUntil: m.available_until || null,
@@ -82,7 +89,7 @@ export async function routeMenu(action, body, auth, req, res) {
         return res.status(200).json({ ok: true, items: menuCache.admin, cached: true });
       }
       const r = await supaFetch(
-        `${SUPABASE_URL}/rest/v1/menu_items?order=name.asc&select=item_code,name,base_price,has_sizes,has_sugar_levels,price_short,price_medium,price_tall,image_path,category_id,is_active,is_signature,available_from,available_until,available_days`
+        `${SUPABASE_URL}/rest/v1/menu_items?order=name.asc&select=item_code,name,base_price,has_sizes,has_sugar_levels,price_short,price_medium,price_tall,image_path,category_id,is_active,is_signature,available_from,available_until,available_days,has_coffee,has_tea,has_chocolate,has_matcha,has_caffeine,is_caffeine_free,is_food`
       );
       if (!r.ok) return res.status(502).json({ ok: false, error: 'Failed to load menu' });
       const items = r.data.map(m => ({
@@ -163,6 +170,13 @@ export async function routeMenu(action, body, auth, req, res) {
       if (body.priceMedium !== undefined) updates.price_medium    = body.priceMedium != null ? parseFloat(body.priceMedium) : null;
       if (body.priceTall   !== undefined) updates.price_tall      = body.priceTall   != null ? parseFloat(body.priceTall)   : null;
       if (body.image     !== undefined) updates.image_path        = body.image || null;
+      if (body.hasCoffee      !== undefined) updates.has_coffee       = !!body.hasCoffee;
+      if (body.hasTea         !== undefined) updates.has_tea          = !!body.hasTea;
+      if (body.hasChocolate   !== undefined) updates.has_chocolate    = !!body.hasChocolate;
+      if (body.hasMatcha      !== undefined) updates.has_matcha       = !!body.hasMatcha;
+      if (body.hasCaffeine    !== undefined) updates.has_caffeine     = !!body.hasCaffeine;
+      if (body.isCaffeineFree !== undefined) updates.is_caffeine_free = !!body.isCaffeineFree;
+      if (body.isFood         !== undefined) updates.is_food          = !!body.isFood;
       if (body.status      !== undefined) updates.is_active         = (body.status || 'ACTIVE').toUpperCase() === 'ACTIVE';
       if (body.isSignature !== undefined) updates.is_signature      = !!body.isSignature;
       // Menu scheduling fields

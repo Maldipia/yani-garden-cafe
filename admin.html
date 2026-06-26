@@ -1300,7 +1300,12 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 .oc-item-name{cursor:pointer}
 .oc-item-name:hover{color:var(--forest);text-decoration:underline;text-underline-offset:2px}
 </style>
-</head>
+<style id="menu-tag-styles">
+.menu-tag-row{background:#f0f7f0;border-radius:8px;padding:8px 12px}
+.menu-tag-lbl{display:flex;align-items:center;gap:7px;font-size:.82rem;font-weight:600;color:#1a2a1a;cursor:pointer}
+.menu-tag-lbl input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:#1a3a2a}
+.menu-tag-hint{font-size:.68rem;font-weight:400;color:#5a4a3a;margin-left:2px}
+</style></head>
 <body>
 
 <!-- ═══════════════════ LOGIN ═══════════════════ -->
@@ -1832,6 +1837,23 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
           <button type="button" onclick="clearMenuSchedule()" style="padding:4px 8px;border-radius:6px;border:1.5px solid #fca5a5;background:#fef2f2;color:#b91c1c;font-size:.65rem;font-weight:600;cursor:pointer">✕ Clear</button>
         </div>
       </div>
+
+      <!-- Content Tags section -->
+      <div style="margin-bottom:16px">
+        <div style="font-size:.75rem;font-weight:700;color:var(--timber);margin-bottom:10px;display:flex;align-items:center;gap:6px">🏷️ CONTENT TAGS <span style="font-size:.65rem;font-weight:400;color:var(--timber);opacity:.7">— helps customers find the right drink</span></div>
+        <div style="display:grid;gap:7px">
+          <div class="menu-tag-row"><label class="menu-tag-lbl"><input type="checkbox" id="tagHasCoffee"> ☕ Contains coffee <span class="menu-tag-hint">espresso, barako, brewed</span></label></div>
+          <div class="menu-tag-row"><label class="menu-tag-lbl"><input type="checkbox" id="tagHasTea"> 🍵 Contains tea <span class="menu-tag-hint">green tea, black tea, herbal</span></label></div>
+          <div class="menu-tag-row"><label class="menu-tag-lbl"><input type="checkbox" id="tagHasChocolate"> 🍫 Contains chocolate <span class="menu-tag-hint">cacao, choco, mocha base</span></label></div>
+          <div class="menu-tag-row"><label class="menu-tag-lbl"><input type="checkbox" id="tagHasMatcha"> 🌿 Contains matcha <span class="menu-tag-hint">matcha powder / green tea</span></label></div>
+          <div style="height:1px;background:var(--mist);margin:2px 0"></div>
+          <div class="menu-tag-row"><label class="menu-tag-lbl"><input type="checkbox" id="tagHasCaffeine"> ⚡ Has caffeine <span class="menu-tag-hint">for customers with sensitivity</span></label></div>
+          <div class="menu-tag-row"><label class="menu-tag-lbl"><input type="checkbox" id="tagIsCaffeineFree"> 💚 Caffeine-free <span class="menu-tag-hint">safe for pregnant / no caffeine</span></label></div>
+          <div style="height:1px;background:var(--mist);margin:2px 0"></div>
+          <div class="menu-tag-row"><label class="menu-tag-lbl"><input type="checkbox" id="tagIsFood"> 🍽️ Food item <span class="menu-tag-hint">meal, pastry, snack</span></label></div>
+        </div>
+      </div>
+
       <div style="display:flex;gap:10px">
         <button id="menuEditSaveBtn" onclick="saveMenuItemEdit()" style="flex:1;padding:13px;background:var(--forest);color:#fff;border:none;border-radius:8px;font-size:.9rem;font-weight:700;cursor:pointer;font-family:var(--font-body)">Save Changes</button>
         <button onclick="closeMenuEditModal()" style="padding:13px 18px;background:var(--mist-light);color:var(--timber);border:none;border-radius:8px;font-size:.9rem;font-weight:600;cursor:pointer;font-family:var(--font-body)">Cancel</button>
@@ -2257,7 +2279,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 
   <script src="/admin-orders.js?v=26"></script>
 <script src="/admin-payments.js?v=23"></script>
-<script src="/admin-menu.js?v=22"></script>
+<script src="/admin-menu.js?v=23"></script>
 <script src="/admin-online.js?v=27"></script>
 <script src="/admin-tables.js?v=20"></script>
 <script src="/admin-checkout.js?v=21"></script>

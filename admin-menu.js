@@ -274,6 +274,10 @@ function openEditItemModal(itemCode) {
   document.getElementById('menuEditTall').value = item.priceTall || '';
   document.getElementById('menuEditImage').value = item.image || '';
   document.getElementById('menuEditStatus').value = item.active ? 'ACTIVE' : 'INACTIVE';
+  // Load content tags
+  var tagMap = {tagHasCoffee:'hasCoffee',tagHasTea:'hasTea',tagHasChocolate:'hasChocolate',
+    tagHasMatcha:'hasMatcha',tagHasCaffeine:'hasCaffeine',tagIsCaffeineFree:'isCaffeineFree',tagIsFood:'isFood'};
+  Object.keys(tagMap).forEach(function(id){ var el=document.getElementById(id); if(el) el.checked=!!item[tagMap[id]]; });
 
   document.getElementById('menuEditSizePrices').style.display = item.hasSizes ? '' : 'none';
   document.getElementById('menuEditHasSizes').onchange = function() {

@@ -293,6 +293,18 @@ a { color: var(--terra); text-decoration: none }
   align-items: center;
   justify-content: center;
 }
+.filter-bar{display:flex;gap:6px;overflow-x:auto;padding:8px 12px;scrollbar-width:none;flex-shrink:0;border-bottom:1px solid var(--mist)}
+.filter-bar::-webkit-scrollbar{display:none}
+.filter-chip{flex-shrink:0;font-size:.7rem;font-weight:700;padding:5px 12px;border-radius:20px;border:1.5px solid var(--mist);background:transparent;color:var(--timber);cursor:pointer;white-space:nowrap;letter-spacing:.02em}
+.filter-chip.active{background:var(--forest);color:#fff;border-color:var(--forest)}
+.content-tag{position:absolute;bottom:5px;left:5px;font-size:.52rem;font-weight:700;padding:2px 7px;border-radius:20px;white-space:nowrap;z-index:4;pointer-events:none;letter-spacing:.03em;text-transform:uppercase}
+.ct-coffee{background:#3d1f0f;color:#f5d8b0}
+.ct-tea{background:#1a2a3a;color:#a8c8e8}
+.ct-choco{background:#2a1a0a;color:#e8c8a0}
+.ct-matcha{background:#1f3020;color:#b8e8a0}
+.ct-caff{background:#2a1a3a;color:#c8a8e8}
+.ct-nocaff{background:#0a2a0a;color:#a8e8a8}
+.ct-food{background:#2a1a0a;color:#e8d0b0}
 .menu-unavailable { opacity: .45; pointer-events: none; position: relative; }
 .menu-avail-label {
   position: absolute; bottom: 6px; left: 50%;
@@ -1221,6 +1233,16 @@ a { color: var(--terra); text-decoration: none }
 </div>
 
 <!-- ═══════════════════ CATEGORIES ═══════════════════ -->
+<div class="filter-bar" id="contentFilterBar">
+  <button class="filter-chip active" onclick="setContentFilter('all')" id="cf-all">All</button>
+  <button class="filter-chip" onclick="setContentFilter('coffee')" id="cf-coffee">☕ Coffee</button>
+  <button class="filter-chip" onclick="setContentFilter('tea')" id="cf-tea">🍵 Tea</button>
+  <button class="filter-chip" onclick="setContentFilter('chocolate')" id="cf-chocolate">🍫 Choco</button>
+  <button class="filter-chip" onclick="setContentFilter('matcha')" id="cf-matcha">🌿 Matcha</button>
+  <button class="filter-chip" onclick="setContentFilter('caffeine')" id="cf-caffeine">⚡ Caffeine</button>
+  <button class="filter-chip" onclick="setContentFilter('nocaffeine')" id="cf-nocaffeine">💚 No Caffeine</button>
+  <button class="filter-chip" onclick="setContentFilter('food')" id="cf-food">🍽️ Food</button>
+</div>
 <div class="cats" id="catTabs"></div>
 
 <!-- ═══════════════════ MENU GRID ═══════════════════ -->
@@ -1455,12 +1477,51 @@ function apiItemToMenuData(item) {
     availableUntil: item.availableUntil || null,
     availableDays:  item.availableDays  || null,
     availableLabel: buildAvailLabel(item),
+    hasCoffee:      !!item.hasCoffee,
+    hasTea:         !!item.hasTea,
+    hasChocolate:   !!item.hasChocolate,
+    hasMatcha:      !!item.hasMatcha,
+    hasCaffeine:    !!item.hasCaffeine,
+    isCaffeineFree: !!item.isCaffeineFree,
+    isFood:         !!item.isFood,
     isSignature: !!item.isSignature,
     img:         img
   };
 }
 
 // MENU_DATA is populated on load; starts empty
+
+var _contentFilter = 'all';
+function setContentFilter(f) {
+  _contentFilter = f;
+  document.querySelectorAll('.filter-chip').forEach(function(b){ b.classList.remove('active'); });
+  var btn = document.getElementById('cf-' + f);
+  if (btn) btn.classList.add('active');
+  renderMenu();
+}
+
+function itemMatchesFilter(item) {
+  if (_contentFilter === 'all')        return true;
+  if (_contentFilter === 'coffee')     return !!item.hasCoffee;
+  if (_contentFilter === 'tea')        return !!item.hasTea;
+  if (_contentFilter === 'chocolate')  return !!item.hasChocolate;
+  if (_contentFilter === 'matcha')     return !!item.hasMatcha;
+  if (_contentFilter === 'caffeine')   return !!item.hasCaffeine;
+  if (_contentFilter === 'nocaffeine') return !!item.isCaffeineFree;
+  if (_contentFilter === 'food')       return !!item.isFood;
+  return true;
+}
+
+function getContentTagBadge(item) {
+  if (item.hasCoffee)      return '<div class="content-tag ct-coffee">☕ Coffee</div>';
+  if (item.hasMatcha)      return '<div class="content-tag ct-matcha">🌿 Matcha</div>';
+  if (item.hasTea)         return '<div class="content-tag ct-tea">🍵 Tea</div>';
+  if (item.hasChocolate)   return '<div class="content-tag ct-choco">🍫 Chocolate</div>';
+  if (item.isCaffeineFree && !item.hasCoffee && !item.isFood)
+                           return '<div class="content-tag ct-nocaff">💚 No caffeine</div>';
+  if (item.isFood)         return '<div class="content-tag ct-food">🍽️ Food</div>';
+  return '';
+}
 
 function buildAvailLabel(item) {
   if (item.available !== false) return '';
@@ -1831,7 +1892,8 @@ function renderMenu() {
   var items = MENU_DATA.filter(function(item) {
     var matchCat = state.activeCategory === 'ALL' || item.category === state.activeCategory;
     var matchSearch = !state.search || item.name.toLowerCase().indexOf(state.search.toLowerCase()) > -1;
-    return matchCat && matchSearch;
+    var matchContent = itemMatchesFilter(item);
+    // removedarch && matchContent;
   });
 
   var grid = document.getElementById('menuGrid');
@@ -1863,6 +1925,7 @@ function renderMenu() {
          '<div class="menu-img-placeholder">' + getCategoryIcon(item.category) + '</div>' +
          (item.isSignature ? '<div class="menu-sig-badge">⭐ YANI\'s Signature</div>' : '') +
          availLbl +
+         getContentTagBadge(item) +
          '<div class="menu-cat-stripe ' + getCategoryColorClass(item.category) + '"></div>' +
        '</div>' +
        '<div class="menu-info">' +
