@@ -19,7 +19,7 @@ export async function routeMenu(action, body, auth, req, res) {
         const ctrl = new AbortController();
         const timeoutId = setTimeout(() => ctrl.abort(), 5000);
         r = await supaFetch(
-          `${SUPABASE_URL}/rest/v1/menu_items?is_active=eq.true&order=name.asc&select=item_code,name,base_price,has_sizes,has_sugar_levels,price_short,price_medium,price_tall,image_path,category_id,is_signature,available_from,available_until,available_days`,
+          `${SUPABASE_URL}/rest/v1/menu_items?is_active=eq.true&order=name.asc&select=item_code,name,base_price,has_sizes,has_sugar_levels,price_short,price_medium,price_tall,image_path,category_id,is_signature,available_from,available_until,available_days,has_coffee,has_tea,has_chocolate,has_matcha,has_caffeine,is_caffeine_free,is_food`,
           { signal: ctrl.signal }
         );
         clearTimeout(timeoutId);
