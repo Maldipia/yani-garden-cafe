@@ -1893,7 +1893,7 @@ function renderMenu() {
     var matchCat = state.activeCategory === 'ALL' || item.category === state.activeCategory;
     var matchSearch = !state.search || item.name.toLowerCase().indexOf(state.search.toLowerCase()) > -1;
     var matchContent = itemMatchesFilter(item);
-    // removedarch && matchContent;
+    return matchCat && matchSearch && matchContent;
   });
 
   var grid = document.getElementById('menuGrid');
