@@ -143,7 +143,7 @@ function renderMenuMgrGrid() {
       + '</div>'
       + '<button class="mm-pill ' + pillClass + '" onclick="quickToggleItem(\'' + esc(item.code) + '\',' + (isActive ? 'true' : 'false') + ')" title="' + (isActive ? 'Set Unavailable' : 'Set Available') + '"></button>'
       + '<div class="mm-row-actions">'
-      +   '<button class="mm-icon-btn mm-icon-sig' + (item.isSignature ? ' sig-on' : '') + '" onclick="quickToggleSignature(\'' + esc(item.code) + '\')" title="' + (item.isSignature ? 'Remove Signature' : 'Mark as Signature') + '">★</button>'
+      +   '<button class="mm-icon-btn mm-icon-sig' + (item.isSignature ? ' sig-on' : '') + '" onclick="quickToggleSignature(\'' + esc(item.code) + '\')" title="' + (item.isSignature ? 'Remove Best Seller' : 'Mark as Best Seller') + '">★</button>'
       +   '<button class="mm-icon-btn mm-icon-edit" onclick="openEditItemModal(\'' + esc(item.code) + '\')" title="Edit">✏️</button>'
       +   '<button class="mm-icon-btn mm-icon-delete" onclick="quickDeleteItem(\'' + esc(item.code) + '\',\'' + esc(item.name) + '\')" title="Delete">🗑️</button>'
       + '</div>'
@@ -234,7 +234,7 @@ async function quickToggleSignature(itemCode) {
     renderMenuMgrGrid();
     showToast('\u274C Failed to update signature: ' + (result && result.error || 'Unknown error'), 'error');
   } else {
-    showToast(newVal ? '\u2B50 ' + esc(item.name) + ' marked as Signature' : '\u2B50 ' + esc(item.name) + ' removed from Signature');
+    showToast(newVal ? '\u2B50 ' + esc(item.name) + ' marked as Best Seller' : '\u2B50 ' + esc(item.name) + ' removed from Best Seller');
   }
 }
 // ── Quick delete ─────────────────────────────────────────────────────────
