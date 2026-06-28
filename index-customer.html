@@ -1378,7 +1378,7 @@ a { color: var(--terra); text-decoration: none }
 
 // ── CONFIG ──────────────────────────────────────────────
 const API_URL = '/api/pos';
-const SERVICE_CHARGE_RATE = 0.10; // 10% for dine-in
+const SERVICE_CHARGE_RATE = 0.10; // 10% for all orders
 
 // ── TABLE TOKENS ────────────────────────────────────────
 // TABLE_TOKENS: loaded dynamically from DB on page load (see initTableTokens)
@@ -2323,7 +2323,7 @@ function renderCheckoutPage() {
         '<div class="ot-icon">🍽️</div><div class="ot-label">Dine-In</div><div class="ot-sub">+10% service charge</div>' +
       '</button>' +
       '<button class="order-type-btn take-out-btn' + (state.orderType==='take-out'?' active':'') + '" onclick="setOrderType(\'take-out\')">' +
-        '<div class="ot-icon">🥡</div><div class="ot-label">Take-Out</div><div class="ot-sub">No service charge</div>' +
+        '<div class="ot-icon">🥡</div><div class="ot-label">Take-Out</div><div class="ot-sub">+10% service charge</div>' +
       '</button>' +
     '</div></div>';
 
@@ -2337,7 +2337,7 @@ function renderCheckoutPage() {
     html += '<div class="summary-row"><span>' + esc(c.name) + (meta ? '<br><small style="color:var(--timber)">' + esc(meta) + '</small>' : '') + ' × ' + c.qty + '</span><span>' + peso(c.price * c.qty) + '</span></div>';
   });
 
-  var svc = state.orderType === 'dine-in' ? Math.round(subtotal * SERVICE_CHARGE_RATE * 100) / 100 : 0;
+  var svc = Math.round(subtotal * SERVICE_CHARGE_RATE * 100) / 100;
   var total = subtotal + svc;
 
   html += '<div class="divider"></div>' +
@@ -2543,7 +2543,7 @@ async function placeOrder() {
   }
 
   var subtotal = getCartSubtotal();
-  var svc = state.orderType === 'dine-in' ? Math.round(subtotal * SERVICE_CHARGE_RATE * 100) / 100 : 0;
+  var svc = Math.round(subtotal * SERVICE_CHARGE_RATE * 100) / 100;
   var total = subtotal + svc;
 
   // GCash: show QR + upload form FIRST — order only placed after proof submitted
