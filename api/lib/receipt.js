@@ -91,7 +91,7 @@ export function buildReceiptHTML({ order, items, isBIR }) {
             <td colspan="2" style="text-align:right;padding:3px 0;font-size:13px">${fmt(order.subtotal)}</td>
           </tr>
           <tr>
-            <td colspan="2" style="text-align:right;padding:3px 0;font-size:13px;color:#6b7280">${parseFloat(order.service_charge||0)===0 ? 'Service Charge:' : 'Service Charge (10%):'}</td>
+            <td colspan="2" style="text-align:right;padding:3px 0;font-size:13px;color:#6b7280">${parseFloat(order.service_charge||0)===0 ? 'Service Charge:' : (String(order.order_type||'').toUpperCase().includes('TAKE') ? 'Packaging Fee (10%):' : 'Service Charge (10%):')}</td>
             <td colspan="2" style="text-align:right;padding:3px 0;font-size:13px;color:${parseFloat(order.service_charge||0)===0 ? '#16a34a' : 'inherit'}">${parseFloat(order.service_charge||0)===0 ? '<em>Waived</em>' : fmt(order.service_charge)}</td>
           </tr>
           ${vatLine}

@@ -2323,7 +2323,7 @@ function renderCheckoutPage() {
         '<div class="ot-icon">🍽️</div><div class="ot-label">Dine-In</div><div class="ot-sub">+10% service charge</div>' +
       '</button>' +
       '<button class="order-type-btn take-out-btn' + (state.orderType==='take-out'?' active':'') + '" onclick="setOrderType(\'take-out\')">' +
-        '<div class="ot-icon">🥡</div><div class="ot-label">Take-Out</div><div class="ot-sub">+10% service charge</div>' +
+        '<div class="ot-icon">🥡</div><div class="ot-label">Take-Out</div><div class="ot-sub">+10% packaging fee</div>' +
       '</button>' +
     '</div></div>';
 
@@ -2342,7 +2342,7 @@ function renderCheckoutPage() {
 
   html += '<div class="divider"></div>' +
     '<div class="summary-row"><span>Subtotal</span><span>' + peso(subtotal) + '</span></div>';
-  if (svc > 0) html += '<div class="summary-row"><span>Service Charge (10%)</span><span>' + peso(svc) + '</span></div>';
+  if (svc > 0) html += '<div class="summary-row"><span>' + (state.orderType === 'take-out' ? 'Packaging Fee (10%)' : 'Service Charge (10%)') + '</span><span>' + peso(svc) + '</span></div>';
   html += '<div class="summary-row total"><span>Total</span><span class="sr-val">' + peso(total) + '</span></div>';
   html += '</div>';
 

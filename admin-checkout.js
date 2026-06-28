@@ -987,7 +987,7 @@ function renderSplitBill() {
     html += '<div style="display:flex;justify-content:space-between;padding:8px 0;font-size:.75rem;color:#6b7280;margin-top:4px">'
       + '<span>Subtotal / person</span><span>₱' + perSub.toFixed(2) + '</span></div>'
       + '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:.75rem;color:#6b7280">'
-      + '<span>Service charge / person</span><span>₱' + perSvc.toFixed(2) + '</span></div>'
+      + '<span>' + (o.orderType && o.orderType.includes('TAKE') ? 'Packaging fee / person' : 'Service charge / person') + '</span><span>₱' + perSvc.toFixed(2) + '</span></div>'
       + '</div>';
 
     // Printable split receipt area
@@ -1159,7 +1159,7 @@ function printSplitReceipts() {
       + '<div class="row"><span>Date:</span><span>' + printDate + '</span></div>'
       + '<div class="dash"></div>'
       + '<div class="row"><span>Subtotal (your share):</span><span>₱' + perSub.toFixed(2) + '</span></div>'
-      + (perSvc > 0 ? '<div class="row"><span>Service Charge:</span><span>₱' + perSvc.toFixed(2) + '</span></div>' : '')
+      + (perSvc > 0 ? '<div class="row"><span>' + (o.orderType==='TAKE-OUT'||o.orderType==='TAKE_OUT'?'Packaging Fee:':'Service Charge:') + '</span><span>₱' + perSvc.toFixed(2) + '</span></div>' : '')
       + '<div class="dash" style="border-top:2px solid #000;margin:3px 0"></div>'
       + '<div class="row grand"><span>YOUR TOTAL:</span><span>₱' + perPerson.toFixed(2) + '</span></div>'
       + '<div class="dash"></div>'
@@ -1237,7 +1237,7 @@ function printItemSplitReceipts() {
     allReceipts += '</table>'
       + '<div class="dash" style="margin-top:3px"></div>'
       + '<div class="row"><span>Subtotal:</span><span>₱' + ptotal.subtotal.toFixed(2) + '</span></div>'
-      + (ptotal.svc > 0 ? '<div class="row"><span>Service Charge:</span><span>₱' + ptotal.svc.toFixed(2) + '</span></div>' : '')
+      + (ptotal.svc > 0 ? '<div class="row"><span>' + (o.orderType==='TAKE-OUT'||o.orderType==='TAKE_OUT'?'Packaging Fee:':'Service Charge:') + '</span><span>₱' + ptotal.svc.toFixed(2) + '</span></div>' : '')
       + '<div class="dash" style="border-top:2px solid #000;margin:3px 0"></div>'
       + '<div class="row grand"><span>YOUR TOTAL:</span><span>₱' + ptotal.total.toFixed(2) + '</span></div>'
       + '<div class="dash"></div>'
