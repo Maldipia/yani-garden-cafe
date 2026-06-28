@@ -794,7 +794,7 @@ function eoRenderBody() {
   var eoTotal = eoSubtotal + eoSvc;
   html += '<div style="margin:14px 16px 4px;padding:12px 16px;background:var(--forest);border-radius:10px;color:#fff">' +
     '<div style="display:flex;justify-content:space-between;font-size:.78rem;opacity:.8"><span>Subtotal</span><span>₱' + eoSubtotal.toFixed(2) + '</span></div>' +
-    '<div style="display:flex;justify-content:space-between;font-size:.78rem;opacity:.8;margin-top:2px"><span>Service Charge (10%)</span><span>₱' + eoSvc.toFixed(2) + '</span></div>' +
+    '<div style="display:flex;justify-content:space-between;font-size:.78rem;opacity:.8;margin-top:2px"><span>' + (o.orderType&&o.orderType.includes(\'TAKE\')?'Packaging Fee (10%)':'Service Charge (10%)') + '</span><span>₱' + eoSvc.toFixed(2) + '</span></div>' +
     '<div style="display:flex;justify-content:space-between;font-size:.95rem;font-weight:800;margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.25)"><span>NEW TOTAL</span><span>₱' + eoTotal.toFixed(2) + '</span></div>' +
   '</div>';
   document.getElementById('eoBody').innerHTML = html;
@@ -1121,7 +1121,7 @@ function printReceipt(orderId) {
     // Totals
     '<div class="total-section">' +
     '<div class="total-row"><span>Subtotal:</span><span>P ' + subtotal.toFixed(2) + '</span></div>' +
-    (serviceCharge > 0 ? '<div class="total-row"><span>Service Charge (' + scPct.toFixed(1) + '%):</span><span>P ' + serviceCharge.toFixed(2) + '</span></div>' : '') +
+    (serviceCharge > 0 ? '<div class="total-row"><span>' + (o.orderType&&o.orderType.toUpperCase().includes('TAKE')?'Packaging Fee':'Service Charge') + ' (' + scPct.toFixed(1) + '%):</span><span>P ' + serviceCharge.toFixed(2) + '</span></div>' : '') +
     (vatEnabled ? '<div class="total-row"><span>VAT (12%, incl.):</span><span>P ' + vatAmount.toFixed(2) + '</span></div>' : '') +
     '<div class="divider-thick"></div>' +
     (discountAmount > 0 ? '<div class="total-row" style="color:#B45309"><span>Discount (' + esc(discountType) + '):</span><span>-P ' + discountAmount.toFixed(2) + '</span></div>' : '') +
@@ -1282,7 +1282,7 @@ function pdfReceipt(orderId) {
     + '</table>'
     + '<div class="totals">'
     +   '<div class="tot-row"><span>Subtotal</span><span>₱ ' + subtotal.toFixed(2) + '</span></div>'
-    +   (svc > 0 ? '<div class="tot-row"><span>Service Charge (' + scPct + '%)</span><span>₱ ' + svc.toFixed(2) + '</span></div>' : '')
+    +   (svc > 0 ? '<div class="tot-row"><span>' + (o.orderType&&o.orderType.includes('TAKE')?'Packaging Fee':'Service Charge') + ' (' + scPct + '%)</span><span>₱ ' + svc.toFixed(2) + '</span></div>' : '')
     +   (vat > 0 ? '<div class="tot-row"><span>VAT (12%, incl.)</span><span>₱ ' + vat.toFixed(2) + '</span></div>' : '')
     +   (disc > 0 ? '<div class="tot-row disc"><span>Discount (' + esc(discType) + ')</span><span>−₱ ' + disc.toFixed(2) + '</span></div>' : '')
     +   '<div class="tot-row grand"><span>TOTAL</span><span>₱ ' + grandTotal.toFixed(2) + '</span></div>'
