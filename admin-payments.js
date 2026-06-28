@@ -179,14 +179,17 @@ async function openVerifyFromOrder(orderId) {
   modal.id = 'proofModalOverlay';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
   var uid = currentUser && currentUser.userId ? currentUser.userId : '';
-  var imgSrc = '/api/payment-proof?id=' + encodeURIComponent(payment.paymentId) + '&userId=' + encodeURIComponent(uid);
+  // Use proofUrl directly if it's a public URL — much faster, no proxy round-trip
+  var imgSrc = (payment.proofUrl && payment.proofUrl.startsWith('http'))
+    ? payment.proofUrl
+    : '/api/payment-proof?id=' + encodeURIComponent(payment.paymentId) + '&userId=' + encodeURIComponent(uid);
   var amtStr = payment.amount ? '₱' + parseFloat(payment.amount).toFixed(2) : '';
   // Build modal using DOM (avoids string escaping issues with onerror)
   var inner = document.createElement('div');
   inner.style.cssText = 'background:#fff;border-radius:16px;padding:20px;max-width:92vw;width:500px;text-align:center';
   inner.innerHTML =
     '<div style="font-weight:700;font-size:1rem;margin-bottom:4px">Payment Proof</div>' +
-    '<div style="font-size:.82rem;color:#6B7280;margin-bottom:8px;display:flex;align-items:center;gap:6px">' + esc(orderId) + ' ' + pmBadge(payment.method) + ' ' + amtStr + '</div>' +
+    '<div style="font-size:.82rem;color:#6B7280;margin-bottom:8px;display:flex;align-items:center;gap:6px">' + esc(orderId) + ' ' + pmBadge(payment.paymentMethod) + ' ' + amtStr + '</div>' +
     '<div id="proofImgWrap2"><div style="color:#9CA3AF;padding:10px">Loading...</div></div>' +
     '<div style="display:flex;gap:10px;margin-top:16px;justify-content:center">' +
       '<button id="vfVerifyBtn" style="flex:1;max-width:160px;padding:10px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer;font-size:.9rem">Verify</button>' +
