@@ -149,7 +149,10 @@ export async function routeOrders(action, body, auth, req, res) {
 
       if (orderItems.length === 0) return res.status(400).json({ ok: false, error: 'No valid items in order' });
 
-      const svcCharge = orderType === 'DINE-IN' ? Math.round(subtotal * SERVICE_CHARGE_RATE * 100) / 100 : 0;
+      // Service charge applies to ALL order types (10%)
+      // Server always calculates this — never trusts client-sent value
+      // Dine-in: Service Charge | Take-out: Packaging Fee — same 10% rate
+      const svcCharge = Math.round(subtotal * SERVICE_CHARGE_RATE * 100) / 100;
       const preTax    = subtotal + svcCharge;
 
       // VAT — read live from settings table
