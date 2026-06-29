@@ -69,6 +69,7 @@ input.ci-input::placeholder{color:rgba(255,255,255,.25);letter-spacing:0}
   <div class="step active" id="step1">
     <div class="step-title">Clock In / Out</div>
     <div class="step-sub">How would you like to log your time?</div>
+    <div style="font-size:.72rem;color:rgba(255,255,255,.3);text-align:center;margin-bottom:8px;line-height:1.5">Tip: QR scan requires camera permission.<br>If camera is blocked, use manual entry.</div>
     <div class="method-btns">
       <button class="method-btn" onclick="startScan()">
         <div class="icon" style="background:rgba(74,222,128,.15)">📷</div>
@@ -84,6 +85,7 @@ input.ci-input::placeholder{color:rgba(255,255,255,.25);letter-spacing:0}
   <!-- STEP 2: QR Scanner -->
   <div class="step" id="step2">
     <div class="step-title">Scan Your QR Code</div>
+    <div style="font-size:.7rem;color:rgba(255,255,255,.3);margin-bottom:8px">If camera shows black screen on iPhone, try: Settings → Safari → Camera → Allow</div>
     <div id="videoWrap">
       <video id="videoEl" playsinline autoplay muted></video>
       <canvas id="snapCanvas" style="display:none"></canvas>
@@ -91,6 +93,7 @@ input.ci-input::placeholder{color:rgba(255,255,255,.25);letter-spacing:0}
     </div>
     <div class="scan-hint">Hold QR code steady inside the green box</div>
     <div class="error-msg" id="scanErr"></div>
+    <button class="ci-btn ci-btn-secondary" style="margin-top:8px" onclick="showManual()">⌨️ Type staff code instead</button>
     <div class="back-link"><a onclick="backTo('step1')">← Back</a></div>
   </div>
 
@@ -189,17 +192,44 @@ function showErr(id,msg){ const el=document.getElementById(id); el.textContent=m
 
 // ── QR SCAN ───────────────────────────────────────────────────────────────
 async function startScan() {
+  // Check browser support
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showManualWithMsg('Camera not supported on this browser. Enter your staff code instead.');
+    return;
+  }
   showStep('step2');
   try {
-    _stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+    // Try rear camera first, fall back to any
+    try {
+      _stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}}});
+    } catch(e1) {
+      _stream = await navigator.mediaDevices.getUserMedia({video:true});
+    }
     const v = document.getElementById('videoEl');
     v.srcObject = _stream;
     await v.play();
     scanLoop();
   } catch(e) {
-    showErr('scanErr','Camera not available — use manual entry instead');
-    setTimeout(()=>showManual(),2000);
+    stopScan();
+    var msg = 'Camera not available.';
+    if(e.name==='NotAllowedError'||e.name==='PermissionDeniedError')
+      msg = 'Camera permission denied. Please allow camera access in your browser settings, or use manual entry.';
+    else if(e.name==='NotFoundError'||e.name==='DevicesNotFoundError')
+      msg = 'No camera found on this device. Use manual entry below.';
+    else if(e.name==='NotReadableError')
+      msg = 'Camera is in use by another app. Close other apps and try again, or use manual entry.';
+    showManualWithMsg(msg);
   }
+}
+
+function showManualWithMsg(msg) {
+  showManual();
+  var err = document.getElementById('manualErr');
+  err.textContent = msg;
+  err.style.display = 'block';
+  err.style.background = 'rgba(234,179,8,.15)';
+  err.style.borderColor = 'rgba(234,179,8,.3)';
+  err.style.color = '#fde68a';
 }
 function scanLoop() {
   const v=document.getElementById('videoEl');
