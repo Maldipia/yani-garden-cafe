@@ -961,6 +961,11 @@ export async function routePayments(action, body, auth, req, res) {
       const authVP     = await checkAdminAuth();
       if (!authVP.ok) return res.status(403).json({ ok: false, error: authVP.error });
       if (!paymentId) return res.status(400).json({ ok: false, error: 'paymentId is required' });
+      // Guard: check payment exists first
+      const existsVP = await supaFetch(`${SUPABASE_URL}/rest/v1/payments?payment_id=eq.${encodeURIComponent(paymentId)}&select=payment_id&limit=1`);
+      if (!existsVP.ok || !Array.isArray(existsVP.data) || existsVP.data.length === 0) {
+        return res.status(404).json({ ok: false, error: 'Payment not found' });
+      }
 
       const r = await supa('PATCH', 'payments', {
         status:      'VERIFIED',
@@ -1003,6 +1008,11 @@ export async function routePayments(action, body, auth, req, res) {
       const reason     = String(body.reason     || '').trim().substring(0, 500);
       const verifiedBy = String(body.verifiedBy || authRP.role || 'Staff').trim().substring(0, 100);
       if (!paymentId) return res.status(400).json({ ok: false, error: 'paymentId is required' });
+      // Guard: check payment exists first
+      const existsRP = await supaFetch(`${SUPABASE_URL}/rest/v1/payments?payment_id=eq.${encodeURIComponent(paymentId)}&select=payment_id&limit=1`);
+      if (!existsRP.ok || !Array.isArray(existsRP.data) || existsRP.data.length === 0) {
+        return res.status(404).json({ ok: false, error: 'Payment not found' });
+      }
 
       const r = await supa('PATCH', 'payments', {
         status:           'REJECTED',
