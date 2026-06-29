@@ -1587,5 +1587,125 @@ export async function routeAdmin(action, body, auth, req, res) {
     }
 
 
+  // ── HR Loan/Doc/Incident/Performance/Leave/Clock APIs ───────────────────
+  const TENANT_HR = '11111111-1111-4111-8111-111111111111';
+
+  if (action === 'getHRLoans') {
+    const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_staff_loans?staff_id=eq.'+body.staffId+'&tenant_id=eq.'+TENANT_HR+'&order=created_at.desc');
+    return res.status(200).json({ ok:true, loans: r.data||[] });
+  }
+  if (action === 'addHRLoan') {
+    const authL = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    if (!authL.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
+    const {staffId,principal,notes,start_date,monthly_amortization} = body;
+    const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_staff_loans',
+      {method:'POST',headers:{Prefer:'return=representation'},
+       body:JSON.stringify({tenant_id:TENANT_HR,staff_id:staffId,principal:parseFloat(principal),balance_remaining:parseFloat(principal),monthly_amortization:monthly_amortization?parseFloat(monthly_amortization):null,start_date:start_date||null,notes:notes||null,status:'ACTIVE'})});
+    return res.status(200).json({ok:r.ok,loan:Array.isArray(r.data)?r.data[0]:r.data});
+  }
+  if (action === 'updateHRLoan') {
+    const authL = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    if (!authL.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
+    const p={};['status','balance_remaining','notes','monthly_amortization'].forEach(k=>{if(body[k]!==undefined)p[k]=body[k];});
+    const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_staff_loans?id=eq.'+body.loanId,{method:'PATCH',body:JSON.stringify(p)});
+    return res.status(200).json({ok:r.ok});
+  }
+  if (action === 'getHRDocuments') {
+    const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_staff_documents?staff_id=eq.'+body.staffId+'&tenant_id=eq.'+TENANT_HR+'&order=created_at.desc');
+    return res.status(200).json({ok:true,documents:r.data||[]});
+  }
+  if (action === 'addHRDocument') {
+    const authD = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    if (!authD.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
+    const {staffId,document_type,notes,expiry_date,file_link} = body;
+    const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_staff_documents',
+      {method:'POST',headers:{Prefer:'return=representation'},
+       body:JSON.stringify({tenant_id:TENANT_HR,staff_id:staffId,document_type,notes:notes||null,expiry_date:expiry_date||null,file_link:file_link||null,verification_status:'PENDING'})});
+    return res.status(200).json({ok:r.ok,document:Array.isArray(r.data)?r.data[0]:r.data});
+  }
+  if (action === 'getHRIncidents') {
+    const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_staff_incidents?staff_id=eq.'+body.staffId+'&tenant_id=eq.'+TENANT_HR+'&order=incident_date.desc');
+    return res.status(200).json({ok:true,incidents:r.data||[]});
+  }
+  if (action === 'addHRIncident') {
+    const authI = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    if (!authI.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
+    const {staffId,incident_type,incident_date,description,action_taken} = body;
+    const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_staff_incidents',
+      {method:'POST',headers:{Prefer:'return=representation'},
+       body:JSON.stringify({tenant_id:TENANT_HR,staff_id:staffId,incident_type,incident_date:incident_date||new Date().toISOString().split('T')[0],description:description||null,action_taken:action_taken||null,status:'OPEN'})});
+    return res.status(200).json({ok:r.ok,incident:Array.isArray(r.data)?r.data[0]:r.data});
+  }
+  if (action === 'getHRPerformance') {
+    const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_performance?staff_id=eq.'+body.staffId+'&tenant_id=eq.'+TENANT_HR+'&order=record_date.desc');
+    return res.status(200).json({ok:true,records:r.data||[]});
+  }
+  if (action === 'addHRPerformance') {
+    const authP = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    if (!authP.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
+    const {staffId,record_type,title,description,record_date,rating} = body;
+    const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_performance',
+      {method:'POST',headers:{Prefer:'return=representation'},
+       body:JSON.stringify({tenant_id:TENANT_HR,staff_id:staffId,record_type,title,description:description||null,record_date:record_date||new Date().toISOString().split('T')[0],rating:rating||null,status:'ACTIVE'})});
+    return res.status(200).json({ok:r.ok,record:Array.isArray(r.data)?r.data[0]:r.data});
+  }
+  if (action === 'getHRLeave') {
+    const [reqs,bals] = await Promise.all([
+      supaFetch(SUPABASE_URL+'/rest/v1/hr_leave_requests?staff_id=eq.'+body.staffId+'&tenant_id=eq.'+TENANT_HR+'&order=requested_at.desc&limit=20'),
+      supaFetch(SUPABASE_URL+'/rest/v1/hr_leave_balances?staff_id=eq.'+body.staffId+'&tenant_id=eq.'+TENANT_HR)
+    ]);
+    return res.status(200).json({ok:true,requests:reqs.data||[],balances:bals.data||[]});
+  }
+  if (action === 'getHRTimeLogs') {
+    const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_time_logs?staff_id=eq.'+body.staffId+'&tenant_id=eq.'+TENANT_HR+'&order=event_time.desc&limit='+(body.limit||20));
+    return res.status(200).json({ok:true,logs:r.data||[]});
+  }
+
+  if (action === 'addHRStaff') {
+    const authS = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    if (!authS.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
+    const {full_name,role,daily_rate,mobile} = body;
+    if (!full_name) return res.status(400).json({ok:false,error:'full_name required'});
+    const TENANT_HR2 = '11111111-1111-4111-8111-111111111111';
+    // Get next staff code
+    const existing = await supaFetch(SUPABASE_URL+'/rest/v1/hr_staff_master?tenant_id=eq.'+TENANT_HR2+'&select=staff_code&order=created_at.desc&limit=1');
+    const lastCode = existing.data?.[0]?.staff_code || 'USR_000';
+    const nextNum = parseInt(lastCode.replace('USR_','')) + 1;
+    const staff_code = 'USR_' + String(nextNum).padStart(3,'0');
+    const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_staff_master',
+      {method:'POST',headers:{Prefer:'return=representation'},
+       body:JSON.stringify({tenant_id:TENANT_HR2,staff_code,full_name,
+         role:role||'STAFF',employment_type:'REGULAR',employment_status:'ACTIVE',
+         pay_basis:'DAILY',daily_rate:daily_rate?parseFloat(daily_rate):null,
+         mobile:mobile||null,date_hired:new Date().toISOString().split('T')[0]})
+      });
+    return res.status(200).json({ok:r.ok,staff:Array.isArray(r.data)?r.data[0]:r.data});
+  }
+  if (action === 'addHRLeaveRequest') {
+    const TENANT_HR2 = '11111111-1111-4111-8111-111111111111';
+    const {staffId,leave_type,start_date,end_date,number_of_days,reason} = body;
+    const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_leave_requests',
+      {method:'POST',headers:{Prefer:'return=representation'},
+       body:JSON.stringify({tenant_id:TENANT_HR2,staff_id:staffId,leave_type,
+         start_date,end_date,number_of_days:parseFloat(number_of_days),
+         reason:reason||null,status:'PENDING',is_paid:false})
+      });
+    return res.status(200).json({ok:r.ok});
+  }
+  if (action === 'addHRTimeLog') {
+    const authT = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    if (!authT.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
+    const TENANT_HR2 = '11111111-1111-4111-8111-111111111111';
+    const {staffId,event_type,log_date,event_time,attendance_source,notes} = body;
+    const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_time_logs',
+      {method:'POST',headers:{Prefer:'return=representation'},
+       body:JSON.stringify({tenant_id:TENANT_HR2,staff_id:staffId,
+         event_type,log_date,event_time,
+         attendance_source:attendance_source||'MANUAL',
+         notes:notes||null,approval_status:'PENDING'})
+      });
+    return res.status(200).json({ok:r.ok});
+  }
+
   return false;
 }
