@@ -851,11 +851,41 @@ function openAddStaffModal() {
 // ── Edit staff (full modal) ────────────────────────────────────────────────
 function openEditStaffModal(id) {
   const s=_hrStaff.find(x=>x.id===id); if(!s) return;
+  // Load profile data if not already loaded
+  api('getHRProfile',{userId:currentUser?.userId,staffId:id}).then(function(r){
+    if(r.ok&&r.profile) {
+      s._profile_sss=r.profile.sss_no||'';
+      s._profile_ph=r.profile.philhealth_no||'';
+      s._profile_pig=r.profile.pagibig_no||'';
+      s._profile_tin=r.profile.tin_no||'';
+    }
+  }).catch(function(){});
   const ROLES=Object.keys(HR_ROLE_STYLE);
   const STATUSES=Object.keys(HR_STATUS_STYLE);
   hrModal('Edit Staff — '+esc(s.full_name),`
+    <!-- ── Basic ── -->
+    <div class="hef-section-label">👤 Basic Information</div>
     <div class="hr-edit-row"><label class="hr-edit-label">Full Name *</label><input class="hr-edit-input" id="hef_name" value="${esc(s.full_name||'')}"></div>
-    <div class="hr-edit-row"><label class="hr-edit-label">Nickname</label><input class="hr-edit-input" id="hef_nick" value="${esc(s.nickname||'')}"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="hr-edit-row"><label class="hr-edit-label">Nickname</label><input class="hr-edit-input" id="hef_nick" value="${esc(s.nickname||'')}"></div>
+      <div class="hr-edit-row"><label class="hr-edit-label">Date of Birth</label><input class="hr-edit-input" id="hef_dob" type="date" value="${s.date_of_birth?s.date_of_birth.slice(0,10):''}"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="hr-edit-row"><label class="hr-edit-label">Gender</label>
+        <select class="hr-edit-input" id="hef_gender">
+          <option value="">—</option>
+          ${['MALE','FEMALE','OTHER'].map(g=>`<option value="${g}"${g===(s.gender||'')?' selected':''}>${g}</option>`).join('')}
+        </select>
+      </div>
+      <div class="hr-edit-row"><label class="hr-edit-label">Civil Status</label>
+        <select class="hr-edit-input" id="hef_civil">
+          <option value="">—</option>
+          ${['SINGLE','MARRIED','WIDOWED','SEPARATED'].map(g=>`<option value="${g}"${g===(s.civil_status||'')?' selected':''}>${g}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <!-- ── Employment ── -->
+    <div class="hef-section-label" style="margin-top:4px">💼 Employment</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
       <div class="hr-edit-row"><label class="hr-edit-label">Role *</label>
         <select class="hr-edit-input" id="hef_role">${ROLES.map(r=>`<option value="${r}"${r===s.role?' selected':''}>${HR_ROLE_STYLE[r].label}</option>`).join('')}</select>
@@ -865,6 +895,27 @@ function openEditStaffModal(id) {
       </div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="hr-edit-row"><label class="hr-edit-label">Employment type</label>
+        <select class="hr-edit-input" id="hef_emptype">
+          ${['REGULAR','PROBATIONARY','PART_TIME','WORKING_STUDENT','RELIEVER','ON_CALL','TRAINEE'].map(t=>`<option value="${t}"${t===(s.employment_type||'REGULAR')?' selected':''}>${t.replace(/_/g,' ')}</option>`).join('')}
+        </select>
+      </div>
+      <div class="hr-edit-row"><label class="hr-edit-label">Date Hired</label>
+        <input class="hr-edit-input" id="hef_hired" type="date" value="${s.date_hired?s.date_hired.slice(0,10):''}">
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="hr-edit-row"><label class="hr-edit-label">Department</label><input class="hr-edit-input" id="hef_dept" value="${esc(s.department||'')}"></div>
+      <div class="hr-edit-row"><label class="hr-edit-label">OT Allowed</label>
+        <select class="hr-edit-input" id="hef_ot">
+          <option value="false"${!s.overtime_allowed?' selected':''}>❌ No</option>
+          <option value="true"${s.overtime_allowed?' selected':''}>✅ Yes</option>
+        </select>
+      </div>
+    </div>
+    <!-- ── Pay ── -->
+    <div class="hef-section-label" style="margin-top:4px">💰 Pay</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
       <div class="hr-edit-row"><label class="hr-edit-label">Pay basis</label>
         <select class="hr-edit-input" id="hef_basis">${['DAILY','HOURLY','MONTHLY'].map(p=>`<option value="${p}"${p===(s.pay_basis||'DAILY')?' selected':''}>${p}</option>`).join('')}</select>
       </div>
@@ -872,22 +923,53 @@ function openEditStaffModal(id) {
         <input class="hr-edit-input" id="hef_rate" type="number" min="0" step="0.01" value="${s.daily_rate||''}">
       </div>
     </div>
-    <div class="hr-edit-row"><label class="hr-edit-label">Phone</label><input class="hr-edit-input" id="hef_phone" value="${esc(s.mobile||'')}"></div>
-    <div class="hr-edit-row"><label class="hr-edit-label">Email</label><input class="hr-edit-input" id="hef_email" type="email" value="${esc(s.email||'')}"></div>
-    <div class="hr-edit-row"><label class="hr-edit-label">Department</label><input class="hr-edit-input" id="hef_dept" value="${esc(s.department||'')}"></div>
-    <div class="hr-edit-row"><label class="hr-edit-label">Notes</label><textarea class="hr-edit-input" id="hef_notes" rows="2">${esc(s.notes||'')}</textarea></div>
+    <!-- ── Contact ── -->
+    <div class="hef-section-label" style="margin-top:4px">📞 Contact</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="hr-edit-row"><label class="hr-edit-label">Phone</label><input class="hr-edit-input" id="hef_phone" value="${esc(s.mobile||'')}"></div>
+      <div class="hr-edit-row"><label class="hr-edit-label">Email</label><input class="hr-edit-input" id="hef_email" type="email" value="${esc(s.email||'')}"></div>
+    </div>
+    <!-- ── Payout ── -->
+    <div class="hef-section-label" style="margin-top:4px">💳 Payout</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="hr-edit-row"><label class="hr-edit-label">Method</label>
+        <select class="hr-edit-input" id="hef_paymethod">
+          <option value="">—</option>
+          ${['CASH','GCASH','MAYA','BANK'].map(m=>`<option value="${m}"${m===(s.payout_method||'')?' selected':''}>${m}</option>`).join('')}
+        </select>
+      </div>
+      <div class="hr-edit-row"><label class="hr-edit-label">GCash / Account No.</label>
+        <input class="hr-edit-input" id="hef_paydetail" value="${esc(s.payout_details||'')}" placeholder="09XX XXX XXXX">
+      </div>
+    </div>
+    <!-- ── Government ── -->
+    <div class="hef-section-label" style="margin-top:4px">🏛️ Government Numbers</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="hr-edit-row"><label class="hr-edit-label">SSS No.</label><input class="hr-edit-input" id="hef_sss" value="${esc(s._profile_sss||'')}" placeholder="00-0000000-0"></div>
+      <div class="hr-edit-row"><label class="hr-edit-label">PhilHealth No.</label><input class="hr-edit-input" id="hef_ph" value="${esc(s._profile_ph||'')}" placeholder="00-000000000-0"></div>
+      <div class="hr-edit-row"><label class="hr-edit-label">PagIBIG No.</label><input class="hr-edit-input" id="hef_pig" value="${esc(s._profile_pig||'')}" placeholder="0000-0000-0000"></div>
+      <div class="hr-edit-row"><label class="hr-edit-label">TIN</label><input class="hr-edit-input" id="hef_tin" value="${esc(s._profile_tin||'')}" placeholder="000-000-000-000"></div>
+    </div>
+    <!-- ── Notes ── -->
+    <div class="hr-edit-row" style="margin-top:4px"><label class="hr-edit-label">Notes</label><textarea class="hr-edit-input" id="hef_notes" rows="2">${esc(s.notes||'')}</textarea></div>
   `,async function(){
     const name=document.getElementById('hef_name').value.trim();
     if(!name){showToast('Name required','error');return false;}
-    const upd={full_name:name,nickname:document.getElementById('hef_nick').value||null,
-      role:document.getElementById('hef_role').value,
-      employment_status:document.getElementById('hef_status').value,
-      pay_basis:document.getElementById('hef_basis').value,
-      daily_rate:parseFloat(document.getElementById('hef_rate').value)||null,
-      mobile:document.getElementById('hef_phone').value||null,
-      email:document.getElementById('hef_email').value||null,
-      department:document.getElementById('hef_dept').value||null,
-      notes:document.getElementById('hef_notes').value||null
+    const gv=function(id){return document.getElementById(id)?.value?.trim()||null;};
+    const upd={
+      full_name:name, nickname:gv('hef_nick'),
+      role:gv('hef_role'), employment_status:gv('hef_status'),
+      employment_type:gv('hef_emptype'),
+      pay_basis:gv('hef_basis'),
+      daily_rate:parseFloat(gv('hef_rate'))||null,
+      mobile:gv('hef_phone'), email:gv('hef_email'),
+      department:gv('hef_dept'), notes:gv('hef_notes'),
+      overtime_allowed: document.getElementById('hef_ot')?.value==='true',
+      date_hired:gv('hef_hired'), date_of_birth:gv('hef_dob'),
+      gender:gv('hef_gender'), civil_status:gv('hef_civil'),
+      payout_method:gv('hef_paymethod'), payout_details:gv('hef_paydetail'),
+      // profile fields
+      _sss:gv('hef_sss'), _ph:gv('hef_ph'), _pig:gv('hef_pig'), _tin:gv('hef_tin'),
     };
     const r=await api('updateHRStaff',{userId:currentUser?.userId,staffId:id,...upd});
     if(!r.ok){showToast('Error: '+(r.error||'Failed'),'error');return false;}
