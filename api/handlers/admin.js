@@ -1707,5 +1707,130 @@ export async function routeAdmin(action, body, auth, req, res) {
     return res.status(200).json({ok:r.ok});
   }
 
+  // ── hrLookupStaff — for clock-in page ────────────────────────────────────
+  if (action === 'hrLookupStaff') {
+    const TENANT_HR = '11111111-1111-4111-8111-111111111111';
+    const sc = String(body.staffCode||'').trim().toUpperCase();
+    if (!sc) return res.status(400).json({ok:false,error:'staffCode required'});
+    const r = await supaFetch(
+      SUPABASE_URL+'/rest/v1/hr_staff_master?staff_code=eq.'+encodeURIComponent(sc)+
+      '&tenant_id=eq.'+TENANT_HR+'&select=id,staff_code,full_name,role,employment_status,daily_rate&limit=1'
+    );
+    const staff = Array.isArray(r.data) ? r.data[0] : null;
+    if (!staff) return res.status(200).json({ok:false,error:'Staff not found'});
+    if (staff.employment_status !== 'ACTIVE') return res.status(200).json({ok:false,error:'Account inactive'});
+    return res.status(200).json({ok:true,staff});
+  }
+
+  // ── hrVerifyPin — for clock-in PIN check ──────────────────────────────────
+  if (action === 'hrVerifyPin') {
+    const TENANT_HR = '11111111-1111-4111-8111-111111111111';
+    const sc = String(body.staffCode||'').trim().toUpperCase();
+    const pin = String(body.pin||'').trim();
+    if (!sc||!pin) return res.status(400).json({ok:false,error:'staffCode + pin required'});
+    const r = await supaFetch(
+      SUPABASE_URL+'/rest/v1/rpc/hr_verify_pin',
+      {method:'POST',body:JSON.stringify({p_tenant:TENANT_HR,p_staff_code:sc,p_pin:pin})}
+    );
+    const ok = r.data === true;
+    return res.status(200).json({ok});
+  }
+
+  // ── hrClockEvent — for clock-in page ──────────────────────────────────────
+  if (action === 'hrClockEvent') {
+    const TENANT_HR = '11111111-1111-4111-8111-111111111111';
+    const {staffCode, eventType, pin} = body;
+    if (!staffCode||!eventType) return res.status(400).json({ok:false,error:'staffCode + eventType required'});
+    // Verify PIN first (re-verify for security)
+    if (pin) {
+      const vr = await supaFetch(
+        SUPABASE_URL+'/rest/v1/rpc/hr_verify_pin',
+        {method:'POST',body:JSON.stringify({p_tenant:TENANT_HR,p_staff_code:staffCode.toUpperCase(),p_pin:pin})}
+      );
+      if (vr.data !== true) return res.status(403).json({ok:false,error:'Invalid PIN'});
+    }
+    // Get staff ID
+    const sr = await supaFetch(
+      SUPABASE_URL+'/rest/v1/hr_staff_master?staff_code=eq.'+staffCode.toUpperCase()+'&tenant_id=eq.'+TENANT_HR+'&select=id&limit=1'
+    );
+    const staffId = sr.data?.[0]?.id;
+    if (!staffId) return res.status(404).json({ok:false,error:'Staff not found'});
+    // Fire clock event
+    const cr = await supaFetch(
+      SUPABASE_URL+'/rest/v1/rpc/hr_clock_event',
+      {method:'POST',body:JSON.stringify({
+        p_tenant:TENANT_HR,p_staff_id:staffId,p_event_type:eventType,
+        p_device:'WEB_PORTAL',p_location_ip:req.headers['x-forwarded-for']||''
+      })}
+    );
+    return res.status(200).json({ok:cr.ok,event:cr.data});
+  }
+
+  // ── hrEmployeeLogin — for employee portal ─────────────────────────────────
+  if (action === 'hrEmployeeLogin') {
+    const TENANT_HR = '11111111-1111-4111-8111-111111111111';
+    const {staffCode, pin} = body;
+    if (!staffCode||!pin) return res.status(400).json({ok:false,error:'staffCode + pin required'});
+    const vr = await supaFetch(
+      SUPABASE_URL+'/rest/v1/rpc/hr_verify_pin',
+      {method:'POST',body:JSON.stringify({p_tenant:TENANT_HR,p_staff_code:staffCode.toUpperCase(),p_pin:pin})}
+    );
+    if (vr.data !== true) return res.status(200).json({ok:false,error:'Incorrect staff code or PIN'});
+    const sr = await supaFetch(
+      SUPABASE_URL+'/rest/v1/hr_staff_master?staff_code=eq.'+staffCode.toUpperCase()+
+      '&tenant_id=eq.'+TENANT_HR+'&select=id,staff_code,full_name,role,employment_type,employment_status,daily_rate,hourly_rate,pay_basis,mobile,email,date_hired,payout_method&limit=1'
+    );
+    const staff = sr.data?.[0];
+    if (!staff) return res.status(200).json({ok:false,error:'Staff not found'});
+    if (staff.employment_status !== 'ACTIVE') return res.status(200).json({ok:false,error:'Account inactive'});
+    // Create session token
+    const token = 'EP_'+Date.now()+'_'+Math.random().toString(36).slice(2,10).toUpperCase();
+    await supaFetch(
+      SUPABASE_URL+'/rest/v1/hr_portal_sessions',
+      {method:'POST',body:JSON.stringify({token,tenant_id:TENANT_HR,staff_id:staff.id,staff_code:staff.staff_code})}
+    );
+    return res.status(200).json({ok:true,staff,token});
+  }
+
+  // ── hrCompute13thMonth ────────────────────────────────────────────────────
+  if (action === 'hrCompute13thMonth') {
+    const authHR = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    if (!authHR.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
+    const TENANT_HR = '11111111-1111-4111-8111-111111111111';
+    const year = body.year || new Date().getFullYear();
+    // Get all active staff with daily rates
+    const sr = await supaFetch(
+      SUPABASE_URL+'/rest/v1/hr_staff_master?tenant_id=eq.'+TENANT_HR+
+      '&employment_status=eq.ACTIVE&daily_rate=not.is.null&select=id,full_name,daily_rate,pay_basis'
+    );
+    const staff = sr.data || [];
+    const results = [];
+    for (const s of staff) {
+      // Simplified: total_basic_pay = daily_rate * 26 * months_worked (assume 12 months for now)
+      const totalBasic = parseFloat(s.daily_rate) * 26; // 1 month basic
+      const thirteenth = Math.round(totalBasic / 12 * 100) / 100;
+      results.push({
+        staff_id: s.id, name: s.full_name,
+        daily_rate: parseFloat(s.daily_rate),
+        total_basic_pay: totalBasic,
+        thirteenth_month_pay: thirteenth
+      });
+    }
+    return res.status(200).json({ok:true,year,results,note:'Based on current daily rate × 26 days. Update monthly actuals in HR > Loans.'});
+  }
+
+  // ── hrGetHolidays ─────────────────────────────────────────────────────────
+  if (action === 'hrGetHolidays') {
+    const TENANT_HR = '11111111-1111-4111-8111-111111111111';
+    const year = body.year || new Date().getFullYear();
+    const r = await supaFetch(
+      SUPABASE_URL+'/rest/v1/hr_holiday_calendar?tenant_id=eq.'+TENANT_HR+
+      '&holiday_date=gte.'+year+'-01-01&holiday_date=lte.'+year+'-12-31'+
+      '&is_active=eq.true&order=holiday_date.asc'
+    );
+    return res.status(200).json({ok:true,holidays:r.data||[]});
+  }
+
+
   return false;
 }

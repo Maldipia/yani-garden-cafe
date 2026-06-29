@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>YANI Employee Portal</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f7f5;min-height:100vh;color:#111}
+/* Login */
+.login-wrap{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;background:linear-gradient(160deg,#0f1f18,#1a3a2a)}
+.login-logo{text-align:center;margin-bottom:28px}
+.login-logo img{width:68px;height:68px;border-radius:50%;border:2px solid rgba(255,255,255,.15)}
+.login-logo h1{font-size:1.1rem;font-weight:700;color:#a8d8a8;margin-top:10px}
+.login-logo p{font-size:.75rem;color:rgba(255,255,255,.4);margin-top:3px}
+.login-card{background:rgba(255,255,255,.07);border-radius:20px;padding:28px 24px;width:100%;max-width:360px;border:1px solid rgba(255,255,255,.1)}
+.login-label{font-size:.7rem;font-weight:700;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.06em;margin-bottom:7px;margin-top:14px}
+.login-label:first-of-type{margin-top:0}
+input.ep-input{width:100%;padding:13px 14px;border-radius:12px;border:1.5px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:#fff;font-size:1rem;outline:none}
+input.ep-input:focus{border-color:#4ade80}
+input.ep-input::placeholder{color:rgba(255,255,255,.25)}
+.ep-btn{width:100%;padding:14px;border-radius:12px;border:none;font-size:.9rem;font-weight:700;cursor:pointer;margin-top:18px;background:#4ade80;color:#0f1f18}
+.ep-err{background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:9px 12px;font-size:.78rem;color:#fca5a5;margin-top:12px;display:none}
+/* Portal */
+#portal{display:none;min-height:100vh;flex-direction:column}
+.ep-header{background:#1a3a2a;padding:14px 18px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10}
+.ep-header-avatar{width:38px;height:38px;border-radius:50%;background:#2d5a3d;color:#a8d8a8;display:flex;align-items:center;justify-content:center;font-size:.95rem;font-weight:700;flex-shrink:0}
+.ep-header-info{flex:1}
+.ep-header-name{font-size:.9rem;font-weight:700;color:#fff}
+.ep-header-role{font-size:.7rem;color:rgba(255,255,255,.5)}
+.ep-logout{font-size:.72rem;color:rgba(255,255,255,.4);background:none;border:none;cursor:pointer;padding:6px 10px}
+.ep-nav{display:flex;gap:0;overflow-x:auto;scrollbar-width:none;background:#fff;border-bottom:1px solid #e5e7eb}
+.ep-nav::-webkit-scrollbar{display:none}
+.ep-tab{font-size:.72rem;padding:11px 14px;border:none;background:transparent;color:#6b7280;cursor:pointer;border-bottom:2.5px solid transparent;white-space:nowrap;font-weight:500}
+.ep-tab.active{color:#1a3a2a;border-bottom-color:#1a3a2a;font-weight:700}
+.ep-content{flex:1;overflow-y:auto;padding:18px}
+/* Cards */
+.ep-section{margin-bottom:20px}
+.ep-section-title{font-size:.72rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+.ep-card{background:#fff;border-radius:12px;padding:14px;border:1px solid #e5e7eb;margin-bottom:8px}
+.ep-grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.ep-field{background:#f9fafb;border-radius:8px;padding:9px 11px}
+.ep-field-label{font-size:.65rem;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px}
+.ep-field-value{font-size:.83rem;color:#111;font-weight:500}
+.ep-badge{display:inline-flex;font-size:.6rem;font-weight:700;padding:2px 8px;border-radius:20px;text-transform:uppercase;letter-spacing:.02em}
+.ep-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #e5e7eb;font-size:.82rem}
+.ep-row:last-child{border:none}
+.ep-event-badge{font-size:.62rem;font-weight:700;padding:2px 8px;border-radius:20px}
+.ci-in{background:#dcfce7;color:#166534}.ci-out{background:#fee2e2;color:#991b1b}
+.ci-break{background:#fef9c3;color:#854d0e}
+.ep-leave-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.ep-leave-card{background:#f9fafb;border-radius:10px;padding:11px 12px;border:1px solid #e5e7eb;text-align:center}
+.ep-leave-type{font-size:.65rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:4px}
+.ep-leave-days{font-size:1.4rem;font-weight:700}
+.ep-leave-sub{font-size:.65rem;color:#6b7280;margin-top:2px}
+.ep-pay-card{background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:1.5px solid #86efac;border-radius:12px;padding:14px 16px;margin-bottom:12px}
+.ep-pay-label{font-size:.68rem;color:#166534;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.ep-pay-amount{font-size:1.8rem;font-weight:700;color:#166534;margin:4px 0}
+.ep-pay-sub{font-size:.73rem;color:#16a34a}
+.ep-empty{text-align:center;padding:32px 20px;color:#9ca3af;font-size:.82rem}
+.ep-clockin-btn{display:flex;align-items:center;justify-content:center;gap:8px;background:#1a3a2a;color:#fff;border:none;border-radius:12px;padding:14px;font-size:.9rem;font-weight:700;cursor:pointer;width:100%;margin-bottom:16px}
+</style>
+</head>
+<body>
+
+<!-- Login -->
+<div id="login" class="login-wrap">
+  <div class="login-logo">
+    <img src="https://hnynvclpvfxzlfjphefj.supabase.co/storage/v1/object/public/card-assets/fathers-day-logo.png" onerror="this.style.display='none'" alt="">
+    <h1>YANI Employee Portal</h1>
+    <p>Garden Cafe · Amadeo, Cavite</p>
+  </div>
+  <div class="login-card">
+    <div class="login-label">Staff Code</div>
+    <input id="epCode" class="ep-input" placeholder="USR_001" autocomplete="off" autocorrect="off" autocapitalize="characters" oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')document.getElementById('epPin').focus()">
+    <div class="login-label">PIN</div>
+    <input id="epPin" class="ep-input" type="password" placeholder="••••" maxlength="4" inputmode="numeric" pattern="[0-9]*" onkeydown="if(event.key==='Enter')epLogin()">
+    <div class="ep-err" id="epErr"></div>
+    <button class="ep-btn" onclick="epLogin()">Sign In →</button>
+  </div>
+</div>
+
+<!-- Portal -->
+<div id="portal">
+  <div class="ep-header">
+    <div class="ep-header-avatar" id="epAvatar">?</div>
+    <div class="ep-header-info">
+      <div class="ep-header-name" id="epName">Loading...</div>
+      <div class="ep-header-role" id="epRole"></div>
+    </div>
+    <button class="ep-logout" onclick="epLogout()">Sign out</button>
+  </div>
+  <nav class="ep-nav">
+    <button class="ep-tab active" onclick="showEpTab('home')">🏠 Home</button>
+    <button class="ep-tab" onclick="showEpTab('attendance')">⏱ Attendance</button>
+    <button class="ep-tab" onclick="showEpTab('pay')">💰 Pay</button>
+    <button class="ep-tab" onclick="showEpTab('leave')">🌿 Leave</button>
+    <button class="ep-tab" onclick="showEpTab('profile')">👤 Profile</button>
+  </nav>
+  <div class="ep-content" id="epContent">
+    <div class="ep-empty">Loading...</div>
+  </div>
+</div>
+
+<script>
+const API='/api/pos';
+let _epStaff=null, _epToken=null, _epData={};
+
+function showEpErr(msg){ const e=document.getElementById('epErr'); e.textContent=msg; e.style.display='block'; setTimeout(()=>e.style.display='none',3000); }
+
+async function epLogin() {
+  const code=document.getElementById('epCode').value.trim().toUpperCase();
+  const pin=document.getElementById('epPin').value.trim();
+  if(!code||!pin){showEpErr('Enter staff code and PIN');return;}
+  const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({action:'hrEmployeeLogin',staffCode:code,pin})}).then(r=>r.json()).catch(()=>({ok:false}));
+  if(!r.ok){showEpErr(r.error||'Login failed');return;}
+  _epStaff=r.staff; _epToken=r.token;
+  localStorage.setItem('ep_token',_epToken);
+  localStorage.setItem('ep_staff',JSON.stringify(_epStaff));
+  showPortal();
+}
+
+function showPortal() {
+  document.getElementById('login').style.display='none';
+  document.getElementById('portal').style.display='flex';
+  const s=_epStaff;
+  document.getElementById('epAvatar').textContent=(s.full_name||'?').charAt(0).toUpperCase();
+  document.getElementById('epName').textContent=s.full_name||'—';
+  document.getElementById('epRole').textContent=(s.role||'').replace(/_/g,' ')+' · '+s.staff_code;
+  showEpTab('home');
+}
+
+function epLogout() {
+  localStorage.removeItem('ep_token'); localStorage.removeItem('ep_staff');
+  _epStaff=null; _epToken=null; _epData={};
+  document.getElementById('login').style.display='flex';
+  document.getElementById('portal').style.display='none';
+  document.getElementById('epCode').value='';
+  document.getElementById('epPin').value='';
+}
+
+function showEpTab(tab) {
+  document.querySelectorAll('.ep-tab').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.ep-tab').forEach(b=>{ if(b.onclick?.toString().includes("'"+tab+"'")) b.classList.add('active'); });
+  const c=document.getElementById('epContent');
+  c.innerHTML='<div class="ep-empty">⏳ Loading...</div>';
+  renderEpTab(tab);
+}
+
+async function renderEpTab(tab) {
+  const s=_epStaff; const c=document.getElementById('epContent');
+  if(!s){c.innerHTML='<div class="ep-empty">Please sign in</div>';return;}
+  try {
+    switch(tab) {
+      case 'home': await renderHome(c,s); break;
+      case 'attendance': await renderAttendance(c,s); break;
+      case 'pay': await renderPay(c,s); break;
+      case 'leave': await renderLeave(c,s); break;
+      case 'profile': renderProfile(c,s); break;
+    }
+  } catch(e){ c.innerHTML='<div class="ep-empty">⚠️ '+e.message+'</div>'; }
+}
+
+async function post(action,extra){
+  return fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({action,userId:_epStaff?.staff_code,...extra})}).then(r=>r.json()).catch(()=>({ok:false}));
+}
+
+async function renderHome(c,s) {
+  const rate=s.daily_rate?'₱'+parseFloat(s.daily_rate).toLocaleString('en-PH',{minimumFractionDigits:2})+'/day':'—';
+  const now=new Date();
+  c.innerHTML=`
+    <div class="ep-section">
+      <div style="font-size:1.1rem;font-weight:700;margin-bottom:4px">Good ${now.getHours()<12?'morning':now.getHours()<17?'afternoon':'evening'}, ${(s.full_name||'').split(' ')[0]}! 👋</div>
+      <div style="font-size:.78rem;color:#6b7280;margin-bottom:18px">${now.toLocaleDateString('en-PH',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</div>
+      <button class="ep-clockin-btn" onclick="window.location='/clockin?staff=${s.staff_code}'">⏱ Clock In / Out</button>
+    </div>
+    <div class="ep-section">
+      <div class="ep-section-title">Quick Info</div>
+      <div class="ep-grid2">
+        <div class="ep-field"><div class="ep-field-label">Daily Rate</div><div class="ep-field-value">${rate}</div></div>
+        <div class="ep-field"><div class="ep-field-label">Status</div><div class="ep-field-value" style="color:#166534">${s.employment_status||'ACTIVE'}</div></div>
+        <div class="ep-field"><div class="ep-field-label">Role</div><div class="ep-field-value">${(s.role||'').replace(/_/g,' ')}</div></div>
+        <div class="ep-field"><div class="ep-field-label">Staff Code</div><div class="ep-field-value">${s.staff_code||'—'}</div></div>
+      </div>
+    </div>`;
+}
+
+async function renderAttendance(c,s) {
+  const r=await post('getHRTimeLogs',{staffId:s.id,limit:30});
+  const logs=r.logs||[];
+  const EC={CLOCK_IN:'ci-in',CLOCK_OUT:'ci-out',BREAK_START:'ci-break',BREAK_END:'ci-break'};
+  c.innerHTML=`
+    <div class="ep-section">
+      <div class="ep-section-title">Time Logs — Last 30 events</div>
+      ${logs.length===0?'<div class="ep-empty">No attendance records yet.</div>':
+        logs.map(l=>{
+          const t=l.event_time?new Date(l.event_time).toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'}):'—';
+          const d=l.log_date?new Date(l.log_date+'T00:00').toLocaleDateString('en-PH',{month:'short',day:'numeric'}):'—';
+          return `<div class="ep-row">
+            <div><span class="ep-event-badge ${EC[l.event_type]||'ci-break'}">${(l.event_type||'').replace(/_/g,' ')}</span></div>
+            <div style="color:#6b7280;font-size:.75rem">${d} · ${t}</div>
+          </div>`;
+        }).join('')
+      }
+    </div>`;
+}
+
+async function renderPay(c,s) {
+  const rate=parseFloat(s.daily_rate||0);
+  const monthly=rate*26;
+  c.innerHTML=`
+    <div class="ep-section">
+      <div class="ep-pay-card">
+        <div class="ep-pay-label">Daily Rate</div>
+        <div class="ep-pay-amount">₱${rate.toLocaleString('en-PH',{minimumFractionDigits:2})}</div>
+        <div class="ep-pay-sub">Est. monthly (26 days): ₱${monthly.toLocaleString('en-PH',{minimumFractionDigits:2})}</div>
+      </div>
+      <div class="ep-grid2">
+        <div class="ep-field"><div class="ep-field-label">Pay basis</div><div class="ep-field-value">${s.pay_basis||'DAILY'}</div></div>
+        <div class="ep-field"><div class="ep-field-label">Pay schedule</div><div class="ep-field-value">Semi-monthly</div></div>
+        <div class="ep-field"><div class="ep-field-label">1st-15th paid on</div><div class="ep-field-value">25th of month</div></div>
+        <div class="ep-field"><div class="ep-field-label">16th-end paid on</div><div class="ep-field-value">10th of next month</div></div>
+      </div>
+    </div>
+    <div class="ep-section">
+      <div class="ep-section-title">Payslips</div>
+      <div class="ep-empty">No payslips generated yet.</div>
+    </div>`;
+}
+
+async function renderLeave(c,s) {
+  const r=await post('getHRLeave',{staffId:s.id});
+  const bals=r.balances||[]; const reqs=r.requests||[];
+  const TYPES=['VACATION','SICK','EMERGENCY','BIRTHDAY'];
+  c.innerHTML=`
+    <div class="ep-section">
+      <div class="ep-section-title">Leave Balances</div>
+      <div class="ep-leave-grid">
+        ${TYPES.map(t=>{
+          const b=bals.find(x=>x.leave_type===t);
+          const rem=b?parseFloat(b.entitled_days)-parseFloat(b.used_days):0;
+          return `<div class="ep-leave-card">
+            <div class="ep-leave-type">${t}</div>
+            <div class="ep-leave-days" style="color:${rem>0?'#166534':'#dc2626'}">${rem}</div>
+            <div class="ep-leave-sub">days remaining</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+    <div class="ep-section">
+      <div class="ep-section-title">Leave History</div>
+      ${reqs.length===0?'<div class="ep-empty">No leave requests on file.</div>':
+        reqs.map(r=>{
+          const sc={PENDING:{b:'#fef9c3',f:'#854d0e'},APPROVED:{b:'#dcfce7',f:'#166534'},REJECTED:{b:'#fee2e2',f:'#991b1b'}};
+          const s2=sc[r.status]||sc.PENDING;
+          return `<div class="ep-row">
+            <div><div style="font-weight:600;font-size:.83rem">${r.leave_type}</div>
+              <div style="font-size:.7rem;color:#6b7280">${r.start_date} → ${r.end_date} (${r.number_of_days}d)</div>
+            </div>
+            <span class="ep-badge" style="background:${s2.b};color:${s2.f}">${r.status}</span>
+          </div>`;
+        }).join('')
+      }
+    </div>`;
+}
+
+function renderProfile(c,s) {
+  c.innerHTML=`
+    <div class="ep-section">
+      <div class="ep-section-title">My Profile</div>
+      <div class="ep-grid2">
+        <div class="ep-field"><div class="ep-field-label">Full name</div><div class="ep-field-value">${s.full_name||'—'}</div></div>
+        <div class="ep-field"><div class="ep-field-label">Staff code</div><div class="ep-field-value">${s.staff_code||'—'}</div></div>
+        <div class="ep-field"><div class="ep-field-label">Role</div><div class="ep-field-value">${(s.role||'').replace(/_/g,' ')}</div></div>
+        <div class="ep-field"><div class="ep-field-label">Employment</div><div class="ep-field-value">${(s.employment_type||'').replace(/_/g,' ')}</div></div>
+        <div class="ep-field"><div class="ep-field-label">Mobile</div><div class="ep-field-value">${s.mobile||'—'}</div></div>
+        <div class="ep-field"><div class="ep-field-label">Email</div><div class="ep-field-value">${s.email||'—'}</div></div>
+        <div class="ep-field"><div class="ep-field-label">Payout</div><div class="ep-field-value">${s.payout_method||'—'}</div></div>
+        <div class="ep-field"><div class="ep-field-label">Hired</div><div class="ep-field-value">${s.date_hired||'—'}</div></div>
+      </div>
+      <div style="margin-top:12px;font-size:.73rem;color:#6b7280">To update your info, request a change through your manager.</div>
+    </div>`;
+}
+
+// ── Auto-login from localStorage ──────────────────────────────────────────
+(function(){
+  const t=localStorage.getItem('ep_token');
+  const s=localStorage.getItem('ep_staff');
+  if(t&&s){try{_epToken=t;_epStaff=JSON.parse(s);showPortal();}catch(e){}}
+})();
+</script>
+</body>
+</html>

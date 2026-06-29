@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>YANI Clock In/Out</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f1f18;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;color:#fff}
+.logo-wrap{text-align:center;margin-bottom:28px}
+.logo-wrap img{width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,.15)}
+.logo-title{font-size:1.1rem;font-weight:700;margin-top:10px;color:#a8d8a8;letter-spacing:.02em}
+.logo-sub{font-size:.75rem;color:rgba(255,255,255,.4);margin-top:3px}
+.card{background:#1a2e22;border-radius:20px;padding:28px 24px;width:100%;max-width:360px;border:1px solid rgba(255,255,255,.08)}
+.step{display:none}.step.active{display:block}
+/* Step 1: scan/manual */
+.method-btns{display:grid;gap:10px;margin-top:4px}
+.method-btn{padding:16px;border-radius:14px;border:1.5px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#fff;font-size:.95rem;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:12px;transition:all .15s}
+.method-btn:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.25)}
+.method-btn .icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0}
+.method-btn .lbl{text-align:left}
+.method-btn .lbl span{display:block;font-size:.72rem;font-weight:400;color:rgba(255,255,255,.5);margin-top:1px}
+/* Step 2: camera / manual entry */
+#videoWrap{position:relative;width:100%;aspect-ratio:1;border-radius:14px;overflow:hidden;background:#000;margin-bottom:16px}
+#videoEl{width:100%;height:100%;object-fit:cover}
+.scan-frame{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.scan-box{width:65%;aspect-ratio:1;border:2.5px solid #4ade80;border-radius:14px;box-shadow:0 0 0 1000px rgba(0,0,0,.4)}
+.scan-hint{text-align:center;font-size:.78rem;color:rgba(255,255,255,.5);margin-bottom:16px}
+/* Step 3: manual code */
+.field-label{font-size:.72rem;font-weight:700;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.06em;margin-bottom:7px}
+input.ci-input{width:100%;padding:13px 14px;border-radius:12px;border:1.5px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:#fff;font-size:1rem;outline:none;letter-spacing:.1em;text-align:center}
+input.ci-input:focus{border-color:#4ade80}
+input.ci-input::placeholder{color:rgba(255,255,255,.25);letter-spacing:0}
+/* PIN pad */
+.staff-card{display:flex;align-items:center;gap:12px;padding:12px;background:rgba(255,255,255,.06);border-radius:12px;margin-bottom:18px}
+.staff-avatar{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1rem;font-weight:700;background:#2d5a3d;color:#a8d8a8;flex-shrink:0}
+.staff-name{font-size:.92rem;font-weight:700}
+.staff-role{font-size:.72rem;color:rgba(255,255,255,.5);margin-top:1px}
+.pin-dots{display:flex;gap:10px;justify-content:center;margin:16px 0}
+.pin-dot{width:14px;height:14px;border-radius:50%;border:2px solid rgba(255,255,255,.3);transition:all .1s}
+.pin-dot.filled{background:#4ade80;border-color:#4ade80}
+.pin-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:4px}
+.pin-btn{padding:16px 10px;border-radius:12px;border:1.5px solid rgba(255,255,255,.1);background:rgba(255,255,255,.06);color:#fff;font-size:1.2rem;font-weight:600;cursor:pointer;text-align:center;transition:all .1s;user-select:none}
+.pin-btn:active{background:rgba(255,255,255,.15);transform:scale(.96)}
+.pin-btn.del{font-size:.9rem;color:rgba(255,255,255,.5)}
+.pin-btn.wide{grid-column:span 3;background:rgba(74,222,128,.12);border-color:rgba(74,222,128,.3);color:#4ade80}
+/* Step 5: success */
+.success-icon{width:72px;height:72px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:2rem;margin:0 auto 16px}
+.ci-btn{width:100%;padding:14px;border-radius:12px;border:none;font-size:.9rem;font-weight:700;cursor:pointer;margin-top:10px;transition:all .15s}
+.ci-btn-primary{background:#4ade80;color:#0f1f18}
+.ci-btn-secondary{background:rgba(255,255,255,.08);color:#fff;border:1.5px solid rgba(255,255,255,.15)}
+.back-link{text-align:center;margin-top:16px}
+.back-link a{color:rgba(255,255,255,.4);font-size:.78rem;text-decoration:none;cursor:pointer}
+.step-title{font-size:1rem;font-weight:700;margin-bottom:5px}
+.step-sub{font-size:.78rem;color:rgba(255,255,255,.45);margin-bottom:18px}
+.error-msg{background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:10px 12px;font-size:.8rem;color:#fca5a5;margin-top:12px;text-align:center;display:none}
+</style>
+</head>
+<body>
+<div class="logo-wrap">
+  <img src="https://hnynvclpvfxzlfjphefj.supabase.co/storage/v1/object/public/card-assets/fathers-day-logo.png"
+       onerror="this.style.display='none'" alt="">
+  <div class="logo-title">YANI Garden Cafe</div>
+  <div class="logo-sub">Employee Time Tracking</div>
+</div>
+
+<div class="card">
+  <!-- STEP 1: Choose method -->
+  <div class="step active" id="step1">
+    <div class="step-title">Clock In / Out</div>
+    <div class="step-sub">How would you like to log your time?</div>
+    <div class="method-btns">
+      <button class="method-btn" onclick="startScan()">
+        <div class="icon" style="background:rgba(74,222,128,.15)">📷</div>
+        <div class="lbl">Scan QR Code<span>Point camera at your employee QR</span></div>
+      </button>
+      <button class="method-btn" onclick="showManual()">
+        <div class="icon" style="background:rgba(99,102,241,.15)">⌨️</div>
+        <div class="lbl">Enter Staff Code<span>Type USR_001 or your name</span></div>
+      </button>
+    </div>
+  </div>
+
+  <!-- STEP 2: QR Scanner -->
+  <div class="step" id="step2">
+    <div class="step-title">Scan Your QR Code</div>
+    <div id="videoWrap">
+      <video id="videoEl" playsinline autoplay muted></video>
+      <canvas id="snapCanvas" style="display:none"></canvas>
+      <div class="scan-frame"><div class="scan-box"></div></div>
+    </div>
+    <div class="scan-hint">Hold QR code steady inside the green box</div>
+    <div class="error-msg" id="scanErr"></div>
+    <div class="back-link"><a onclick="backTo('step1')">← Back</a></div>
+  </div>
+
+  <!-- STEP 3: Manual entry -->
+  <div class="step" id="step3">
+    <div class="step-title">Enter Staff Code</div>
+    <div class="step-sub">Type your staff code (e.g. USR_001)</div>
+    <div class="field-label">Staff Code</div>
+    <input id="manualCode" class="ci-input" placeholder="USR_001" autocomplete="off" autocorrect="off" autocapitalize="characters" oninput="this.value=this.value.toUpperCase()">
+    <div class="error-msg" id="manualErr"></div>
+    <button class="ci-btn ci-btn-primary" style="margin-top:16px" onclick="lookupStaff(document.getElementById('manualCode').value)">Continue →</button>
+    <div class="back-link"><a onclick="backTo('step1')">← Back</a></div>
+  </div>
+
+  <!-- STEP 4: PIN entry -->
+  <div class="step" id="step4">
+    <div class="staff-card" id="staffCard">
+      <div class="staff-avatar" id="staffAvatar">?</div>
+      <div><div class="staff-name" id="staffName">Loading...</div><div class="staff-role" id="staffRole"></div></div>
+    </div>
+    <div class="field-label">Enter PIN</div>
+    <div class="pin-dots" id="pinDots">
+      <div class="pin-dot" id="d0"></div>
+      <div class="pin-dot" id="d1"></div>
+      <div class="pin-dot" id="d2"></div>
+      <div class="pin-dot" id="d3"></div>
+    </div>
+    <div class="error-msg" id="pinErr"></div>
+    <div class="pin-pad">
+      ${[1,2,3,4,5,6,7,8,9].map(n=>`<button class="pin-btn" onclick="pinPress('${n}')">${n}</button>`).join('')}
+      <button class="pin-btn del" onclick="pinDel()">⌫</button>
+      <button class="pin-btn" onclick="pinPress('0')">0</button>
+      <button class="pin-btn del" onclick="clearPin()">✕</button>
+    </div>
+    <div class="back-link" style="margin-top:14px"><a onclick="backTo('step1')">← Start over</a></div>
+  </div>
+
+  <!-- STEP 5: Choose event -->
+  <div class="step" id="step5">
+    <div class="step-title" style="text-align:center;margin-bottom:20px">What are you doing?</div>
+    <div class="method-btns">
+      <button class="method-btn" onclick="doClockEvent('CLOCK_IN')">
+        <div class="icon" style="background:rgba(74,222,128,.15)">✅</div>
+        <div class="lbl">Clock In<span>Start of shift</span></div>
+      </button>
+      <button class="method-btn" onclick="doClockEvent('CLOCK_OUT')">
+        <div class="icon" style="background:rgba(239,68,68,.15)">🚪</div>
+        <div class="lbl">Clock Out<span>End of shift</span></div>
+      </button>
+      <button class="method-btn" onclick="doClockEvent('BREAK_START')">
+        <div class="icon" style="background:rgba(251,191,36,.15)">☕</div>
+        <div class="lbl">Break Start<span>Taking a break</span></div>
+      </button>
+      <button class="method-btn" onclick="doClockEvent('BREAK_END')">
+        <div class="icon" style="background:rgba(99,102,241,.15)">🔄</div>
+        <div class="lbl">Break End<span>Back to work</span></div>
+      </button>
+    </div>
+    <div class="back-link" style="margin-top:14px"><a onclick="backTo('step1')">← Start over</a></div>
+  </div>
+
+  <!-- STEP 6: Success/Done -->
+  <div class="step" id="step6">
+    <div style="text-align:center;padding:10px 0">
+      <div class="success-icon" id="doneIcon">✅</div>
+      <div style="font-size:1.2rem;font-weight:700;margin-bottom:6px" id="doneTitle">Logged!</div>
+      <div style="font-size:.85rem;color:rgba(255,255,255,.6);margin-bottom:4px" id="doneName"></div>
+      <div style="font-size:.78rem;color:rgba(255,255,255,.4)" id="doneTime"></div>
+    </div>
+    <button class="ci-btn ci-btn-primary" style="margin-top:24px" onclick="reset()">Done</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+<script>
+const API = '/api/pos';
+const TENANT = '11111111-1111-4111-8111-111111111111';
+let _staff = null, _pin = '', _stream = null, _scanTimer = null;
+
+const ROLE_COLORS = {
+  MANAGER:'#1e3a5f',BARISTA:'#7c2d12',CASHIER:'#78350f',
+  KITCHEN:'#7f1d1d',TRAINEE:'#7c3aed',STAFF:'#374151',OWNER:'#1a3a2a'
+};
+
+function showStep(id) {
+  document.querySelectorAll('.step').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+function backTo(id) {
+  stopScan();
+  _pin=''; _staff=null;
+  updateDots();
+  showStep(id);
+}
+function showErr(id,msg){ const el=document.getElementById(id); el.textContent=msg; el.style.display='block'; setTimeout(()=>el.style.display='none',3000); }
+
+// ── QR SCAN ───────────────────────────────────────────────────────────────
+async function startScan() {
+  showStep('step2');
+  try {
+    _stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+    const v = document.getElementById('videoEl');
+    v.srcObject = _stream;
+    await v.play();
+    scanLoop();
+  } catch(e) {
+    showErr('scanErr','Camera not available — use manual entry instead');
+    setTimeout(()=>showManual(),2000);
+  }
+}
+function scanLoop() {
+  const v=document.getElementById('videoEl');
+  const c=document.getElementById('snapCanvas');
+  if(!v.videoWidth){ _scanTimer=setTimeout(scanLoop,200); return; }
+  c.width=v.videoWidth; c.height=v.videoHeight;
+  const ctx=c.getContext('2d');
+  ctx.drawImage(v,0,0);
+  const img=ctx.getImageData(0,0,c.width,c.height);
+  const code=jsQR(img.data,img.width,img.height,{inversionAttempts:'dontInvert'});
+  if(code && code.data.startsWith('YANI-CLOCKIN:')) {
+    stopScan();
+    const staffCode=code.data.replace('YANI-CLOCKIN:','');
+    lookupStaff(staffCode);
+  } else {
+    _scanTimer=setTimeout(scanLoop,200);
+  }
+}
+function stopScan() {
+  clearTimeout(_scanTimer);
+  if(_stream){ _stream.getTracks().forEach(t=>t.stop()); _stream=null; }
+}
+
+// ── MANUAL ENTRY ──────────────────────────────────────────────────────────
+function showManual() { stopScan(); showStep('step3'); setTimeout(()=>document.getElementById('manualCode').focus(),100); }
+
+async function lookupStaff(code) {
+  if(!code) return;
+  const r = await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({action:'hrLookupStaff',staffCode:code.trim().toUpperCase()})}).then(r=>r.json()).catch(()=>({ok:false}));
+  if(!r.ok||!r.staff){ showErr('manualErr','Staff not found: '+code); return; }
+  _staff=r.staff; _pin='';
+  // Show staff card
+  const role=_staff.role||'STAFF';
+  const color=ROLE_COLORS[role]||'#374151';
+  document.getElementById('staffAvatar').textContent=(_staff.full_name||'?').charAt(0).toUpperCase();
+  document.getElementById('staffAvatar').style.background=color;
+  document.getElementById('staffName').textContent=_staff.full_name||'—';
+  document.getElementById('staffRole').textContent=role.replace(/_/g,' ')+' · '+_staff.staff_code;
+  updateDots();
+  showStep('step4');
+}
+
+// ── PIN PAD ───────────────────────────────────────────────────────────────
+function pinPress(d) {
+  if(_pin.length>=4) return;
+  _pin+=d;
+  updateDots();
+  if(_pin.length===4) setTimeout(verifyPin,200);
+}
+function pinDel() { _pin=_pin.slice(0,-1); updateDots(); }
+function clearPin() { _pin=''; updateDots(); }
+function updateDots() {
+  for(var i=0;i<4;i++){
+    document.getElementById('d'+i).classList.toggle('filled',i<_pin.length);
+  }
+}
+async function verifyPin() {
+  document.getElementById('pinErr').style.display='none';
+  const r = await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({action:'hrVerifyPin',staffCode:_staff.staff_code,pin:_pin})}).then(r=>r.json()).catch(()=>({ok:false}));
+  if(!r.ok){ showErr('pinErr','Incorrect PIN. Try again.'); _pin=''; updateDots(); return; }
+  showStep('step5');
+}
+
+// ── CLOCK EVENT ───────────────────────────────────────────────────────────
+const EVENT_LABELS={CLOCK_IN:'Clocked In ✅',CLOCK_OUT:'Clocked Out 🚪',BREAK_START:'Break Started ☕',BREAK_END:'Back from Break 🔄'};
+const EVENT_ICONS={CLOCK_IN:'✅',CLOCK_OUT:'🚪',BREAK_START:'☕',BREAK_END:'🔄'};
+const EVENT_COLORS={CLOCK_IN:'#4ade80',CLOCK_OUT:'#f87171',BREAK_START:'#fbbf24',BREAK_END:'#818cf8'};
+
+async function doClockEvent(type) {
+  const r = await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({action:'hrClockEvent',staffCode:_staff.staff_code,eventType:type,pin:_pin})}).then(r=>r.json()).catch(()=>({ok:false}));
+  if(!r.ok){ alert('Error: '+(r.error||'Failed to record')); return; }
+  document.getElementById('doneIcon').textContent=EVENT_ICONS[type]||'✅';
+  document.getElementById('doneIcon').style.background=EVENT_COLORS[type]+'22';
+  document.getElementById('doneTitle').textContent=EVENT_LABELS[type]||'Done';
+  document.getElementById('doneName').textContent=_staff.full_name||'';
+  document.getElementById('doneTime').textContent=new Date().toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit',hour12:true})+' · '+new Date().toLocaleDateString('en-PH',{weekday:'long',month:'short',day:'numeric'});
+  showStep('step6');
+  // Auto reset after 5s
+  setTimeout(reset,5000);
+}
+
+function reset() { stopScan(); _staff=null; _pin=''; updateDots(); showStep('step1'); }
+
+// Pre-fill from URL param (QR scan via external scanner)
+const params=new URLSearchParams(location.search);
+if(params.get('staff')) lookupStaff(params.get('staff'));
+</script>
+</body>
+</html>

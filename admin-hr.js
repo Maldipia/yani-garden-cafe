@@ -198,6 +198,7 @@ function renderHRDetail(s) {
         {k:'clock',    l:'⏱ Clock-in'},
         {k:'performance',l:'⭐ Performance'},
         {k:'documents',l:'📄 Documents'},
+        {k:'payroll',  l:'🧮 Payroll'},
       ].map(t=>`<button class="hr-tab${_hrActiveTab===t.k?' active':''}" onclick="switchHRTab('${s.id}','${t.k}')">${t.l}</button>`).join('')}
     </div>
     <div class="hr-tab-content" id="hrTabContent"><div class="hr-loading">Loading...</div></div>`;
@@ -226,6 +227,7 @@ async function loadHRTab(s,tab) {
       case 'clock':      await loadClockTab(s,tc); break;
       case 'performance':await loadPerformanceTab(s,tc); break;
       case 'documents':  await loadDocumentsTab(s,tc); break;
+      case 'payroll':    await loadPayrollTab(s,tc); break;
       default: tc.innerHTML='<div class="hr-empty-sm">Coming soon</div>';
     }
   } catch(e) { tc.innerHTML=`<div class="hr-error">⚠️ ${esc(e.message)}</div>`; }
@@ -715,6 +717,63 @@ function renderScheduleTab(s) {
         </div>`).join('')}
       </div>
       <div class="hr-empty-sm" style="margin-top:12px">No schedule set. <button class="hr-link-btn">+ Create schedule</button></div>
+    </div>`;
+}
+
+// ── PAYROLL TAB ───────────────────────────────────────────────────────────
+async function loadPayrollTab(s,tc) {
+  const [h13, hols] = await Promise.all([
+    api('hrCompute13thMonth', {userId:currentUser?.userId, year:new Date().getFullYear()}),
+    api('hrGetHolidays', {userId:currentUser?.userId, year:new Date().getFullYear()})
+  ]);
+
+  const my13 = (h13.records||[]).find(r=>r.staff_id===s.id);
+  const holidays = hols.holidays||[];
+
+  tc.innerHTML = `
+    <div class="hr-section">
+      <div class="hr-section-title">🎄 13th Month Pay (${new Date().getFullYear()})</div>
+      <div class="hr-pay-card" style="margin-bottom:10px">
+        <div class="hr-pay-label">ESTIMATED 13TH MONTH</div>
+        <div class="hr-pay-amount">${my13 ? hrPeso(my13.thirteenth_month_pay) : '—'}</div>
+        <div class="hr-pay-sub">${my13 ? 'Based on ₱'+parseFloat(my13.daily_rate).toLocaleString('en-PH')+'/day × 26 days ÷ 12' : 'Set daily rate to compute'}</div>
+      </div>
+      <div style="font-size:.72rem;color:#6b7280;padding:8px 0">
+        ⚖️ Per RA 8187: 13th month = Total basic salary paid for the year ÷ 12. Must be paid on or before Dec 24.
+      </div>
+    </div>
+
+    <div class="hr-section">
+      <div class="hr-section-title">📋 Government Deductions (2026 estimates)</div>
+      <div class="hr-list-table">
+        <div class="hr-table-hdr" style="grid-template-columns:2fr 1fr 1fr 1fr"><span>Contribution</span><span class="r">Employee</span><span class="r">Employer</span><span class="r">Total</span></div>
+        ${[
+          {n:'SSS',    ee:581.30, er:1208.70},
+          {n:'PhilHealth', ee:parseFloat(s.daily_rate||0)*26*0.025, er:parseFloat(s.daily_rate||0)*26*0.025},
+          {n:'PagIBIG', ee:100,   er:100},
+        ].map(g=>`<div class="hr-table-row" style="grid-template-columns:2fr 1fr 1fr 1fr">
+          <span style="font-weight:600">${g.n}</span>
+          <span class="r hr-red">${hrPeso(g.ee)}</span>
+          <span class="r" style="color:#6b7280">${hrPeso(g.er)}</span>
+          <span class="r">${hrPeso(g.ee+g.er)}</span>
+        </div>`).join('')}
+      </div>
+      <div style="font-size:.7rem;color:#6b7280;margin-top:8px">* SSS based on standard bracket. PhilHealth at 5% of basic (shared equally). PagIBIG minimum ₱100 each.</div>
+    </div>
+
+    <div class="hr-section">
+      <div class="hr-section-title">📅 PH Holidays 2026 (${holidays.length} days)</div>
+      <div class="hr-list-table">
+        <div class="hr-table-hdr" style="grid-template-columns:1fr 2fr 1fr"><span>Date</span><span>Holiday</span><span class="r">Pay Rate</span></div>
+        ${holidays.map(h=>{
+          const isReg = h.holiday_type==='REGULAR_HOLIDAY';
+          return `<div class="hr-table-row" style="grid-template-columns:1fr 2fr 1fr">
+            <span class="hr-td-date">${hrDate(h.holiday_date)}</span>
+            <span style="font-weight:${isReg?700:400}">${esc(h.holiday_name)}</span>
+            <span class="r"><span class="hr-badge-sm" style="background:${isReg?'#fee2e2':'#fef9c3'};color:${isReg?'#991b1b':'#854d0e'}">${h.pay_multiplier}×</span></span>
+          </div>`;
+        }).join('')}
+      </div>
     </div>`;
 }
 
