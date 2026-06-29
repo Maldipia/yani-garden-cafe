@@ -2,323 +2,305 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>YANI Clock In/Out</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f1f18;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;color:#fff}
-.logo-wrap{text-align:center;margin-bottom:28px}
-.logo-wrap img{width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,.15)}
-.logo-title{font-size:1.1rem;font-weight:700;margin-top:10px;color:#a8d8a8;letter-spacing:.02em}
-.logo-sub{font-size:.75rem;color:rgba(255,255,255,.4);margin-top:3px}
-.card{background:#1a2e22;border-radius:20px;padding:28px 24px;width:100%;max-width:360px;border:1px solid rgba(255,255,255,.08)}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f1f18;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;color:#fff}
+.logo{text-align:center;margin-bottom:24px}
+.logo img{width:60px;height:60px;border-radius:50%;border:2px solid rgba(255,255,255,.15)}
+.logo h1{font-size:1rem;font-weight:700;color:#a8d8a8;margin-top:8px}
+.logo p{font-size:.72rem;color:rgba(255,255,255,.35);margin-top:2px}
+.card{background:#1a2e22;border-radius:18px;padding:24px 20px;width:100%;max-width:340px;border:1px solid rgba(255,255,255,.07)}
 .step{display:none}.step.active{display:block}
-/* Step 1: scan/manual */
-.method-btns{display:grid;gap:10px;margin-top:4px}
-.method-btn{padding:16px;border-radius:14px;border:1.5px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#fff;font-size:.95rem;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:12px;transition:all .15s}
-.method-btn:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.25)}
-.method-btn .icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0}
-.method-btn .lbl{text-align:left}
-.method-btn .lbl span{display:block;font-size:.72rem;font-weight:400;color:rgba(255,255,255,.5);margin-top:1px}
-/* Step 2: camera / manual entry */
-#videoWrap{position:relative;width:100%;aspect-ratio:1;border-radius:14px;overflow:hidden;background:#000;margin-bottom:16px}
+.step-title{font-size:.95rem;font-weight:700;margin-bottom:4px}
+.step-sub{font-size:.75rem;color:rgba(255,255,255,.4);margin-bottom:16px;line-height:1.5}
+/* Method buttons */
+.methods{display:grid;gap:9px}
+.method-btn{display:flex;align-items:center;gap:12px;padding:14px;border-radius:12px;border:1.5px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:#fff;font-size:.88rem;font-weight:600;cursor:pointer;width:100%;text-align:left;transition:background .12s}
+.method-btn:active{background:rgba(255,255,255,.12)}
+.method-icon{width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0}
+.method-sub{font-size:.68rem;font-weight:400;color:rgba(255,255,255,.4);margin-top:1px}
+/* Camera */
+#videoWrap{position:relative;width:100%;aspect-ratio:1;border-radius:12px;overflow:hidden;background:#000;margin-bottom:12px}
 #videoEl{width:100%;height:100%;object-fit:cover}
-.scan-frame{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
-.scan-box{width:65%;aspect-ratio:1;border:2.5px solid #4ade80;border-radius:14px;box-shadow:0 0 0 1000px rgba(0,0,0,.4)}
-.scan-hint{text-align:center;font-size:.78rem;color:rgba(255,255,255,.5);margin-bottom:16px}
-/* Step 3: manual code */
-.field-label{font-size:.72rem;font-weight:700;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.06em;margin-bottom:7px}
-input.ci-input{width:100%;padding:13px 14px;border-radius:12px;border:1.5px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:#fff;font-size:1rem;outline:none;letter-spacing:.1em;text-align:center}
-input.ci-input:focus{border-color:#4ade80}
-input.ci-input::placeholder{color:rgba(255,255,255,.25);letter-spacing:0}
+.scan-box{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.scan-box-inner{width:60%;aspect-ratio:1;border:2.5px solid #4ade80;border-radius:12px;box-shadow:0 0 0 9999px rgba(0,0,0,.45)}
+.scan-hint{font-size:.72rem;color:rgba(255,255,255,.4);text-align:center;margin-bottom:12px}
+/* Input */
+.field-label{font-size:.68rem;font-weight:700;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+.ci-input{width:100%;padding:12px 14px;border-radius:11px;border:1.5px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);color:#fff;font-size:1rem;outline:none;letter-spacing:.06em}
+.ci-input:focus{border-color:#4ade80}
+.ci-input::placeholder{color:rgba(255,255,255,.2);letter-spacing:0}
+/* Staff card */
+.staff-preview{display:flex;align-items:center;gap:11px;padding:11px 13px;background:rgba(255,255,255,.06);border-radius:11px;margin-bottom:16px;border:1px solid rgba(255,255,255,.08)}
+.staff-av{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.95rem;font-weight:700;background:#2d5a3d;color:#a8d8a8;flex-shrink:0}
+.staff-nm{font-size:.88rem;font-weight:700;color:#fff}
+.staff-rl{font-size:.68rem;color:rgba(255,255,255,.45);margin-top:1px}
+/* PIN dots */
+.pin-dots{display:flex;gap:12px;justify-content:center;margin-bottom:18px}
+.pdot{width:14px;height:14px;border-radius:50%;border:2px solid rgba(255,255,255,.25);transition:all .12s;background:transparent}
+.pdot.on{background:#4ade80;border-color:#4ade80;transform:scale(1.1)}
 /* PIN pad */
-.staff-card{display:flex;align-items:center;gap:12px;padding:12px;background:rgba(255,255,255,.06);border-radius:12px;margin-bottom:18px}
-.staff-avatar{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1rem;font-weight:700;background:#2d5a3d;color:#a8d8a8;flex-shrink:0}
-.staff-name{font-size:.92rem;font-weight:700}
-.staff-role{font-size:.72rem;color:rgba(255,255,255,.5);margin-top:1px}
-.pin-dots{display:flex;gap:10px;justify-content:center;margin:16px 0}
-.pin-dot{width:14px;height:14px;border-radius:50%;border:2px solid rgba(255,255,255,.3);transition:all .1s}
-.pin-dot.filled{background:#4ade80;border-color:#4ade80}
-.pin-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:4px}
-.pin-btn{padding:16px 10px;border-radius:12px;border:1.5px solid rgba(255,255,255,.1);background:rgba(255,255,255,.06);color:#fff;font-size:1.2rem;font-weight:600;cursor:pointer;text-align:center;transition:all .1s;user-select:none}
-.pin-btn:active{background:rgba(255,255,255,.15);transform:scale(.96)}
-.pin-btn.del{font-size:.9rem;color:rgba(255,255,255,.5)}
-.pin-btn.wide{grid-column:span 3;background:rgba(74,222,128,.12);border-color:rgba(74,222,128,.3);color:#4ade80}
-/* Step 5: success */
-.success-icon{width:72px;height:72px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:2rem;margin:0 auto 16px}
-.ci-btn{width:100%;padding:14px;border-radius:12px;border:none;font-size:.9rem;font-weight:700;cursor:pointer;margin-top:10px;transition:all .15s}
-.ci-btn-primary{background:#4ade80;color:#0f1f18}
-.ci-btn-secondary{background:rgba(255,255,255,.08);color:#fff;border:1.5px solid rgba(255,255,255,.15)}
-.back-link{text-align:center;margin-top:16px}
-.back-link a{color:rgba(255,255,255,.4);font-size:.78rem;text-decoration:none;cursor:pointer}
-.step-title{font-size:1rem;font-weight:700;margin-bottom:5px}
-.step-sub{font-size:.78rem;color:rgba(255,255,255,.45);margin-bottom:18px}
-.error-msg{background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:10px 12px;font-size:.8rem;color:#fca5a5;margin-top:12px;text-align:center;display:none}
+.pin-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+.pkey{padding:15px 8px;border-radius:11px;border:1.5px solid rgba(255,255,255,.09);background:rgba(255,255,255,.05);color:#fff;font-size:1.15rem;font-weight:600;cursor:pointer;text-align:center;transition:all .1s;user-select:none}
+.pkey:active{background:rgba(255,255,255,.16);transform:scale(.95)}
+.pkey.sym{font-size:.85rem;color:rgba(255,255,255,.45)}
+/* Event buttons */
+.events{display:grid;gap:8px}
+.ev-btn{display:flex;align-items:center;gap:11px;padding:13px;border-radius:12px;border:1.5px solid rgba(255,255,255,.09);background:rgba(255,255,255,.04);color:#fff;font-size:.85rem;font-weight:600;cursor:pointer;width:100%;text-align:left;transition:background .12s}
+.ev-btn:active{background:rgba(255,255,255,.12)}
+.ev-icon{font-size:1.25rem;width:34px;text-align:center;flex-shrink:0}
+.ev-sub{font-size:.66rem;font-weight:400;color:rgba(255,255,255,.38);margin-top:1px}
+/* Success */
+.done-wrap{text-align:center;padding:8px 0}
+.done-icon{width:70px;height:70px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.9rem;margin:0 auto 14px;border:2px solid rgba(255,255,255,.1)}
+.done-title{font-size:1.15rem;font-weight:700;margin-bottom:5px}
+.done-name{font-size:.82rem;color:rgba(255,255,255,.55)}
+.done-time{font-size:.73rem;color:rgba(255,255,255,.35);margin-top:3px}
+/* Shared */
+.ci-btn{display:block;width:100%;padding:13px;border-radius:11px;border:none;font-size:.87rem;font-weight:700;cursor:pointer;text-align:center;margin-top:10px}
+.ci-primary{background:#4ade80;color:#0f1f18}
+.ci-secondary{background:rgba(255,255,255,.07);color:rgba(255,255,255,.7);border:1.5px solid rgba(255,255,255,.1)}
+.back{text-align:center;margin-top:14px}
+.back a{font-size:.73rem;color:rgba(255,255,255,.3);cursor:pointer;text-decoration:none}
+.back a:hover{color:rgba(255,255,255,.6)}
+.err{background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.25);border-radius:8px;padding:9px 12px;font-size:.75rem;color:#fca5a5;margin-top:10px;text-align:center;display:none}
+.info{background:rgba(234,179,8,.1);border:1px solid rgba(234,179,8,.2);border-radius:8px;padding:8px 12px;font-size:.7rem;color:#fde68a;margin-bottom:12px;line-height:1.5;display:none}
 </style>
 </head>
 <body>
-<div class="logo-wrap">
-  <img src="https://hnynvclpvfxzlfjphefj.supabase.co/storage/v1/object/public/card-assets/fathers-day-logo.png"
-       onerror="this.style.display='none'" alt="">
-  <div class="logo-title">YANI Garden Cafe</div>
-  <div class="logo-sub">Employee Time Tracking</div>
+
+<div class="logo">
+  <img src="https://hnynvclpvfxzlfjphefj.supabase.co/storage/v1/object/public/card-assets/fathers-day-logo.png" onerror="this.style.display='none'" alt="YANI">
+  <h1>YANI Garden Cafe</h1>
+  <p>Employee Time Tracker</p>
 </div>
 
 <div class="card">
-  <!-- STEP 1: Choose method -->
-  <div class="step active" id="step1">
+
+  <!-- STEP 1: Method -->
+  <div class="step active" id="s1">
     <div class="step-title">Clock In / Out</div>
-    <div class="step-sub">How would you like to log your time?</div>
-    <div style="font-size:.72rem;color:rgba(255,255,255,.3);text-align:center;margin-bottom:8px;line-height:1.5">Tip: QR scan requires camera permission.<br>If camera is blocked, use manual entry.</div>
-    <div class="method-btns">
+    <div class="step-sub">Choose how to identify yourself</div>
+    <div class="methods">
       <button class="method-btn" onclick="startScan()">
-        <div class="icon" style="background:rgba(74,222,128,.15)">📷</div>
-        <div class="lbl">Scan QR Code<span>Point camera at your employee QR</span></div>
+        <div class="method-icon" style="background:rgba(74,222,128,.12)">📷</div>
+        <div>Scan QR Code<div class="method-sub">Point camera at your employee QR</div></div>
       </button>
-      <button class="method-btn" onclick="showManual()">
-        <div class="icon" style="background:rgba(99,102,241,.15)">⌨️</div>
-        <div class="lbl">Enter Staff Code<span>Type USR_001 or your name</span></div>
+      <button class="method-btn" onclick="goManual()">
+        <div class="method-icon" style="background:rgba(99,102,241,.12)">⌨️</div>
+        <div>Enter Staff Code<div class="method-sub">Type your code manually (e.g. USR_001)</div></div>
       </button>
     </div>
   </div>
 
-  <!-- STEP 2: QR Scanner -->
-  <div class="step" id="step2">
+  <!-- STEP 2: Camera -->
+  <div class="step" id="s2">
     <div class="step-title">Scan Your QR Code</div>
-    <div style="font-size:.7rem;color:rgba(255,255,255,.3);margin-bottom:8px">If camera shows black screen on iPhone, try: Settings → Safari → Camera → Allow</div>
+    <div class="info" id="camInfo">📱 iPhone: Settings → Safari → Camera → Allow</div>
     <div id="videoWrap">
       <video id="videoEl" playsinline autoplay muted></video>
       <canvas id="snapCanvas" style="display:none"></canvas>
-      <div class="scan-frame"><div class="scan-box"></div></div>
+      <div class="scan-box"><div class="scan-box-inner"></div></div>
     </div>
-    <div class="scan-hint">Hold QR code steady inside the green box</div>
-    <div class="error-msg" id="scanErr"></div>
-    <button class="ci-btn ci-btn-secondary" style="margin-top:8px" onclick="showManual()">⌨️ Type staff code instead</button>
-    <div class="back-link"><a onclick="backTo('step1')">← Back</a></div>
+    <div class="scan-hint">Hold your QR code inside the green frame</div>
+    <div class="err" id="camErr"></div>
+    <button class="ci-btn ci-secondary" onclick="goManual()">⌨️ Enter code instead</button>
+    <div class="back"><a onclick="goBack('s1')">← Back</a></div>
   </div>
 
-  <!-- STEP 3: Manual entry -->
-  <div class="step" id="step3">
+  <!-- STEP 3: Manual code -->
+  <div class="step" id="s3">
     <div class="step-title">Enter Staff Code</div>
-    <div class="step-sub">Type your staff code (e.g. USR_001)</div>
+    <div class="step-sub">Type your staff code exactly as given</div>
     <div class="field-label">Staff Code</div>
-    <input id="manualCode" class="ci-input" placeholder="USR_001" autocomplete="off" autocorrect="off" autocapitalize="characters" oninput="this.value=this.value.toUpperCase()">
-    <div class="error-msg" id="manualErr"></div>
-    <button class="ci-btn ci-btn-primary" style="margin-top:16px" onclick="lookupStaff(document.getElementById('manualCode').value)">Continue →</button>
-    <div class="back-link"><a onclick="backTo('step1')">← Back</a></div>
+    <input id="codeInput" class="ci-input" placeholder="e.g. USR_001" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
+    <div class="err" id="codeErr"></div>
+    <button class="ci-btn ci-primary" style="margin-top:14px" onclick="lookupCode()">Continue →</button>
+    <div class="back"><a onclick="goBack('s1')">← Back</a></div>
   </div>
 
-  <!-- STEP 4: PIN entry -->
-  <div class="step" id="step4">
-    <div class="staff-card" id="staffCard">
-      <div class="staff-avatar" id="staffAvatar">?</div>
-      <div><div class="staff-name" id="staffName">Loading...</div><div class="staff-role" id="staffRole"></div></div>
+  <!-- STEP 4: PIN -->
+  <div class="step" id="s4">
+    <div class="staff-preview">
+      <div class="staff-av" id="pinAvatar">?</div>
+      <div>
+        <div class="staff-nm" id="pinName">Loading...</div>
+        <div class="staff-rl" id="pinRole"></div>
+      </div>
     </div>
-    <div class="field-label">Enter PIN</div>
-    <div class="pin-dots" id="pinDots">
-      <div class="pin-dot" id="d0"></div>
-      <div class="pin-dot" id="d1"></div>
-      <div class="pin-dot" id="d2"></div>
-      <div class="pin-dot" id="d3"></div>
+    <div class="field-label" style="text-align:center">Enter your 4-digit PIN</div>
+    <div class="pin-dots">
+      <div class="pdot" id="d0"></div>
+      <div class="pdot" id="d1"></div>
+      <div class="pdot" id="d2"></div>
+      <div class="pdot" id="d3"></div>
     </div>
-    <div class="error-msg" id="pinErr"></div>
+    <div class="err" id="pinErr"></div>
     <div class="pin-pad">
-      ${[1,2,3,4,5,6,7,8,9].map(n=>`<button class="pin-btn" onclick="pinPress('${n}')">${n}</button>`).join('')}
-      <button class="pin-btn del" onclick="pinDel()">⌫</button>
-      <button class="pin-btn" onclick="pinPress('0')">0</button>
-      <button class="pin-btn del" onclick="clearPin()">✕</button>
+      <button class="pkey" onclick="pk('1')">1</button>
+      <button class="pkey" onclick="pk('2')">2</button>
+      <button class="pkey" onclick="pk('3')">3</button>
+      <button class="pkey" onclick="pk('4')">4</button>
+      <button class="pkey" onclick="pk('5')">5</button>
+      <button class="pkey" onclick="pk('6')">6</button>
+      <button class="pkey" onclick="pk('7')">7</button>
+      <button class="pkey" onclick="pk('8')">8</button>
+      <button class="pkey" onclick="pk('9')">9</button>
+      <button class="pkey sym" onclick="pinClear()">✕</button>
+      <button class="pkey" onclick="pk('0')">0</button>
+      <button class="pkey sym" onclick="pinDel()">⌫</button>
     </div>
-    <div class="back-link" style="margin-top:14px"><a onclick="backTo('step1')">← Start over</a></div>
+    <div class="back" style="margin-top:14px"><a onclick="goBack('s1')">← Start over</a></div>
   </div>
 
   <!-- STEP 5: Choose event -->
-  <div class="step" id="step5">
-    <div class="step-title" style="text-align:center;margin-bottom:20px">What are you doing?</div>
-    <div class="method-btns">
-      <button class="method-btn" onclick="doClockEvent('CLOCK_IN')">
-        <div class="icon" style="background:rgba(74,222,128,.15)">✅</div>
-        <div class="lbl">Clock In<span>Start of shift</span></div>
+  <div class="step" id="s5">
+    <div class="step-title" style="text-align:center;margin-bottom:16px">What are you doing?</div>
+    <div class="events">
+      <button class="ev-btn" onclick="clockEvent('CLOCK_IN')">
+        <div class="ev-icon">✅</div>
+        <div>Clock In<div class="ev-sub">Start of shift</div></div>
       </button>
-      <button class="method-btn" onclick="doClockEvent('CLOCK_OUT')">
-        <div class="icon" style="background:rgba(239,68,68,.15)">🚪</div>
-        <div class="lbl">Clock Out<span>End of shift</span></div>
+      <button class="ev-btn" onclick="clockEvent('CLOCK_OUT')">
+        <div class="ev-icon">🚪</div>
+        <div>Clock Out<div class="ev-sub">End of shift</div></div>
       </button>
-      <button class="method-btn" onclick="doClockEvent('BREAK_START')">
-        <div class="icon" style="background:rgba(251,191,36,.15)">☕</div>
-        <div class="lbl">Break Start<span>Taking a break</span></div>
+      <button class="ev-btn" onclick="clockEvent('BREAK_START')">
+        <div class="ev-icon">☕</div>
+        <div>Break Start<div class="ev-sub">Taking a break</div></div>
       </button>
-      <button class="method-btn" onclick="doClockEvent('BREAK_END')">
-        <div class="icon" style="background:rgba(99,102,241,.15)">🔄</div>
-        <div class="lbl">Break End<span>Back to work</span></div>
+      <button class="ev-btn" onclick="clockEvent('BREAK_END')">
+        <div class="ev-icon">🔄</div>
+        <div>Break End<div class="ev-sub">Back to work</div></div>
       </button>
     </div>
-    <div class="back-link" style="margin-top:14px"><a onclick="backTo('step1')">← Start over</a></div>
+    <div class="err" id="evErr"></div>
+    <div class="back" style="margin-top:14px"><a onclick="goBack('s1')">← Start over</a></div>
   </div>
 
-  <!-- STEP 6: Success/Done -->
-  <div class="step" id="step6">
-    <div style="text-align:center;padding:10px 0">
-      <div class="success-icon" id="doneIcon">✅</div>
-      <div style="font-size:1.2rem;font-weight:700;margin-bottom:6px" id="doneTitle">Logged!</div>
-      <div style="font-size:.85rem;color:rgba(255,255,255,.6);margin-bottom:4px" id="doneName"></div>
-      <div style="font-size:.78rem;color:rgba(255,255,255,.4)" id="doneTime"></div>
+  <!-- STEP 6: Done -->
+  <div class="step" id="s6">
+    <div class="done-wrap">
+      <div class="done-icon" id="doneIcon">✅</div>
+      <div class="done-title" id="doneTitle">Recorded!</div>
+      <div class="done-name" id="doneName"></div>
+      <div class="done-time" id="doneTime"></div>
     </div>
-    <button class="ci-btn ci-btn-primary" style="margin-top:24px" onclick="reset()">Done</button>
+    <button class="ci-btn ci-primary" style="margin-top:20px" onclick="reset()">Done</button>
   </div>
+
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
 <script>
 const API = '/api/pos';
-const TENANT = '11111111-1111-4111-8111-111111111111';
 let _staff = null, _pin = '', _stream = null, _scanTimer = null;
 
-const ROLE_COLORS = {
-  MANAGER:'#1e3a5f',BARISTA:'#7c2d12',CASHIER:'#78350f',
-  KITCHEN:'#7f1d1d',TRAINEE:'#7c3aed',STAFF:'#374151',OWNER:'#1a3a2a'
-};
+const ROLE_BG = {MANAGER:'#1e3a5f',BARISTA:'#7c2d12',CASHIER:'#78350f',KITCHEN:'#7f1d1d',TRAINEE:'#6d28d9',OWNER:'#1a3a2a',STAFF:'#374151'};
+const EV_ICON  = {CLOCK_IN:'✅',CLOCK_OUT:'🚪',BREAK_START:'☕',BREAK_END:'🔄'};
+const EV_LABEL = {CLOCK_IN:'Clocked In',CLOCK_OUT:'Clocked Out',BREAK_START:'Break Started',BREAK_END:'Back from Break'};
+const EV_COLOR = {CLOCK_IN:'#4ade80',CLOCK_OUT:'#f87171',BREAK_START:'#fbbf24',BREAK_END:'#818cf8'};
 
-function showStep(id) {
-  document.querySelectorAll('.step').forEach(s=>s.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
-}
-function backTo(id) {
-  stopScan();
-  _pin=''; _staff=null;
-  updateDots();
-  showStep(id);
-}
-function showErr(id,msg){ const el=document.getElementById(id); el.textContent=msg; el.style.display='block'; setTimeout(()=>el.style.display='none',3000); }
+function showStep(id){document.querySelectorAll('.step').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');}
+function showErr(id,msg){var e=document.getElementById(id);if(!e)return;e.textContent=msg;e.style.display='block';setTimeout(function(){e.style.display='none';},4000);}
+function goBack(id){stopScan();_pin='';_staff=null;updateDots();showStep(id);}
 
-// ── QR SCAN ───────────────────────────────────────────────────────────────
-async function startScan() {
-  // Check browser support
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    showManualWithMsg('Camera not supported on this browser. Enter your staff code instead.');
-    return;
-  }
-  showStep('step2');
+// ── Scan ──────────────────────────────────────────────────────────────────
+async function startScan(){
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){goManual();return;}
+  showStep('s2');
   try {
-    // Try rear camera first, fall back to any
-    try {
-      _stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}}});
-    } catch(e1) {
-      _stream = await navigator.mediaDevices.getUserMedia({video:true});
-    }
-    const v = document.getElementById('videoEl');
-    v.srcObject = _stream;
+    var constraints = {video:{facingMode:{ideal:'environment'}}};
+    try{_stream=await navigator.mediaDevices.getUserMedia(constraints);}
+    catch(e1){_stream=await navigator.mediaDevices.getUserMedia({video:true});}
+    var v=document.getElementById('videoEl');
+    v.srcObject=_stream;
     await v.play();
     scanLoop();
   } catch(e) {
     stopScan();
-    var msg = 'Camera not available.';
-    if(e.name==='NotAllowedError'||e.name==='PermissionDeniedError')
-      msg = 'Camera permission denied. Please allow camera access in your browser settings, or use manual entry.';
-    else if(e.name==='NotFoundError'||e.name==='DevicesNotFoundError')
-      msg = 'No camera found on this device. Use manual entry below.';
-    else if(e.name==='NotReadableError')
-      msg = 'Camera is in use by another app. Close other apps and try again, or use manual entry.';
-    showManualWithMsg(msg);
+    var info=document.getElementById('camInfo');if(info)info.style.display='block';
+    var msg='Camera not available.';
+    if(e.name==='NotAllowedError')msg='Camera permission denied. Allow camera in browser settings.';
+    else if(e.name==='NotFoundError')msg='No camera found on this device.';
+    else if(e.name==='NotReadableError')msg='Camera busy. Close other apps.';
+    showErr('camErr',msg);
   }
 }
-
-function showManualWithMsg(msg) {
-  showManual();
-  var err = document.getElementById('manualErr');
-  err.textContent = msg;
-  err.style.display = 'block';
-  err.style.background = 'rgba(234,179,8,.15)';
-  err.style.borderColor = 'rgba(234,179,8,.3)';
-  err.style.color = '#fde68a';
+function scanLoop(){
+  var v=document.getElementById('videoEl'),c=document.getElementById('snapCanvas');
+  if(!v||!v.videoWidth){_scanTimer=setTimeout(scanLoop,200);return;}
+  c.width=v.videoWidth;c.height=v.videoHeight;
+  var ctx=c.getContext('2d');ctx.drawImage(v,0,0);
+  var img=ctx.getImageData(0,0,c.width,c.height);
+  var code=jsQR(img.data,img.width,img.height,{inversionAttempts:'dontInvert'});
+  if(code&&code.data.startsWith('YANI-CLOCKIN:')){
+    stopScan();lookupStaff(code.data.replace('YANI-CLOCKIN:',''));
+  } else {_scanTimer=setTimeout(scanLoop,200);}
 }
-function scanLoop() {
-  const v=document.getElementById('videoEl');
-  const c=document.getElementById('snapCanvas');
-  if(!v.videoWidth){ _scanTimer=setTimeout(scanLoop,200); return; }
-  c.width=v.videoWidth; c.height=v.videoHeight;
-  const ctx=c.getContext('2d');
-  ctx.drawImage(v,0,0);
-  const img=ctx.getImageData(0,0,c.width,c.height);
-  const code=jsQR(img.data,img.width,img.height,{inversionAttempts:'dontInvert'});
-  if(code && code.data.startsWith('YANI-CLOCKIN:')) {
-    stopScan();
-    const staffCode=code.data.replace('YANI-CLOCKIN:','');
-    lookupStaff(staffCode);
-  } else {
-    _scanTimer=setTimeout(scanLoop,200);
-  }
-}
-function stopScan() {
-  clearTimeout(_scanTimer);
-  if(_stream){ _stream.getTracks().forEach(t=>t.stop()); _stream=null; }
-}
+function stopScan(){clearTimeout(_scanTimer);if(_stream){_stream.getTracks().forEach(function(t){t.stop();});_stream=null;}}
 
-// ── MANUAL ENTRY ──────────────────────────────────────────────────────────
-function showManual() { stopScan(); showStep('step3'); setTimeout(()=>document.getElementById('manualCode').focus(),100); }
+// ── Manual ────────────────────────────────────────────────────────────────
+function goManual(){stopScan();showStep('s3');setTimeout(function(){var i=document.getElementById('codeInput');if(i)i.focus();},80);}
+function lookupCode(){var v=document.getElementById('codeInput');if(v)lookupStaff(v.value);}
 
-async function lookupStaff(code) {
-  if(!code) return;
-  const r = await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({action:'hrLookupStaff',staffCode:code.trim().toUpperCase()})}).then(r=>r.json()).catch(()=>({ok:false}));
-  if(!r.ok||!r.staff){ showErr('manualErr','Staff not found: '+code); return; }
-  _staff=r.staff; _pin='';
-  // Show staff card
-  const role=_staff.role||'STAFF';
-  const color=ROLE_COLORS[role]||'#374151';
-  document.getElementById('staffAvatar').textContent=(_staff.full_name||'?').charAt(0).toUpperCase();
-  document.getElementById('staffAvatar').style.background=color;
-  document.getElementById('staffName').textContent=_staff.full_name||'—';
-  document.getElementById('staffRole').textContent=role.replace(/_/g,' ')+' · '+_staff.staff_code;
-  updateDots();
-  showStep('step4');
+async function lookupStaff(code){
+  if(!code||!code.trim()){showErr('codeErr','Enter your staff code');return;}
+  var r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({action:'hrLookupStaff',staffCode:code.trim().toUpperCase()})}).then(function(r){return r.json();}).catch(function(){return {ok:false,error:'Network error'};});
+  if(!r.ok){showErr('codeErr',r.error||'Staff not found');return;}
+  _staff=r.staff;_pin='';updateDots();
+  var bg=ROLE_BG[_staff.role]||ROLE_BG.STAFF;
+  document.getElementById('pinAvatar').textContent=(_staff.full_name||'?').charAt(0).toUpperCase();
+  document.getElementById('pinAvatar').style.background=bg;
+  document.getElementById('pinName').textContent=_staff.full_name||'—';
+  document.getElementById('pinRole').textContent=(_staff.role||'').replace(/_/g,' ')+' · '+_staff.staff_code;
+  showStep('s4');
 }
 
-// ── PIN PAD ───────────────────────────────────────────────────────────────
-function pinPress(d) {
-  if(_pin.length>=4) return;
-  _pin+=d;
-  updateDots();
-  if(_pin.length===4) setTimeout(verifyPin,200);
-}
-function pinDel() { _pin=_pin.slice(0,-1); updateDots(); }
-function clearPin() { _pin=''; updateDots(); }
-function updateDots() {
-  for(var i=0;i<4;i++){
-    document.getElementById('d'+i).classList.toggle('filled',i<_pin.length);
-  }
-}
-async function verifyPin() {
+// ── PIN ───────────────────────────────────────────────────────────────────
+function pk(d){if(_pin.length>=4)return;_pin+=d;updateDots();if(_pin.length===4)setTimeout(verifyPin,150);}
+function pinDel(){_pin=_pin.slice(0,-1);updateDots();}
+function pinClear(){_pin='';updateDots();}
+function updateDots(){for(var i=0;i<4;i++)document.getElementById('d'+i).classList.toggle('on',i<_pin.length);}
+
+async function verifyPin(){
   document.getElementById('pinErr').style.display='none';
-  const r = await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({action:'hrVerifyPin',staffCode:_staff.staff_code,pin:_pin})}).then(r=>r.json()).catch(()=>({ok:false}));
-  if(!r.ok){ showErr('pinErr','Incorrect PIN. Try again.'); _pin=''; updateDots(); return; }
-  showStep('step5');
+  var r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({action:'hrVerifyPin',staffCode:_staff.staff_code,pin:_pin})}).then(function(r){return r.json();}).catch(function(){return {ok:false};});
+  if(!r.ok){showErr('pinErr','Wrong PIN. Try again.');_pin='';updateDots();return;}
+  showStep('s5');
 }
 
-// ── CLOCK EVENT ───────────────────────────────────────────────────────────
-const EVENT_LABELS={CLOCK_IN:'Clocked In ✅',CLOCK_OUT:'Clocked Out 🚪',BREAK_START:'Break Started ☕',BREAK_END:'Back from Break 🔄'};
-const EVENT_ICONS={CLOCK_IN:'✅',CLOCK_OUT:'🚪',BREAK_START:'☕',BREAK_END:'🔄'};
-const EVENT_COLORS={CLOCK_IN:'#4ade80',CLOCK_OUT:'#f87171',BREAK_START:'#fbbf24',BREAK_END:'#818cf8'};
-
-async function doClockEvent(type) {
-  const r = await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({action:'hrClockEvent',staffCode:_staff.staff_code,eventType:type,pin:_pin})}).then(r=>r.json()).catch(()=>({ok:false}));
-  if(!r.ok){ alert('Error: '+(r.error||'Failed to record')); return; }
-  document.getElementById('doneIcon').textContent=EVENT_ICONS[type]||'✅';
-  document.getElementById('doneIcon').style.background=EVENT_COLORS[type]+'22';
-  document.getElementById('doneTitle').textContent=EVENT_LABELS[type]||'Done';
+// ── Clock event ───────────────────────────────────────────────────────────
+async function clockEvent(type){
+  document.getElementById('evErr').style.display='none';
+  var r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({action:'hrClockEvent',staffCode:_staff.staff_code,eventType:type,pin:_pin})}).then(function(r){return r.json();}).catch(function(){return {ok:false,error:'Network error'};});
+  if(!r.ok){showErr('evErr','Error: '+(r.error||'Failed. Try again.'));return;}
+  var color=EV_COLOR[type]||'#4ade80';
+  var icon=document.getElementById('doneIcon');
+  icon.textContent=EV_ICON[type]||'✅';
+  icon.style.background=color+'20';
+  icon.style.borderColor=color+'50';
+  document.getElementById('doneTitle').textContent=EV_LABEL[type]||'Recorded';
   document.getElementById('doneName').textContent=_staff.full_name||'';
-  document.getElementById('doneTime').textContent=new Date().toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit',hour12:true})+' · '+new Date().toLocaleDateString('en-PH',{weekday:'long',month:'short',day:'numeric'});
-  showStep('step6');
-  // Auto reset after 5s
+  var now=new Date();
+  document.getElementById('doneTime').textContent=now.toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit',hour12:true})+' · '+now.toLocaleDateString('en-PH',{weekday:'long',month:'short',day:'numeric'});
+  showStep('s6');
   setTimeout(reset,5000);
 }
 
-function reset() { stopScan(); _staff=null; _pin=''; updateDots(); showStep('step1'); }
+function reset(){stopScan();_staff=null;_pin='';updateDots();showStep('s1');}
 
-// Pre-fill from URL param (QR scan via external scanner)
-const params=new URLSearchParams(location.search);
-if(params.get('staff')) lookupStaff(params.get('staff'));
+// Auto-fill from URL ?staff=USR_001
+(function(){
+  var p=new URLSearchParams(location.search);
+  var s=p.get('staff');
+  if(s){lookupStaff(s);}
+})();
 </script>
 </body>
 </html>
