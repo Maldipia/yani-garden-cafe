@@ -15,14 +15,21 @@ export async function routeAdmin(action, body, auth, req, res) {
 
   // ── getHRStaff ──────────────────────────────────────────────────────────
   if (action === 'getHRStaff') {
-    const TENANT_HR = '11111111-1111-4111-8111-111111111111';
-    const rHR = await supaFetch(
-      SUPABASE_URL + '/rest/v1/hr_staff_master?tenant_id=eq.' + TENANT_HR +
-      '&select=id,staff_code,full_name,nickname,role,employment_type,employment_status,pay_basis,daily_rate,hourly_rate,standard_hours_per_day,overtime_allowed,mobile,email,date_of_birth,date_hired,department,payout_method,payout_details&order=full_name.asc'
-    );
-    if (!rHR.ok) return res.status(500).json({ ok:false, error:'Failed to load HR staff' });
-    const hrStaff = await rHR.json();
-    return res.status(200).json({ ok:true, staff: hrStaff });
+    try {
+      const TENANT_HR = '11111111-1111-4111-8111-111111111111';
+      const rHR = await supaFetch(
+        SUPABASE_URL + '/rest/v1/hr_staff_master?tenant_id=eq.' + TENANT_HR +
+        '&select=id,staff_code,full_name,nickname,role,employment_type,employment_status,pay_basis,daily_rate,hourly_rate,standard_hours_per_day,overtime_allowed,mobile,email,date_of_birth,date_hired,department,payout_method,payout_details&order=full_name.asc'
+      );
+      if (!rHR.ok) {
+        const errBody = await rHR.text().catch(() => '');
+        return res.status(500).json({ ok:false, error:'Supabase error: ' + rHR.status, detail: errBody.slice(0,200) });
+      }
+      const hrStaff = await rHR.json();
+      return res.status(200).json({ ok:true, staff: hrStaff });
+    } catch(hrErr) {
+      return res.status(500).json({ ok:false, error:'HR fetch error: ' + hrErr.message });
+    }
   }
   if (action === 'updateHRStaff') {
     const authHR = await checkAdminAuth ? checkAdminAuth() : await checkAuth(['OWNER','ADMIN']);
