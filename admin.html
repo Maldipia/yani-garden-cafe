@@ -1388,8 +1388,13 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
   .hr-list-col{width:100%;border-right:none;border-bottom:0.5px solid var(--mist);max-height:280px}
   .hr-grid-2{grid-template-columns:1fr}
 }
+
+.hr-edit-row{display:flex;flex-direction:column;gap:4px}
+.hr-edit-label{font-size:.72rem;font-weight:700;color:var(--timber);text-transform:uppercase;letter-spacing:.04em}
+.hr-edit-input{padding:9px 12px;border:1.5px solid var(--mist);border-radius:9px;font-size:.85rem;color:var(--ink);background:var(--bg);outline:none;width:100%;box-sizing:border-box;font-family:var(--font-body)}
+.hr-edit-input:focus{border-color:var(--forest);box-shadow:0 0 0 3px rgba(26,58,42,.08)}
+.hr-edit-input select,.hr-edit-input textarea{resize:vertical}
 </style>
-</head>
 <body>
 
 <!-- ═══════════════════ LOGIN ═══════════════════ -->
@@ -2364,7 +2369,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 
   <script src="/admin-orders.js?v=27"></script>
 <script src="/admin-payments.js?v=24"></script>
-<script src="/admin-hr.js?v=1"></script>
+<script src="/admin-hr.js?v=2"></script>
   <script src="/admin-menu.js?v=24"></script>
 <script src="/admin-online.js?v=27"></script>
 <script src="/admin-tables.js?v=20"></script>

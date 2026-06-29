@@ -406,8 +406,152 @@ function hrField(label, value) {
   </div>`;
 }
 
-function openAddStaffModal() { showToast('Add staff — coming next session', 'info'); }
-function openEditStaffModal(id) { showToast('Edit staff — coming next session', 'info'); }
+function openAddStaffModal() { showToast('Select a staff and click ✏️ Edit to update details. New staff — coming soon.', 'info'); }
+function openEditStaffModal(id) {
+  const s = _hrStaff.find(x => x.id === id);
+  if (!s) return;
+
+  // Remove existing modal if any
+  var existing = document.getElementById('hrEditModal');
+  if (existing) existing.remove();
+
+  const rs = HR_ROLE_STYLE[s.role] || HR_ROLE_STYLE.STAFF;
+  const ROLES = ['MANAGER','BARISTA','CASHIER','KITCHEN','SERVICE_CREW','WORKING_STUDENT','STAFF','OWNER','PAYROLL_ADMIN'];
+  const STATUSES = ['ACTIVE','ON_LEAVE','SUSPENDED','RESIGNED','TERMINATED','AWOL'];
+  const PAY_BASIS = ['DAILY','HOURLY','MONTHLY'];
+
+  const modal = document.createElement('div');
+  modal.id = 'hrEditModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  modal.innerHTML = `
+    <div style="background:var(--bg);border-radius:16px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 20px 14px;border-bottom:0.5px solid var(--mist)">
+        <div>
+          <div style="font-size:1rem;font-weight:700;color:var(--ink)">Edit Staff</div>
+          <div style="font-size:.75rem;color:var(--timber);margin-top:2px">${esc(s.full_name)} · ${esc(s.staff_code)}</div>
+        </div>
+        <button onclick="document.getElementById('hrEditModal').remove()" style="width:32px;height:32px;border-radius:50%;border:none;background:var(--mist);cursor:pointer;font-size:1rem;display:flex;align-items:center;justify-content:center">✕</button>
+      </div>
+      <div style="padding:20px;display:flex;flex-direction:column;gap:14px">
+
+        <div class="hr-edit-row">
+          <label class="hr-edit-label">Full Name *</label>
+          <input class="hr-edit-input" id="hef_name" type="text" value="${esc(s.full_name||'')}">
+        </div>
+
+        <div class="hr-edit-row">
+          <label class="hr-edit-label">Nickname</label>
+          <input class="hr-edit-input" id="hef_nick" type="text" value="${esc(s.nickname||'')}">
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="hr-edit-row">
+            <label class="hr-edit-label">Role *</label>
+            <select class="hr-edit-input" id="hef_role">
+              ${ROLES.map(r => `<option value="${r}"${r===s.role?' selected':''}>${r.replace('_',' ')}</option>`).join('')}
+            </select>
+          </div>
+          <div class="hr-edit-row">
+            <label class="hr-edit-label">Status *</label>
+            <select class="hr-edit-input" id="hef_status">
+              ${STATUSES.map(st => `<option value="${st}"${st===s.employment_status?' selected':''}>${st.replace('_',' ')}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="hr-edit-row">
+            <label class="hr-edit-label">Pay Basis</label>
+            <select class="hr-edit-input" id="hef_paybasis">
+              ${PAY_BASIS.map(p => `<option value="${p}"${p===(s.pay_basis||'DAILY')?' selected':''}>${p}</option>`).join('')}
+            </select>
+          </div>
+          <div class="hr-edit-row">
+            <label class="hr-edit-label">Daily Rate (₱)</label>
+            <input class="hr-edit-input" id="hef_rate" type="number" min="0" step="0.01" value="${s.daily_rate||''}">
+          </div>
+        </div>
+
+        <div class="hr-edit-row">
+          <label class="hr-edit-label">Phone</label>
+          <input class="hr-edit-input" id="hef_phone" type="text" placeholder="09XX XXX XXXX" value="${esc(s.mobile||'')}">
+        </div>
+
+        <div class="hr-edit-row">
+          <label class="hr-edit-label">Email</label>
+          <input class="hr-edit-input" id="hef_email" type="email" value="${esc(s.email||'')}">
+        </div>
+
+        <div class="hr-edit-row">
+          <label class="hr-edit-label">Department</label>
+          <input class="hr-edit-input" id="hef_dept" type="text" placeholder="e.g. Bar, Kitchen, Service" value="${esc(s.department||'')}">
+        </div>
+
+        <div class="hr-edit-row">
+          <label class="hr-edit-label">Notes</label>
+          <textarea class="hr-edit-input" id="hef_notes" rows="2" placeholder="Internal notes...">${esc(s.notes||'')}</textarea>
+        </div>
+
+        <div style="display:flex;gap:10px;padding-top:6px">
+          <button onclick="document.getElementById('hrEditModal').remove()"
+            style="flex:1;padding:12px;border-radius:10px;border:1.5px solid var(--mist);background:transparent;color:var(--ink);font-size:.85rem;font-weight:600;cursor:pointer">
+            Cancel
+          </button>
+          <button onclick="saveHRStaffEdit('${s.id}')"
+            style="flex:2;padding:12px;border-radius:10px;border:none;background:var(--forest);color:#fff;font-size:.85rem;font-weight:700;cursor:pointer">
+            💾 Save Changes
+          </button>
+        </div>
+
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  // Close on backdrop click
+  modal.addEventListener('click', function(e){ if(e.target===modal) modal.remove(); });
+  // Focus first input
+  setTimeout(function(){ document.getElementById('hef_name')?.focus(); }, 50);
+}
+
+async function saveHRStaffEdit(id) {
+  const get = function(eid){ return document.getElementById(eid)?.value?.trim() || ''; };
+  const name = get('hef_name');
+  if (!name) { showToast('Full name is required', 'error'); return; }
+
+  const btn = document.querySelector('#hrEditModal button[onclick*="saveHRStaffEdit"]');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+
+  const updates = {
+    full_name:         name,
+    nickname:          get('hef_nick') || null,
+    role:              get('hef_role'),
+    employment_status: get('hef_status'),
+    pay_basis:         get('hef_paybasis'),
+    daily_rate:        parseFloat(get('hef_rate')) || null,
+    mobile:            get('hef_phone') || null,
+    email:             get('hef_email') || null,
+    department:        get('hef_dept') || null,
+    notes:             get('hef_notes') || null,
+  };
+
+  try {
+    const r = await api('updateHRStaff', { userId: currentUser?.userId, staffId: id, ...updates });
+    if (!r.ok) throw new Error(r.error || 'Save failed');
+
+    // Update local state
+    const idx = _hrStaff.findIndex(x => x.id === id);
+    if (idx >= 0) Object.assign(_hrStaff[idx], updates);
+    if (_hrSelected?.id === id) Object.assign(_hrSelected, updates);
+
+    document.getElementById('hrEditModal')?.remove();
+    renderHRStaffList();
+    if (_hrSelected?.id === id) renderHRDetail(_hrSelected);
+    showToast(name + ' updated ✅', 'success');
+  } catch(e) {
+    showToast('Error: ' + e.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = '💾 Save Changes'; }
+  }
+}
 function openAddAllowanceModal(id) { showToast('Add allowance — coming next session', 'info'); }
 function openClockInModal() { showToast('Manual clock-in — coming next session', 'info'); }
 function openPerformanceModal(id, type) { showToast(`${type} form — coming next session`, 'info'); }
