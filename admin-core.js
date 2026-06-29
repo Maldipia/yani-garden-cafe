@@ -952,6 +952,7 @@ function renderSidebar() {
     // that all represent the same person. The MEMBERS view shows them as tabs.
     html += item('MEMBERS', '👥', 'Members', '');
     html += item('DOCS', '📄', 'DOCS', '');
+    html += item('HR', '👥', 'HR', '');
   }
 
   if (isAdmin) {
@@ -1192,6 +1193,10 @@ function setFilter(f) {
     var cv2 = document.getElementById('costingView');
     if (cv2) cv2.style.display = 'block';
     loadCostingView();
+  } else if (f === 'HR') {
+    document.querySelectorAll('#mainContent > div, #mainContent > section').forEach(function(el){ el.style.display='none'; });
+    var hv = document.getElementById('hrView'); if (hv) hv.style.display='flex';
+    if (typeof loadHRModule === 'function') loadHRModule();
   } else if (f === 'DOCS') {
     var dv = document.getElementById('docsView');
     if (dv) dv.style.display = 'block';

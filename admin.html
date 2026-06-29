@@ -1305,7 +1305,91 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 .menu-tag-lbl{display:flex;align-items:center;gap:7px;font-size:.82rem;font-weight:600;color:#1a2a1a;cursor:pointer}
 .menu-tag-lbl input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:#1a3a2a}
 .menu-tag-hint{font-size:.68rem;font-weight:400;color:#5a4a3a;margin-left:2px}
-</style></head>
+</style>
+<style id="hr-styles">
+/* ── HR Module Layout ─────────────────────────────────────── */
+.hr-wrap{display:flex;gap:0;height:100%;min-height:0;overflow:hidden}
+.hr-list-col{width:280px;min-width:240px;border-right:0.5px solid var(--mist);display:flex;flex-direction:column;overflow:hidden;flex-shrink:0}
+.hr-detail-col{flex:1;overflow-y:auto;min-height:0;padding:0}
+.hr-list-hdr{display:flex;align-items:center;justify-content:space-between;padding:14px 14px 10px;border-bottom:0.5px solid var(--mist)}
+.hr-list-title{font-size:.9rem;font-weight:700;color:var(--ink)}
+.hr-add-btn{font-size:.75rem;background:var(--forest);color:#fff;border:none;border-radius:8px;padding:5px 12px;cursor:pointer;font-weight:600}
+.hr-search-wrap{padding:8px 10px}
+.hr-search{width:100%;padding:7px 10px;border:1px solid var(--mist);border-radius:8px;font-size:.8rem;outline:none;background:var(--forest-lightest)}
+.hr-filter-row{display:flex;gap:4px;padding:0 10px 8px;flex-wrap:wrap}
+.hr-filter-btn{font-size:.68rem;padding:3px 10px;border-radius:20px;border:1px solid var(--mist);background:transparent;color:var(--timber);cursor:pointer;font-weight:600}
+.hr-filter-btn.active{background:var(--forest);color:#fff;border-color:var(--forest)}
+.hr-staff-list{flex:1;overflow-y:auto;padding:4px 8px}
+/* Staff cards */
+.hr-staff-card{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;cursor:pointer;margin-bottom:4px;transition:background .1s}
+.hr-staff-card:hover{background:var(--forest-lightest)}
+.hr-staff-card.selected{background:var(--forest-lightest);box-shadow:inset 2px 0 0 var(--forest)}
+.hr-avatar{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.9rem;font-weight:700;flex-shrink:0}
+.hr-card-info{flex:1;min-width:0}
+.hr-card-name{font-size:.82rem;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hr-card-meta{margin-top:2px}
+.hr-card-right{display:flex;align-items:center;gap:6px;flex-shrink:0}
+/* Badges */
+.hr-badge{display:inline-flex;align-items:center;gap:3px;font-size:.62rem;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:.02em;text-transform:uppercase;white-space:nowrap}
+.hr-badge-sm{display:inline-flex;font-size:.6rem;font-weight:600;padding:1px 6px;border-radius:20px;white-space:nowrap}
+.hr-dot{display:inline-block;width:7px;height:7px;border-radius:50%;flex-shrink:0}
+/* Toggle */
+.hr-toggle{width:34px;height:18px;border-radius:18px;border:none;cursor:pointer;position:relative;background:var(--mist);transition:background .15s;flex-shrink:0}
+.hr-toggle.on{background:#22c55e}
+.hr-toggle-knob{position:absolute;width:13px;height:13px;background:#fff;border-radius:50%;top:2.5px;left:2.5px;transition:left .15s;display:block}
+.hr-toggle.on .hr-toggle-knob{left:19px}
+/* Detail panel */
+.hr-detail-hdr{display:flex;align-items:flex-start;gap:14px;padding:18px;border-bottom:0.5px solid var(--mist)}
+.hr-detail-avatar{width:54px;height:54px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.4rem;font-weight:700;flex-shrink:0}
+.hr-detail-hdr-info{flex:1}
+.hr-detail-name{font-size:1.1rem;font-weight:700;color:var(--ink);margin-bottom:5px}
+.hr-detail-badges{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:4px}
+.hr-detail-code{font-size:.72rem;color:var(--timber)}
+.hr-detail-actions{flex-shrink:0}
+.hr-edit-btn{font-size:.78rem;padding:6px 14px;background:var(--forest-lightest);color:var(--forest);border:1.5px solid var(--forest);border-radius:8px;cursor:pointer;font-weight:600}
+/* Tabs */
+.hr-tabs{display:flex;gap:0;border-bottom:0.5px solid var(--mist);overflow-x:auto;scrollbar-width:none;padding:0 18px}
+.hr-tabs::-webkit-scrollbar{display:none}
+.hr-tab{font-size:.75rem;padding:9px 12px;border:none;background:transparent;color:var(--timber);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;font-weight:500}
+.hr-tab.active{color:var(--forest);border-bottom-color:var(--forest);font-weight:700}
+/* Tab content */
+.hr-tab-content{padding:18px}
+.hr-section{margin-bottom:20px}
+.hr-section-title{font-size:.75rem;font-weight:700;color:var(--timber);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+.hr-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.hr-field{background:var(--forest-lightest);border-radius:8px;padding:9px 12px}
+.hr-field-label{font-size:.68rem;color:var(--timber);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px}
+.hr-field-value{font-size:.82rem;color:var(--ink);font-weight:500}
+/* Leave grid */
+.hr-leave-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.hr-leave-card{background:var(--forest-lightest);border-radius:8px;padding:10px 12px;border:0.5px solid var(--mist)}
+.hr-leave-type{font-size:.7rem;color:var(--timber);font-weight:600;margin-bottom:4px}
+.hr-leave-bal{font-size:1.3rem;font-weight:700;color:var(--forest)}
+.hr-leave-bal span{font-size:.7rem;font-weight:400;color:var(--timber)}
+.hr-leave-used{font-size:.7rem;color:var(--timber)}
+/* Documents */
+.hr-doc-item{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:0.5px solid var(--mist)}
+.hr-doc-status{font-size:.9rem;width:20px;text-align:center}
+.hr-doc-missing{color:#d1d5db}
+.hr-doc-ok{color:#22c55e}
+.hr-doc-name{flex:1;font-size:.82rem;color:var(--ink)}
+/* Misc */
+.hr-empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;min-height:300px;color:var(--timber)}
+.hr-empty-sm{font-size:.8rem;color:var(--timber);padding:10px 0}
+.hr-list-empty{text-align:center;padding:24px;font-size:.8rem;color:var(--timber)}
+.hr-loading{text-align:center;padding:40px;color:var(--timber)}
+.hr-error{color:#dc2626;padding:20px;font-size:.85rem}
+.hr-link-btn{background:none;border:none;color:var(--forest);cursor:pointer;font-size:.78rem;font-weight:600;padding:0;text-decoration:underline}
+.hr-primary-btn{background:var(--forest);color:#fff;border:none;border-radius:8px;padding:9px 18px;cursor:pointer;font-size:.82rem;font-weight:600}
+.hr-success-btn{background:#dcfce7;color:#166534;border:none;border-radius:8px;padding:7px 14px;cursor:pointer;font-size:.78rem;font-weight:600}
+.hr-warn-btn{background:#fef9c3;color:#854d0e;border:none;border-radius:8px;padding:7px 14px;cursor:pointer;font-size:.78rem;font-weight:600}
+@media(max-width:700px){
+  .hr-wrap{flex-direction:column}
+  .hr-list-col{width:100%;border-right:none;border-bottom:0.5px solid var(--mist);max-height:280px}
+  .hr-grid-2{grid-template-columns:1fr}
+}
+</style>
+</head>
 <body>
 
 <!-- ═══════════════════ LOGIN ═══════════════════ -->
@@ -2258,6 +2342,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 
   <!-- DOCS View (BIR sales records: manual ledger + live transactions) -->
   <div id="docsView" style="display:none;padding:0 0 100px"></div>
+  <div id="hrView" style="display:none;flex:1;min-height:0;overflow:hidden"></div>
 
   <div id="reviewsView" style="display:none;padding:0 0 100px"></div>
 
@@ -2275,11 +2360,12 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
   </div>
 </div>
 
-<script src="/admin-core.js?v=40"></script>
+<script src="/admin-core.js?v=41"></script>
 
   <script src="/admin-orders.js?v=27"></script>
 <script src="/admin-payments.js?v=24"></script>
-<script src="/admin-menu.js?v=24"></script>
+<script src="/admin-hr.js?v=1"></script>
+  <script src="/admin-menu.js?v=24"></script>
 <script src="/admin-online.js?v=27"></script>
 <script src="/admin-tables.js?v=20"></script>
 <script src="/admin-checkout.js?v=22"></script>
