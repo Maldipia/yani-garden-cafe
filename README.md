@@ -291,3 +291,4 @@ If you (a future developer or future Claude with no memory) need to make changes
 **Repo:** https://github.com/Maldipia/yani-garden-cafe
 **Last meaningful README update:** 2026-05-23
 
+
