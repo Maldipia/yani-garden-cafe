@@ -12,6 +12,7 @@ const HR_ROLE_STYLE = {
   SERVICE_CREW:    {bg:'#064e3b',fg:'#6ee7b7',label:'Service'},
   WORKING_STUDENT: {bg:'#1e1b4b',fg:'#a5b4fc',label:'W.Student'},
   STAFF:           {bg:'#374151',fg:'#d1d5db',label:'Staff'},
+  TRAINEE:         {bg:'#7c3aed',fg:'#ede9fe',label:'Trainee'},
 };
 const HR_STATUS_STYLE = {
   ACTIVE:     {bg:'#dcfce7',fg:'#166534',label:'Active',dot:'#22c55e'},
