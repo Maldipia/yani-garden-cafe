@@ -152,7 +152,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="pkey" onclick="pk('0')">0</button>
       <button class="pkey sym" onclick="pinDel()">⌫</button>
     </div>
-    <div class="back" style="margin-top:14px"><a onclick="goBack('s1')">← Start over</a></div>
+    <div class="back" style="margin-top:14px">
+      <a onclick="clearRemembered()" style="margin-right:16px">✕ Not me?</a>
+      <a onclick="goBack('s1')">← Back</a>
+    </div>
   </div>
 
   <!-- STEP 5: Choose event -->
@@ -301,13 +304,23 @@ async function clockEvent(type){
   setTimeout(reset,2500);
 }
 
+function clearRemembered(){
+  try{localStorage.removeItem('yani_last_staff');}catch(e){}
+  _staff=null;_pin='';updateDots();
+  var inp=document.getElementById('codeInput');
+  if(inp) inp.value='';
+  showStep('s1');
+}
+
 function reset(){
-  stopScan();_staff=null;_pin='';updateDots();showStep('s1');
-  // Re-fill remembered staff code so next clock-in is faster
+  stopScan();_staff=null;_pin='';updateDots();
+  // If code is remembered, skip step 1 and go straight to PIN
   var saved=localStorage.getItem('yani_last_staff');
   if(saved){
-    var inp=document.getElementById('codeInput');
-    if(inp) inp.value=saved;
+    // Auto-lookup remembered staff → land on PIN pad
+    lookupStaff(saved);
+  } else {
+    showStep('s1');
   }
 }
 
@@ -316,11 +329,10 @@ function reset(){
   var p=new URLSearchParams(location.search);
   var s=p.get('staff');
   if(s){ lookupStaff(s); return; }
-  // Pre-fill remembered staff code on manual input
+  // If code remembered, go straight to PIN entry on open
   var saved=localStorage.getItem('yani_last_staff');
   if(saved){
-    var inp=document.getElementById('codeInput');
-    if(inp){ inp.value=saved; inp.focus(); }
+    lookupStaff(saved);
   }
 })();
 </script>
