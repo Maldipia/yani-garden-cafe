@@ -188,7 +188,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div class="done-name" id="doneName"></div>
       <div class="done-time" id="doneTime"></div>
     </div>
-    <button class="ci-btn ci-primary" style="margin-top:20px" onclick="reset()">Done</button>
+    <div id="countdownBar" style="height:4px;background:rgba(255,255,255,.15);border-radius:4px;margin-top:18px;overflow:hidden">
+    <div id="countdownFill" style="height:100%;background:#4ade80;width:100%;transition:width 2.4s linear"></div>
+  </div>
+  <button class="ci-btn ci-primary" style="margin-top:10px" onclick="reset()">Done (tap to skip)</button>
   </div>
 
 </div>
@@ -252,6 +255,8 @@ async function lookupStaff(code){
     body:JSON.stringify({action:'hrLookupStaff',staffCode:code.trim().toUpperCase()})}).then(function(r){return r.json();}).catch(function(){return {ok:false,error:'Network error'};});
   if(!r.ok){showErr('codeErr',r.error||'Staff not found');return;}
   _staff=r.staff;_pin='';updateDots();
+  // Remember this staff code on device
+  try{localStorage.setItem('yani_last_staff',_staff.staff_code);}catch(e){}
   var bg=ROLE_BG[_staff.role]||ROLE_BG.STAFF;
   document.getElementById('pinAvatar').textContent=(_staff.full_name||'?').charAt(0).toUpperCase();
   document.getElementById('pinAvatar').style.background=bg;
@@ -290,16 +295,33 @@ async function clockEvent(type){
   var now=new Date();
   document.getElementById('doneTime').textContent=now.toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit',hour12:true})+' · '+now.toLocaleDateString('en-PH',{weekday:'long',month:'short',day:'numeric'});
   showStep('s6');
-  setTimeout(reset,5000);
+  // Start countdown bar
+  var fill=document.getElementById('countdownFill');
+  if(fill){setTimeout(function(){fill.style.width='0%';},50);}
+  setTimeout(reset,2500);
 }
 
-function reset(){stopScan();_staff=null;_pin='';updateDots();showStep('s1');}
+function reset(){
+  stopScan();_staff=null;_pin='';updateDots();showStep('s1');
+  // Re-fill remembered staff code so next clock-in is faster
+  var saved=localStorage.getItem('yani_last_staff');
+  if(saved){
+    var inp=document.getElementById('codeInput');
+    if(inp) inp.value=saved;
+  }
+}
 
-// Auto-fill from URL ?staff=USR_001
+// Auto-fill from URL ?staff=USR_001 OR remembered code
 (function(){
   var p=new URLSearchParams(location.search);
   var s=p.get('staff');
-  if(s){lookupStaff(s);}
+  if(s){ lookupStaff(s); return; }
+  // Pre-fill remembered staff code on manual input
+  var saved=localStorage.getItem('yani_last_staff');
+  if(saved){
+    var inp=document.getElementById('codeInput');
+    if(inp){ inp.value=saved; inp.focus(); }
+  }
 })();
 </script>
 </body>
