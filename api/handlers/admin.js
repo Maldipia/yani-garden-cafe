@@ -229,7 +229,7 @@ export async function routeAdmin(action, body, auth, req, res) {
       SUPABASE_URL+'/rest/v1/rpc/hr_verify_pin',
       {method:'POST',body:JSON.stringify({p_tenant:TENANT_HR,p_staff_code:sc,p_pin:pin})}
     );
-    const ok = r.data === true;
+    const ok = Array.isArray(r.data) && r.data.length > 0;
     return res.status(200).json({ok});
   }
 
@@ -244,7 +244,8 @@ export async function routeAdmin(action, body, auth, req, res) {
         SUPABASE_URL+'/rest/v1/rpc/hr_verify_pin',
         {method:'POST',body:JSON.stringify({p_tenant:TENANT_HR,p_staff_code:staffCode.toUpperCase(),p_pin:pin})}
       );
-      if (vr.data !== true) return res.status(403).json({ok:false,error:'Invalid PIN'});
+      const verOk=Array.isArray(vr.data)&&vr.data.length>0;
+    if (!verOk) return res.status(403).json({ok:false,error:'Invalid PIN'});
     }
     // Get staff ID
     const sr = await supaFetch(
@@ -272,7 +273,8 @@ export async function routeAdmin(action, body, auth, req, res) {
       SUPABASE_URL+'/rest/v1/rpc/hr_verify_pin',
       {method:'POST',body:JSON.stringify({p_tenant:TENANT_HR,p_staff_code:staffCode.toUpperCase(),p_pin:pin})}
     );
-    if (vr.data !== true) return res.status(200).json({ok:false,error:'Incorrect staff code or PIN'});
+    const empVerOk=Array.isArray(vr.data)&&vr.data.length>0;
+    if (!empVerOk) return res.status(200).json({ok:false,error:'Incorrect staff code or PIN'});
     const sr = await supaFetch(
       SUPABASE_URL+'/rest/v1/hr_staff_master?staff_code=eq.'+staffCode.toUpperCase()+
       '&tenant_id=eq.'+TENANT_HR+'&select=id,staff_code,full_name,role,employment_type,employment_status,daily_rate,hourly_rate,pay_basis,mobile,email,date_hired,payout_method&limit=1'
