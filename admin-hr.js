@@ -102,7 +102,7 @@ function renderHRModule() {
     <div class="hr-wrap">
       <div class="hr-list-col" id="hrListCol">
         <div class="hr-list-hdr">
-          <div class="hr-list-title">👥 Staff <span style="font-size:.7rem;color:var(--timber);font-weight:400">${_hrStaff.length} total</span></div>
+          <div class="hr-list-title">👥 Staff <span style="font-size:.7rem;color:#5a4a3a;font-weight:400">${_hrStaff.length} total</span></div>
           <button class="hr-add-btn" onclick="openAddStaffModal()">+ Add</button>
         </div>
         <div class="hr-search-wrap">
@@ -120,8 +120,8 @@ function renderHRModule() {
         <div id="hrDetailContent">
           <div class="hr-empty-state">
             <div style="font-size:3rem">👥</div>
-            <div style="font-size:1rem;font-weight:600;margin-top:10px;color:var(--ink)">Select a staff member</div>
-            <div style="font-size:.8rem;color:var(--timber);margin-top:6px">Click any name from the list to view their full profile</div>
+            <div style="font-size:1rem;font-weight:600;margin-top:10px;color:#111">Select a staff member</div>
+            <div style="font-size:.8rem;color:#5a4a3a;margin-top:6px">Click any name from the list to view their full profile</div>
           </div>
         </div>
       </div>
@@ -253,7 +253,7 @@ function renderProfileTab(s) {
     </div>
     <div class="hr-section">
       <div class="hr-section-title">Payout
-        <span style="font-size:.65rem;color:var(--timber);font-weight:400">(update via Edit)</span>
+        <span style="font-size:.65rem;color:#5a4a3a;font-weight:400">(update via Edit)</span>
       </div>
       <div class="hr-grid-2">
         ${hf('Method',s.payout_method||'—')} ${hf('GCash / Bank',s.payout_details||'—')}
@@ -261,10 +261,26 @@ function renderProfileTab(s) {
     </div>
     <div class="hr-section">
       <div class="hr-section-title">Government Numbers
-        <span style="font-size:.65rem;color:var(--timber);font-weight:400">(fill via Edit)</span>
+        <span style="font-size:.65rem;color:#5a4a3a;font-weight:400">(fill via Edit)</span>
       </div>
       <div class="hr-grid-2">
         ${hf('SSS','—')} ${hf('PhilHealth','—')} ${hf('PagIBIG','—')} ${hf('TIN','—')}
+      </div>
+    </div>
+    <div class="hr-section">
+      <div class="hr-section-title">🔲 Employee QR Code
+        <span style="font-size:.65rem;color:#5a4a3a;font-weight:400">— for clock-in/out</span>
+      </div>
+      <div style="display:flex;align-items:flex-start;gap:16px;background:#f0fdf4;border-radius:10px;padding:14px">
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent('YANI-CLOCKIN:'+s.staff_code)}&bgcolor=ffffff&color=1a3a2a&margin=4"
+          style="width:90px;height:90px;border-radius:8px;border:2px solid #1a3a2a;flex-shrink:0"
+          alt="QR Code for ${esc(s.staff_code)}">
+        <div>
+          <div style="font-size:.82rem;font-weight:700;color:#111;margin-bottom:4px">${esc(s.full_name||'—')}</div>
+          <div style="font-size:.75rem;color:#5a4a3a;margin-bottom:8px">${esc(s.staff_code||'')} · ${esc(s.role||'')}</div>
+          <div style="font-size:.7rem;color:#5a4a3a;margin-bottom:8px;line-height:1.5">Staff scans this QR to clock in/out.<br>Encodes: <code style="background:#e5e7eb;padding:1px 5px;border-radius:4px">YANI-CLOCKIN:${esc(s.staff_code||'')}</code></div>
+          <button onclick="printHRQR('${esc(s.staff_code||'')}','${esc(s.full_name||'')}')" style="font-size:.72rem;background:#1a3a2a;color:#fff;border:none;border-radius:8px;padding:5px 12px;cursor:pointer">🖨️ Print QR</button>
+        </div>
       </div>
     </div>`;
 }
@@ -457,7 +473,7 @@ async function loadClockTab(s,tc) {
               <span class="hr-td-date">${hrDate(l.log_date)}</span>
               <span>${l.event_time?new Date(l.event_time).toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'}):'—'}</span>
               <span><span class="hr-badge-sm" style="background:${bg};color:#1a1a1a">${esc(l.event_type||'').replace(/_/g,' ')}</span></span>
-              <span style="font-size:.7rem;color:var(--timber)">${esc(l.attendance_source||'MANUAL')}</span>
+              <span style="font-size:.7rem;color:#5a4a3a">${esc(l.attendance_source||'MANUAL')}</span>
             </div>`;
           }).join('')}
         </div>`
@@ -708,15 +724,15 @@ function hrModal(title, body, onSave) {
   m.id='hrModal2';
   m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px';
   m.innerHTML=`
-    <div style="background:var(--bg);border-radius:16px;width:100%;max-width:460px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 18px 12px;border-bottom:0.5px solid var(--mist)">
-        <div style="font-size:.95rem;font-weight:700;color:var(--ink)">${title}</div>
-        <button onclick="document.getElementById('hrModal2').remove()" style="width:28px;height:28px;border-radius:50%;border:none;background:var(--mist);cursor:pointer;font-size:.9rem">✕</button>
+    <div style="background:#fff;border-radius:16px;width:100%;max-width:460px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 18px 12px;border-bottom:0.5px solid #e5e7eb">
+        <div style="font-size:.95rem;font-weight:700;color:#111">${title}</div>
+        <button onclick="document.getElementById('hrModal2').remove()" style="width:28px;height:28px;border-radius:50%;border:none;background:#e5e7eb;cursor:pointer;font-size:.9rem">✕</button>
       </div>
       <div style="padding:18px;display:flex;flex-direction:column;gap:12px" id="hrModal2Body">${body}</div>
       <div style="display:flex;gap:10px;padding:0 18px 18px">
-        <button onclick="document.getElementById('hrModal2').remove()" style="flex:1;padding:11px;border-radius:10px;border:1.5px solid var(--mist);background:transparent;color:var(--ink);font-size:.82rem;font-weight:600;cursor:pointer">Cancel</button>
-        <button id="hrModal2Save" style="flex:2;padding:11px;border-radius:10px;border:none;background:var(--forest);color:#fff;font-size:.82rem;font-weight:700;cursor:pointer">Save</button>
+        <button onclick="document.getElementById('hrModal2').remove()" style="flex:1;padding:11px;border-radius:10px;border:1.5px solid #e5e7eb;background:#f9fafb;color:#374151;font-size:.82rem;font-weight:600;cursor:pointer">Cancel</button>
+        <button id="hrModal2Save" style="flex:2;padding:11px;border-radius:10px;border:none;background:#1a3a2a;color:#fff;font-size:.82rem;font-weight:700;cursor:pointer">💾 Save</button>
       </div>
     </div>`;
   document.body.appendChild(m);
@@ -823,4 +839,18 @@ function openEditStaffModal(id) {
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
+function printHRQR(staffCode, name) {
+  var url = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data='+encodeURIComponent('YANI-CLOCKIN:'+staffCode)+'&bgcolor=ffffff&color=1a3a2a&margin=8';
+  var w = window.open('','_blank','width=400,height=500');
+  w.document.write('<html><body style="text-align:center;font-family:sans-serif;padding:20px">'+
+    '<h2 style="color:#1a3a2a;margin:0 0 4px">YANI Garden Cafe</h2>'+
+    '<p style="margin:0 0 12px;font-size:.85rem;color:#555">Employee Clock-in QR Code</p>'+
+    '<img src="'+url+'" style="width:200px;height:200px;display:block;margin:0 auto 12px">'+
+    '<div style="font-size:1.1rem;font-weight:700;color:#1a3a2a">'+name+'</div>'+
+    '<div style="font-size:.85rem;color:#555;margin-top:4px">'+staffCode+'</div>'+
+    '<button onclick="window.print()" style="margin-top:16px;padding:8px 20px;background:#1a3a2a;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:.9rem">🖨️ Print</button>'+
+    '</body></html>');
+  w.document.close();
+}
+
 function hf(label,value){return`<div class="hr-field"><div class="hr-field-label">${esc(label)}</div><div class="hr-field-value">${esc(String(value??'—'))}</div></div>`;}
