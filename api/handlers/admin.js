@@ -13,6 +13,33 @@ import bcrypt from 'bcryptjs';
 export async function routeAdmin(action, body, auth, req, res) {
   const { checkAuth, checkAdminAuth, jwtUser } = auth;
 
+  // ── getHRStaff ──────────────────────────────────────────────────────────
+  if (action === 'getHRStaff') {
+    const TENANT_HR = '11111111-1111-4111-8111-111111111111';
+    const rHR = await supaFetch(
+      SUPABASE_URL + '/rest/v1/hr_staff_master?tenant_id=eq.' + TENANT_HR +
+      '&select=id,staff_code,full_name,nickname,role,employment_type,employment_status,pay_basis,daily_rate,hourly_rate,standard_hours_per_day,overtime_allowed,mobile,email,date_of_birth,date_hired,department,payout_method,payout_details&order=full_name.asc'
+    );
+    if (!rHR.ok) return res.status(500).json({ ok:false, error:'Failed to load HR staff' });
+    const hrStaff = await rHR.json();
+    return res.status(200).json({ ok:true, staff: hrStaff });
+  }
+  if (action === 'updateHRStaff') {
+    const authHR = await checkAdminAuth ? checkAdminAuth() : await checkAuth(['OWNER','ADMIN']);
+    if (!authHR.ok) return res.status(403).json({ ok:false, error:'Unauthorized' });
+    const hrStaffId = body.staffId;
+    if (!hrStaffId) return res.status(400).json({ ok:false, error:'staffId required' });
+    const hrAllowed = ['employment_status','full_name','role','daily_rate','hourly_rate','pay_basis','mobile','email','notes','overtime_allowed','department'];
+    const hrPatch = { updated_at: new Date().toISOString() };
+    hrAllowed.forEach(function(k){ if (body[k] !== undefined) hrPatch[k] = body[k]; });
+    const rHR2 = await supaFetch(
+      SUPABASE_URL + '/rest/v1/hr_staff_master?id=eq.' + hrStaffId,
+      { method:'PATCH', body:JSON.stringify(hrPatch) }
+    );
+    if (!rHR2.ok) return res.status(500).json({ ok:false, error:'HR update failed' });
+    return res.status(200).json({ ok:true });
+  }
+
     if (action === 'changePin') {
       // REQUIRES VALID JWT — no legacy body.userId fallback allowed for PIN changes
       if (!jwtUser) {
