@@ -103,7 +103,7 @@ input.ep-input::placeholder{color:rgba(255,255,255,.25)}
 </div>
 
 <script>
-const API='https://admin.yanigardencafe.com/api/pos';
+const API='/api/pos';
 let _epStaff=null, _epToken=null, _epData={};
 
 function showEpErr(msg){ const e=document.getElementById('epErr'); e.textContent=msg; e.style.display='block'; setTimeout(()=>e.style.display='none',3000); }

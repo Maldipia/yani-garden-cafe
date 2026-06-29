@@ -203,6 +203,22 @@
     {
       "source": "/card",
       "destination": "/card.html"
+    },
+    {
+      "source": "/clockin",
+      "destination": "/clockin.html"
+    },
+    {
+      "source": "/clockin/",
+      "destination": "/clockin.html"
+    },
+    {
+      "source": "/employee",
+      "destination": "/employee.html"
+    },
+    {
+      "source": "/employee/",
+      "destination": "/employee.html"
     }
   ],
   "headers": [
