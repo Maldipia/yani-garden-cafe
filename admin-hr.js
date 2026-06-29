@@ -219,7 +219,10 @@ async function loadHRTab(s,tab) {
   tc.innerHTML='<div class="hr-loading">⏳ Loading...</div>';
   try {
     switch(tab) {
-      case 'profile':    tc.innerHTML=renderProfileTab(s); break;
+      case 'profile':
+        tc.innerHTML=renderProfileTab(s);
+        loadGovtNumbers(s);
+        break;
       case 'pay':        tc.innerHTML=renderPayTab(s); break;
       case 'loans':      await loadLoansTab(s,tc); break;
       case 'schedule':   tc.innerHTML=renderScheduleTab(s); break;
@@ -262,12 +265,15 @@ function renderProfileTab(s) {
         ${hf('Method',s.payout_method||'—')} ${hf('GCash / Bank',s.payout_details||'—')}
       </div>
     </div>
-    <div class="hr-section">
+    <div class="hr-section" id="hrGovtSection_${esc(s.id)}">
       <div class="hr-section-title">Government Numbers
         <span style="font-size:.65rem;color:#5a4a3a;font-weight:400">(fill via Edit)</span>
       </div>
-      <div class="hr-grid-2">
-        ${hf('SSS','—')} ${hf('PhilHealth','—')} ${hf('PagIBIG','—')} ${hf('TIN','—')}
+      <div class="hr-grid-2" id="hrGovtGrid_${esc(s.id)}">
+        <div class="hr-field"><div class="hr-field-label">SSS</div><div class="hr-field-value" id="hrSSS_${esc(s.id)}">⏳</div></div>
+        <div class="hr-field"><div class="hr-field-label">PhilHealth</div><div class="hr-field-value" id="hrPH_${esc(s.id)}">⏳</div></div>
+        <div class="hr-field"><div class="hr-field-label">PagIBIG</div><div class="hr-field-value" id="hrPIG_${esc(s.id)}">⏳</div></div>
+        <div class="hr-field"><div class="hr-field-label">TIN</div><div class="hr-field-value" id="hrTIN_${esc(s.id)}">⏳</div></div>
       </div>
     </div>
     <div class="hr-section">
@@ -380,6 +386,28 @@ function openAddLoanModal(staffId) {
     showToast(typeVal==='deduction'?'Deduction recorded ✅':'Loan recorded ✅','success');
     if(_hrSelected?.id===staffId) await loadHRTab(_hrSelected,'loans');
   });
+}
+
+// ── loadGovtNumbers — async fetch and populate profile tab ─────────────
+async function loadGovtNumbers(s) {
+  try {
+    const r = await api('getHRProfile', {userId:currentUser?.userId, staffId:s.id});
+    if (!r.ok) return;
+    const p = r.profile || {};
+    s._profile_sss  = p.sss_no        || '';
+    s._profile_ph   = p.philhealth_no  || '';
+    s._profile_pig  = p.pagibig_no     || '';
+    s._profile_tin  = p.tin_no         || '';
+    // Update DOM if elements exist
+    const set = function(id, val) {
+      var el = document.getElementById(id);
+      if (el) el.textContent = val || '—';
+    };
+    set('hrSSS_'+s.id,  s._profile_sss  || '—');
+    set('hrPH_'+s.id,   s._profile_ph   || '—');
+    set('hrPIG_'+s.id,  s._profile_pig  || '—');
+    set('hrTIN_'+s.id,  s._profile_tin  || '—');
+  } catch(e) { /* silent fail */ }
 }
 
 // ── LEAVE TAB ──────────────────────────────────────────────────────────────
@@ -849,17 +877,23 @@ function openAddStaffModal() {
 }
 
 // ── Edit staff (full modal) ────────────────────────────────────────────────
-function openEditStaffModal(id) {
+async function openEditStaffModal(id) {
   const s=_hrStaff.find(x=>x.id===id); if(!s) return;
-  // Load profile data if not already loaded
-  api('getHRProfile',{userId:currentUser?.userId,staffId:id}).then(function(r){
-    if(r.ok&&r.profile) {
-      s._profile_sss=r.profile.sss_no||'';
-      s._profile_ph=r.profile.philhealth_no||'';
-      s._profile_pig=r.profile.pagibig_no||'';
-      s._profile_tin=r.profile.tin_no||'';
+  // WAIT for profile before building modal so fields are pre-filled
+  try {
+    const pr = await api('getHRProfile',{userId:currentUser?.userId,staffId:id});
+    if(pr.ok && pr.profile) {
+      s._profile_sss  = pr.profile.sss_no        || '';
+      s._profile_ph   = pr.profile.philhealth_no  || '';
+      s._profile_pig  = pr.profile.pagibig_no     || '';
+      s._profile_tin  = pr.profile.tin_no         || '';
+    } else {
+      s._profile_sss = s._profile_sss || '';
+      s._profile_ph  = s._profile_ph  || '';
+      s._profile_pig = s._profile_pig || '';
+      s._profile_tin = s._profile_tin || '';
     }
-  }).catch(function(){});
+  } catch(e) {}
   const ROLES=Object.keys(HR_ROLE_STYLE);
   const STATUSES=Object.keys(HR_STATUS_STYLE);
   hrModal('Edit Staff — '+esc(s.full_name),`
