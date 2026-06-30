@@ -711,6 +711,7 @@ async function deleteOrder(orderId) {
 // ════════════════════════════════════════════════════════
 var eoOrderId = null;       // current order being edited
 var eoItems = [];           // mutable copy of order items
+var eoOrderType = '';       // order type of the order being edited (for svc charge label)
 var eoMenuData = [];        // flat menu list for adding items
 var eoActiveCat = null;     // active category in add-items section
 
@@ -718,6 +719,7 @@ function openEditOrder(orderId) {
   var o = allOrders.find(function(x) { return x.orderId === orderId; });
   if (!o) { showToast('Order not found', 'error'); return; }
   eoOrderId = orderId;
+  eoOrderType = o.orderType || '';
   window._eoHasDiscount  = parseFloat(o.discountAmount) > 0;
   window._eoDiscountType = (o.discountType || 'discount').replace('_',' ');
   // Deep-copy items so we can mutate without affecting allOrders
@@ -812,7 +814,7 @@ function eoRenderBody() {
   var eoTotal = eoSubtotal + eoSvc;
   html += '<div style="margin:14px 16px 4px;padding:12px 16px;background:var(--forest);border-radius:10px;color:#fff">' +
     '<div style="display:flex;justify-content:space-between;font-size:.78rem;opacity:.8"><span>Subtotal</span><span>₱' + eoSubtotal.toFixed(2) + '</span></div>' +
-    '<div style="display:flex;justify-content:space-between;font-size:.78rem;opacity:.8;margin-top:2px"><span>' + (o.orderType&&o.orderType.indexOf('TAKE')>=0?'Packaging Fee (10%)':'Service Charge (10%)') + '</span><span>₱' + eoSvc.toFixed(2) + '</span></div>' +
+    '<div style="display:flex;justify-content:space-between;font-size:.78rem;opacity:.8;margin-top:2px"><span>' + (eoOrderType && eoOrderType.indexOf('TAKE')>=0?'Packaging Fee (10%)':'Service Charge (10%)') + '</span><span>₱' + eoSvc.toFixed(2) + '</span></div>' +
     '<div style="display:flex;justify-content:space-between;font-size:.95rem;font-weight:800;margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.25)"><span>NEW TOTAL</span><span>₱' + eoTotal.toFixed(2) + '</span></div>' +
   '</div>';
   var eoBodyEl = document.getElementById('eoBody');
