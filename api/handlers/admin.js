@@ -261,7 +261,16 @@ export async function routeAdmin(action, body, auth, req, res) {
         p_device:'WEB_PORTAL',p_location_ip:req.headers['x-forwarded-for']||''
       })}
     );
-    return res.status(200).json({ok:cr.ok,event:cr.data});
+    if (!cr.ok) return res.status(200).json({ok:false,error:'Clock event failed: '+cr.status});
+    // hr_clock_event() returns TABLE(ok,message,event_id) — HTTP 200 alone doesn't
+    // mean the transition was valid, must unwrap the inner result (see api/handlers/hr.js
+    // for the canonical implementation — this copy is unreachable dead code since
+    // routeHR handles 'hrClockEvent' first in api/pos.js, kept in sync for safety).
+    const inner = Array.isArray(cr.data) ? cr.data[0] : null;
+    if (!inner || inner.ok !== true) {
+      return res.status(200).json({ok:false, error: inner?.message || 'Clock event rejected'});
+    }
+    return res.status(200).json({ok:true,event:inner});
   }
 
   // ── hrEmployeeLogin — for employee portal ─────────────────────────────────

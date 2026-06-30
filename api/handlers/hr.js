@@ -98,7 +98,16 @@ export async function routeHR(action, body, auth, req, res) {
       })}
     );
     if (!cr.ok) return res.status(200).json({ok:false,error:'Clock event failed: '+cr.status});
-    return res.status(200).json({ok:true, event:cr.data});
+    // hr_clock_event() returns TABLE(ok boolean, message text, event_id uuid) — a HTTP 200
+    // here only means the RPC call itself succeeded, NOT that the clock transition was
+    // valid (e.g. clocking in twice, or clocking out while still on break are rejected
+    // by the function but still come back as HTTP 200 with ok:false inside the payload).
+    // Must unwrap and surface that inner result, or the client shows a false success screen.
+    const inner = Array.isArray(cr.data) ? cr.data[0] : null;
+    if (!inner || inner.ok !== true) {
+      return res.status(200).json({ok:false, error: inner?.message || 'Clock event rejected'});
+    }
+    return res.status(200).json({ok:true, event:inner});
   }
 
   // ── hrEmployeeLogin ────────────────────────────────────────────────────
