@@ -252,7 +252,7 @@ function scanLoop(){
   var img=ctx.getImageData(0,0,c.width,c.height);
   var code=jsQR(img.data,img.width,img.height,{inversionAttempts:'dontInvert'});
   if(code&&code.data.startsWith('YANI-CLOCKIN:')){
-    stopScan();lookupStaff(code.data.replace('YANI-CLOCKIN:',''));
+    stopScan();lookupByQr(code.data.replace('YANI-CLOCKIN:',''));
   } else {_scanTimer=setTimeout(scanLoop,200);}
 }
 function stopScan(){clearTimeout(_scanTimer);if(_stream){_stream.getTracks().forEach(function(t){t.stop();});_stream=null;}}
@@ -261,12 +261,27 @@ function stopScan(){clearTimeout(_scanTimer);if(_stream){_stream.getTracks().for
 function goManual(){stopScan();showStep('s3');setTimeout(function(){var i=document.getElementById('codeInput');if(i)i.focus();},80);}
 function lookupCode(){var v=document.getElementById('codeInput');if(v)lookupStaff(v.value);}
 
+// QR scans send the rotatable qr_token (not uppercased — it's lowercase hex).
+// Backend falls back to matching it as a plain staff_code for any
+// already-printed QR codes that still encode the old format.
+async function lookupByQr(token){
+  if(!token||!token.trim()){goManual();showErr('codeErr','QR not recognized. Enter your code instead.');return;}
+  var r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({action:'hrLookupStaff',qrToken:token.trim()})}).then(function(r){return r.json();}).catch(function(){return {ok:false,error:'Network error'};});
+  if(!r.ok){goManual();showErr('codeErr',r.error||'QR not recognized. Enter your code instead.');return;}
+  applyStaffResult(r.staff);
+}
+
 async function lookupStaff(code){
   if(!code||!code.trim()){showErr('codeErr','Enter your staff code');return;}
   var r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({action:'hrLookupStaff',staffCode:code.trim().toUpperCase()})}).then(function(r){return r.json();}).catch(function(){return {ok:false,error:'Network error'};});
   if(!r.ok){showErr('codeErr',r.error||'Staff not found');return;}
-  _staff=r.staff;_pin='';updateDots();
+  applyStaffResult(r.staff);
+}
+
+function applyStaffResult(staff){
+  _staff=staff;_pin='';updateDots();
   // Remember this staff code on device
   try{localStorage.setItem('yani_last_staff',_staff.staff_code);}catch(e){}
   var bg=ROLE_BG[_staff.role]||ROLE_BG.STAFF;

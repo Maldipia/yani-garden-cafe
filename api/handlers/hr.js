@@ -7,15 +7,41 @@ const TENANT_HR = '11111111-1111-4111-8111-111111111111';
 export async function routeHR(action, body, auth, req, res) {
 
   // ── hrLookupStaff ──────────────────────────────────────────────────────
+  // Accepts EITHER staffCode (manual entry) OR qrToken (QR scan). The QR
+  // token is a separate rotatable secret — see hrRotateQrToken — so a
+  // photographed/old QR can be invalidated without affecting staffCode.
+  // Backward-compat: if qrToken doesn't match any qr_token (e.g. an
+  // already-printed QR still encoding the plain staff_code), falls back
+  // to matching it as a staff_code so existing printed QR codes keep working.
   if (action === 'hrLookupStaff') {
     const sc = String(body.staffCode||'').trim().toUpperCase();
-    if (!sc) return res.status(400).json({ok:false,error:'staffCode required'});
-    const r = await supaFetch(
-      SUPABASE_URL+'/rest/v1/hr_staff_master?staff_code=eq.'+encodeURIComponent(sc)+
-      '&tenant_id=eq.'+TENANT_HR+'&select=id,staff_code,full_name,role,employment_status,daily_rate&limit=1'
-    );
-    const staff = Array.isArray(r.data) ? r.data[0] : null;
-    if (!staff) return res.status(200).json({ok:false,error:'Staff not found'});
+    const qr = String(body.qrToken||'').trim();
+    if (!sc && !qr) return res.status(400).json({ok:false,error:'staffCode or qrToken required'});
+
+    let staff = null;
+    if (qr) {
+      const rQr = await supaFetch(
+        SUPABASE_URL+'/rest/v1/hr_staff_master?qr_token=eq.'+encodeURIComponent(qr)+
+        '&tenant_id=eq.'+TENANT_HR+'&select=id,staff_code,full_name,role,employment_status,daily_rate&limit=1'
+      );
+      staff = Array.isArray(rQr.data) ? rQr.data[0] : null;
+      if (!staff) {
+        // Fallback: treat the scanned value as a legacy plain staff_code
+        const rLegacy = await supaFetch(
+          SUPABASE_URL+'/rest/v1/hr_staff_master?staff_code=eq.'+encodeURIComponent(qr.toUpperCase())+
+          '&tenant_id=eq.'+TENANT_HR+'&select=id,staff_code,full_name,role,employment_status,daily_rate&limit=1'
+        );
+        staff = Array.isArray(rLegacy.data) ? rLegacy.data[0] : null;
+      }
+    } else {
+      const r = await supaFetch(
+        SUPABASE_URL+'/rest/v1/hr_staff_master?staff_code=eq.'+encodeURIComponent(sc)+
+        '&tenant_id=eq.'+TENANT_HR+'&select=id,staff_code,full_name,role,employment_status,daily_rate&limit=1'
+      );
+      staff = Array.isArray(r.data) ? r.data[0] : null;
+    }
+
+    if (!staff) return res.status(200).json({ok:false,error:qr?'QR code not recognized':'Staff not found'});
     if (staff.employment_status !== 'ACTIVE') return res.status(200).json({ok:false,error:'Account inactive'});
     return res.status(200).json({ok:true,staff});
   }
@@ -111,15 +137,19 @@ export async function routeHR(action, body, auth, req, res) {
   }
 
   // ── hrEmployeeLogin ────────────────────────────────────────────────────
+  // Uses the PORTAL PIN (hr_verify_portal_pin / password_hash column) —
+  // intentionally separate from the attendance PIN (hr_verify_pin / pin_hash)
+  // used at the clock-in kiosk. A shoulder-surfed attendance PIN at the
+  // counter can no longer be used to view payslips or personal info.
   if (action === 'hrEmployeeLogin') {
     const {staffCode, pin} = body;
-    if (!staffCode||!pin) return res.status(400).json({ok:false,error:'staffCode + pin required'});
+    if (!staffCode||!pin) return res.status(400).json({ok:false,error:'staffCode + portal PIN required'});
     const vr = await supaFetch(
-      SUPABASE_URL+'/rest/v1/rpc/hr_verify_pin',
+      SUPABASE_URL+'/rest/v1/rpc/hr_verify_portal_pin',
       {method:'POST',body:JSON.stringify({p_tenant:TENANT_HR,p_staff_code:staffCode.toUpperCase(),p_pin:pin})}
     );
     if (!(Array.isArray(vr.data) && vr.data.length > 0)) {
-      return res.status(200).json({ok:false,error:'Incorrect staff code or PIN'});
+      return res.status(200).json({ok:false,error:'Incorrect staff code or portal PIN'});
     }
     const sr = await supaFetch(
       SUPABASE_URL+'/rest/v1/hr_staff_master?staff_code=eq.'+staffCode.toUpperCase()+

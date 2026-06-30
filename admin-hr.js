@@ -278,20 +278,70 @@ function renderProfileTab(s) {
     </div>
     <div class="hr-section">
       <div class="hr-section-title">🔲 Employee QR Code
-        <span style="font-size:.65rem;color:#5a4a3a;font-weight:400">— for clock-in/out</span>
+        <span style="font-size:.65rem;color:#5a4a3a;font-weight:400">— for clock-in/out only</span>
       </div>
       <div style="display:flex;align-items:flex-start;gap:16px;background:#f0fdf4;border-radius:10px;padding:14px">
-        <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent('YANI-CLOCKIN:'+s.staff_code)}&bgcolor=ffffff&color=1a3a2a&margin=4"
+        <img id="hrQrImg_${esc(s.id)}" src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent('YANI-CLOCKIN:'+(s.qr_token||s.staff_code))}&bgcolor=ffffff&color=1a3a2a&margin=4"
           style="width:90px;height:90px;border-radius:8px;border:2px solid #1a3a2a;flex-shrink:0"
           alt="QR Code for ${esc(s.staff_code)}">
         <div>
           <div style="font-size:.82rem;font-weight:700;color:#111;margin-bottom:4px">${esc(s.full_name||'—')}</div>
           <div style="font-size:.75rem;color:#5a4a3a;margin-bottom:8px">${esc(s.staff_code||'')} · ${esc(s.role||'')}</div>
-          <div style="font-size:.7rem;color:#5a4a3a;margin-bottom:8px;line-height:1.5">Staff scans this QR to clock in/out.<br>Encodes: <code style="background:#e5e7eb;padding:1px 5px;border-radius:4px">YANI-CLOCKIN:${esc(s.staff_code||'')}</code></div>
-          <button onclick="printHRQR('${esc(s.staff_code||'')}','${esc(s.full_name||'')}')" style="font-size:.72rem;background:#1a3a2a;color:#fff;border:none;border-radius:8px;padding:5px 12px;cursor:pointer">🖨️ Print QR</button>
+          <div style="font-size:.68rem;color:#5a4a3a;margin-bottom:8px;line-height:1.5">This QR only identifies the staff member — a PIN is still required to clock in. If lost or copied, regenerate it below to invalidate the old code.</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button onclick="printHRQR('${esc(s.qr_token||s.staff_code)}','${esc(s.full_name||'')}','${esc(s.staff_code||'')}')" style="font-size:.7rem;background:#1a3a2a;color:#fff;border:none;border-radius:8px;padding:5px 11px;cursor:pointer">🖨️ Print QR</button>
+            <button onclick="regenerateHRQR('${esc(s.id)}')" style="font-size:.7rem;background:#fff;color:#991b1b;border:1.5px solid #991b1b;border-radius:8px;padding:5px 11px;cursor:pointer">🔄 Regenerate QR</button>
+          </div>
         </div>
       </div>
+    </div>
+    <div class="hr-section">
+      <div class="hr-section-title">🔐 PIN Management
+        <span style="font-size:.65rem;color:#5a4a3a;font-weight:400">— two separate secrets, by design</span>
+      </div>
+      <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px 14px;margin-bottom:10px">
+        <div style="font-size:.7rem;color:#854d0e;line-height:1.6">
+          <b>Attendance PIN</b> (4–6 digits) — used only at the clock-in kiosk for Clock In/Out/Break. Fast, shared-device friendly.<br>
+          <b>Portal PIN</b> (6–8 digits) — used only to log into the employee portal (payslips, leave, profile). Deliberately separate, so a PIN seen at the counter can't be used to view personal/payroll info.
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button onclick="setHRPin('${esc(s.id)}','${esc(s.full_name||'')}','attendance')" style="font-size:.72rem;background:#1a3a2a;color:#fff;border:none;border-radius:8px;padding:7px 13px;cursor:pointer">⏱ Set Attendance PIN</button>
+        <button onclick="setHRPin('${esc(s.id)}','${esc(s.full_name||'')}','portal')" style="font-size:.72rem;background:#fff;color:#1a3a2a;border:1.5px solid #1a3a2a;border-radius:8px;padding:7px 13px;cursor:pointer">🌐 Set Portal PIN</button>
+      </div>
     </div>`;
+}
+
+function regenerateHRQR(staffId) {
+  if (!confirm('Regenerate this QR code? The old printed QR will stop working immediately.')) return;
+  api('hrRotateQrToken', {userId: currentUser?.userId, staffId}).then(function(r){
+    if (!r.ok) { showToast('Error: '+(r.error||'Failed to regenerate'), 'error'); return; }
+    var img = document.getElementById('hrQrImg_'+staffId);
+    if (img) img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=120x120&data='+encodeURIComponent('YANI-CLOCKIN:'+r.qrToken)+'&bgcolor=ffffff&color=1a3a2a&margin=4';
+    var s = _hrStaff.find(function(x){ return x.id === staffId; });
+    if (s) s.qr_token = r.qrToken;
+    showToast('QR regenerated — old code is now invalid ✅', 'success');
+  });
+}
+
+function setHRPin(staffId, name, kind) {
+  var isPortal = kind === 'portal';
+  var minLen = isPortal ? 6 : 4;
+  var maxLen = isPortal ? 8 : 6;
+  hrModal((isPortal ? '🌐 Set Portal PIN' : '⏱ Set Attendance PIN') + ' — ' + esc(name), `
+    <div class="hr-edit-row">
+      <label class="hr-edit-label">${isPortal ? 'Portal' : 'Attendance'} PIN (${minLen}-${maxLen} digits)</label>
+      <input class="hr-edit-input" id="hrNewPin" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="${maxLen}" placeholder="${isPortal ? '6-8 digits' : '4-6 digits'}">
+    </div>
+    <div style="font-size:.7rem;color:#5a4a3a;margin-top:6px">${isPortal ? 'Used only for the employee portal login — separate from the clock-in PIN.' : 'Used only at the clock-in kiosk — staff will use this with their QR or staff code.'}</div>
+  `, async function(){
+    var pin = document.getElementById('hrNewPin').value.trim();
+    var re = isPortal ? /^\d{6,8}$/ : /^\d{4,6}$/;
+    if (!re.test(pin)) { showToast('PIN must be '+minLen+'-'+maxLen+' digits', 'error'); return false; }
+    var r = await api(isPortal ? 'hrSetPortalPin' : 'hrSetPin', {userId: currentUser?.userId, staffId, pin});
+    if (!r.ok) { showToast('Error: '+(r.error||'Failed'), 'error'); return false; }
+    showToast((isPortal ? 'Portal' : 'Attendance') + ' PIN set ✅', 'success');
+  });
 }
 
 function renderPayTab(s) {
@@ -1015,15 +1065,15 @@ async function openEditStaffModal(id) {
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
-function printHRQR(staffCode, name) {
-  var url = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data='+encodeURIComponent('YANI-CLOCKIN:'+staffCode)+'&bgcolor=ffffff&color=1a3a2a&margin=8';
+function printHRQR(qrToken, name, staffCode) {
+  var url = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data='+encodeURIComponent('YANI-CLOCKIN:'+qrToken)+'&bgcolor=ffffff&color=1a3a2a&margin=8';
   var w = window.open('','_blank','width=400,height=500');
   w.document.write('<html><body style="text-align:center;font-family:sans-serif;padding:20px">'+
     '<h2 style="color:#1a3a2a;margin:0 0 4px">YANI Garden Cafe</h2>'+
     '<p style="margin:0 0 12px;font-size:.85rem;color:#555">Employee Clock-in QR Code</p>'+
     '<img src="'+url+'" style="width:200px;height:200px;display:block;margin:0 auto 12px">'+
     '<div style="font-size:1.1rem;font-weight:700;color:#1a3a2a">'+name+'</div>'+
-    '<div style="font-size:.85rem;color:#555;margin-top:4px">'+staffCode+'</div>'+
+    '<div style="font-size:.85rem;color:#555;margin-top:4px">'+(staffCode||'')+'</div>'+
     '<button onclick="window.print()" style="margin-top:16px;padding:8px 20px;background:#1a3a2a;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:.9rem">🖨️ Print</button>'+
     '</body></html>');
   w.document.close();

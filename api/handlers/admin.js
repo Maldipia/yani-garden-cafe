@@ -19,7 +19,7 @@ export async function routeAdmin(action, body, auth, req, res) {
       const TENANT_HR = '11111111-1111-4111-8111-111111111111';
       const rHR = await supaFetch(
         SUPABASE_URL + '/rest/v1/hr_staff_master?tenant_id=eq.' + TENANT_HR +
-        '&select=id,staff_code,full_name,nickname,role,employment_type,employment_status,pay_basis,daily_rate,hourly_rate,standard_hours_per_day,overtime_allowed,mobile,email,date_of_birth,date_hired,department,payout_method,payout_details,gender,civil_status,notes&order=full_name.asc'
+        '&select=id,staff_code,full_name,nickname,role,employment_type,employment_status,pay_basis,daily_rate,hourly_rate,standard_hours_per_day,overtime_allowed,mobile,email,date_of_birth,date_hired,department,payout_method,payout_details,gender,civil_status,notes,qr_token&order=full_name.asc'
       );
       if (!rHR.ok) return res.status(500).json({ ok:false, error:'Supabase HR error: ' + rHR.status });
       return res.status(200).json({ ok:true, staff: Array.isArray(rHR.data) ? rHR.data : [] });
@@ -339,6 +339,55 @@ export async function routeAdmin(action, body, auth, req, res) {
     return res.status(200).json({ok:true,holidays:r.data||[]});
   }
 
+  // ── hrSetPin — sets the ATTENDANCE PIN (clock-in/clock-out only) ───────────
+  if (action === 'hrSetPin') {
+    const authSP = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    if (!authSP.ok) return res.status(403).json({ok:false,error:authSP.error});
+    const {staffId, pin} = body;
+    if (!staffId||!pin) return res.status(400).json({ok:false,error:'staffId + pin required'});
+    if (!/^\d{4,6}$/.test(String(pin))) return res.status(400).json({ok:false,error:'PIN must be 4-6 digits'});
+    const r = await supaFetch(
+      SUPABASE_URL+'/rest/v1/rpc/hr_set_pin',
+      {method:'POST',body:JSON.stringify({p_staff_id:staffId,p_pin:String(pin)})}
+    );
+    if (!r.ok) return res.status(500).json({ok:false,error:'Failed to set attendance PIN'});
+    return res.status(200).json({ok:true});
+  }
+
+  // ── hrSetPortalPin — sets the PORTAL PIN (separate from attendance PIN) ────
+  // Used for the employee self-service portal (payslips, leave, profile).
+  // Deliberately a different secret from the attendance PIN so a PIN
+  // shoulder-surfed at the clock-in kiosk can't unlock the portal.
+  if (action === 'hrSetPortalPin') {
+    const authSPP = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    if (!authSPP.ok) return res.status(403).json({ok:false,error:authSPP.error});
+    const {staffId, pin} = body;
+    if (!staffId||!pin) return res.status(400).json({ok:false,error:'staffId + pin required'});
+    if (!/^\d{6,8}$/.test(String(pin))) return res.status(400).json({ok:false,error:'Portal PIN must be 6-8 digits'});
+    const r = await supaFetch(
+      SUPABASE_URL+'/rest/v1/rpc/hr_set_portal_pin',
+      {method:'POST',body:JSON.stringify({p_staff_id:staffId,p_pin:String(pin)})}
+    );
+    if (!r.ok) return res.status(500).json({ok:false,error:'Failed to set portal PIN'});
+    return res.status(200).json({ok:true});
+  }
+
+  // ── hrRotateQrToken — regenerates a staff's QR token, invalidating old QR ──
+  // Any photo/copy of the previous QR code becomes useless immediately —
+  // it no longer resolves to a valid staff record.
+  if (action === 'hrRotateQrToken') {
+    const authRQ = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    if (!authRQ.ok) return res.status(403).json({ok:false,error:authRQ.error});
+    const {staffId} = body;
+    if (!staffId) return res.status(400).json({ok:false,error:'staffId required'});
+    const r = await supaFetch(
+      SUPABASE_URL+'/rest/v1/rpc/hr_rotate_qr_token',
+      {method:'POST',body:JSON.stringify({p_staff_id:staffId})}
+    );
+    if (!r.ok) return res.status(500).json({ok:false,error:'Failed to rotate QR token'});
+    const newToken = Array.isArray(r.data) ? r.data[0] : r.data;
+    return res.status(200).json({ok:true, qrToken:newToken});
+  }
 
   return false;
 }

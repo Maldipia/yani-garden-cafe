@@ -73,8 +73,8 @@ input.ep-input::placeholder{color:rgba(255,255,255,.25)}
   <div class="login-card">
     <div class="login-label">Staff Code</div>
     <input id="epCode" class="ep-input" placeholder="USR_001" autocomplete="off" autocorrect="off" autocapitalize="characters" oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')document.getElementById('epPin').focus()">
-    <div class="login-label">PIN</div>
-    <input id="epPin" class="ep-input" type="password" placeholder="••••" maxlength="4" inputmode="numeric" pattern="[0-9]*" onkeydown="if(event.key==='Enter')epLogin()">
+    <div class="login-label">Portal PIN <span style="font-weight:400;color:rgba(255,255,255,.35);text-transform:none;letter-spacing:0">(not your clock-in PIN)</span></div>
+    <input id="epPin" class="ep-input" type="password" placeholder="••••••" maxlength="8" inputmode="numeric" pattern="[0-9]*" onkeydown="if(event.key==='Enter')epLogin()">
     <div class="ep-err" id="epErr"></div>
     <button class="ep-btn" onclick="epLogin()">Sign In →</button>
   </div>
@@ -111,7 +111,7 @@ function showEpErr(msg){ const e=document.getElementById('epErr'); e.textContent
 async function epLogin() {
   const code=document.getElementById('epCode').value.trim().toUpperCase();
   const pin=document.getElementById('epPin').value.trim();
-  if(!code||!pin){showEpErr('Enter staff code and PIN');return;}
+  if(!code||!pin){showEpErr('Enter staff code and portal PIN');return;}
   const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({action:'hrEmployeeLogin',staffCode:code,pin})}).then(r=>r.json()).catch(()=>({ok:false}));
   if(!r.ok){showEpErr(r.error||'Login failed');return;}
