@@ -1,10 +1,12 @@
 // ── Billing, payments, receipts, refunds, promos ──────────────────────────
+import bcrypt from 'bcryptjs';
 import { supaFetch, supa, auditLog, getSetting, logSync, pushToSheets } from '../lib/db.js';
 import { invalidateMenuCache } from '../lib/cache.js';
 import { isValidOrderId, isNonEmptyString } from '../lib/validation.js';
 import { SUPABASE_URL, SERVICE_CHARGE_RATE, BUSINESS_NAME, ORDER_PREFIX, SUPABASE_KEY } from '../lib/config.js';
 import { buildReceiptHTML, sendReceiptEmail } from '../lib/receipt.js';
 import { uploadToGoogleDrive } from '../lib/drive.js';
+import { signToken } from '../lib/auth.js';
 
 export async function routePayments(action, body, auth, req, res) {
   const { checkAuth, checkAdminAuth, jwtUser } = auth;
@@ -1038,7 +1040,78 @@ export async function routePayments(action, body, auth, req, res) {
     // AUTH ACTIONS
     // ══════════════════════════════════════════════════════════════════════
 
+    // ── verifyUserPin — admin/staff panel login ──────────────────────────────
+    if (action === 'verifyUserPin') {
+      const pin = String(body.pin || '').trim();
+      if (!pin) return res.status(400).json({ ok: false, error: 'PIN is required' });
+
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/staff_users?active=eq.true&select=user_id,username,display_name,role,pin_hash,failed_attempts,locked_until`
+      );
+      if (!r.ok || !Array.isArray(r.data)) {
+        return res.status(500).json({ ok: false, error: 'Lookup failed' });
+      }
+
+      let matched = null;
+      for (const u of r.data) {
+        if (u.locked_until && new Date(u.locked_until) > new Date()) continue;
+        if (u.pin_hash && await bcrypt.compare(pin, u.pin_hash)) { matched = u; break; }
+      }
+
+      if (!matched) {
+        return res.status(401).json({ ok: false, error: 'Incorrect PIN' });
+      }
+
+      // Reset failed attempts on success
+      await supaFetch(
+        `${SUPABASE_URL}/rest/v1/staff_users?user_id=eq.${encodeURIComponent(matched.user_id)}`,
+        { method: 'PATCH', body: JSON.stringify({ failed_attempts: 0, locked_until: null, last_login_at: new Date().toISOString() }) }
+      );
+
+      const token = await signToken(matched.user_id, matched.role, matched.display_name);
+      return res.status(200).json({
+        ok: true,
+        userId: matched.user_id,
+        username: matched.username,
+        displayName: matched.display_name,
+        role: matched.role,
+        token,
+        expiresIn: 12 * 60 * 60
+      });
+    }
+
     // ── changePin ──────────────────────────────────────────────────────────
+    if (action === 'changePin') {
+      const authCP = await checkAuth([]); // any authenticated user
+      if (!authCP.ok) return res.status(403).json({ ok: false, error: authCP.error });
+
+      const newPin = String(body.newPin || '').trim();
+      const oldPin = String(body.oldPin || '').trim();
+      if (!/^\d{4,6}$/.test(newPin)) {
+        return res.status(400).json({ ok: false, error: 'New PIN must be 4-6 digits' });
+      }
+
+      const targetUserId = authCP.userId;
+      const ur = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/staff_users?user_id=eq.${encodeURIComponent(targetUserId)}&select=pin_hash&limit=1`
+      );
+      const current = ur.data && ur.data[0];
+      if (!current) return res.status(404).json({ ok: false, error: 'User not found' });
+
+      if (oldPin) {
+        const matches = await bcrypt.compare(oldPin, current.pin_hash);
+        if (!matches) return res.status(401).json({ ok: false, error: 'Current PIN is incorrect' });
+      }
+
+      const newHash = await bcrypt.hash(newPin, 12);
+      const upd = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/staff_users?user_id=eq.${encodeURIComponent(targetUserId)}`,
+        { method: 'PATCH', body: JSON.stringify({ pin_hash: newHash }) }
+      );
+      if (!upd.ok) return res.status(500).json({ ok: false, error: 'Failed to update PIN' });
+
+      return res.status(200).json({ ok: true });
+    }
 
   return false;
 }
