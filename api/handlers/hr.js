@@ -33,6 +33,41 @@ export async function routeHR(action, body, auth, req, res) {
     return res.status(200).json({ok});
   }
 
+  // ── hrGetClockStatus ───────────────────────────────────────────────────
+  // Returns the staff member's current clock state so the UI can show only
+  // the valid next action (e.g. if already clocked in, only offer Clock Out
+  // / Break Start — not Clock In again).
+  if (action === 'hrGetClockStatus') {
+    const sc = String(body.staffCode||'').trim().toUpperCase();
+    if (!sc) return res.status(400).json({ok:false,error:'staffCode required'});
+    const sr = await supaFetch(
+      SUPABASE_URL+'/rest/v1/hr_staff_master?staff_code=eq.'+encodeURIComponent(sc)+
+      '&tenant_id=eq.'+TENANT_HR+'&select=id&limit=1'
+    );
+    const staffId = sr.data?.[0]?.id;
+    if (!staffId) return res.status(200).json({ok:false,error:'Staff not found'});
+
+    // "Today" in Asia/Manila (UTC+8), matching the hr_clock_event() SQL function
+    const phNow = new Date(Date.now() + 8*60*60*1000);
+    const todayPH = phNow.toISOString().slice(0,10);
+
+    const lr = await supaFetch(
+      SUPABASE_URL+'/rest/v1/hr_time_logs?staff_id=eq.'+staffId+'&tenant_id=eq.'+TENANT_HR+
+      '&log_date=eq.'+todayPH+'&select=event_type,event_time&order=event_time.desc,created_at.desc&limit=1'
+    );
+    const last = lr.data?.[0] || null;
+    const lastType = last?.event_type || null;
+
+    let state = 'OUT';
+    if (lastType === 'CLOCK_IN' || lastType === 'BREAK_END' || lastType === 'BROKEN_TIME_END') state = 'IN';
+    else if (lastType === 'BREAK_START') state = 'ON_BREAK';
+    else if (lastType === 'BROKEN_TIME_START') state = 'ON_BROKEN';
+    else if (lastType === 'CLOCK_OUT') state = 'OUT';
+    // else (no logs today) stays 'OUT'
+
+    return res.status(200).json({ok:true, state, lastEvent:lastType, lastEventTime:last?.event_time||null});
+  }
+
   // ── hrClockEvent ───────────────────────────────────────────────────────
   if (action === 'hrClockEvent') {
     const {staffCode, eventType, pin} = body;
