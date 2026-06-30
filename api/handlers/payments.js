@@ -1065,7 +1065,7 @@ export async function routePayments(action, body, auth, req, res) {
       // Reset failed attempts on success
       await supaFetch(
         `${SUPABASE_URL}/rest/v1/staff_users?user_id=eq.${encodeURIComponent(matched.user_id)}`,
-        { method: 'PATCH', body: JSON.stringify({ failed_attempts: 0, locked_until: null, last_login_at: new Date().toISOString() }) }
+        { method: 'PATCH', body: JSON.stringify({ failed_attempts: 0, locked_until: null, last_login: new Date().toISOString() }) }
       );
 
       const token = await signToken(matched.user_id, matched.role, matched.display_name);
