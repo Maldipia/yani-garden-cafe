@@ -729,13 +729,31 @@ function openEditOrder(orderId) {
   // Show cancel-order button only for non-completed/non-cancelled orders
   document.getElementById('eoCancelOrderBtn').style.display = '';
   document.getElementById('eoOverlay').classList.add('open');
+  // Lock background page scroll so touch drags can't fall through to the page
+  // behind the modal (this was the cause of "messy / can't scroll up" on mobile).
+  window._eoBodyScrollY = window.scrollY || window.pageYOffset || 0;
+  document.body.style.position = 'fixed';
+  document.body.style.top = '-' + window._eoBodyScrollY + 'px';
+  document.body.style.left = '0';
+  document.body.style.right = '0';
+  document.body.style.overflow = 'hidden';
   eoRenderBody();
+}
+
+function eoUnlockBodyScroll() {
+  document.body.style.position = '';
+  document.body.style.top = '';
+  document.body.style.left = '';
+  document.body.style.right = '';
+  document.body.style.overflow = '';
+  window.scrollTo(0, window._eoBodyScrollY || 0);
 }
 
 function closeEditOrder(evt) {
   if (evt && evt.target !== document.getElementById('eoOverlay')) return;
   document.getElementById('eoOverlay').classList.remove('open');
   eoOrderId = null; eoItems = [];
+  eoUnlockBodyScroll();
 }
 
 function eoRenderBody() {
@@ -797,7 +815,10 @@ function eoRenderBody() {
     '<div style="display:flex;justify-content:space-between;font-size:.78rem;opacity:.8;margin-top:2px"><span>' + (o.orderType&&o.orderType.indexOf('TAKE')>=0?'Packaging Fee (10%)':'Service Charge (10%)') + '</span><span>₱' + eoSvc.toFixed(2) + '</span></div>' +
     '<div style="display:flex;justify-content:space-between;font-size:.95rem;font-weight:800;margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.25)"><span>NEW TOTAL</span><span>₱' + eoTotal.toFixed(2) + '</span></div>' +
   '</div>';
-  document.getElementById('eoBody').innerHTML = html;
+  var eoBodyEl = document.getElementById('eoBody');
+  var eoPrevScroll = eoBodyEl ? eoBodyEl.scrollTop : 0;
+  eoBodyEl.innerHTML = html;
+  eoBodyEl.scrollTop = eoPrevScroll;
 }
 
 function eoSetCat(cat) {
@@ -846,6 +867,7 @@ async function eoCancelOrder() {
     renderStats(); renderFilters(); renderOrders();
     document.getElementById('eoOverlay').classList.remove('open');
     eoOrderId = null; eoItems = [];
+    eoUnlockBodyScroll();
   } else {
     showToast('❌ Failed to cancel: ' + (result.error || 'Unknown error'), 'error');
   }
@@ -873,6 +895,7 @@ async function eoSaveChanges() {
       // Close modal immediately so staff sees response
       document.getElementById('eoOverlay').classList.remove('open');
       eoOrderId = null; eoItems = [];
+      eoUnlockBodyScroll();
       // Reload fresh from DB — discount/total may have changed
       await loadOrders();
       renderStats(); renderFilters(); renderOrders();

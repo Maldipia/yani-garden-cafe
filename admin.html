@@ -597,7 +597,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 }
 .po-header-title { flex:1; font-family:var(--font-soul); font-size:1.1rem; font-weight:700 }
 .po-close { background:none; border:none; color:#fff; font-size:1.5rem; cursor:pointer; padding:4px }
-.po-body { flex:1; overflow-y:auto; padding:16px }
+.po-body { flex:1; overflow-y:auto; padding:16px; -webkit-overflow-scrolling:touch; overscroll-behavior:contain }
 
 /* ── Staff POS two-column layout ── */
 #spOverlay .po-modal {
@@ -928,6 +928,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 .eo-overlay {
   position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:200;
   display:none; align-items:flex-end; justify-content:center;
+  overscroll-behavior:contain;
 }
 .eo-overlay.open { display:flex }
 .eo-modal {
@@ -942,7 +943,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 }
 .eo-header-title { flex:1; font-family:var(--font-soul); font-size:1.1rem; font-weight:700 }
 .eo-close { background:none; border:none; color:#fff; font-size:1.5rem; cursor:pointer; padding:4px }
-.eo-body { flex:1; overflow-y:auto; padding:16px }
+.eo-body { flex:1; overflow-y:auto; padding:16px; -webkit-overflow-scrolling:touch; overscroll-behavior:contain }
 .eo-section-title {
   font-size:.78rem; font-weight:700; color:var(--timber); text-transform:uppercase;
   letter-spacing:.05em; margin-bottom:10px; margin-top:16px;
@@ -1023,7 +1024,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 }
 .ol-edit-header-title { flex:1; font-family:var(--font-soul); font-size:1.1rem; font-weight:700 }
 .ol-edit-close { background:none; border:none; color:#fff; font-size:1.5rem; cursor:pointer; padding:4px }
-.ol-edit-body { flex:1; overflow-y:auto; padding:20px }
+.ol-edit-body { flex:1; overflow-y:auto; padding:20px; -webkit-overflow-scrolling:touch; overscroll-behavior:contain }
 .ol-edit-footer {
   background:var(--white); padding:14px 20px; border-top:2px solid var(--mist);
   display:flex; gap:10px;
@@ -2279,7 +2280,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 
 <script src="/admin-core.js?v=41"></script>
 
-  <script src="/admin-orders.js?v=27"></script>
+  <script src="/admin-orders.js?v=28"></script>
 <script src="/admin-payments.js?v=24"></script>
 <script src="/admin-hr.js?v=8"></script>
   <script src="/admin-menu.js?v=24"></script>
