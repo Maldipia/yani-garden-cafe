@@ -121,9 +121,11 @@ function renderMenuMgrGrid() {
     var imgHtml = '<img src="' + imgSrc + '" class="mm-thumb" onerror="' + onerrorAttr + '">' +
       '<div class="mm-thumb-placeholder" style="display:none">🍽</div>';
 
-    var priceDisplay = item.hasSizes
-      ? '₱' + item.priceShort + ' / ₱' + item.priceMedium + ' / ₱' + item.priceTall
-      : '₱' + item.price;
+    var priceDisplay = item.hasPortions
+      ? '🍰 ₱' + (item.priceSlice||0) + ' / 🎂 ₱' + (item.priceWhole||0)
+      : item.hasSizes
+        ? '₱' + item.priceShort + ' / ₱' + item.priceMedium + ' / ₱' + item.priceTall
+        : '₱' + item.price;
     var catLabel = (item.category || 'Other').trim();
     var pillClass = isActive ? 'on' : 'off';
     var statusBadge = isActive
@@ -182,9 +184,12 @@ async function quickToggleItem(itemCode, currentlyActive) {
     price:       item.price,
     hasSizes:    item.hasSizes,
     hasSugar:    item.hasSugar,
+    hasPortions: item.hasPortions,
     priceShort:  item.priceShort,
     priceMedium: item.priceMedium,
     priceTall:   item.priceTall,
+    priceSlice:  item.priceSlice,
+    priceWhole:  item.priceWhole,
     image:       item.image || '',
     status:      newStatus,
   };
@@ -220,9 +225,12 @@ async function quickToggleSignature(itemCode) {
     price:       item.price,
     hasSizes:    item.hasSizes,
     hasSugar:    item.hasSugar,
+    hasPortions: item.hasPortions,
     priceShort:  item.priceShort,
     priceMedium: item.priceMedium,
     priceTall:   item.priceTall,
+    priceSlice:  item.priceSlice,
+    priceWhole:  item.priceWhole,
     image:       item.image || '',
     status:      item.active ? 'ACTIVE' : 'INACTIVE',
     isSignature: newVal,
@@ -334,6 +342,18 @@ function openAddItemModal() {
   document.getElementById('menuEditHasSizes').onchange = function() {
     document.getElementById('menuEditSizePrices').style.display = this.checked ? '' : 'none';
   };
+  // Reset portion fields
+  var hasPortionsEl = document.getElementById('menuEditHasPortions');
+  var portionPricesEl = document.getElementById('menuEditPortionPrices');
+  if (hasPortionsEl) {
+    hasPortionsEl.checked = false;
+    document.getElementById('menuEditSlice').value = '';
+    document.getElementById('menuEditWhole').value = '';
+    if (portionPricesEl) portionPricesEl.style.display = 'none';
+    hasPortionsEl.onchange = function() {
+      if (portionPricesEl) portionPricesEl.style.display = this.checked ? '' : 'none';
+    };
+  }
   clearMenuSchedule();
   previewMenuImage('');
   document.getElementById('menuEditOverlay').style.display = 'block';
