@@ -1458,14 +1458,23 @@ function apiItemToMenuData(item) {
       tall:   parseFloat(item.priceTall)   || parseFloat(item.price) || 0
     };
   }
+  var portions = null;
+  if (item.hasPortions) {
+    portions = {
+      slice: parseFloat(item.priceSlice) || parseFloat(item.price) || 0,
+      whole: parseFloat(item.priceWhole) || parseFloat(item.price) || 0
+    };
+  }
   return {
-    code:      item.code,
-    name:      item.name,
-    category:  item.category,
-    price:     parseFloat(item.price) || 0,
-    hasSizes:  !!item.hasSizes,
-    hasSugar:  !!item.hasSugar,
-    sizes:     sizes,
+    code:        item.code,
+    name:        item.name,
+    category:    item.category,
+    price:       parseFloat(item.price) || 0,
+    hasSizes:    !!item.hasSizes,
+    hasSugar:    !!item.hasSugar,
+    hasPortions: !!item.hasPortions,
+    sizes:       sizes,
+    portions:    portions,
     available:      item.available !== false,
     availableFrom:  item.availableFrom  || null,
     availableUntil: item.availableUntil || null,
@@ -1911,7 +1920,9 @@ function renderMenu() {
     var cartQty = getCartQty(item.code);
     var badge = cartQty > 0 ? '<span class="menu-badge">' + cartQty + '</span>' : '';
     var priceStr = '';
-    if (item.hasSizes && item.sizes) {
+    if (item.hasPortions && item.portions) {
+      priceStr = '<span class="menu-price">🍰 ' + peso(item.portions.slice) + '</span> <span class="menu-price-range"> / 🎂 ' + peso(item.portions.whole) + '</span>';
+    } else if (item.hasSizes && item.sizes) {
       priceStr = '<span class="menu-price">' + peso(item.sizes.short) + '</span> <span class="menu-price-range">- ' + peso(item.sizes.tall) + '</span>';
     } else {
       priceStr = '<span class="menu-price">' + peso(item.price) + '</span>';
@@ -1980,9 +1991,15 @@ function _doAddItem(code) {
   });
 
   // No options needed and no addons → add directly
-  if (!item.hasSizes && !item.hasSugar && applicableAddons.length === 0) {
+  if (!item.hasPortions && !item.hasSizes && !item.hasSugar && applicableAddons.length === 0) {
     addToCart(item, null, null, null, item.price, []);
     toast(esc(item.name) + ' added');
+    return;
+  }
+
+  // Has portions (Slice / Whole) — show portion selector first
+  if (item.hasPortions && item.portions) {
+    showPortionSelector(item, applicableAddons);
     return;
   }
 
@@ -2012,6 +2029,59 @@ function _doAddItem(code) {
     showSizeSelector(item);
   } else {
     showSugarSelector(item, null, null, item.price);
+  }
+}
+
+function showPortionSelector(item, applicableAddons) {
+  var html = '<div class="opt-header">' +
+    '<div class="opt-item-name">' + esc(item.name) + '</div>' +
+    '<div class="opt-item-detail">' + esc(item.category) + '</div>' +
+  '</div>' +
+  '<div class="opt-label">Choose Portion</div>' +
+  '<div class="opt-group" id="portionGroup">' +
+    '<button class="opt-btn" data-portion="Slice" data-price="' + item.portions.slice + '" onclick="selectPortion(this)">' +
+      '<div class="opt-btn-radio"></div>' +
+      '<div class="opt-btn-text"><div class="opt-btn-main">🍰 Slice</div></div>' +
+      '<div class="opt-btn-price">' + peso(item.portions.slice) + '</div>' +
+    '</button>' +
+    '<button class="opt-btn" data-portion="Whole" data-price="' + item.portions.whole + '" onclick="selectPortion(this)">' +
+      '<div class="opt-btn-radio"></div>' +
+      '<div class="opt-btn-text"><div class="opt-btn-main">🎂 Whole</div></div>' +
+      '<div class="opt-btn-price">' + peso(item.portions.whole) + '</div>' +
+    '</button>' +
+  '</div>' +
+  '<button class="opt-confirm" onclick="portionNext(\'' + item.code + '\')">Next →</button>';
+
+  document.getElementById('optContent').innerHTML = html;
+  openModal('optModal');
+}
+
+function selectPortion(btn) {
+  document.querySelectorAll('#portionGroup .opt-btn').forEach(function(b) { b.classList.remove('selected'); });
+  btn.classList.add('selected');
+}
+
+function portionNext(code) {
+  var item = MENU_DATA.find(function(m) { return m.code === code; });
+  var sel = document.querySelector('#portionGroup .opt-btn.selected');
+  if (!sel) { toast('Please choose Slice or Whole'); return; }
+
+  var portionLabel = sel.dataset.portion;  // "Slice" or "Whole"
+  var price = Number(sel.dataset.price);
+
+  // Portion stored in size_choice column (same as size) — portionLabel is "Slice" or "Whole"
+  var applicableAddons = ADDONS_DATA.filter(function(a) {
+    return a.applies_to_all || (a.applies_to_codes || []).includes(code);
+  });
+
+  if (item.hasSugar) {
+    showSugarSelector(item, portionLabel, portionLabel, price);
+  } else if (applicableAddons.length > 0) {
+    showAddonSelector(item, portionLabel, portionLabel, null, price, applicableAddons);
+  } else {
+    addToCart(item, portionLabel, portionLabel, null, price, []);
+    closeModal('optModal');
+    toast(esc(item.name) + ' (' + portionLabel + ') added');
   }
 }
 
