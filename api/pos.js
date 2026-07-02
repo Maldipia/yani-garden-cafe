@@ -16,6 +16,7 @@ import { routeAdmin }      from './handlers/admin.js';
 import { routeHR }         from './handlers/hr.js';
 import { routeCardPortal } from './handlers/card-portal.js';
 import { routeExpenses }  from './handlers/expenses.js';
+import { routeCustomers }  from './handlers/customers.js';
 import { routeReviews }    from './handlers/reviews.js';
 import { routeDocs }       from './handlers/docs.js';
 
@@ -72,6 +73,7 @@ export default async function handler(req, res) {
       await routePayments   (action, body, auth, req, res) ||
       await routeCardPortal (action, body, auth, req, res) ||
       await routeExpenses   (action, body, auth, req, res) ||
+      await routeCustomers  (action, body, auth, req, res) ||
       await routeReviews    (action, body, auth, req, res) ||
       await routeDocs       (action, body, auth, req, res) ||
       await routeHR         (action, body, auth, req, res) ||
