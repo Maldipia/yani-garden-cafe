@@ -61,6 +61,9 @@ export async function routeOrders(action, body, auth, req, res) {
             if (size === 'short'  && dbItem.price_short)  validBase = parseFloat(dbItem.price_short);
             if (size === 'medium' && dbItem.price_medium) validBase = parseFloat(dbItem.price_medium);
             if (size === 'tall'   && dbItem.price_tall)   validBase = parseFloat(dbItem.price_tall);
+            // Portion items: size_choice stores "Slice" or "Whole"
+            if (size === 'slice'  && dbItem.price_slice)  validBase = parseFloat(dbItem.price_slice);
+            if (size === 'whole'  && dbItem.price_whole)  validBase = parseFloat(dbItem.price_whole);
             // Add addon prices to valid total
             const addons = Array.isArray(item.addons) ? item.addons : [];
             let addonTotal = 0;
@@ -97,7 +100,7 @@ export async function routeOrders(action, body, auth, req, res) {
       // Look up prices from menu
       const itemCodes = [...new Set(items.map(i => i.code))];
       const menuR = await supaFetch(
-        `${SUPABASE_URL}/rest/v1/menu_items?item_code=in.(${itemCodes.map(c => `"${c}"`).join(',')})&is_active=eq.true&select=item_code,name,base_price,has_sizes,price_short,price_medium,price_tall`
+        `${SUPABASE_URL}/rest/v1/menu_items?item_code=in.(${itemCodes.map(c => `"${c}"`).join(',')})&is_active=eq.true&select=item_code,name,base_price,has_sizes,price_short,price_medium,price_tall,has_portions,price_slice,price_whole`
       );
       const menuMap = {};
       if (menuR.ok && Array.isArray(menuR.data)) {
@@ -398,6 +401,15 @@ export async function routeOrders(action, body, auth, req, res) {
         vatEnabled,
         total,
       });
+    }
+
+    // ── getTables — returns all cafe_tables for staff panel dropdown ───────
+    if (action === 'getTables') {
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/cafe_tables?select=id,table_number,table_name,capacity,status,qr_token&order=table_number.asc`
+      );
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to load tables' });
+      return res.status(200).json({ ok: true, tables: r.data || [] });
     }
 
     // ── getOrders ──────────────────────────────────────────────────────────
