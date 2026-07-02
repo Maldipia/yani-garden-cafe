@@ -428,7 +428,7 @@ function spRenderMenu() {
     return;
   }
   grid.innerHTML = filtered.map(function(it) {
-    var priceStr = it.hasSizes ? ('₱' + it.priceShort + '–₱' + it.priceTall) : ('₱' + (it.price||it.basePrice||0));
+    var priceStr = it.hasPortions ? ('₱' + it.priceSlice + ' / ₱' + it.priceWhole) : it.hasSizes ? ('₱' + it.priceShort + '–₱' + it.priceTall) : ('₱' + (it.price||it.basePrice||0));
     // Use stored image_path directly. For /images/xxx.png paths (no http), it's a Vercel static asset.
     // Only fall back to code-based path if image is empty.
     var imgSrc = (it.image && it.image.trim()) ? it.image : getLocalMenuImgPath(it.code);
@@ -451,11 +451,13 @@ function spAddItem(code) {
   var item = spMenuItems.find(function(it){ return it.code === code; });
   if (!item) return;
   spAddingItem = { code:item.code, name:item.name, hasSizes:item.hasSizes, hasSugar:item.hasSugar,
+    hasPortions:item.hasPortions, priceSlice:parseFloat(item.priceSlice)||0, priceWhole:parseFloat(item.priceWhole)||0,
     price:parseFloat(item.price)||0, priceShort:parseFloat(item.priceShort)||0, priceMedium:parseFloat(item.priceMedium)||0, priceTall:parseFloat(item.priceTall)||0,
     size:'', sugarLevel:'', qty:1 };
   // Redirect po-popup callbacks to sp handlers
   _spPopupMode = true;
-  if (item.hasSizes) showSizePopup();
+  if (item.hasPortions) showPortionPopup();
+  else if (item.hasSizes) showSizePopup();
   else if (item.hasSugar) showSugarPopup();
   else spFinishAdd();
 }
@@ -673,6 +675,9 @@ function poAddItem(code) {
     code: item.code,
     name: item.name,
     hasSizes: item.hasSizes,
+    hasPortions: item.hasPortions,
+    priceSlice: parseFloat(item.priceSlice)||0,
+    priceWhole: parseFloat(item.priceWhole)||0,
     hasSugar: item.hasSugar,
     price: item.price,
     priceShort: item.priceShort,
@@ -684,13 +689,41 @@ function poAddItem(code) {
   };
 
   // If has sizes → show size popup
-  if (item.hasSizes) {
+  if (item.hasPortions) {
+    showPortionPopup();
+  } else if (item.hasSizes) {
     showSizePopup();
   } else if (item.hasSugar) {
     showSugarPopup();
   } else {
     // No options — add directly
     poFinishAdd();
+  }
+}
+
+function showPortionPopup() {
+  var it = _spPopupMode ? spAddingItem : poAddingItem;
+  var html = '<div class="po-popup-title">' + esc(it.name) + '</div>'
+    + '<div class="po-popup-sub">Choose portion</div>'
+    + '<div class="po-option" onclick="poSelectPortion(\'Slice\',' + it.priceSlice + ')">'
+    +   '<span class="po-option-label">🍰 Slice</span><span class="po-option-price">₱' + it.priceSlice + '</span>'
+    + '</div>'
+    + '<div class="po-option" onclick="poSelectPortion(\'Whole\',' + it.priceWhole + ')">'
+    +   '<span class="po-option-label">🎂 Whole</span><span class="po-option-price">₱' + it.priceWhole + '</span>'
+    + '</div>';
+  document.getElementById('poPopupBox').innerHTML = html;
+  document.getElementById('poPopup').classList.add('open');
+}
+
+function poSelectPortion(portion, price) {
+  var item = _spPopupMode ? spAddingItem : poAddingItem;
+  item.size = portion; // reuse size_choice column — stores "Slice" or "Whole"
+  item.price = price;
+  document.getElementById('poPopup').classList.remove('open');
+  if (item.hasSugar) {
+    setTimeout(showSugarPopup, 200);
+  } else {
+    _spPopupMode ? spFinishAdd() : poFinishAdd();
   }
 }
 

@@ -19,7 +19,7 @@ export async function routeMenu(action, body, auth, req, res) {
         const ctrl = new AbortController();
         const timeoutId = setTimeout(() => ctrl.abort(), 5000);
         r = await supaFetch(
-          `${SUPABASE_URL}/rest/v1/menu_items?is_active=eq.true&order=name.asc&select=item_code,name,base_price,has_sizes,has_sugar_levels,price_short,price_medium,price_tall,image_path,category_id,is_signature,available_from,available_until,available_days,has_coffee,has_tea,has_chocolate,has_matcha,has_caffeine,is_caffeine_free,is_food`,
+          `${SUPABASE_URL}/rest/v1/menu_items?is_active=eq.true&order=name.asc&select=item_code,name,base_price,has_sizes,has_sugar_levels,price_short,price_medium,price_tall,has_portions,price_slice,price_whole,image_path,category_id,is_signature,available_from,available_until,available_days,has_coffee,has_tea,has_chocolate,has_matcha,has_caffeine,is_caffeine_free,is_food`,
           { signal: ctrl.signal }
         );
         clearTimeout(timeoutId);
@@ -55,6 +55,12 @@ export async function routeMenu(action, body, auth, req, res) {
           name:           m.name,
           price:          m.base_price,
           hasSizes:       m.has_sizes,
+        hasPortions:    m.has_portions,
+        priceSlice:     m.price_slice,
+        priceWhole:     m.price_whole,
+          hasPortions:    m.has_portions,
+          priceSlice:     m.price_slice,
+          priceWhole:     m.price_whole,
           hasSugar:       m.has_sugar_levels,
           priceShort:     m.price_short,
           priceMedium:    m.price_medium,
@@ -89,7 +95,7 @@ export async function routeMenu(action, body, auth, req, res) {
         return res.status(200).json({ ok: true, items: menuCache.admin, cached: true });
       }
       const r = await supaFetch(
-        `${SUPABASE_URL}/rest/v1/menu_items?order=name.asc&select=item_code,name,base_price,has_sizes,has_sugar_levels,price_short,price_medium,price_tall,image_path,category_id,is_active,is_signature,available_from,available_until,available_days,has_coffee,has_tea,has_chocolate,has_matcha,has_caffeine,is_caffeine_free,is_food`
+        `${SUPABASE_URL}/rest/v1/menu_items?order=name.asc&select=item_code,name,base_price,has_sizes,has_sugar_levels,price_short,price_medium,price_tall,has_portions,price_slice,price_whole,image_path,category_id,is_active,is_signature,available_from,available_until,available_days,has_coffee,has_tea,has_chocolate,has_matcha,has_caffeine,is_caffeine_free,is_food`
       );
       if (!r.ok) return res.status(502).json({ ok: false, error: 'Failed to load menu' });
       const items = r.data.map(m => ({
@@ -134,6 +140,9 @@ export async function routeMenu(action, body, auth, req, res) {
         category_id:      getCategoryId(body.category),
         base_price:       parseFloat(body.price) || 0,
         has_sizes:        !!body.hasSizes,
+        has_portions:     !!body.hasPortions,
+        price_slice:      body.priceSlice  != null ? parseFloat(body.priceSlice)  : null,
+        price_whole:      body.priceWhole != null ? parseFloat(body.priceWhole) : null,
         has_sugar_levels: !!body.hasSugar,
         price_short:      body.priceShort  != null ? parseFloat(body.priceShort)  : null,
         price_medium:     body.priceMedium != null ? parseFloat(body.priceMedium) : null,
@@ -164,7 +173,10 @@ export async function routeMenu(action, body, auth, req, res) {
       if (body.name      !== undefined) updates.name             = body.name;
       if (body.category  !== undefined) updates.category_id      = getCategoryId(body.category);
       if (body.price     !== undefined) updates.base_price        = parseFloat(body.price) || 0;
-      if (body.hasSizes  !== undefined) updates.has_sizes         = !!body.hasSizes;
+      if (body.hasSizes     !== undefined) updates.has_sizes     = !!body.hasSizes;
+      if (body.hasPortions  !== undefined) updates.has_portions  = !!body.hasPortions;
+      if (body.priceSlice   !== undefined) updates.price_slice   = body.priceSlice  != null ? parseFloat(body.priceSlice)  : null;
+      if (body.priceWhole   !== undefined) updates.price_whole   = body.priceWhole != null ? parseFloat(body.priceWhole) : null;
       if (body.hasSugar  !== undefined) updates.has_sugar_levels  = !!body.hasSugar;
       if (body.priceShort  !== undefined) updates.price_short     = body.priceShort  != null ? parseFloat(body.priceShort)  : null;
       if (body.priceMedium !== undefined) updates.price_medium    = body.priceMedium != null ? parseFloat(body.priceMedium) : null;

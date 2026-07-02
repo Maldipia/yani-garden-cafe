@@ -274,6 +274,20 @@ function openEditItemModal(itemCode) {
   document.getElementById('menuEditTall').value = item.priceTall || '';
   document.getElementById('menuEditImage').value = item.image || '';
   document.getElementById('menuEditStatus').value = item.active ? 'ACTIVE' : 'INACTIVE';
+
+  // Portions (Slice / Whole)
+  var hasPortionsEl = document.getElementById('menuEditHasPortions');
+  var portionPricesEl = document.getElementById('menuEditPortionPrices');
+  if (hasPortionsEl) {
+    hasPortionsEl.checked = !!item.hasPortions;
+    document.getElementById('menuEditSlice').value = item.priceSlice || '';
+    document.getElementById('menuEditWhole').value = item.priceWhole || '';
+    if (portionPricesEl) portionPricesEl.style.display = item.hasPortions ? '' : 'none';
+    hasPortionsEl.onchange = function() {
+      if (portionPricesEl) portionPricesEl.style.display = this.checked ? '' : 'none';
+    };
+  }
+
   // Load content tags
   var tagMap = {tagHasCoffee:'hasCoffee',tagHasTea:'hasTea',tagHasChocolate:'hasChocolate',
     tagHasMatcha:'hasMatcha',tagHasCaffeine:'hasCaffeine',tagIsCaffeineFree:'isCaffeineFree',tagIsFood:'isFood'};
@@ -505,6 +519,10 @@ async function saveMenuItemEdit() {
   var priceShort = parseFloat(document.getElementById('menuEditShort').value) || 0;
   var priceMedium = parseFloat(document.getElementById('menuEditMedium').value) || 0;
   var priceTall = parseFloat(document.getElementById('menuEditTall').value) || 0;
+  var hasPortionsEl = document.getElementById('menuEditHasPortions');
+  var hasPortions = hasPortionsEl ? hasPortionsEl.checked : false;
+  var priceSlice = parseFloat((document.getElementById('menuEditSlice')||{}).value) || 0;
+  var priceWhole = parseFloat((document.getElementById('menuEditWhole')||{}).value) || 0;
   var image = document.getElementById('menuEditImage').value.trim();
   var status = document.getElementById('menuEditStatus').value;
 
@@ -521,7 +539,9 @@ async function saveMenuItemEdit() {
   var isNew = document.getElementById('menuEditIsNew').value === 'true';
   var action = isNew ? 'addMenuItem' : 'updateMenuItem';
   var payload = { name:name, category:category, price:price, hasSizes:hasSizes, hasSugar:hasSugar,
-    priceShort:priceShort, priceMedium:priceMedium, priceTall:priceTall, image:image, status:status,
+    priceShort:priceShort, priceMedium:priceMedium, priceTall:priceTall,
+    hasPortions:hasPortions, priceSlice:priceSlice, priceWhole:priceWhole,
+    image:image, status:status,
     userId: currentUser && currentUser.userId };
   // Menu scheduling
   var fromEl = document.getElementById('menuEditAvailFrom');

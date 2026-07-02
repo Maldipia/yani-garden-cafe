@@ -1781,6 +1781,9 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
         <label style="font-size:.75rem;font-weight:700;color:var(--timber)">
           <input type="checkbox" id="menuEditHasSugar" style="margin-right:6px">Has Sweetness
         </label>
+        <label style="font-size:.75rem;font-weight:700;color:var(--timber)">
+          <input type="checkbox" id="menuEditHasPortions" style="margin-right:6px">Has Portions (Slice / Whole)
+        </label>
       </div>
       <div id="menuEditSizePrices" style="display:none;margin-bottom:12px;background:var(--mist-light);border-radius:8px;padding:12px">
         <div style="font-size:.75rem;font-weight:700;color:var(--timber);margin-bottom:8px">SIZE PRICES (₱)</div>
@@ -1788,6 +1791,13 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
           <div><label style="font-size:.68rem;color:var(--timber);display:block;margin-bottom:3px">SHORT</label><input id="menuEditShort" type="number" min="0" step="1" style="width:100%;padding:8px;border:1.5px solid var(--mist);border-radius:6px;font-size:.85rem;font-family:var(--font-body)"></div>
           <div><label style="font-size:.68rem;color:var(--timber);display:block;margin-bottom:3px">MEDIUM</label><input id="menuEditMedium" type="number" min="0" step="1" style="width:100%;padding:8px;border:1.5px solid var(--mist);border-radius:6px;font-size:.85rem;font-family:var(--font-body)"></div>
           <div><label style="font-size:.68rem;color:var(--timber);display:block;margin-bottom:3px">TALL</label><input id="menuEditTall" type="number" min="0" step="1" style="width:100%;padding:8px;border:1.5px solid var(--mist);border-radius:6px;font-size:.85rem;font-family:var(--font-body)"></div>
+        </div>
+      </div>
+      <div id="menuEditPortionPrices" style="display:none;margin-bottom:12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px">
+        <div style="font-size:.75rem;font-weight:700;color:#166534;margin-bottom:8px">🍰 PORTION PRICES (₱)</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div><label style="font-size:.68rem;color:#166534;display:block;margin-bottom:3px">SLICE</label><input id="menuEditSlice" type="number" min="0" step="1" style="width:100%;padding:8px;border:1.5px solid #bbf7d0;border-radius:6px;font-size:.85rem;font-family:var(--font-body)"></div>
+          <div><label style="font-size:.68rem;color:#166534;display:block;margin-bottom:3px">WHOLE</label><input id="menuEditWhole" type="number" min="0" step="1" style="width:100%;padding:8px;border:1.5px solid #bbf7d0;border-radius:6px;font-size:.85rem;font-family:var(--font-body)"></div>
         </div>
       </div>
       <div style="margin-bottom:12px">
@@ -2281,9 +2291,9 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 <script src="/admin-core.js?v=42"></script>
 
   <script src="/admin-orders.js?v=30"></script>
-<script src="/admin-payments.js?v=24"></script>
+<script src="/admin-payments.js?v=25"></script>
 <script src="/admin-hr.js?v=9"></script>
-  <script src="/admin-menu.js?v=24"></script>
+  <script src="/admin-menu.js?v=25"></script>
 <script src="/admin-online.js?v=27"></script>
 <script src="/admin-tables.js?v=20"></script>
 <script src="/admin-checkout.js?v=22"></script>

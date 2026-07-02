@@ -2080,7 +2080,7 @@ function spRenderMenu() {
     return;
   }
   grid.innerHTML = filtered.map(function(it) {
-    var priceStr = it.hasSizes ? ('₱' + it.priceShort + '–₱' + it.priceTall) : ('₱' + (it.price||it.basePrice||0));
+    var priceStr = it.hasPortions ? ('₱' + it.priceSlice + ' / ₱' + it.priceWhole) : it.hasSizes ? ('₱' + it.priceShort + '–₱' + it.priceTall) : ('₱' + (it.price||it.basePrice||0));
     // Image: use stored image_path directly (it.image from getMenu API).
     // Only fall back to local path construction if no image stored.
     // This handles both /images/C014.png paths AND http:// Supabase URLs.
@@ -2103,12 +2103,13 @@ function spRenderMenu() {
 function spAddItem(code) {
   var item = spMenuItems.find(function(it){ return it.code === code; });
   if (!item) return;
-  spAddingItem = { code:item.code, name:item.name, hasSizes:item.hasSizes, hasSugar:item.hasSugar,
+  spAddingItem = { code:item.code, name:item.name, hasSizes:item.hasSizes, hasSugar:item.hasSugar, hasPortions:item.hasPortions,
     price:parseFloat(item.price)||0, priceShort:parseFloat(item.priceShort)||0, priceMedium:parseFloat(item.priceMedium)||0, priceTall:parseFloat(item.priceTall)||0,
     size:'', sugarLevel:'', qty:1 };
   // Redirect po-popup callbacks to sp handlers
   _spPopupMode = true;
-  if (item.hasSizes) showSizePopup();
+  if (item.hasPortions) showPortionPopup();
+  else if (item.hasSizes) showSizePopup();
   else if (item.hasSugar) showSugarPopup();
   else spFinishAdd();
 }
@@ -2301,6 +2302,9 @@ function poAddItem(code) {
     code: item.code,
     name: item.name,
     hasSizes: item.hasSizes,
+    hasPortions: item.hasPortions,
+    priceSlice: parseFloat(item.priceSlice)||0,
+    priceWhole: parseFloat(item.priceWhole)||0,
     hasSugar: item.hasSugar,
     price: item.price,
     priceShort: item.priceShort,
@@ -2312,7 +2316,9 @@ function poAddItem(code) {
   };
 
   // If has sizes → show size popup
-  if (item.hasSizes) {
+  if (item.hasPortions) {
+    showPortionPopup();
+  } else if (item.hasSizes) {
     showSizePopup();
   } else if (item.hasSugar) {
     showSugarPopup();
