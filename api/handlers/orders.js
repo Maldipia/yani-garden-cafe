@@ -37,7 +37,7 @@ export async function routeOrders(action, body, auth, req, res) {
       // Server-side price validation — fetch menu from DB and verify each item price
       if (!isStaffOrder) {
         const menuR = await supaFetch(
-          `${SUPABASE_URL}/rest/v1/menu_items?is_active=eq.true&select=item_code,base_price,price_short,price_medium,price_tall`
+          `${SUPABASE_URL}/rest/v1/menu_items?is_active=eq.true&select=item_code,base_price,price_short,price_medium,price_tall,has_portions,price_slice,price_whole`
         );
         // Also fetch addon prices to allow item + addon total
         const addonR = await supaFetch(
@@ -126,6 +126,15 @@ export async function routeOrders(action, body, auth, req, res) {
         if (menuItem.has_sizes && item.size) {
           const sizeKey = { SHORT: 'price_short', MEDIUM: 'price_medium', TALL: 'price_tall' }[String(item.size).toUpperCase()];
           if (sizeKey && menuItem[sizeKey] != null) unitPrice = parseFloat(menuItem[sizeKey]);
+        }
+        // Portion items (Slice/Whole) — size_choice carries the portion name
+        if (menuItem.has_portions && item.size) {
+          const portionKey = { SLICE: 'price_slice', WHOLE: 'price_whole' }[String(item.size).toUpperCase()];
+          if (portionKey && menuItem[portionKey] != null) unitPrice = parseFloat(menuItem[portionKey]);
+        }
+        // Portion item with no portion selected — default to slice price so total is never ₱0
+        if (menuItem.has_portions && !item.size && unitPrice === 0 && menuItem.price_slice != null) {
+          unitPrice = parseFloat(menuItem.price_slice);
         }
         const qty = Math.max(1, parseInt(item.qty) || 1);
         // Addons: validate prices from DB, not client
