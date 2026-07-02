@@ -412,6 +412,15 @@ export async function routeOrders(action, body, auth, req, res) {
       return res.status(200).json({ ok: true, tables: r.data || [] });
     }
 
+    // ── getTableStatus — same as getTables, used by customer menu to refresh tokens ─
+    if (action === 'getTableStatus') {
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/cafe_tables?select=table_number,table_name,qr_token,status&order=table_number.asc`
+      );
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to load table status' });
+      return res.status(200).json({ ok: true, tables: r.data || [] });
+    }
+
     // ── getOrders ──────────────────────────────────────────────────────────
     if (action === 'getOrders') {
       const orderId     = body.orderId ? String(body.orderId).trim() : null;
