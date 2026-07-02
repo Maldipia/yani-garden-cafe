@@ -290,7 +290,9 @@ function renderOrders() {
     if (o.discountedTotal && o.discountedTotal > 0) displayTotal = o.discountedTotal;
     var scLine = (o.serviceCharge && o.serviceCharge > 0)
       ? ' <span style="font-size:.7rem;font-weight:500;color:var(--timber)">(incl. ₱' + o.serviceCharge.toLocaleString() + ' svc)</span>' : '';
-    html += '<div class="oc-total">₱' + displayTotal.toLocaleString() + scLine + '</div>';
+    // Sales figures — visible to OWNER + ADMIN only
+    var canSeeSales = currentUser && (currentUser.role === 'OWNER' || currentUser.role === 'ADMIN');
+    html += '<div class="oc-total">' + (canSeeSales ? '₱' + displayTotal.toLocaleString() + scLine : '—') + '</div>';
 
     // Payment status + method selector
     var canSetPayment = (currentUser.role === 'OWNER' || currentUser.role === 'ADMIN' || currentUser.role === 'CASHIER');

@@ -706,15 +706,20 @@ function renderStats() {
     }
   });
 
-  document.getElementById('statSales').textContent = '₱' + totalSales.toLocaleString();
   document.getElementById('statOrders').textContent = completed;
   document.getElementById('statActive').textContent = active;
   var avgEl = document.getElementById('statAvg');
-  if (avgEl) avgEl.textContent = completed > 0 ? '₱' + Math.round(totalSales / completed).toLocaleString() : '—';
+
+  // ── SALES FIGURES: visible to OWNER + ADMIN only ──────────────────────────
+  // CASHIER and KITCHEN see order counts but not revenue totals.
+  var canSeeSales = currentUser && (currentUser.role === 'OWNER' || currentUser.role === 'ADMIN');
+  var salesEl = document.getElementById('statSales');
+  if (salesEl) salesEl.textContent = canSeeSales ? '₱' + totalSales.toLocaleString() : '—';
+  if (avgEl)  avgEl.textContent   = canSeeSales && completed > 0 ? '₱' + Math.round(totalSales / completed).toLocaleString() : '—';
 
   // Fallback: if allOrders doesn't have enough today orders, pull from API
   // This fixes analytics not showing on days with 200+ orders in the queue
-  if (completed === 0 && allOrders.length > 0) {
+  if (canSeeSales && completed === 0 && allOrders.length > 0) {
     // Silent refresh from API
     api('getAnalytics', { userId: currentUser && currentUser.userId }).then(function(r) {
       if (r && r.ok && r.todaySales) {

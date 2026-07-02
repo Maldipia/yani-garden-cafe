@@ -261,7 +261,7 @@ export async function routePayments(action, body, auth, req, res) {
     // ── getShiftSummary ────────────────────────────────────────────────────
     // Returns today's sales breakdown by payment method for end-of-day reconciliation
     if (action === 'getShiftSummary') {
-      const authSh = await checkAuth(['OWNER','ADMIN','CASHIER']);
+      const authSh = await checkAuth(['OWNER','ADMIN']);
       if (!authSh.ok) return res.status(403).json({ ok: false, error: authSh.error });
 
       // Get timezone from settings (default Asia/Manila)
