@@ -11,6 +11,11 @@ export async function routeOrders(action, body, auth, req, res) {
 
     if (action === 'placeOrder') {
       const isStaffOrder = body.staffOrder === true;
+      // staffOrder bypasses table-token + price validation — must be an authenticated staff member
+      if (isStaffOrder) {
+        const authSO = await checkAuth([]);
+        if (!authSO.ok) return res.status(403).json({ ok: false, error: authSO.error });
+      }
       const rawTableNo   = body.tableNo;
       const tableNo      = rawTableNo != null ? String(rawTableNo).trim() : '0';
       // Accept both 'token' (customer front-end) and 'tableToken' (legacy) field names
