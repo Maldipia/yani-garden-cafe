@@ -17,6 +17,7 @@ import { routeHR }         from './handlers/hr.js';
 import { routeCardPortal } from './handlers/card-portal.js';
 import { routeExpenses }  from './handlers/expenses.js';
 import { routeCustomers }  from './handlers/customers.js';
+import { routeAdminOps }    from './handlers/admin-ops.js';
 import { routeReviews }    from './handlers/reviews.js';
 import { routeDocs }       from './handlers/docs.js';
 
@@ -77,7 +78,8 @@ export default async function handler(req, res) {
       await routeReviews    (action, body, auth, req, res) ||
       await routeDocs       (action, body, auth, req, res) ||
       await routeHR         (action, body, auth, req, res) ||
-      await routeAdmin      (action, body, auth, req, res);
+      await routeAdmin      (action, body, auth, req, res) ||
+      await routeAdminOps   (action, body, auth, req, res);
 
     if (!handled) {
       return res.status(400).json({ ok: false, error: `Unknown action: ${action}` });
