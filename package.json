@@ -11,5 +11,9 @@
     "jsonwebtoken": "^9.0.2",
     "node-fetch": "^3.3.2"
   },
-  "type": "module"
+  "type": "module",
+  "scripts": {
+    "guard": "node scripts/check-actions.mjs",
+    "test": "node scripts/check-actions.mjs"
+  }
 }

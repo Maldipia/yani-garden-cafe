@@ -382,7 +382,7 @@ async function logAudit(userId, action, target, details) {
         await fetch(API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'logAudit', userId, action, target: target || '', details: details || '' })
+            body: JSON.stringify({ action: 'logAudit', userId, auditAction: action, target: target || '', details: details || '' })
         });
     } catch (error) {
         console.error('Audit log error:', error);

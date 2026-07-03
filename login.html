@@ -287,30 +287,31 @@
             loginBtn.disabled = true;
 
             try {
-                // Call API to verify PIN
+                // Call API to verify PIN (verifyUserPin is the live handler)
                 const response = await fetch(API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'verifyAdminPin', pin: pin })
+                    body: JSON.stringify({ action: 'verifyUserPin', pin: pin })
                 });
                 const data = await response.json();
 
-                 if (data.ok && data.valid) {
-                    // Login successful — use defaults if role-based fields are not returned
+                 if (data.ok && data.token) {
+                    // Login successful — persist in the SAME format admin.html reads
+                    // (key: pos_session_token, incl. JWT) so API calls authenticate.
+                    const expiresAt = Date.now() + (data.expiresIn || 28800) * 1000;
                     const session = {
-                        userId: data.userId || 'admin',
-                        username: data.username || 'Admin',
-                        role: data.role || 'ADMIN',
-                        loginTime: new Date().toISOString(),
-                        expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString() // 30 min
+                        token:     data.token,
+                        userId:    data.userId,
+                        username:  data.username || data.displayName || 'Staff',
+                        role:      data.role || 'ADMIN',
+                        expiresAt: expiresAt
                     };
-                    // Save session
-                    localStorage.setItem('yaniSession', JSON.stringify(session));
+                    try { localStorage.setItem('pos_session_token', JSON.stringify(session)); } catch (_) {}
                     // Redirect to dashboard
                     window.location.href = 'admin.html';
                 } else {
                     // Login failed
-                    showError(data.message || 'Invalid PIN. Please try again.');
+                    showError(data.error || data.message || 'Invalid PIN. Please try again.');
                     document.getElementById('pinInput').value = '';
                     document.querySelectorAll('.pin-dot').forEach(dot => dot.classList.remove('filled'));
                 }
@@ -339,7 +340,7 @@
                 await fetch(API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'logAudit', userId, action, target: target || '', details: details || '' })
+                    body: JSON.stringify({ action: 'logAudit', userId, auditAction: action, target: target || '', details: details || '' })
                 });
             } catch (error) {
                 console.error('Audit log error:', error);

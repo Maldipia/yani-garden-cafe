@@ -1,0 +1,28 @@
+name: Guard
+
+# Locks the API surface. Runs on every push + PR. If a change deletes or
+# renames a handler that the frontend still calls (the cc8a85e failure mode),
+# this fails the check before it can reach production.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  action-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Check API action contract
+        run: node scripts/check-actions.mjs
+      - name: Syntax-check all handlers
+        run: |
+          for f in api/*.js api/handlers/*.js api/lib/*.js; do
+            node --check "$f" || exit 1
+          done
+          echo "✅ all API files parse"

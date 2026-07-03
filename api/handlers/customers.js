@@ -5,12 +5,30 @@ import { supa, supaFetch } from '../lib/db.js';
 import { SUPABASE_URL }     from '../lib/config.js';
 
 const CUSTOMER_ACTIONS = new Set([
-  'getCustomers', 'getCustomer', 'upsertCustomer',
+  'getCustomers', 'getCustomer', 'upsertCustomer', 'logAudit',
 ]);
 
 export async function routeCustomers(action, body, auth, req, res) {
   if (!CUSTOMER_ACTIONS.has(action)) return false;
   const { checkAdminAuth } = auth;
+
+  // ── logAudit — lightweight audit trail (login/logout/session events) ─────
+  // Fire-and-forget from clients; never throws back a hard failure.
+  if (action === 'logAudit') {
+    const auditAction = String(body.auditAction || body.event || body.target || 'EVENT').substring(0, 60);
+    const userId = body.userId ? String(body.userId).substring(0, 60) : null;
+    try {
+      await supa('POST', 'order_audit_logs', {
+        order_id: 'SESSION',
+        action: auditAction,
+        actor_id: userId,
+        actor_name: body.username ? String(body.username).substring(0, 80) : null,
+        details: (body.details && typeof body.details === 'object') ? body.details
+               : { note: String(body.details || '').substring(0, 300) },
+      }, null, 'return=minimal');
+    } catch (_) { /* audit is best-effort */ }
+    return res.status(200).json({ ok: true });
+  }
 
   // ── getCustomers — list (optional search by name/phone/email) ────────────
   if (action === 'getCustomers') {
