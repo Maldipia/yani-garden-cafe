@@ -244,6 +244,8 @@ export async function routeAdminOps(action, body, auth, req, res) {
 
     // ── getOnlineOrders ────────────────────────────────────────────────────
     if (action === 'getOnlineOrders') {
+      const authOO = await checkAdminAuth();
+      if (!authOO.ok) return res.status(403).json({ ok: false, error: authOO.error });
       const r = await supaFetch(
         `${SUPABASE_URL}/rest/v1/online_orders?order=created_at.desc&limit=200`
       );
@@ -782,15 +784,23 @@ export async function routeAdminOps(action, body, auth, req, res) {
 
     // ── getSettings ────────────────────────────────────────────────────────
     if (action === 'getSettings') {
+      const authGS = await checkAdminAuth();
+      if (!authGS.ok) return res.status(403).json({ ok: false, error: authGS.error });
+      // Keys that must NEVER leave the server, even to authenticated admins.
+      const SECRET_KEYS = new Set([
+        'JWT_SECRET','jwt_secret','SESSION_KEY','GOOGLE_SA_JSON',
+        'SUPABASE_SECRET_KEY','SUPABASE_SERVICE_KEY','RESEND_API_KEY',
+      ]);
+      const isSecret = (k) => SECRET_KEYS.has(k) || /SECRET|PRIVATE_KEY|SA_JSON|SERVICE_KEY/i.test(String(k));
       const now2 = Date.now();
       if (_settingsCache.data && (now2 - _settingsCache.ts) < SETTINGS_CACHE_TTL) {
-        return res.status(200).json({ ok: true, settings: _settingsCache.data, cached: true });
+        return res.status(200).json({ ok: true, settings: _settingsCache.data.filter(s => !isSecret(s.key)), cached: true });
       }
       const r = await supaFetch(`${SUPABASE_URL}/rest/v1/settings?order=key.asc&select=key,value,description`);
       if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to fetch settings' });
       _settingsCache.data = r.data || [];
       _settingsCache.ts = now2;
-      return res.status(200).json({ ok: true, settings: _settingsCache.data });
+      return res.status(200).json({ ok: true, settings: _settingsCache.data.filter(s => !isSecret(s.key)) });
     }
 
     // ── updateSetting ──────────────────────────────────────────────────────
@@ -1564,6 +1574,8 @@ export async function routeAdminOps(action, body, auth, req, res) {
 
     // ── getOpenCashSession ─────────────────────────────────────────────────
     if (action === 'getOpenCashSession') {
+      const authCS = await checkAdminAuth();
+      if (!authCS.ok) return res.status(403).json({ ok: false, error: authCS.error });
       const r = await supaFetch(
         `${SUPABASE_URL}/rest/v1/cash_sessions?status=eq.OPEN&select=*&order=opened_at.desc&limit=1`
       );
