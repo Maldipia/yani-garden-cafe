@@ -840,6 +840,34 @@ function eoRemoveItem(idx) {
   eoRenderBody();
 }
 
+// Dedicated portion/size picker for the edit modal (does NOT reuse the
+// cancel-reason dialog, which had wrong labels + could clash with the locked modal).
+function eoPickOption(title, options) {
+  return new Promise(function(resolve) {
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:100000;display:flex;align-items:center;justify-content:center;padding:16px';
+    var box = document.createElement('div');
+    box.style.cssText = 'background:#fff;border-radius:16px;padding:20px;max-width:360px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.35)';
+    var html = '<div style="font-weight:700;font-size:15px;margin-bottom:14px;color:#1a3a2a">' + title + '</div>';
+    options.forEach(function(opt) {
+      html += '<button class="eo-pick-opt" data-val="' + opt.value + '" ' +
+        'style="display:block;width:100%;text-align:left;padding:13px 14px;margin-bottom:8px;border-radius:10px;' +
+        'border:1.5px solid #d9e2dc;background:#f7faf8;cursor:pointer;font-size:14px;font-weight:600;color:#1a3a2a">' +
+        opt.label + '</button>';
+    });
+    html += '<button id="eoPickCancel" style="width:100%;padding:11px;margin-top:4px;border-radius:10px;border:none;background:#eee;cursor:pointer;font-weight:600;color:#666">Cancel</button>';
+    box.innerHTML = html;
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    function cleanup() { if (overlay.parentNode) document.body.removeChild(overlay); }
+    box.querySelectorAll('.eo-pick-opt').forEach(function(b) {
+      b.onclick = function() { var v = b.getAttribute('data-val'); cleanup(); resolve(v); };
+    });
+    document.getElementById('eoPickCancel').onclick = function() { cleanup(); resolve(null); };
+    overlay.onclick = function(e) { if (e.target === overlay) { cleanup(); resolve(null); } };
+  });
+}
+
 async function eoAddItem(code) {
   var menuItems = window._menuDataCache || [];
   var m = menuItems.find(function(x) { return x.code === code; });
@@ -852,7 +880,7 @@ async function eoAddItem(code) {
   if (m.hasPortions) {
     var slice = parseFloat(m.priceSlice) || 0;
     var whole = parseFloat(m.priceWhole) || 0;
-    var pick = await ygcSelectPrompt('Choose portion — ' + m.name, 'Select a portion:', [
+    var pick = await eoPickOption('Choose portion — ' + m.name, [
       { value: 'Slice', label: '🍰 Slice — ₱' + slice },
       { value: 'Whole', label: '🎂 Whole — ₱' + whole },
     ]);
@@ -865,7 +893,7 @@ async function eoAddItem(code) {
     var pShort = parseFloat(m.priceShort) || 0;
     var pMed   = parseFloat(m.priceMedium) || 0;
     var pTall  = parseFloat(m.priceTall) || 0;
-    var pickS = await ygcSelectPrompt('Choose size — ' + m.name, 'Select a size:', [
+    var pickS = await eoPickOption('Choose size — ' + m.name, [
       { value: 'Short',  label: 'Short — ₱' + pShort },
       { value: 'Medium', label: 'Medium — ₱' + pMed },
       { value: 'Tall',   label: 'Tall — ₱' + pTall },
