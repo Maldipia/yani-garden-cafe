@@ -362,6 +362,15 @@ export default async function handler(req, res) {
     // ── STAFF: activate card ─────────────────────────────────────────────
     if (action === 'activateCard') {
       const { card_number, performed_by } = body;
+      // ── AUTH GUARD — activation creates a live card + loyalty account.
+      {
+        const callerUserId = String(body.userId || performed_by || '');
+        const VALID_USER_ID = /^USR_\d{3,6}$/;
+        const ownerOk = body.pin ? await verifyOwnerPin(body.pin) : false;
+        if (!ownerOk && !VALID_USER_ID.test(callerUserId)) {
+          return res.status(403).json({ ok: false, error: 'Staff authorization required to activate a card' });
+        }
+      }
       if (!card_number) return res.status(400).json({ ok: false, error: 'card_number required' });
       const r = await rpc('activate_card', {
         p_card_number: card_number.trim().toUpperCase(),
@@ -574,6 +583,16 @@ export default async function handler(req, res) {
     // ── STAFF: reload card ───────────────────────────────────────────────
     if (action === 'reloadCard') {
       const { card_number, amount, performed_by } = body;
+      // ── AUTH GUARD — reload adds real balance; must be authenticated staff.
+      // Accept either a valid staff userId (USR_###) or the owner PIN.
+      {
+        const callerUserId = String(body.userId || performed_by || '');
+        const VALID_USER_ID = /^USR_\d{3,6}$/;
+        const ownerOk = body.pin ? await verifyOwnerPin(body.pin) : false;
+        if (!ownerOk && !VALID_USER_ID.test(callerUserId)) {
+          return res.status(403).json({ ok: false, error: 'Staff authorization required to reload a card' });
+        }
+      }
       if (!card_number) return res.status(400).json({ ok: false, error: 'card_number required' });
       if (!amount)      return res.status(400).json({ ok: false, error: 'amount required' });
       const amt = parseFloat(amount);
