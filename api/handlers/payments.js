@@ -424,11 +424,44 @@ export async function routePayments(action, body, auth, req, res) {
       );
       const existItems = existItemsR.ok ? (existItemsR.data || []) : [];
 
+      // ── Server-side price re-resolution ──────────────────────────────────
+      // NEVER trust the client-supplied price. Resolve every item's unit price
+      // from menu_items (base / size / portion), mirroring placeOrder. Prevents
+      // ₱0 rows AND price tampering by staff editing an order.
+      const editCodes = [...new Set(items.map(it => it.code).filter(c => c && c !== 'CUSTOM'))];
+      let editMenu = {};
+      if (editCodes.length) {
+        const emR = await supaFetch(
+          `${SUPABASE_URL}/rest/v1/menu_items?item_code=in.(${editCodes.map(c => `"${c}"`).join(',')})&select=item_code,base_price,has_sizes,price_short,price_medium,price_tall,has_portions,price_slice,price_whole`
+        );
+        if (emR.ok && Array.isArray(emR.data)) {
+          for (const mi of emR.data) editMenu[mi.item_code] = mi;
+        }
+      }
+      const resolvePrice = (it) => {
+        const mi = editMenu[it.code];
+        if (!mi) return parseFloat(it.price) || 0; // CUSTOM items keep client price
+        let p = parseFloat(mi.base_price) || 0;
+        const size = String(it.size || '').toUpperCase();
+        if (mi.has_sizes && size) {
+          const k = { SHORT:'price_short', MEDIUM:'price_medium', TALL:'price_tall' }[size];
+          if (k && mi[k] != null) p = parseFloat(mi[k]);
+        }
+        if (mi.has_portions && size) {
+          const k = { SLICE:'price_slice', WHOLE:'price_whole' }[size];
+          if (k && mi[k] != null) p = parseFloat(mi[k]);
+        }
+        if (mi.has_portions && !size && (!p || p === 0) && mi.price_slice != null) {
+          p = parseFloat(mi.price_slice);
+        }
+        return p;
+      };
+
       // Recalculate totals
       let subtotal = 0;
       const itemRows = items.map(it => {
         const qty = Math.max(1, parseInt(it.qty) || 1);
-        const price = parseFloat(it.price) || 0;
+        const price = resolvePrice(it);
         subtotal += price * qty;
         // Carry over prepared state AND original created_at if this item already existed
         const existMatch = existItems.find(e =>

@@ -806,7 +806,7 @@ function eoRenderBody() {
   filtered.forEach(function(m) {
     html += '<div class="eo-menu-item" onclick="eoAddItem(\'' + esc(m.code) + '\')">'+
       '<div class="eo-menu-item-name">' + esc(m.name) + '</div>' +
-      '<div class="eo-menu-item-price">₱' + (m.price || 0) + '</div>' +
+      '<div class="eo-menu-item-price">' + (m.hasPortions ? ('₱' + (parseFloat(m.priceSlice)||0) + ' / ₱' + (parseFloat(m.priceWhole)||0)) : m.hasSizes ? ('₱' + (parseFloat(m.priceShort)||0) + '–₱' + (parseFloat(m.priceTall)||0)) : ('₱' + (parseFloat(m.price)||parseFloat(m.basePrice)||0))) + '</div>' +
     '</div>';
   });
   html += '</div>';
@@ -840,16 +840,48 @@ function eoRemoveItem(idx) {
   eoRenderBody();
 }
 
-function eoAddItem(code) {
+async function eoAddItem(code) {
   var menuItems = window._menuDataCache || [];
   var m = menuItems.find(function(x) { return x.code === code; });
   if (!m) return;
-  // Check if already in list (same code, no size/sugar) — just bump qty
-  var existing = eoItems.find(function(it) { return it.code === code && !it.size && !it.sugar; });
+
+  var chosenSize = '';
+  var unitPrice  = parseFloat(m.price) || parseFloat(m.basePrice) || 0;
+
+  // Portion items (Slice/Whole) — must pick, and price comes from the portion.
+  if (m.hasPortions) {
+    var slice = parseFloat(m.priceSlice) || 0;
+    var whole = parseFloat(m.priceWhole) || 0;
+    var pick = await ygcSelectPrompt('Choose portion — ' + m.name, 'Select a portion:', [
+      { value: 'Slice', label: '🍰 Slice — ₱' + slice },
+      { value: 'Whole', label: '🎂 Whole — ₱' + whole },
+    ]);
+    if (!pick) return; // cancelled
+    chosenSize = pick;
+    unitPrice  = (pick === 'Whole') ? whole : slice;
+  }
+  // Sized drinks (Short/Medium/Tall) — must pick, price comes from the size.
+  else if (m.hasSizes) {
+    var pShort = parseFloat(m.priceShort) || 0;
+    var pMed   = parseFloat(m.priceMedium) || 0;
+    var pTall  = parseFloat(m.priceTall) || 0;
+    var pickS = await ygcSelectPrompt('Choose size — ' + m.name, 'Select a size:', [
+      { value: 'Short',  label: 'Short — ₱' + pShort },
+      { value: 'Medium', label: 'Medium — ₱' + pMed },
+      { value: 'Tall',   label: 'Tall — ₱' + pTall },
+    ]);
+    if (!pickS) return;
+    chosenSize = pickS;
+    unitPrice  = pickS === 'Tall' ? pTall : pickS === 'Medium' ? pMed : pShort;
+  }
+
+  // Merge with an identical existing line (same code + size), else push new.
+  var existing = eoItems.find(function(it) { return it.code === code && it.size === chosenSize && !it.sugar; });
   if (existing) {
     existing.qty += 1;
+    if (!(parseFloat(existing.price) > 0) && unitPrice > 0) existing.price = unitPrice;
   } else {
-    eoItems.push({ code: m.code, name: m.name, size: '', sugar: '', qty: 1, price: parseFloat(m.price) || 0, notes: '' });
+    eoItems.push({ code: m.code, name: m.name, size: chosenSize, sugar: '', qty: 1, price: unitPrice, notes: '' });
   }
   eoRenderBody();
 }
