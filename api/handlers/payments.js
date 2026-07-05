@@ -119,7 +119,7 @@ export async function routePayments(action, body, auth, req, res) {
 
       // Fetch current order — need both original total AND any existing discount
       const orderR = await supaFetch(
-        `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=total,discount_type,discount_amount,discounted_total,discount_note`
+        `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=total,status,payment_method,discount_type,discount_amount,discounted_total,discount_note`
       );
       if (!orderR.ok || !orderR.data?.length)
         return res.status(404).json({ ok: false, error: 'Order not found' });
@@ -236,6 +236,59 @@ export async function routePayments(action, body, auth, req, res) {
           }
         } catch(cardErr) {
           console.error('Card adjust error (non-fatal):', cardErr.message);
+        }
+      }
+
+      // ── Charge-now safety net ─────────────────────────────────────────────
+      // The completion hook only charges a Yani Card if the discount+card were
+      // present WHEN the order was completed. If staff attach a Yani Card
+      // discount to an ALREADY-COMPLETED order, that hook already ran and won't
+      // fire again — leaving the card uncharged. Charge it here in that case.
+      {
+        const orderStatus = String(orderR.data[0].status || '').toUpperCase();
+        const isCardPayNow = type === 'YANI_CARD' || String(storedType || '').startsWith('YANI_CARD');
+        if (orderStatus === 'COMPLETED' && isCardPayNow && !isStackingOnCard) {
+          try {
+            const cardMatch2 = String(combinedNote || '').match(/YANI-\d+/i);
+            if (cardMatch2) {
+              const cardNum2 = cardMatch2[0].toUpperCase();
+              // Idempotency: only if no CHARGE exists for this order yet
+              const already = await supaFetch(
+                `${SUPABASE_URL}/rest/v1/card_transactions?order_id=eq.${encodeURIComponent(orderId)}&type=eq.CHARGE&select=id&limit=1`
+              );
+              if (!already.data?.length) {
+                const cardRow2R = await supaFetch(
+                  `${SUPABASE_URL}/rest/v1/yani_cards?card_number=eq.${encodeURIComponent(cardNum2)}&select=qr_token,status,balance&limit=1`
+                );
+                const cardRow2 = cardRow2R.data?.[0];
+                if (cardRow2 && cardRow2.status === 'ACTIVE' && cardRow2.qr_token) {
+                  const netCharge2 = parseFloat(discountedTotal || (originalTotal * 0.9));
+                  const chargeR = await supaFetch(`${SUPABASE_URL}/rest/v1/rpc/charge_card_exact`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                      p_qr_token:     cardRow2.qr_token,
+                      p_net_amount:   netCharge2,
+                      p_order_id:     orderId,
+                      p_performed_by: body.userId || 'STAFF',
+                      p_description:  `Order ${orderId} — Yani Card charge on completed order ₱${netCharge2}`,
+                    })
+                  });
+                  if (chargeR.ok) {
+                    await supaFetch(`${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}`, {
+                      method: 'PATCH', body: JSON.stringify({ paid_at: new Date().toISOString() })
+                    });
+                    auditLog({ orderId, action: 'YANI_CARD_CHARGED_ON_COMPLETED', actor: { userId: body.userId, role: authD.role },
+                      details: { cardNumber: cardNum2, netCharge: netCharge2 } });
+                  } else {
+                    console.error('Charge-now failed for ' + orderId + ':', JSON.stringify(chargeR));
+                    auditLog({ orderId, action: 'YANI_CARD_CHARGE_FAILED', details: { cardNumber: cardNum2, netCharge: netCharge2, error: chargeR.status } });
+                  }
+                }
+              }
+            }
+          } catch(chargeNowErr) {
+            console.error('Charge-now error (non-fatal):', chargeNowErr.message);
+          }
         }
       }
 
