@@ -623,7 +623,7 @@ async function loadAnalytics(silent) {
               '</div>';
             }).join('');
         return '<div style="background:#fff;border:1.5px solid var(--mist);border-radius:12px;padding:14px;margin-bottom:16px">' +
-          '<div style="font-weight:700;font-size:.9rem;color:var(--forest-deep);margin-bottom:4px">💳 Payment Methods (30d)</div>' +
+          '<div style="font-weight:700;font-size:.9rem;color:var(--forest-deep);margin-bottom:4px">💳 Payment Methods (This Month)</div>' +
           '<div style="font-size:.72rem;color:var(--forest-mid);margin-bottom:10px">Total discounts saved: <strong>₱' + parseFloat(s.totalDiscounts30d||0).toFixed(2) + '</strong></div>' +
           pmHtml + '</div>';
       })() +

@@ -629,21 +629,28 @@ export async function routeAdminOps(action, body, auth, req, res) {
       });
       const realCancels = cancelled.filter(o => o.cancel_reason !== 'migration_cleanup').length;
 
-      // ── Payment method breakdown (last 30d completed orders) ──────────
+      // ── Payment method breakdown (MONTH-TO-DATE, from the 1st) ─────────
+      // Owner tracks the running month total + card payments, so this window
+      // is the calendar month start (1st, 6 AM PH business-day boundary),
+      // NOT a rolling 30 days.
+      const nowPH = new Date(Date.now() + phOffset);
+      // First day of the current PH month at 06:00 PH == (1st 06:00 +08) in UTC
+      const monthStartUTC = new Date(Date.UTC(nowPH.getUTCFullYear(), nowPH.getUTCMonth(), 1, 6, 0, 0) - phOffset).toISOString();
       const payR = await fetch(
-        `${BASE}/dine_in_orders?status=eq.COMPLETED&is_test=eq.false&is_deleted=eq.false&created_at=gte.${thirtyAgo}&select=payment_method,total,discounted_total,discount_amount`,
+        `${BASE}/dine_in_orders?status=eq.COMPLETED&is_test=eq.false&is_deleted=eq.false&created_at=gte.${monthStartUTC}&select=payment_method,total,discounted_total,discount_amount`,
         { headers: H }
       );
       const payOrders = payR.ok ? (await payR.json()) : [];
       const payBreakdown = {};
-      let totalDiscounts30d = 0;
+      let totalDiscountsMTD = 0;
       payOrders.forEach(o => {
         const m = o.payment_method || 'UNRECORDED';
         if (!payBreakdown[m]) payBreakdown[m] = { count:0, revenue:0 };
         payBreakdown[m].count   += 1;
         payBreakdown[m].revenue += parseFloat(o.discounted_total || o.total || 0);
-        totalDiscounts30d += parseFloat(o.discount_amount || 0);
+        totalDiscountsMTD += parseFloat(o.discount_amount || 0);
       });
+      const totalDiscounts30d = totalDiscountsMTD; // keep alias for response below
 
       return res.status(200).json({
         ok: true,
