@@ -325,15 +325,10 @@ let selectedAmt = 1000;
 
 async function loadPaymentSettings() {
   try {
-    var r = await fetch(API, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ action:'getSettings' })
-    });
+    // Use the PUBLIC config endpoint (safe whitelist) — getSettings is admin-only.
+    var r = await fetch('/api/config', { method:'GET' });
     var d = await r.json();
-    var s = {};
-    if (d.ok && d.settings) {
-      (d.settings||[]).forEach(function(x){ s[x.key] = x.value; });
-    }
+    var s = (d && d.config) ? d.config : {};
     // Use single combined payment image (same as POS checkout)
     if (s.PAYMENT_IMAGE_URL) window._paymentImageUrl = s.PAYMENT_IMAGE_URL;
     if (s.ACCOUNT_NAME)      window._accountName     = s.ACCOUNT_NAME;
