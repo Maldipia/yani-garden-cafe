@@ -601,6 +601,7 @@ async function loadAnalytics(silent) {
         var pb = r.paymentBreakdown || {};
         var pmKeys = Object.keys(pb).sort();
         var pmTotalRev = pmKeys.reduce(function(acc,k){ return acc + (pb[k].revenue||0); }, 0);
+        var pmTotalCount = pmKeys.reduce(function(acc,k){ return acc + (pb[k].count||0); }, 0);
         var pmHtml = pmKeys.length === 0
           ? '<div style="color:var(--forest-mid);font-size:.82rem">No completed orders yet.</div>'
           : pmKeys.map(function(pm) {
@@ -625,6 +626,13 @@ async function loadAnalytics(silent) {
         return '<div style="background:#fff;border:1.5px solid var(--mist);border-radius:12px;padding:14px;margin-bottom:16px">' +
           '<div style="font-weight:700;font-size:.9rem;color:var(--forest-deep);margin-bottom:4px">💳 Payment Methods (This Month)</div>' +
           '<div style="font-size:.72rem;color:var(--forest-mid);margin-bottom:10px">Total discounts saved: <strong>₱' + parseFloat(s.totalDiscounts30d||0).toFixed(2) + '</strong></div>' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;background:var(--forest-deep);color:#fff;border-radius:10px;padding:12px 14px;margin-bottom:12px">' +
+            '<div>' +
+              '<div style="font-size:.7rem;opacity:.85;text-transform:uppercase;letter-spacing:.05em">Total Sales (This Month)</div>' +
+              '<div style="font-size:.68rem;opacity:.75;margin-top:2px">' + pmTotalCount + ' orders</div>' +
+            '</div>' +
+            '<div style="font-size:1.35rem;font-weight:800">₱' + pmTotalRev.toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2}) + '</div>' +
+          '</div>' +
           pmHtml + '</div>';
       })() +
 
