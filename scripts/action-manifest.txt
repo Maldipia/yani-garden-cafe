@@ -43,6 +43,7 @@ getCashSessions
 getCategories
 getCustomer
 getCustomers
+getDocsCardPayments
 getDocsLedger
 getDocsLive
 getHRDocuments

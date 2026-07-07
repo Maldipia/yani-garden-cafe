@@ -12,6 +12,7 @@
 
 var _docsDate      = null;     // yyyy-mm-dd currently viewed (ledger)
 var _docsLedger    = [];       // docs_daily_sales rows for _docsDate
+var _docsCard      = { rows: [], total: 0, count: 0 }; // CARD terminal payments (MTD)
 var _docsLive      = [];       // v_docs_daily_transactions rows for today
 var _docsEditId    = null;     // id of row being edited (null = new)
 var _docsPrefilled = false;    // was the open form pre-filled from an order?
@@ -75,7 +76,7 @@ async function loadDocsView() {
   if (!_docsDate) _docsDate = _dTodayManila();
   view.innerHTML = '<div style="padding:32px;text-align:center;color:var(--timber)">Loading DOCS…</div>';
   try {
-    await Promise.all([loadDocsLedger(), loadDocsLive()]);
+    await Promise.all([loadDocsLedger(), loadDocsLive(), loadDocsCardPayments()]);
     renderDocsView();
     _docsStartLive();
   } catch (e) {
@@ -93,6 +94,11 @@ async function loadDocsLive() {
   var r = await api('getDocsLive', { date: _dTodayManila(), userId: currentUser && currentUser.userId });
   if (!r || !r.ok) throw new Error((r && r.error) || 'Failed to load live sales');
   _docsLive = r.rows || [];
+}
+async function loadDocsCardPayments() {
+  var r = await api('getDocsCardPayments', { userId: currentUser && currentUser.userId });
+  if (!r || !r.ok) { _docsCard = { rows: [], total: 0, count: 0 }; return; }
+  _docsCard = { rows: r.rows || [], total: r.total || 0, count: r.count || 0 };
 }
 
 // ── Live panel auto-refresh (stops itself when the view is hidden) ─────────
@@ -117,11 +123,60 @@ function renderDocsView() {
   html += '<div style="font-size:.7rem;color:var(--timber)">BIR sales records · Management</div></div></div>';
   html += _renderLedgerPanelShell();
   html += '<div style="height:26px"></div>';
+  html += _renderCardPaymentsPanel();
+  html += '<div style="height:26px"></div>';
   html += '<div id="docsLivePanel"></div>';
   html += '</div>';
   view.innerHTML = html;
   _renderLivePanel();
 }
+
+function _renderCardPaymentsPanel() {
+  var rows = (_docsCard && _docsCard.rows) || [];
+  var total = (_docsCard && _docsCard.total) || 0;
+  var count = (_docsCard && _docsCard.count) || 0;
+
+  var h = '';
+  h += '<div style="background:var(--white);border:1.5px solid var(--mist);border-radius:var(--r-lg);overflow:hidden">';
+  // header
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--mist);background:var(--forest-deep);color:#fff">';
+  h += '<div><div style="font-weight:700;font-size:1rem">💳 Card Terminal Payments</div>';
+  h += '<div style="font-size:.7rem;opacity:.8;margin-top:2px">Maya / credit-debit card · this month · tap a row for reference</div></div>';
+  h += '<div style="text-align:right"><div style="font-size:1.15rem;font-weight:800">₱' + Number(total).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2}) + '</div>';
+  h += '<div style="font-size:.68rem;opacity:.8">' + count + ' payment' + (count===1?'':'s') + '</div></div>';
+  h += '</div>';
+
+  if (!rows.length) {
+    h += '<div style="padding:24px;text-align:center;color:var(--timber);font-size:.85rem">No card terminal payments this month yet.</div>';
+    h += '</div>';
+    return h;
+  }
+
+  // column header
+  h += '<div style="display:grid;grid-template-columns:1.1fr 1fr 1.4fr 1fr .8fr;gap:8px;padding:9px 16px;background:#f7faf8;font-size:.68rem;font-weight:700;color:var(--forest-mid);text-transform:uppercase;letter-spacing:.03em">';
+  h += '<div>Order ID</div><div>SI / Ref</div><div>Customer</div><div style="text-align:right">Amount</div><div style="text-align:right">Date</div>';
+  h += '</div>';
+
+  rows.forEach(function (r) {
+    var dt = r.datetime ? new Date(r.datetime) : null;
+    var dstr = dt ? dt.toLocaleString('en-PH', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit', hour12:true, timeZone:'Asia/Manila' }) : '—';
+    var si = r.si_no ? ('SI ' + _dEsc(String(r.si_no))) : '<span style="color:#b45309">no SI</span>';
+    var splitBadge = (r.method && r.method !== 'CARD') ? ' <span style="font-size:.6rem;background:#fde68a;color:#92400e;padding:1px 5px;border-radius:6px">' + _dEsc(r.method) + '</span>' : '';
+    h += '<div onclick="showOrderHistory(\'' + _dEsc(r.order_id) + '\')" ' +
+         'style="display:grid;grid-template-columns:1.1fr 1fr 1.4fr 1fr .8fr;gap:8px;padding:11px 16px;border-bottom:1px solid var(--mist);font-size:.8rem;cursor:pointer;align-items:center" ' +
+         'onmouseover="this.style.background=\'#f2f7f3\'" onmouseout="this.style.background=\'transparent\'">';
+    h += '<div style="font-weight:700;color:var(--forest-deep)">' + _dEsc(r.order_id) + splitBadge + '</div>';
+    h += '<div style="font-size:.75rem;color:var(--forest-mid)">' + si + '</div>';
+    h += '<div style="color:var(--timber)">' + (_dEsc(r.customer) || '—') + '</div>';
+    h += '<div style="text-align:right;font-weight:700;color:var(--forest)">₱' + Number(r.amount).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2}) + '</div>';
+    h += '<div style="text-align:right;font-size:.72rem;color:var(--timber)">' + dstr + '</div>';
+    h += '</div>';
+  });
+
+  h += '</div>';
+  return h;
+}
+
 
 function _renderLedgerPanelShell() {
   var active = _docsLedger.filter(function (r) { return r.status === 'ACTIVE'; });
