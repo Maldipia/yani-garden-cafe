@@ -267,12 +267,11 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--forest);min-he
         <div class="field">
           <label>Amount</label>
           <div class="load-amt-row">
-            <div class="amt-chip" onclick="selectAmt(200,this)">₱200</div>
-            <div class="amt-chip" onclick="selectAmt(500,this)">₱500</div>
-            <div class="amt-chip selected" onclick="selectAmt(1000,this)">₱1,000</div>
+            <div class="amt-chip selected" onclick="selectAmt(500,this)">₱500</div>
+            <div class="amt-chip" onclick="selectAmt(1000,this)">₱1,000</div>
             <div class="amt-chip" onclick="selectAmt(2000,this)">₱2,000</div>
           </div>
-          <input type="number" id="loadAmt" value="1000" min="100" max="10000"
+          <input type="number" id="loadAmt" value="500" min="500" max="10000"
             style="width:100%;padding:10px 12px;border:2px solid var(--mist);border-radius:10px;font-size:1rem;margin-top:4px"
             oninput="updateLoadPreview()">
         </div>
@@ -537,7 +536,7 @@ function selectAmt(a, el){
 }
 function updateLoadPreview(){
   const amt = parseFloat(document.getElementById('loadAmt')?.value||0);
-  if(!amt || amt<100){
+  if(!amt || amt<500){
     document.getElementById('loadPreview').style.display='none';
     document.getElementById('paymentQRSection').style.display='none';
     return;
@@ -574,7 +573,7 @@ function handleProofFile(input){
 async function submitLoad(){
   if(!session){ toast('Please log in first',true); return; }
   const amt = parseFloat(document.getElementById('loadAmt').value);
-  if(!amt || amt<100 || amt>10000){ toast('Amount must be ₱100–₱10,000',true); return; }
+  if(!amt || amt<500 || amt>10000){ toast('Minimum load is ₱500 (up to ₱10,000)',true); return; }
   if(!proofB64){ toast('Please upload your payment screenshot',true); return; }
   const btn = document.getElementById('submitLoadBtn');
   btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Submitting…';
