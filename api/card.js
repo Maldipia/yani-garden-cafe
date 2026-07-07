@@ -598,6 +598,21 @@ export default async function handler(req, res) {
       const amt = parseFloat(amount);
       if (isNaN(amt) || amt <= 0)
         return res.status(400).json({ ok: false, error: 'Invalid amount' });
+      // ── Activation gate: the FIRST load on a new card (balance 0) must be ≥ ₱1,000.
+      // Subsequent reloads (balance already > 0) may be any amount.
+      {
+        const ACTIVATION_MIN = 1000;
+        const cardNumUp = card_number.trim().toUpperCase();
+        const curR = await supa(`/rest/v1/yani_cards?card_number=eq.${encodeURIComponent(cardNumUp)}&select=balance&limit=1`);
+        const curBal = parseFloat(curR.data?.[0]?.balance) || 0;
+        if (curBal <= 0 && amt < ACTIVATION_MIN) {
+          return res.status(400).json({
+            ok: false,
+            code: 'ACTIVATION_MIN',
+            error: `Membership activation requires an initial load of ₱${ACTIVATION_MIN} or more. This is the first load on card ${cardNumUp}. (Reloads afterward may be any amount.)`
+          });
+        }
+      }
       const r = await rpc('reload_card', {
         p_card_number:  card_number.trim().toUpperCase(),
         p_amount:       amt,

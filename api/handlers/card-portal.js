@@ -199,8 +199,8 @@ export async function routeCardPortal(action, body, auth, req, res) {
     if (!sessR.ok) return res.status(401).json({ ok: false, error: sessR.error });
 
     const amt = parseFloat(amount);
-    if (isNaN(amt) || amt < 500 || amt > 10000)
-      return res.status(400).json({ ok: false, error: 'Minimum load is ₱500 (up to ₱10,000)' });
+    if (isNaN(amt) || amt < 1 || amt > 10000)
+      return res.status(400).json({ ok: false, error: 'Reload amount must be between ₱1 and ₱10,000' });
     const VALID_METHODS = ['GCASH','BDO','BPI','UNIONBANK','INSTAPAY','QR'];
     const method = String(paymentMethod || 'GCASH').toUpperCase();
     if (!VALID_METHODS.includes(method))

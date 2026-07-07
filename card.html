@@ -164,7 +164,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--forest);min-he
   <div style="width:100%;max-width:360px;margin:20px auto 0;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:18px 20px;text-align:center">
     <div style="font-size:1.3rem;margin-bottom:6px">🌱</div>
     <div style="color:#fff;font-weight:700;font-size:.95rem;margin-bottom:4px">Don't have a Yani Card yet?</div>
-    <div style="color:rgba(255,255,255,.6);font-size:.78rem;line-height:1.5;margin-bottom:14px">Load ₱500 minimum to get your card.<br>Enjoy 10% off every order + earn free food rewards.</div>
+    <div style="color:rgba(255,255,255,.6);font-size:.78rem;line-height:1.5;margin-bottom:14px">Activate with a ₱1,000 load.<br>Enjoy 10% off + free food rewards while your wallet stays at ₱500 or above.</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
       <div style="background:rgba(255,255,255,.08);border-radius:10px;padding:10px 6px">
         <div style="font-size:1.1rem">💸</div>
@@ -179,7 +179,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--forest);min-he
     </div>
     <div style="color:rgba(255,255,255,.55);font-size:.75rem;margin-bottom:12px;line-height:1.5">
       📲 How to get yours:<br>
-      1. Pay ₱500+ via GCash or bank transfer<br>
+      1. Pay ₱1,000+ via GCash or bank transfer<br>
       2. Send proof of payment to our page<br>
       3. We'll send your card number &amp; PIN
     </div>
@@ -271,7 +271,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--forest);min-he
             <div class="amt-chip" onclick="selectAmt(1000,this)">₱1,000</div>
             <div class="amt-chip" onclick="selectAmt(2000,this)">₱2,000</div>
           </div>
-          <input type="number" id="loadAmt" value="500" min="500" max="10000"
+          <input type="number" id="loadAmt" value="500" min="1" max="10000"
             style="width:100%;padding:10px 12px;border:2px solid var(--mist);border-radius:10px;font-size:1rem;margin-top:4px"
             oninput="updateLoadPreview()">
         </div>
@@ -405,7 +405,17 @@ function showPortal(){
 function renderCard(card){
   document.getElementById('cardTier').textContent    = card.tier || 'STARTER';
   document.getElementById('cardBalance').textContent = parseFloat(card.balance).toFixed(2);
-  document.getElementById('cardDisc').textContent    = (card.discountPct||10)+'% off every purchase';
+  // Member privileges are active only when balance ≥ ₱500 (checked before payment).
+  var _bal = parseFloat(card.balance) || 0;
+  var _pct = (card.discountPct||10);
+  var _discEl = document.getElementById('cardDisc');
+  if (_bal >= 500) {
+    _discEl.textContent = _pct + '% off — Member Privileges active';
+    _discEl.style.opacity = '1';
+  } else {
+    _discEl.textContent = 'Reload to ₱500 to activate your ' + _pct + '% Member Privileges';
+    _discEl.style.opacity = '.85';
+  }
   document.getElementById('cardName').textContent    = card.holderName || 'Card Holder';
   document.getElementById('cardNum').textContent     = card.cardNumber;
   document.getElementById('statSaved').textContent   = peso(card.totalSaved);
@@ -536,7 +546,7 @@ function selectAmt(a, el){
 }
 function updateLoadPreview(){
   const amt = parseFloat(document.getElementById('loadAmt')?.value||0);
-  if(!amt || amt<500){
+  if(!amt || amt<1){
     document.getElementById('loadPreview').style.display='none';
     document.getElementById('paymentQRSection').style.display='none';
     return;
@@ -573,7 +583,7 @@ function handleProofFile(input){
 async function submitLoad(){
   if(!session){ toast('Please log in first',true); return; }
   const amt = parseFloat(document.getElementById('loadAmt').value);
-  if(!amt || amt<500 || amt>10000){ toast('Minimum load is ₱500 (up to ₱10,000)',true); return; }
+  if(!amt || amt<1 || amt>10000){ toast('Enter a reload amount (up to ₱10,000)',true); return; }
   if(!proofB64){ toast('Please upload your payment screenshot',true); return; }
   const btn = document.getElementById('submitLoadBtn');
   btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Submitting…';

@@ -139,6 +139,27 @@ export async function routePayments(action, body, auth, req, res) {
       const isStackingOnCard = isYaniCardDiscount &&
         ['PWD','SENIOR','BOTH','PROMO','CUSTOM'].includes(type);
 
+      // ── One discount per transaction ──────────────────────────────────────
+      // Per YANI Card T&C, the 10% member discount cannot be combined with
+      // PWD/Senior/Promo/Bundle discounts. Reject any attempt to stack — staff
+      // must remove the existing discount first and pick a single one.
+      if (isStackingOnCard && type !== 'REMOVE') {
+        return res.status(400).json({
+          ok: false,
+          code: 'NO_STACK',
+          error: 'Only one discount may be applied per transaction. The YANI Card 10% member discount cannot be combined with PWD, Senior, or promo discounts. Remove the current discount first, then apply the one the customer prefers.'
+        });
+      }
+      // Also block adding a Yani Card discount on top of an existing PWD/Senior/Promo.
+      if (type === 'YANI_CARD' && existingDiscType && existingDiscType !== 'YANI_CARD' &&
+          ['PWD','SENIOR','BOTH','PROMO','CUSTOM'].includes(existingDiscType)) {
+        return res.status(400).json({
+          ok: false,
+          code: 'NO_STACK',
+          error: 'Only one discount may be applied per transaction. This order already has a ' + existingDiscType + ' discount. Remove it first to use the YANI Card 10% member discount.'
+        });
+      }
+
       // Base for the incoming discount calculation
       const baseForCalc = isStackingOnCard ? existingDiscTotal : originalTotal;
 
@@ -171,6 +192,31 @@ export async function routePayments(action, body, auth, req, res) {
         newDiscountAmount = Math.min(customAmt, baseForCalc);
         discountPct      = Math.round((newDiscountAmount / baseForCalc) * 100 * 100) / 100;
       } else if (type === 'YANI_CARD') {
+        // ── Member Privilege gate: Active Wallet Balance ≥ ₱500 BEFORE payment ──
+        // Checked on the balance as it stands now (before this order is charged).
+        // Easy for staff to explain: "You need ₱500 on the card to get 10% today."
+        const MAINTAIN_BALANCE = 500;
+        const cardNum = String(body.yaniCardNumber || '').trim().toUpperCase();
+        if (cardNum) {
+          const balR = await supaFetch(
+            `${SUPABASE_URL}/rest/v1/yani_cards?card_number=eq.${encodeURIComponent(cardNum)}&select=balance,status&limit=1`
+          );
+          const cardRow = balR.data && balR.data[0];
+          if (!cardRow) {
+            return res.status(404).json({ ok: false, error: `Card ${cardNum} not found.`, code: 'CARD_NOT_FOUND' });
+          }
+          if (String(cardRow.status).toUpperCase() !== 'ACTIVE') {
+            return res.status(400).json({ ok: false, error: `Card ${cardNum} is ${cardRow.status}. Member discount unavailable.`, code: 'CARD_INACTIVE' });
+          }
+          const bal = parseFloat(cardRow.balance) || 0;
+          if (bal < MAINTAIN_BALANCE) {
+            return res.status(400).json({
+              ok: false,
+              code: 'MAINTAIN_BALANCE',
+              error: `YANI Member privileges are active only when the wallet balance is ₱${MAINTAIN_BALANCE} or above before payment. This card has ₱${bal.toFixed(2)}. Please reload to ₱${MAINTAIN_BALANCE}+ to use the 10% member discount.`
+            });
+          }
+        }
         discountPct      = 10;
         newDiscountAmount = Math.round(originalTotal * 0.10 * 100) / 100;
       }
