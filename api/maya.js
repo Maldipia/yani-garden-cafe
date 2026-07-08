@@ -138,6 +138,20 @@ export default async function handler(req, res) {
 
   const { action, orderId, amount, description, customerName, customerEmail } = bodyIn;
 
+  // ── diag (safe): report env var PRESENCE only, never values ───────────────
+  if (action === 'diag') {
+    return res.status(200).json({
+      ok: true,
+      env: MAYA_ENV,
+      hasPublicKey: !!MAYA_PUBLIC_KEY,
+      publicKeyLen: MAYA_PUBLIC_KEY ? MAYA_PUBLIC_KEY.length : 0,
+      publicKeyPrefix: MAYA_PUBLIC_KEY ? MAYA_PUBLIC_KEY.slice(0, 3) : '',
+      hasSecretKey: !!MAYA_SECRET_KEY,
+      secretKeyLen: MAYA_SECRET_KEY ? MAYA_SECRET_KEY.length : 0,
+      base: MAYA_BASE,
+    });
+  }
+
   // ── createCheckout ────────────────────────────────────────────
   if (action === 'createCheckout') {
     if (!MAYA_PUBLIC_KEY) return res.status(500).json({ ok: false, error: 'Maya not configured (missing public key)', code: 'NO_KEY' });
