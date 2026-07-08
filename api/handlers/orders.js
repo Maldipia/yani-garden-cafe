@@ -577,6 +577,12 @@ export async function routeOrders(action, body, auth, req, res) {
         return res.status(409).json({ ok: false, holdForPayment: true,
           error: 'Order is on hold until payment is received. Collect payment, then mark it received.' });
       }
+      // Dine-in cash (CASH_PENDING) may cook + be READY, but not COMPLETED until
+      // the server marks the cash collected (prevents closing an unpaid order).
+      if (prevPayStat === 'CASH_PENDING' && newStatus === 'COMPLETED') {
+        return res.status(409).json({ ok: false, holdForPayment: true,
+          error: 'Collect the cash first, then mark it received before completing.' });
+      }
 
       const patch = { status: newStatus };
       if (newStatus === 'CANCELLED' && cancelReason) patch.cancel_reason = cancelReason;

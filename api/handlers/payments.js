@@ -42,7 +42,7 @@ export async function routePayments(action, body, auth, req, res) {
       // Load order — only flag live, unpaid orders. Never touch a VERIFIED /
       // PLATFORM_PAID / SUBMITTED order or one that's already closed.
       const ordR = await supaFetch(
-        `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=status,payment_status&limit=1`
+        `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=status,payment_status,order_type&limit=1`
       );
       const ord = ordR.ok && ordR.data && ordR.data[0];
       if (!ord) return res.status(404).json({ ok: false, error: 'Order not found' });
@@ -54,15 +54,25 @@ export async function routePayments(action, body, auth, req, res) {
         return res.status(200).json({ ok: true, orderId, method, skipped: true });
       }
 
+      // ── Payment status by method + order type ─────────────────────────────
+      // DINE-IN + CASH → CASH_PENDING: kitchen cooks now, server collects at
+      //   the table (customer is seated, low walk-away risk).
+      // TAKE-OUT + CASH, and ALL CARD (terminal) → AWAITING_PAYMENT: held from
+      //   prep until staff confirms payment (higher walk-away risk).
+      const orderType = String(ord.order_type || '').toUpperCase();
+      const isDineIn  = orderType === 'DINE-IN' || orderType === 'DINE_IN' || orderType === 'DINEIN';
+      const payStatus = (method === 'CASH' && isDineIn) ? 'CASH_PENDING' : 'AWAITING_PAYMENT';
+      const held      = payStatus === 'AWAITING_PAYMENT';
+
       const r = await supa('PATCH', 'dine_in_orders',
-        { payment_method: method, payment_status: 'AWAITING_PAYMENT', updated_at: new Date().toISOString() },
+        { payment_method: method, payment_status: payStatus, updated_at: new Date().toISOString() },
         { order_id: `eq.${encodeURIComponent(orderId)}` }
       );
       if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to flag payment' });
       logSync('dine_in_orders', orderId, 'UPDATE');
-      auditLog({ orderId, action: 'PAYMENT_INTENT', newValue: method, details: { source: 'customer', held: true } });
-      pushToSheets('updateOrderPayment', { orderId, paymentMethod: method, paymentStatus: 'AWAITING_PAYMENT' });
-      return res.status(200).json({ ok: true, orderId, method });
+      auditLog({ orderId, action: 'PAYMENT_INTENT', newValue: method, details: { source: 'customer', held, orderType } });
+      pushToSheets('updateOrderPayment', { orderId, paymentMethod: method, paymentStatus: payStatus });
+      return res.status(200).json({ ok: true, orderId, method, payStatus, held });
     }
 
     if (action === 'setPaymentMethod') {

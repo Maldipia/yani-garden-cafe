@@ -2932,11 +2932,8 @@ function renderPaymentPage() {
 
     html += '<div style="font-family:var(--font-soul);font-size:1.1rem;font-weight:700;margin-bottom:16px;text-align:center">How would you like to pay?</div>';
 
-    var _cpm = (window.APP_CONFIG && window.APP_CONFIG.CARD_PAYMENT_MODE) || 'qr';
-    var _cardName = (_cpm === 'paymongo') ? 'Card / Maya' : 'Card Payment';
-    var _cardDesc = (_cpm === 'paymongo') ? 'Visa · Mastercard · Maya · GCash' : 'Server will come to your table';
     html += '<button class="pay-method-btn" onclick="selectPayment(\'card\')">' +
-      '<div class="pay-method-icon">💳</div><div class="pay-method-info"><div class="pay-method-name">' + _cardName + '</div><div class="pay-method-desc">' + _cardDesc + '</div></div></button>';
+      '<div class="pay-method-icon">💳</div><div class="pay-method-info"><div class="pay-method-name">Credit / Debit Card</div><div class="pay-method-desc">Secure checkout · Visa · Mastercard · JCB · Maya</div></div></button>';
 
     html += '<button class="pay-method-btn" onclick="selectPayment(\'cash\')">' +
       '<div class="pay-method-icon">💵</div><div class="pay-method-info"><div class="pay-method-name">Cash Payment</div><div class="pay-method-desc">Server will come to your table</div></div></button>';
@@ -2951,31 +2948,23 @@ function renderPaymentPage() {
 async function selectPayment(method) {
   state.paymentMethod = method;
 
-  // Cash & Card are collected in person at the table. Online card (PayMongo)
-  // is handled separately below. For both in-person methods we flag the order
-  // so the admin board alerts a server to come collect, and the order is held
-  // from preparation until payment is confirmed.
-  if (method === 'cash' || method === 'card') {
-    var payMode = (window.APP_CONFIG && window.APP_CONFIG.CARD_PAYMENT_MODE) || 'qr';
-    if (method === 'card' && payMode === 'paymongo') {
+  // ── CARD: the ONLY method that uses PayMongo/Maya secure checkout. ────────
+  if (method === 'card') {
+    var _cardMode = (window.APP_CONFIG && window.APP_CONFIG.CARD_PAYMENT_MODE) || 'qr';
+    if (_cardMode === 'paymongo') {
       await showPaymongoPayment();
       return;
     }
-
-    var methodLabel = method === 'cash' ? 'Cash' : 'Card';
-    var methodIcon  = method === 'cash' ? '💵' : '💳';
-
-    // Record the intended method + flag AWAITING_PAYMENT (alerts staff, holds prep)
-    try { await api('flagPaymentIntent', { orderId: state.orderId, method: method.toUpperCase() }); } catch (e) {}
-
-    var body = document.getElementById('paymentBody');
-    body.innerHTML = '<div class="status-card">' +
-      '<div class="status-icon">' + methodIcon + '</div>' +
-      '<div class="status-title">' + methodLabel + ' Payment</div>' +
+    // Go-live switch still OFF → card handled at the terminal by staff.
+    try { await api('flagPaymentIntent', { orderId: state.orderId, method: 'CARD' }); } catch (e) {}
+    var cbody = document.getElementById('paymentBody');
+    cbody.innerHTML = '<div class="status-card">' +
+      '<div class="status-icon">💳</div>' +
+      '<div class="status-title">Card Payment</div>' +
       '<div style="margin-top:16px;background:#F0FDF4;border:1.5px solid #86EFAC;border-radius:14px;padding:18px;text-align:center">' +
         '<div style="font-size:1.6rem;margin-bottom:10px">🌿</div>' +
         '<div style="font-size:.92rem;font-weight:700;color:#166534;margin-bottom:8px">Thank you for your order!</div>' +
-        '<div style="font-size:.83rem;color:#15803D;line-height:1.7">Our team will come to your table to assist with your payment. Preparation begins once payment is completed. Thank you for your kind understanding. 💚</div>' +
+        '<div style="font-size:.83rem;color:#15803D;line-height:1.7">Our server will bring the card terminal to your table. Preparation begins once payment is completed. 💚</div>' +
       '</div>' +
       '<div class="status-order-id" style="margin-top:14px">' + esc(state.orderId) + '</div>' +
       '<div style="font-size:1.1rem;font-weight:700;color:var(--terra);margin-top:4px">' + peso(state.orderTotal) + '</div></div>' +
@@ -2983,7 +2972,33 @@ async function selectPayment(method) {
     return;
   }
 
-  // Online QR (GCash / InstaPay / bank transfer) — pay first, then upload proof
+  // ── CASH: server collects at the table. Dine-in cooks now; take-out waits. ─
+  if (method === 'cash') {
+    var isDineIn = String(state.orderType || 'DINE-IN').toUpperCase().indexOf('TAKE') === -1;
+    // Flag intent — backend sets CASH_PENDING (dine-in, cooks now) or
+    // AWAITING_PAYMENT (take-out, held) based on order type.
+    try { await api('flagPaymentIntent', { orderId: state.orderId, method: 'CASH' }); } catch (e) {}
+
+    var kitchenLine = isDineIn
+      ? 'Your order is being prepared. Our server will come to your table to collect your cash payment.'
+      : 'Please prepare your payment. Our server will assist you — preparation begins once payment is collected.';
+
+    var body = document.getElementById('paymentBody');
+    body.innerHTML = '<div class="status-card">' +
+      '<div class="status-icon">💵</div>' +
+      '<div class="status-title">Cash Payment</div>' +
+      '<div style="margin-top:16px;background:#F0FDF4;border:1.5px solid #86EFAC;border-radius:14px;padding:18px;text-align:center">' +
+        '<div style="font-size:1.6rem;margin-bottom:10px">🌿</div>' +
+        '<div style="font-size:.92rem;font-weight:700;color:#166534;margin-bottom:8px">Thank you! Your order has been received.</div>' +
+        '<div style="font-size:.83rem;color:#15803D;line-height:1.7">' + kitchenLine + ' 💚</div>' +
+      '</div>' +
+      '<div class="status-order-id" style="margin-top:14px">' + esc(state.orderId) + '</div>' +
+      '<div style="font-size:1.1rem;font-weight:700;color:var(--terra);margin-top:4px">' + peso(state.orderTotal) + '</div></div>' +
+      '<button class="btn-primary mt-16" onclick="closePage(\'payment\');openPage(\'status\');startStatusPolling()">Track Your Order →</button>';
+    return;
+  }
+
+  // ── QR: show QR codes immediately, customer pays + uploads proof. ─────────
   showQRPayment();
 }
 

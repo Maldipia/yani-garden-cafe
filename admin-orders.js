@@ -332,6 +332,16 @@ function renderOrders() {
         html += '<button class="oc-btn" style="background:var(--forest);color:#fff;border:none;font-weight:700;width:calc(100% - 32px);margin:4px 16px 6px" '
           + 'onclick="markPaymentReceived(\'' + esc(o.orderId) + '\',\'' + esc(awMethod) + '\')">✅ Payment Received</button>';
       }
+    } else if (o.paymentStatus === 'CASH_PENDING') {
+      // Dine-in cash — kitchen cooks now; server collects cash at the table.
+      html += '<div class="oc-payment awaiting" style="background:#FEF9C3;border-color:#FDE047">'
+        + '<div style="font-weight:800;font-size:.78rem;color:#854D0E">💵 Table ' + esc(o.tableNo || '?') + ' — Cash on collection (preparing now)</div>'
+        + '<div style="font-size:.68rem;font-weight:600;margin-top:3px;color:#a16207">Collect cash before completing the order.</div>'
+        + '</div>';
+      if (canSetPayment && o.status !== 'CANCELLED') {
+        html += '<button class="oc-btn" style="background:var(--forest);color:#fff;border:none;font-weight:700;width:calc(100% - 32px);margin:4px 16px 6px" '
+          + 'onclick="markPaymentReceived(\'' + esc(o.orderId) + '\',\'CASH\')">✅ Cash Received</button>';
+      }
     } else {
       // Show customer's chosen payment method even before it's confirmed
       var chosenMethod = (o.paymentMethod || '').toUpperCase().trim();
