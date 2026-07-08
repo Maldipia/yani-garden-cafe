@@ -93,14 +93,23 @@ export default async function handler(req, res) {
       const amount   = (attrs.amount || 0) / 100; // convert centavos
 
       if (orderId) {
-        // Mark order payment as PAID in Supabase
+        // Extract the richest reconciliation detail PayMongo gives us.
+        const paymentId   = event?.data?.attributes?.data?.id || attrs.payment_id || null;
+        const source      = attrs.source || {};
+        const brand       = (source.brand || source.type || attrs.payment_method_used || '').toLowerCase() || null;
+        const refNo       = attrs.external_reference_number || attrs.reference_number || source.reference || null;
+        // Mark order PAID — webhook is the authoritative source of truth.
         await supaUpdate('dine_in_orders', { order_id: orderId }, {
-          payment_status: 'PAID',
-          payment_method: 'CARD',
-          paid_at: new Date().toISOString(),
-          payment_amount: amount,
+          payment_status:        'PAID',
+          payment_method:        'CARD',
+          paid_at:               new Date().toISOString(),
+          payment_amount:        amount,
+          paymongo_payment_id:   paymentId,
+          payment_brand:         brand,
+          payment_ref_no:        refNo,
+          settlement_status:     'pending',
         });
-        console.log(`Order ${orderId} marked PAID ₱${amount}`);
+        console.log(`Order ${orderId} marked PAID ₱${amount} (${brand||'card'}, pay=${paymentId})`);
       }
     }
 
@@ -130,6 +139,39 @@ export default async function handler(req, res) {
     const amountInCentavos = Math.round(parseFloat(amount) * 100);
     if (amountInCentavos < 2000) { // PayMongo min = ₱20
       return res.status(400).json({ ok: false, error: 'Minimum amount is ₱20' });
+    }
+
+    // ── Duplicate-session guard (checklist #3) ────────────────────────────
+    // If this order already has a PayMongo link and it isn't paid yet, reuse
+    // the SAME link so multiple taps never create multiple payable sessions.
+    {
+      const existR = await fetch(
+        `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=payment_status,paymongo_link_id&limit=1`,
+        { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+      );
+      const existRows = existR.ok ? await existR.json() : [];
+      const existing  = existRows[0];
+      if (existing) {
+        if (existing.payment_status === 'PAID') {
+          return res.status(409).json({ ok: false, error: 'This order is already paid.', code: 'ALREADY_PAID' });
+        }
+        if (existing.paymongo_link_id) {
+          // Confirm the existing link is still usable (not paid/expired) and reuse it.
+          const chk = await pmFetch(`/links/${existing.paymongo_link_id}`);
+          if (chk.ok) {
+            const st  = chk.data.data?.attributes?.status;
+            const url = chk.data.data?.attributes?.checkout_url;
+            if (st === 'paid') {
+              await supaUpdate('dine_in_orders', { order_id: orderId }, { payment_status: 'PAID' });
+              return res.status(409).json({ ok: false, error: 'This order is already paid.', code: 'ALREADY_PAID' });
+            }
+            if (url && (st === 'unpaid' || st === 'pending')) {
+              return res.status(200).json({ ok: true, checkoutUrl: url, linkId: existing.paymongo_link_id, amount: amountInCentavos / 100, reused: true });
+            }
+          }
+          // else: link missing/expired → fall through and create a fresh one
+        }
+      }
     }
 
     const payload = {
@@ -171,6 +213,7 @@ export default async function handler(req, res) {
       payment_status: 'PENDING',
       payment_method: 'CARD',
       paymongo_link_id: linkId,
+      paymongo_checkout_ref: linkId,
     });
 
     return res.status(200).json({
@@ -219,6 +262,25 @@ export default async function handler(req, res) {
     }
 
     return res.status(200).json({ ok: true, status: payment_status || 'PENDING' });
+  }
+
+  // ── cancelPayment ─────────────────────────────────────────
+  // Customer backed out of the PayMongo checkout. Mark the order's payment
+  // CANCELLED (not stuck PENDING) so they can re-pick a method. The order
+  // itself is preserved — only payment intent is reset.
+  if (action === 'cancelPayment') {
+    if (!orderId) return res.status(400).json({ ok: false, error: 'orderId required' });
+    // Never override an already-paid order.
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=payment_status&limit=1`,
+      { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+    );
+    const rows = r.ok ? await r.json() : [];
+    if (rows[0]?.payment_status === 'PAID') {
+      return res.status(200).json({ ok: true, status: 'PAID', note: 'Already paid — not cancelled.' });
+    }
+    await supaUpdate('dine_in_orders', { order_id: orderId }, { payment_status: 'PAYMENT_CANCELLED' });
+    return res.status(200).json({ ok: true, status: 'PAYMENT_CANCELLED' });
   }
 
   return res.status(400).json({ ok: false, error: 'Unknown action' });
