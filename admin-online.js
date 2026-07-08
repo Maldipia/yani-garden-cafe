@@ -1347,10 +1347,11 @@ function _settingsPayment() {
       + '</div>';
   }
 
+  var _cardOnline = mode === 'maya';
   return '<div class="s-card">'
-    + '<div class="s-card-title">💳 Payment Mode</div>'
-    + '<div style="font-size:.75rem;color:var(--timber);margin-bottom:16px">Customers scan your uploaded QR and upload payment proof. Card payments are collected in person at the table via your Maya terminal.</div>'
-    + toggleRow('QR Image', 'Customer scans your uploaded QR and uploads payment proof', '🖼️', true, 'qr', 'qr')
+    + '<div class="s-card-title">💳 Card Payment Mode</div>'
+    + '<div style="font-size:.75rem;color:var(--timber);margin-bottom:16px">Choose how customers pay by card. <b>Terminal</b>: staff brings the Maya machine to the table. <b>Maya Online</b>: customer pays on Maya\'s secure page (requires Maya API keys set up).</div>'
+    + toggleRow('Maya Online Checkout', _cardOnline ? 'Active — customers pay card online via Maya' : 'Off — card is collected at the table terminal', '🌐', _cardOnline, 'maya', 'qr')
     + '</div>'
     + '<div class="s-card">'
     + '<div class="s-card-title">💳 Payment Image</div>'
@@ -1606,7 +1607,7 @@ async function setPaymentMode(mode) {
   var r = await api('updateSetting', { userId: currentUser.userId, key: 'CARD_PAYMENT_MODE', value: mode });
   if (r.ok) {
     _settings.CARD_PAYMENT_MODE = mode;
-    showToast('🖼️ QR Image mode active', 'success');
+    showToast(mode === 'maya' ? '🌐 Maya Online checkout enabled' : '💳 Card at terminal (Maya Online off)', 'success');
     switchSettingsTab('payment');
   } else {
     showToast('Failed to switch: ' + (r.error || '?'), 'error');

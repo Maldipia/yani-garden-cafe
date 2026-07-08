@@ -1740,6 +1740,22 @@ window.addEventListener('DOMContentLoaded', async function() {
   state.tableNo = params.get('table') || '';
   state.token = params.get('token') || '';
 
+  // ── Maya Checkout redirect-back (payment confirmed by webhook, UI-only here) ─
+  var _mayaReturn = params.get('maya');
+  var _mayaRef    = params.get('ref') || '';
+  if (_mayaReturn && _mayaRef) {
+    if (_mayaReturn === 'success') {
+      try { toast('Payment received! Tracking your order.'); } catch (e) {}
+      state.orderId = _mayaRef;
+      // Jump straight to order tracking.
+      try { openPage('status'); startStatusPolling(); } catch (e) {}
+    } else {
+      // failure or cancel → free the order so another method can be chosen.
+      try { fetch('/api/maya', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'cancelPayment', orderId: _mayaRef }) }); } catch (e) {}
+      try { toast('Payment not completed. You can choose another payment method.'); } catch (e) {}
+    }
+  }
+
   // Refresh table tokens from DB (handles added/changed tables dynamically)
   await initTableTokens();
 
@@ -2935,9 +2951,15 @@ function renderPaymentPage() {
 async function selectPayment(method) {
   state.paymentMethod = method;
 
-  // ── CARD: staff runs the Maya card terminal at the table. ────────────────
-  // (Online Maya API integration is a planned separate task.)
+  // ── CARD ─────────────────────────────────────────────────────────────────
+  // If Maya online checkout is enabled → hosted redirect. Otherwise (default)
+  // staff runs the Maya card terminal at the table.
   if (method === 'card') {
+    var _cardMode = (window.APP_CONFIG && window.APP_CONFIG.CARD_PAYMENT_MODE) || 'qr';
+    if (_cardMode === 'maya') {
+      showMayaCheckout();
+      return;
+    }
     try { await api('flagPaymentIntent', { orderId: state.orderId, method: 'CARD' }); } catch (e) {}
     var cbody = document.getElementById('paymentBody');
     cbody.innerHTML = '<div class="status-card">' +
@@ -2982,6 +3004,68 @@ async function selectPayment(method) {
 
   // ── QR: show QR codes immediately, customer pays + uploads proof. ─────────
   showQRPayment();
+}
+
+// ── Maya Checkout (online card) — confirmation screen FIRST, then redirect ──
+function showMayaCheckout() {
+  var body = document.getElementById('paymentBody');
+  body.innerHTML = '<div class="status-card">' +
+    '<div style="text-align:center">' +
+      '<div style="font-size:1.9rem;margin-bottom:6px">💳</div>' +
+      '<div style="font-weight:800;font-size:1.05rem;color:var(--forest)">Card Payment</div>' +
+    '</div>' +
+    '<div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:12px;padding:16px;margin-top:14px">' +
+      '<div style="display:flex;justify-content:space-between;font-size:.86rem;margin-bottom:6px"><span style="color:var(--timber)">Order</span><span style="font-weight:700">' + esc(state.orderId) + '</span></div>' +
+      '<div style="display:flex;justify-content:space-between;font-size:.86rem;margin-bottom:6px"><span style="color:var(--timber)">Table</span><span style="font-weight:700">' + esc(state.tableNo) + '</span></div>' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;border-top:1px dashed #86efac;padding-top:8px;margin-top:8px"><span style="color:var(--timber);font-size:.86rem">Amount</span><span style="font-weight:800;font-size:1.3rem;color:var(--terra)">' + peso(state.orderTotal) + '</span></div>' +
+    '</div>' +
+    '<div style="text-align:center;font-size:.78rem;color:var(--timber);margin-top:12px">Secure Card Payment powered by <b>Maya</b><br>Visa · Mastercard · JCB · Maya</div>' +
+    '<label style="display:flex;gap:10px;align-items:flex-start;margin-top:14px;cursor:pointer;font-size:.8rem;color:var(--ink);line-height:1.5">' +
+      '<input type="checkbox" id="mayaConfirmChk" onchange="document.getElementById(\'mayaProceedBtn\').disabled=!this.checked" style="margin-top:3px;width:18px;height:18px;flex-shrink:0">' +
+      '<span>I confirm my order is correct and understand payment is processed securely through Maya.</span>' +
+    '</label>' +
+  '</div>' +
+  '<button class="btn-primary mt-16" id="mayaProceedBtn" onclick="proceedToMaya()" disabled>Proceed to Secure Payment →</button>' +
+  '<button class="btn-outline mt-8" onclick="renderPaymentPage()">← Choose Another Method</button>';
+}
+
+async function proceedToMaya() {
+  var body = document.getElementById('paymentBody');
+  body.innerHTML = '<div class="status-card" style="text-align:center">' +
+    '<div style="font-size:2rem;margin-bottom:10px">💳</div>' +
+    '<div style="font-weight:700;font-size:1rem;margin-bottom:6px">Setting up secure payment…</div>' +
+    '<div style="font-size:.82rem;color:var(--timber)">Please wait</div>' +
+    '<div style="margin-top:16px;width:32px;height:32px;border:3px solid var(--mist);border-top-color:var(--forest);border-radius:50%;animation:spin .8s linear infinite;margin:16px auto 0"></div>' +
+  '</div>';
+  try {
+    var resp = await fetch('/api/maya', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'createCheckout',
+        orderId: state.orderId,
+        amount: state.orderTotal,
+        description: 'YANI Garden Cafe — Table ' + state.tableNo,
+        customerName: state.customerName || 'Guest',
+      })
+    });
+    var data = await resp.json();
+    if (data.code === 'ALREADY_PAID') {
+      body.innerHTML = '<div class="status-card" style="text-align:center"><div style="font-size:2rem">✅</div><div style="font-weight:700;color:var(--forest);margin-top:8px">This order is already paid.</div></div>' +
+        '<button class="btn-primary mt-16" onclick="closePage(\'payment\');openPage(\'status\');startStatusPolling()">Track My Order →</button>';
+      return;
+    }
+    if (!data.ok || !data.redirectUrl) throw new Error(data.error || 'Could not start Maya checkout');
+    // Redirect the customer to Maya's hosted checkout page.
+    window.location.href = data.redirectUrl;
+  } catch (err) {
+    body.innerHTML = '<div class="status-card" style="text-align:center">' +
+      '<div style="font-size:2rem;margin-bottom:8px">⚠️</div>' +
+      '<div style="font-weight:700;color:var(--terra)">Payment setup failed</div>' +
+      '<div style="font-size:.82rem;color:var(--timber);margin-top:6px">' + esc(err.message) + '</div>' +
+      '<div style="font-size:.78rem;color:var(--timber);margin-top:10px">Please pick another payment method.</div>' +
+    '</div>' +
+    '<button class="btn-outline mt-16" onclick="renderPaymentPage()">← Try Another Method</button>';
+  }
 }
 
 function showQRPayment() {
