@@ -167,8 +167,8 @@ export async function routeLoyalty(action, body, auth, req, res) {
       let tierInt = null;
       if (cardTier !== undefined && cardTier !== null && cardTier !== '' && cardTier !== 0) {
         tierInt = parseInt(cardTier);
-        if (![500,1000,2000,3000].includes(tierInt)) {
-          return res.status(400).json({ ok: false, error: 'cardTier must be 500, 1000, 2000, or 3000' });
+        if (![1000,2000,3000].includes(tierInt)) {
+          return res.status(400).json({ ok: false, error: 'cardTier must be 1000, 2000, or 3000 (₱1,000 activation minimum)' });
         }
       }
 
@@ -186,8 +186,8 @@ export async function routeLoyalty(action, body, auth, req, res) {
       // We auto-assign for BOTH new signups and existing accounts that are
       // upgrading from no-card to wanting-card.
       async function reserveNextCard() {
-        // Always reserve a slot even if no tier chosen — default to 500
-        const requestedTier = tierInt || 500;
+        // Default to the ₱1,000 activation minimum if no tier chosen.
+        const requestedTier = tierInt || 1000;
         // Try matching-tier first
         let r = await supaFetch(
           `${SUPABASE_URL}/rest/v1/yani_cards?status=eq.INACTIVE&holder_name=is.null&tier=eq.${requestedTier}&select=card_number,tier&order=card_number.asc&limit=1`
