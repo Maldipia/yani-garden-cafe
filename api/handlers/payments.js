@@ -243,10 +243,15 @@ export async function routePayments(action, body, auth, req, res) {
           : note) || null;
       }
 
-      const r = await supa('PATCH', 'dine_in_orders',
-        { discount_type: storedType, discount_pax: qualPax, discount_pct: discountPct,
+      // When a YANI Card discount is applied, mark the order as paid-by-Yani-Card
+      // so the completion hook charges the wallet. (Not for PWD/Senior/Promo.)
+      const _isYaniCardType = storedType === 'YANI_CARD' || String(storedType || '').startsWith('YANI_CARD');
+      const _patchFields = { discount_type: storedType, discount_pax: qualPax, discount_pct: discountPct,
           discount_amount: finalDiscountAmount, discounted_total: discountedTotal,
-          discount_note: combinedNote, updated_at: new Date().toISOString() },
+          discount_note: combinedNote, updated_at: new Date().toISOString() };
+      if (_isYaniCardType) _patchFields.payment_method = 'YANI_CARD';
+      const r = await supa('PATCH', 'dine_in_orders',
+        _patchFields,
         { order_id: `eq.${encodeURIComponent(orderId)}` }
       );
       if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to apply discount' });
