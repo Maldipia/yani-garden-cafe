@@ -5,6 +5,8 @@
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://hnynvclpvfxzlfjphefj.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SECRET_KEY;
 const ALLOWED = process.env.ALLOWED_ORIGINS || 'https://yanigardencafe.com';
+// YANI Card T&C version — keep in sync with api/lib/config.js TNC_VERSION.
+const TNC_VERSION = 'v1.0';
 
 const SAFE_KEYS = [
   'BUSINESS_NAME','ORDER_PREFIX','SERVICE_CHARGE','CURRENCY','TIMEZONE',
@@ -63,7 +65,7 @@ export default async function handler(req, res) {
 
   // Serve from in-memory cache
   if (_cache && Date.now() - _cacheAt < CACHE_TTL_MS) {
-    return res.status(200).json({ ok: true, config: _cache, cached: true });
+    return res.status(200).json({ ok: true, config: { ..._cache, TNC_VERSION }, cached: true });
   }
 
   // Try DB with a 5-second timeout
@@ -93,5 +95,5 @@ export default async function handler(req, res) {
   _cache = config;
   _cacheAt = Date.now();
   res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=300, stale-while-revalidate=86400');
-  return res.status(200).json({ ok: true, config, source });
+  return res.status(200).json({ ok: true, config: { ...config, TNC_VERSION }, source });
 };

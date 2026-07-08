@@ -3,7 +3,7 @@
 // Auth: PIN → session token. Session token required for all subsequent actions.
 // ─────────────────────────────────────────────────────────────────────────────
 import { supaFetch, supa, auditLog } from '../lib/db.js';
-import { SUPABASE_URL }              from '../lib/config.js';
+import { SUPABASE_URL, TNC_VERSION }              from '../lib/config.js';
 import { checkRateLimit }            from '../lib/cache.js';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -193,10 +193,15 @@ export async function routeCardPortal(action, body, auth, req, res) {
 
   // ── requestCardLoad ─────────────────────────────────────────────────────────
   if (action === 'requestCardLoad') {
-    const { cardNumber, sessionToken, amount, paymentMethod, proofBase64, proofExt } = body;
+    const { cardNumber, sessionToken, amount, paymentMethod, proofBase64, proofExt, tncAccepted, tncVersion } = body;
     if (!cardNumber) return res.status(400).json({ ok: false, error: 'cardNumber required' });
     const sessR = await verifyPortalSession(sessionToken, cardNumber);
     if (!sessR.ok) return res.status(401).json({ ok: false, error: sessR.error });
+
+    // ── Mandatory T&C confirmation before reload (legal compliance) ──────────
+    if (tncAccepted !== true) {
+      return res.status(400).json({ ok: false, error: 'Please confirm you agree to the reload terms before proceeding.', code: 'TNC_REQUIRED' });
+    }
 
     const amt = parseFloat(amount);
     if (isNaN(amt) || amt < 1 || amt > 10000)
@@ -260,6 +265,24 @@ export async function routeCardPortal(action, body, auth, req, res) {
       return res.status(500).json({ ok: false, error: 'Failed to submit load request' });
 
     auditLog({ action: 'CARD_LOAD_REQUESTED', details: { cardNumber, amount: amt, method } });
+
+    // ── Record T&C acceptance for this reload (append-only audit) ────────────
+    try {
+      await supaFetch(`${SUPABASE_URL}/rest/v1/tnc_acceptances`, {
+        method: 'POST',
+        headers: { 'Prefer': 'return=minimal' },
+        body: JSON.stringify({
+          context:     'RELOAD',
+          tnc_version: String(tncVersion || TNC_VERSION),
+          card_number: cardNumber,
+          amount:      amt,
+          order_ref:   reqR.data?.[0]?.id || null,
+          user_agent:  String(req?.headers?.['user-agent'] || '').substring(0, 300),
+          ip_hint:     String(req?.headers?.['x-forwarded-for'] || '').split(',')[0].substring(0, 60) || null,
+        })
+      });
+    } catch(e) { console.error('T&C acceptance log (reload) failed:', e.message); }
+
     return res.status(200).json({ ok: true, message: `Load request for ₱${amt} submitted. Staff will credit your card shortly.`, requestId: reqR.data?.[0]?.id });
   }
 

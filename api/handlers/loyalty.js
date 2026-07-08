@@ -3,7 +3,7 @@ import { supaFetch, supa, auditLog, getSetting } from '../lib/db.js';
 import { _settingsCache, SETTINGS_CACHE_TTL, invalidateSettingsCache } from '../lib/cache.js';
 import { signToken } from '../lib/auth.js';
 import { isNonEmptyString, isValidOrderId } from '../lib/validation.js';
-import { SUPABASE_URL, BUSINESS_NAME } from '../lib/config.js';
+import { SUPABASE_URL, BUSINESS_NAME, TNC_VERSION } from '../lib/config.js';
 import { _maybeFireSoulSearcher, _maybeFireRainyDay } from '../lib/loyalty-events.js';
 
 export async function routeLoyalty(action, body, auth, req, res) {
@@ -127,9 +127,13 @@ export async function routeLoyalty(action, body, auth, req, res) {
     // a chosen tier (lets a customer change their mind from "no card" to
     // "yes I want one"). We never downgrade.
     if (action === 'registerForRewards') {
-      const { name, email, phone, cardTier, notes, consent } = body;
+      const { name, email, phone, cardTier, notes, consent, tncAccepted, tncVersion } = body;
       if (!name || !email) return res.status(400).json({ ok: false, error: 'name and email required' });
       if (consent !== true) return res.status(400).json({ ok: false, error: 'consent required' });
+      // ── Mandatory T&C acceptance (legal compliance) ──────────────────────
+      if (tncAccepted !== true) {
+        return res.status(400).json({ ok: false, error: 'You must read and accept the YANI Card Terms & Conditions to register.', code: 'TNC_REQUIRED' });
+      }
 
       const cleanEmail = String(email).trim().toLowerCase();
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
@@ -141,6 +145,23 @@ export async function routeLoyalty(action, body, auth, req, res) {
       }
       const cleanPhone = phone ? String(phone).replace(/\D/g,'').substring(0,13) : null;
       const cleanNotes = notes ? String(notes).trim().substring(0, 500) : null;
+
+      // ── Record T&C acceptance (append-only audit) ────────────────────────
+      // Fire-and-forget: never block registration on the audit write.
+      try {
+        await supaFetch(`${SUPABASE_URL}/rest/v1/tnc_acceptances`, {
+          method: 'POST',
+          headers: { 'Prefer': 'return=minimal' },
+          body: JSON.stringify({
+            context:     'REGISTRATION',
+            tnc_version: String(tncVersion || TNC_VERSION),
+            email:       cleanEmail,
+            phone:       cleanPhone,
+            user_agent:  String(req?.headers?.['user-agent'] || '').substring(0, 300),
+            ip_hint:     String(req?.headers?.['x-forwarded-for'] || '').split(',')[0].substring(0, 60) || null,
+          })
+        });
+      } catch(e) { console.error('T&C acceptance log (registration) failed:', e.message); }
 
       // Validate card tier — only the four published options (or no card).
       let tierInt = null;

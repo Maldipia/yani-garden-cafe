@@ -4,6 +4,9 @@ export const RESEND_KEY      = process.env.RESEND_API_KEY || '';
 export const FROM_EMAIL      = 'onboarding@resend.dev';
 export const BUSINESS_NAME   = process.env.BUSINESS_NAME || 'Yani Garden Cafe';
 export const SERVICE_CHARGE_RATE = 0.10;
+// YANI Card Terms & Conditions — bump this when the T&C text changes.
+// Existing members must re-accept the latest version on next register/reload.
+export const TNC_VERSION = 'v1.0';
 export const ORDER_PREFIX    = 'ORD';
 
 export const SUPABASE_KEY = (() => {

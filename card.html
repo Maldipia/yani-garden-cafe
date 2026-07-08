@@ -285,7 +285,20 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--forest);min-he
         </label>
         <input type="file" id="proofFileInput" accept="image/*" onchange="handleProofFile(this)">
         <img class="proof-preview" id="proofPreview">
-        <button class="btn-primary" id="submitLoadBtn" onclick="submitLoad()" style="margin-top:8px">
+        <div style="background:#fbf7ee;border:1px solid var(--mist);border-radius:12px;padding:12px 14px;margin-top:12px;font-size:.76rem;color:var(--timber);line-height:1.55">
+          <div style="font-weight:800;color:var(--forest-deep);margin-bottom:6px">Before you reload — key terms</div>
+          <div style="display:flex;gap:6px;margin-bottom:3px"><span>•</span><span>Activation requires a ₱1,000 initial load.</span></div>
+          <div style="display:flex;gap:6px;margin-bottom:3px"><span>•</span><span>Keep an <b>active balance of ₱500+</b> to enjoy your 10% Member Privileges.</span></div>
+          <div style="display:flex;gap:6px;margin-bottom:3px"><span>•</span><span>Wallet loads are <b>non-refundable</b> and cannot be exchanged for cash.</span></div>
+          <div style="display:flex;gap:6px;margin-bottom:3px"><span>•</span><span>The 10% discount can't be combined with Senior, PWD, or promos.</span></div>
+          <div style="display:flex;gap:6px"><span>•</span><span>Balance is for eligible purchases only.</span></div>
+          <a href="#" onclick="openTncModal();return false" style="display:inline-block;margin-top:8px;color:var(--forest);font-weight:700;text-decoration:underline">Read full Terms &amp; Conditions</a>
+        </div>
+        <label style="display:flex;gap:10px;align-items:flex-start;margin-top:12px;cursor:pointer;font-size:.8rem;color:var(--ink);line-height:1.5">
+          <input type="checkbox" id="reloadTncCheck" onchange="document.getElementById('submitLoadBtn').disabled=!this.checked" style="margin-top:3px;width:18px;height:18px;flex-shrink:0">
+          <span>I understand and agree to these terms before proceeding with my wallet reload.</span>
+        </label>
+        <button class="btn-primary" id="submitLoadBtn" onclick="submitLoad()" style="margin-top:8px" disabled>
           Submit Load Request
         </button>
         <div style="font-size:.72rem;color:var(--timber);text-align:center;margin-top:10px">
@@ -332,6 +345,7 @@ async function loadPaymentSettings() {
     if (s.PAYMENT_IMAGE_URL) window._paymentImageUrl = s.PAYMENT_IMAGE_URL;
     if (s.ACCOUNT_NAME)      window._accountName     = s.ACCOUNT_NAME;
     if (s.GCASH_NUMBER)      window._gcashNumber      = s.GCASH_NUMBER;
+    if (s.TNC_VERSION)       window._tncVersion       = s.TNC_VERSION;
     // Re-render Load tab now that image URL is available
     updateLoadPreview();
   } catch(e) { console.error('Failed to load payment settings:', e); }
@@ -585,6 +599,7 @@ async function submitLoad(){
   const amt = parseFloat(document.getElementById('loadAmt').value);
   if(!amt || amt<1 || amt>10000){ toast('Enter a reload amount (up to ₱10,000)',true); return; }
   if(!proofB64){ toast('Please upload your payment screenshot',true); return; }
+  if(!document.getElementById('reloadTncCheck')?.checked){ toast('Please agree to the reload terms first',true); return; }
   const btn = document.getElementById('submitLoadBtn');
   btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Submitting…';
   try {
@@ -595,6 +610,8 @@ async function submitLoad(){
       paymentMethod: 'QR',
       proofBase64:   proofB64,
       proofExt:      proofExt,
+      tncAccepted:   true,
+      tncVersion:    (window._tncVersion || 'v1.0'),
     });
     if(r.ok){
       toast('✅ Load request submitted! Staff will credit your card shortly.');
@@ -603,6 +620,7 @@ async function submitLoad(){
       document.getElementById('uploadLabel').className='upload-btn';
       document.getElementById('uploadLabel').textContent='📷 Tap to upload payment screenshot';
       document.getElementById('proofFileInput').value='';
+      var _rc=document.getElementById('reloadTncCheck'); if(_rc){ _rc.checked=false; }
       setTimeout(loadPortalData, 500);
     } else {
       toast(r.error||'Failed to submit. Try again.',true);
@@ -619,7 +637,44 @@ if(!restoreSession()){
   const cn = params.get('card');
   if(cn) document.getElementById('loginCard').value = cn.toUpperCase();
 }
+function tncHtml(){
+  return ''
+  + '<p style="margin:0 0 4px;font-weight:800">YANI Wallet Membership</p>'
+  + '<p style="margin:0 0 14px;color:#8a8378;font-size:.76rem">Version ' + (window._tncVersion||'v1.0') + '</p>'
+  + '<p style="font-weight:700;margin:12px 0 4px">Membership</p>'
+  + '<p style="margin:0 0 10px">Activation requires an initial wallet load of ₱1,000.</p>'
+  + '<p style="font-weight:700;margin:12px 0 4px">Member Privileges</p>'
+  + '<p style="margin:0 0 6px">Members receive 10% OFF on eligible purchases.</p>'
+  + '<p style="margin:0 0 10px">Member Privileges are active only while your Active Wallet Balance is ₱500 or above before payment.</p>'
+  + '<p style="font-weight:700;margin:12px 0 4px">Wallet</p>'
+  + '<p style="margin:0 0 6px">Reloads may be made in any amount.</p>'
+  + '<p style="margin:0 0 6px">If your balance falls below ₱500, your wallet remains usable, but Member Privileges are suspended until the balance is restored to ₱500 or more.</p>'
+  + '<p style="margin:0 0 6px">Wallet loads are non-refundable and cannot be exchanged for cash.</p>'
+  + '<p style="margin:0 0 10px">Wallet top-ups are not discounted — a ₱1,000 load credits exactly ₱1,000.</p>'
+  + '<p style="font-weight:700;margin:12px 0 4px">Discounts</p>'
+  + '<p style="margin:0 0 6px">The YANI Card discount cannot be combined with: Senior Citizen, PWD, promotional offers, bundle or combo discounts, third-party delivery platforms (GrabFood, Foodpanda, etc.), or any other discount unless otherwise specified.</p>'
+  + '<p style="margin:0 0 10px">Senior Citizen and PWD customers should choose whichever discount is legally applicable and more beneficial, in accordance with Philippine law.</p>'
+  + '<p style="font-weight:700;margin:12px 0 4px">Rewards</p>'
+  + '<p style="margin:0 0 10px">Leaves continue to be earned on eligible purchases and may be redeemed subject to availability and program rules.</p>'
+  + '<p style="font-weight:700;margin:12px 0 4px">General</p>'
+  + '<p style="margin:0 0 6px">Lost cards follow YANI\'s replacement policy.</p>'
+  + '<p style="margin:0 0 6px">YANI Garden Café reserves the right to modify, suspend, or terminate the program and its benefits when necessary.</p>';
+}
+function openTncModal(){ document.getElementById('tncBody').innerHTML = tncHtml(); document.getElementById('tncModal').style.display='block'; }
+function closeTncModal(){ document.getElementById('tncModal').style.display='none'; }
 </script>
 </div>
-</body>
+<div id="tncModal" style="display:none;position:fixed;inset:0;background:rgba(9,59,41,.55);z-index:9999;padding:20px;overflow-y:auto">
+  <div style="max-width:440px;margin:24px auto;background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 24px 60px -20px rgba(0,0,0,.5)">
+    <div style="background:var(--forest-deep,#093b29);color:#fff;padding:16px 20px;display:flex;justify-content:space-between;align-items:center">
+      <div style="font-weight:800;font-size:1.05rem">YANI Wallet Membership — Terms</div>
+      <div onclick="closeTncModal()" style="cursor:pointer;font-size:1.4rem;line-height:1;opacity:.85">&times;</div>
+    </div>
+    <div id="tncBody" style="padding:18px 20px;max-height:70vh;overflow-y:auto;font-size:.83rem;line-height:1.6;color:var(--ink,#21302a)"></div>
+    <div style="padding:14px 20px;border-top:1px solid var(--mist,#eee)">
+      <button class="btn-primary" onclick="closeTncModal()" style="width:100%">Close</button>
+    </div>
+  </div>
+</div>
+
 </html>
