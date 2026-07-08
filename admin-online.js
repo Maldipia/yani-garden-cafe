@@ -1330,7 +1330,6 @@ function _settingsPayment() {
   var showImg = !!url;
   var mode = s.CARD_PAYMENT_MODE || 'qr';
   var isQR       = mode === 'qr';
-  var isPaymongo = mode === 'paymongo';
   var previewHtml = showImg
     ? '<img id="payImgPreview" src="' + url + '" onerror="this.style.display=\'none\'" style="width:90px;height:90px;object-fit:contain;border-radius:8px;border:1.5px solid var(--mist);background:#f8f8f8">'
     : '<div id="payImgPreview" style="width:90px;height:90px;border-radius:8px;border:2px dashed var(--mist);display:flex;align-items:center;justify-content:center;font-size:.65rem;color:var(--timber);text-align:center">No<br>image</div>';
@@ -1350,9 +1349,8 @@ function _settingsPayment() {
 
   return '<div class="s-card">'
     + '<div class="s-card-title">💳 Payment Mode</div>'
-    + '<div style="font-size:.75rem;color:var(--timber);margin-bottom:16px">Only one can be active. Tap the toggle to switch. Changes take effect immediately.</div>'
-    + toggleRow('QR Image', 'Customer scans your uploaded QR and uploads payment proof', '🖼️', isQR, 'qr', 'paymongo')
-    + toggleRow('PayMongo', 'Secure online checkout — Credit/Debit Card, GCash, Maya', '💳', isPaymongo, 'paymongo', 'qr')
+    + '<div style="font-size:.75rem;color:var(--timber);margin-bottom:16px">Customers scan your uploaded QR and upload payment proof. Card payments are collected in person at the table via your Maya terminal.</div>'
+    + toggleRow('QR Image', 'Customer scans your uploaded QR and uploads payment proof', '🖼️', true, 'qr', 'qr')
     + '</div>'
     + '<div class="s-card">'
     + '<div class="s-card-title">💳 Payment Image</div>'
@@ -1608,7 +1606,7 @@ async function setPaymentMode(mode) {
   var r = await api('updateSetting', { userId: currentUser.userId, key: 'CARD_PAYMENT_MODE', value: mode });
   if (r.ok) {
     _settings.CARD_PAYMENT_MODE = mode;
-    showToast(mode === 'paymongo' ? '💳 Switched to PayMongo' : '🖼️ Switched to QR Image', 'success');
+    showToast('🖼️ QR Image mode active', 'success');
     switchSettingsTab('payment');
   } else {
     showToast('Failed to switch: ' + (r.error || '?'), 'error');

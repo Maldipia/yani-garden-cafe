@@ -1740,16 +1740,6 @@ window.addEventListener('DOMContentLoaded', async function() {
   state.tableNo = params.get('table') || '';
   state.token = params.get('token') || '';
 
-  // ── PayMongo redirect-back handling (checklist #5) ────────────────────────
-  // Payment is confirmed by webhook, not this redirect — here we only steer UI.
-  var payReturn = params.get('payment');
-  var payRef    = params.get('ref') || '';
-  if (payReturn === 'failed' && payRef) {
-    // Customer cancelled/failed → mark payment cancelled so it isn't stuck PENDING.
-    try { fetch('/api/paymongo', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'cancelPayment', orderId: payRef }) }); } catch(e) {}
-    try { toast('Payment cancelled. You can choose another payment method.'); } catch(e) {}
-  }
-
   // Refresh table tokens from DB (handles added/changed tables dynamically)
   await initTableTokens();
 
@@ -2691,10 +2681,7 @@ async function placeOrder() {
   // Cash & in-person Card are collected at the table — mark the intent so the
   // order shows on the admin board as AWAITING PAYMENT the instant it's placed
   // (server is alerted to collect; prep is held until payment is confirmed).
-  // Online card (PayMongo) is self-paid, so it is NOT held.
-  var _payMode = (window.APP_CONFIG && window.APP_CONFIG.CARD_PAYMENT_MODE) || 'qr';
-  if (state.checkoutPayMethod === 'cash' ||
-      (state.checkoutPayMethod === 'card' && _payMode !== 'paymongo')) {
+  if (state.checkoutPayMethod === 'cash' || state.checkoutPayMethod === 'card') {
     orderPayload.paymentIntent = state.checkoutPayMethod.toUpperCase();
   }
   var result = await api('placeOrder', orderPayload);
@@ -2948,14 +2935,9 @@ function renderPaymentPage() {
 async function selectPayment(method) {
   state.paymentMethod = method;
 
-  // ── CARD: the ONLY method that uses PayMongo/Maya secure checkout. ────────
+  // ── CARD: staff runs the Maya card terminal at the table. ────────────────
+  // (Online Maya API integration is a planned separate task.)
   if (method === 'card') {
-    var _cardMode = (window.APP_CONFIG && window.APP_CONFIG.CARD_PAYMENT_MODE) || 'qr';
-    if (_cardMode === 'paymongo') {
-      await showPaymongoPayment();
-      return;
-    }
-    // Go-live switch still OFF → card handled at the terminal by staff.
     try { await api('flagPaymentIntent', { orderId: state.orderId, method: 'CARD' }); } catch (e) {}
     var cbody = document.getElementById('paymentBody');
     cbody.innerHTML = '<div class="status-card">' +
@@ -3000,86 +2982,6 @@ async function selectPayment(method) {
 
   // ── QR: show QR codes immediately, customer pays + uploads proof. ─────────
   showQRPayment();
-}
-
-async function showPaymongoPayment() {
-  // ── Confirmation screen FIRST (checklist #8) — no link created yet. ──────
-  var body = document.getElementById('paymentBody');
-  body.innerHTML = '<div class="status-card">' +
-    '<div style="text-align:center">' +
-      '<div style="font-size:1.9rem;margin-bottom:6px">💳</div>' +
-      '<div style="font-weight:800;font-size:1.05rem;color:var(--forest)">Card / Maya Payment</div>' +
-    '</div>' +
-    '<div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:12px;padding:16px;margin-top:14px">' +
-      '<div style="display:flex;justify-content:space-between;font-size:.86rem;margin-bottom:6px"><span style="color:var(--timber)">Order</span><span style="font-weight:700">' + esc(state.orderId) + '</span></div>' +
-      '<div style="display:flex;justify-content:space-between;font-size:.86rem;margin-bottom:6px"><span style="color:var(--timber)">Table</span><span style="font-weight:700">' + esc(state.tableNo) + '</span></div>' +
-      '<div style="display:flex;justify-content:space-between;align-items:center;border-top:1px dashed #86efac;padding-top:8px;margin-top:8px"><span style="color:var(--timber);font-size:.86rem">Amount</span><span style="font-weight:800;font-size:1.3rem;color:var(--terra)">' + peso(state.orderTotal) + '</span></div>' +
-    '</div>' +
-    '<div style="text-align:center;font-size:.78rem;color:var(--timber);margin-top:12px">Securely processed through <b>Maya</b><br>Accepted: Visa · Mastercard · JCB · Maya · GCash</div>' +
-    '<label style="display:flex;gap:10px;align-items:flex-start;margin-top:14px;cursor:pointer;font-size:.8rem;color:var(--ink);line-height:1.5">' +
-      '<input type="checkbox" id="pmConfirmChk" onchange="document.getElementById(\'pmProceedBtn\').disabled=!this.checked" style="margin-top:3px;width:18px;height:18px;flex-shrink:0">' +
-      '<span>I confirm my order is correct and understand payment is processed securely through Maya, subject to YANI\'s Terms.</span>' +
-    '</label>' +
-  '</div>' +
-  '<button class="btn-primary mt-16" id="pmProceedBtn" onclick="proceedToPaymongo()" disabled>Proceed to Secure Payment →</button>' +
-  '<button class="btn-outline mt-8" onclick="renderPaymentPage()">← Choose Another Method</button>';
-}
-
-async function proceedToPaymongo() {
-  var body = document.getElementById('paymentBody');
-  body.innerHTML = '<div class="status-card" style="text-align:center">' +
-    '<div style="font-size:2rem;margin-bottom:10px">💳</div>' +
-    '<div style="font-weight:700;font-size:1rem;margin-bottom:6px">Setting up secure payment…</div>' +
-    '<div style="font-size:.82rem;color:var(--timber)">Please wait</div>' +
-    '<div style="margin-top:16px;width:32px;height:32px;border:3px solid var(--mist);border-top-color:var(--forest);border-radius:50%;animation:spin .8s linear infinite;margin:16px auto 0"></div>' +
-  '</div>';
-
-  try {
-    var pmResp = await fetch('/api/paymongo', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'createPaymentLink',
-        orderId: state.orderId,
-        amount: state.orderTotal,
-        description: 'YANI Garden Cafe — Table ' + state.tableNo,
-        customerName: state.customerName || 'Guest',
-      })
-    });
-    var pmData = await pmResp.json();
-    if (pmData.code === 'ALREADY_PAID') {
-      body.innerHTML = '<div class="status-card" style="text-align:center"><div style="font-size:2rem">✅</div><div style="font-weight:700;color:var(--forest);margin-top:8px">This order is already paid.</div></div>' +
-        '<button class="btn-primary mt-16" onclick="closePage(\'payment\');openPage(\'status\');startStatusPolling()">Track My Order →</button>';
-      return;
-    }
-    if (!pmData.ok || !pmData.checkoutUrl) throw new Error(pmData.error || 'Could not create payment link');
-
-    body.innerHTML = '<div class="status-card" style="text-align:center">' +
-      '<div style="font-size:1.8rem;margin-bottom:8px">💳</div>' +
-      '<div style="font-weight:700;font-size:1rem;margin-bottom:4px">Pay Securely Online</div>' +
-      '<div style="font-size:1.3rem;font-weight:700;color:var(--terra);margin:10px 0">' + peso(state.orderTotal) + '</div>' +
-      '<div style="font-size:.78rem;color:var(--timber);margin-bottom:16px">' + esc(state.orderId) + ' · Table ' + esc(state.tableNo) + '</div>' +
-      '<a href="' + pmData.checkoutUrl + '" target="_blank" rel="noopener" style="display:block;background:var(--forest);color:#fff;padding:14px;border-radius:12px;font-weight:700;font-size:.95rem;text-decoration:none;margin-bottom:12px">💳 Pay Now — Card / Maya</a>' +
-      '<div style="font-size:.72rem;color:var(--timber);margin-bottom:16px">🔒 Secured by Maya · Card details never stored</div>' +
-      '<div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:12px;font-size:.78rem;color:#166534">After paying, tap below to track your order.</div>' +
-    '</div>' +
-    '<button class="btn-primary mt-16" onclick="closePage(\'payment\');openPage(\'status\');startStatusPolling()">I\'ve Paid — Track My Order →</button>' +
-    '<button class="btn-outline mt-8" onclick="cancelPaymongo()">Cancel Payment</button>';
-
-  } catch(err) {
-    body.innerHTML = '<div class="status-card" style="text-align:center">' +
-      '<div style="font-size:2rem;margin-bottom:8px">⚠️</div>' +
-      '<div style="font-weight:700;color:var(--terra)">Payment setup failed</div>' +
-      '<div style="font-size:.82rem;color:var(--timber);margin-top:6px">' + esc(err.message) + '</div>' +
-      '<div style="font-size:.78rem;color:var(--timber);margin-top:10px">Please pick another payment method.</div>' +
-    '</div>' +
-    '<button class="btn-outline mt-16" onclick="renderPaymentPage()">← Try Another Method</button>';
-  }
-}
-
-async function cancelPaymongo() {
-  try { await fetch('/api/paymongo', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'cancelPayment', orderId: state.orderId }) }); } catch(e) {}
-  renderPaymentPage();
 }
 
 function showQRPayment() {
