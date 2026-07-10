@@ -264,7 +264,7 @@ async function onlineOrderAction(orderRef, newStatus) {
     var resp = await fetch('/api/online-order', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'updateOnlineOrderStatus', orderRef: orderRef, status: newStatus, updatedBy: currentUser.username || 'Staff' })
+      body: JSON.stringify({ action: 'updateOnlineOrderStatus', orderRef: orderRef, status: newStatus, updatedBy: currentUser.username || 'Staff', userId: currentUser.userId })
     });
     var data = await resp.json();
     if (!data.ok) throw new Error(data.error || 'Failed');
@@ -426,7 +426,8 @@ async function olSaveEdit() {
         customerPhone: phone,
         specialInstructions: instructions,
         adminNotes: adminNotes,
-        updatedBy: currentUser.username || 'Owner'
+        updatedBy: currentUser.username || 'Owner',
+        userId: currentUser.userId
       })
     });
     var data = await resp.json();
@@ -450,7 +451,7 @@ async function olCancelOrder() {
     var resp = await fetch('/api/online-order', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'updateOnlineOrderStatus', orderRef: olEditOrderRef, status: 'CANCELLED', updatedBy: currentUser.username || 'Owner' })
+      body: JSON.stringify({ action: 'updateOnlineOrderStatus', orderRef: olEditOrderRef, status: 'CANCELLED', updatedBy: currentUser.username || 'Owner', userId: currentUser.userId })
     });
     var data = await resp.json();
     if (!data.ok) throw new Error(data.error || 'Failed');

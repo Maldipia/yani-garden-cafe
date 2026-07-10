@@ -128,6 +128,30 @@ async function supabase(method, path, body = null, params = null) {
   try { return text ? JSON.parse(text) : null; } catch { return text; }
 }
 
+// ── Staff auth helper ──────────────────────────────────────────
+// Verifies the request carries a valid staff userId (OWNER/ADMIN, active).
+// Mirrors the dine-in checkAuth mechanism so online admin actions can't be
+// called anonymously.
+const VALID_USER_ID_RE = /^USR_\d{3,6}$/;
+async function requireStaff(payload, allowedRoles = ['OWNER', 'ADMIN']) {
+  const userId = String((payload && payload.userId) || '').trim();
+  if (!userId) return { ok: false, error: 'userId is required for this action' };
+  if (!VALID_USER_ID_RE.test(userId)) return { ok: false, error: 'Invalid userId format' };
+  try {
+    const rows = await supabase('GET', 'staff_users', null, {
+      user_id: `eq.${userId}`, active: 'eq.true', select: 'role',
+    });
+    if (!rows || !rows.length) return { ok: false, error: 'Unauthorized: user not found' };
+    const role = rows[0].role;
+    if (allowedRoles.length && !allowedRoles.includes(role)) {
+      return { ok: false, error: 'Unauthorized: insufficient role' };
+    }
+    return { ok: true, role };
+  } catch (e) {
+    return { ok: false, error: 'Auth check failed' };
+  }
+}
+
 // ── Supabase PATCH helper ──────────────────────────────────────
 async function supabasePatch(path, filter, data) {
   const url = `${SUPABASE_URL}/rest/v1/${path}?${filter}`;
@@ -337,6 +361,39 @@ export default async function handler(req, res) {
       if (orderItems.length > 50) {
         return res.status(400).json({ ok: false, error: 'Order cannot contain more than 50 items' });
       }
+
+      // ── Server-side price validation ──────────────────────────────────────
+      // Reject any item whose sent price doesn't match the DB (anti-tampering).
+      // Mirrors the dine-in guard. Items with 0/missing price are skipped —
+      // server trusts DB for those (free items / add-ons).
+      {
+        const menuRows = await supabase('GET', 'menu_items', null, {
+          is_active: 'eq.true',
+          select: 'item_code,base_price,price_short,price_medium,price_tall,has_portions,price_slice,price_whole',
+        });
+        const menuMap = {};
+        (menuRows || []).forEach(m => { menuMap[m.item_code] = m; });
+        for (const it of orderItems) {
+          const code = it.code || it.item_code;
+          const dbItem = code ? menuMap[code] : null;
+          if (!dbItem) continue; // unknown code — server will handle / skip
+          const sent = parseFloat(it.price !== undefined ? it.price : it.unitPrice);
+          if (isNaN(sent) || sent <= 0) continue; // skip free/missing — server uses DB
+          const size = String(it.size || '').toLowerCase();
+          let valid = parseFloat(dbItem.base_price) || 0;
+          if (size === 'short'  && dbItem.price_short)  valid = parseFloat(dbItem.price_short);
+          if (size === 'medium' && dbItem.price_medium) valid = parseFloat(dbItem.price_medium);
+          if (size === 'tall'   && dbItem.price_tall)   valid = parseFloat(dbItem.price_tall);
+          if (size === 'slice'  && dbItem.price_slice)  valid = parseFloat(dbItem.price_slice);
+          if (size === 'whole'  && dbItem.price_whole)  valid = parseFloat(dbItem.price_whole);
+          if (Math.abs(sent - valid) > 1.01) {
+            return res.status(400).json({
+              ok: false,
+              error: `Invalid price for ${code}: sent ₱${sent}, expected ₱${valid}`,
+            });
+          }
+        }
+      }
       
       // Calculate subtotal from items
       const subtotal = orderItems.reduce((sum, item) => {
@@ -468,6 +525,8 @@ export default async function handler(req, res) {
 
     // ── UPDATE ORDER STATUS (admin) ───────────────────────────
     if (action === 'updateOnlineOrderStatus') {
+      const _auth = await requireStaff(payload);
+      if (!_auth.ok) return res.status(403).json({ ok: false, error: _auth.error });
       const { orderRef, status, adminNotes } = payload;
       if (!orderRef || !status) return res.status(400).json({ ok: false, error: 'Missing fields' });
       
@@ -522,6 +581,8 @@ export default async function handler(req, res) {
 
     // ── VERIFY PAYMENT (admin) ────────────────────────────────
     if (action === 'verifyOnlinePayment') {
+      const _auth = await requireStaff(payload);
+      if (!_auth.ok) return res.status(403).json({ ok: false, error: _auth.error });
       const { orderRef, verified, rejectionReason } = payload;
       if (!orderRef) return res.status(400).json({ ok: false, error: 'Missing orderRef' });
       
@@ -628,6 +689,8 @@ export default async function handler(req, res) {
     }
 
     if (action === 'editOnlineOrder') {
+      const _auth = await requireStaff(payload);
+      if (!_auth.ok) return res.status(403).json({ ok: false, error: _auth.error });
       const { orderRef, customerName, customerPhone, specialInstructions, adminNotes, updatedBy } = payload;
       if (!orderRef) return res.status(400).json({ ok: false, error: 'Missing orderRef' });
       if (!customerName || customerName.trim().length < 2)
