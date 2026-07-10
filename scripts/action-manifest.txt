@@ -82,6 +82,7 @@ hrClockEvent
 hrCompute13thMonth
 hrEmployeeLogin
 hrGetClockStatus
+hrGetDailyHours
 hrGetHolidays
 hrLookupStaff
 hrRotateQrToken

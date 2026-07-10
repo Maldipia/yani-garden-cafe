@@ -94,6 +94,44 @@ export async function routeHR(action, body, auth, req, res) {
     return res.status(200).json({ok:true, state, lastEvent:lastType, lastEventTime:last?.event_time||null});
   }
 
+  // ── hrGetDailyHours ─────────────────────────────────────────────────────
+  // Worked-hours summary for the broken-time / phone-surrender model.
+  // Sums all logged-in intervals; regular ≤ standard (8h), overtime beyond.
+  if (action === 'hrGetDailyHours') {
+    const { staffCode, date } = body;
+    if (!staffCode) return res.status(400).json({ok:false,error:'staffCode required'});
+    // Resolve staff id
+    const sr = await supaFetch(
+      SUPABASE_URL+'/rest/v1/hr_staff_master?staff_code=eq.'+encodeURIComponent(String(staffCode).toUpperCase())+
+      '&tenant_id=eq.'+TENANT_HR+'&select=id,full_name&limit=1'
+    );
+    const staff = sr.data?.[0];
+    if (!staff) return res.status(200).json({ok:false,error:'Staff not found'});
+    // Date default = today (Asia/Manila)
+    const phNow = new Date(Date.now() + 8*60*60*1000);
+    const theDate = date || phNow.toISOString().slice(0,10);
+    const hr = await supaFetch(
+      SUPABASE_URL+'/rest/v1/rpc/hr_daily_hours',
+      {method:'POST',body:JSON.stringify({p_tenant:TENANT_HR,p_staff_id:staff.id,p_date:theDate})}
+    );
+    const row = Array.isArray(hr.data) ? hr.data[0] : hr.data;
+    if (!row) return res.status(200).json({ok:false,error:'No data'});
+    return res.status(200).json({
+      ok:true,
+      staffCode: String(staffCode).toUpperCase(),
+      fullName: staff.full_name,
+      date: theDate,
+      workedHours:   Number(row.worked_hours),
+      regularHours:  Number(row.regular_hours),
+      overtimeHours: Number(row.overtime_hours),
+      standardHours: Number(row.standard_hours),
+      sessionCount:  Number(row.session_count),
+      isOpen:        !!row.is_open,
+      firstIn:       row.first_in,
+      lastEvent:     row.last_event,
+    });
+  }
+
   // ── hrClockEvent ───────────────────────────────────────────────────────
   if (action === 'hrClockEvent') {
     const {staffCode, eventType, pin} = body;
