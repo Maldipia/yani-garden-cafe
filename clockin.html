@@ -227,9 +227,12 @@ async function startScan(){
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){goManual();return;}
   showStep('s2');
   try {
-    var constraints = {video:{facingMode:{ideal:'environment'}}};
+    var constraints = {video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:1280}}};
     try{_stream=await navigator.mediaDevices.getUserMedia(constraints);}
-    catch(e1){_stream=await navigator.mediaDevices.getUserMedia({video:true});}
+    catch(e1){
+      try{_stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});}
+      catch(e2){_stream=await navigator.mediaDevices.getUserMedia({video:true});}
+    }
     var v=document.getElementById('videoEl');
     v.srcObject=_stream;
     await v.play();
@@ -246,14 +249,14 @@ async function startScan(){
 }
 function scanLoop(){
   var v=document.getElementById('videoEl'),c=document.getElementById('snapCanvas');
-  if(!v||!v.videoWidth){_scanTimer=setTimeout(scanLoop,200);return;}
+  if(!v||!v.videoWidth){_scanTimer=setTimeout(scanLoop,120);return;}
   c.width=v.videoWidth;c.height=v.videoHeight;
   var ctx=c.getContext('2d');ctx.drawImage(v,0,0);
   var img=ctx.getImageData(0,0,c.width,c.height);
-  var code=jsQR(img.data,img.width,img.height,{inversionAttempts:'dontInvert'});
-  if(code&&code.data.startsWith('YANI-CLOCKIN:')){
-    stopScan();lookupByQr(code.data.replace('YANI-CLOCKIN:',''));
-  } else {_scanTimer=setTimeout(scanLoop,200);}
+  var code=jsQR(img.data,img.width,img.height,{inversionAttempts:'attemptBoth'});
+  if(code&&code.data&&code.data.indexOf('YANI-CLOCKIN:')!==-1){
+    stopScan();lookupByQr(code.data.substring(code.data.indexOf('YANI-CLOCKIN:')+13));
+  } else {_scanTimer=setTimeout(scanLoop,120);}
 }
 function stopScan(){clearTimeout(_scanTimer);if(_stream){_stream.getTracks().forEach(function(t){t.stop();});_stream=null;}}
 
