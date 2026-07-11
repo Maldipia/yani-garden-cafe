@@ -873,6 +873,13 @@ function _sRow(icon, label, val, color) {
     + '</div>';
 }
 
+// Order-number search — filters the visible order cards live.
+function onOrderSearch(val) {
+  window._orderSearch = (val || '').trim();
+  // Re-filter without rebuilding the filter bar (keeps the input focused).
+  if (typeof renderOrders === 'function') renderOrders();
+}
+
 function renderFilters() {
   // Only order-status chips — section navigation is now in the sidebar
   var counts = { ALL:0, ACTIVE:0, NEW:0, PREPARING:0, READY:0, COMPLETED:0, CANCELLED:0, PLATFORM:0, DELETED:0, SCHEDULED:0 };
@@ -906,7 +913,12 @@ function renderFilters() {
   var fb = document.getElementById('filterBar');
   if (fb) fb.style.display = isOrderView ? '' : 'none';
 
-  if (fb) fb.innerHTML = chips.map(function(t) {
+  if (fb) fb.innerHTML =
+    '<input id="orderSearchInput" type="search" placeholder="🔍 Order #" ' +
+      'value="' + (window._orderSearch ? String(window._orderSearch).replace(/"/g,'&quot;') : '') + '" ' +
+      'oninput="onOrderSearch(this.value)" autocomplete="off" ' +
+      'style="padding:7px 12px;border:1.5px solid var(--mist);border-radius:20px;font-size:.82rem;min-width:120px;margin-right:6px;outline:none">' +
+    chips.map(function(t) {
     return '<button class="filter-btn' + (currentFilter===t.key?' active':'') + '" onclick="setFilter(\'' + t.key + '\')">' +
       t.label + '<span class="filter-count">' + t.count + '</span></button>';
   }).join('');

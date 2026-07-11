@@ -83,7 +83,13 @@ function updateSlaChips() {
 }
 
 function renderOrders() {
+  var _q = (window._orderSearch || '').toLowerCase().replace(/\s+/g,'');
   var filtered = allOrders.filter(function(o) {
+    // When searching by order number, match across ALL orders regardless of tab.
+    if (_q) {
+      var oid = String(o.orderId || o.order_id || '').toLowerCase().replace(/\s+/g,'');
+      return oid.indexOf(_q) !== -1;
+    }
     if (currentFilter === 'ALL') return true;
     if (currentFilter === 'ACTIVE') return !o.isTest && (o.status === 'NEW' || o.status === 'PREPARING' || o.status === 'READY');
     if (currentFilter === 'PLATFORM') return !!o.platform;
@@ -103,8 +109,11 @@ function renderOrders() {
   });
 
   if (filtered.length === 0) {
+    var _emptyMsg = (window._orderSearch)
+      ? 'No order matching "' + esc(window._orderSearch) + '"'
+      : 'No orders here yet';
     document.getElementById('orderGrid').innerHTML =
-      '<div class="empty-state"><div class="empty-icon">☕</div><div class="empty-text">No orders here yet</div></div>';
+      '<div class="empty-state"><div class="empty-icon">☕</div><div class="empty-text">' + _emptyMsg + '</div></div>';
     return;
   }
 
