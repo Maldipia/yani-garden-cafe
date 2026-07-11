@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YANI Camera Test</title>
+<style>
+  body{font-family:-apple-system,system-ui,sans-serif;background:#faf8f1;color:#1a3a2a;margin:0;padding:20px;max-width:520px;margin:0 auto}
+  h1{font-size:1.3rem;text-align:center}
+  .row{background:#fff;border:1.5px solid #e0ded5;border-radius:12px;padding:14px;margin:10px 0;font-size:.9rem}
+  .ok{border-color:#86efac;background:#f0fdf4}
+  .bad{border-color:#fca5a5;background:#fef2f2}
+  .label{font-weight:700;font-size:.75rem;color:#5c7355;text-transform:uppercase;margin-bottom:4px}
+  video{width:100%;border-radius:12px;background:#000;margin-top:10px}
+  button{width:100%;padding:16px;background:#1a3a2a;color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:700;margin-top:12px}
+  .big{font-size:1.05rem;font-weight:800;text-align:center;padding:16px;border-radius:12px;margin-top:12px}
+</style>
+</head>
+<body>
+<h1>🎥 YANI Camera Test</h1>
+<div id="results"></div>
+<button onclick="testCamera()">▶ Test Camera Now</button>
+<video id="v" playsinline autoplay muted style="display:none"></video>
+<div id="verdict"></div>
+
+<script>
+function row(label, value, ok){
+  var d=document.createElement('div');
+  d.className='row '+(ok===true?'ok':ok===false?'bad':'');
+  d.innerHTML='<div class="label">'+label+'</div>'+value;
+  document.getElementById('results').appendChild(d);
+}
+// Environment checks (run on load)
+(function(){
+  row('Page URL', location.href, location.protocol==='https:');
+  row('Secure context (HTTPS)?', window.isSecureContext ? '✅ Yes' : '❌ NO — camera needs HTTPS', window.isSecureContext);
+  var hasAPI = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  row('Camera API present?', hasAPI ? '✅ Yes' : '❌ NO — browser blocks it (in-app browser?)', hasAPI);
+  // Detect in-app browser
+  var ua=navigator.userAgent||'';
+  var inApp=/FBAN|FBAV|Instagram|Messenger|Line|Twitter|GSA/.test(ua);
+  row('In-app browser (FB/IG/etc)?', inApp ? '⚠️ YES — open in Safari/Chrome instead' : '✅ No (real browser)', !inApp);
+  row('Browser', ua.slice(0,120), null);
+})();
+
+async function testCamera(){
+  document.getElementById('verdict').innerHTML='';
+  var v=document.getElementById('v');
+  try{
+    var stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}}});
+    v.style.display='block'; v.srcObject=stream; await v.play();
+    document.getElementById('verdict').innerHTML='<div class="big ok">✅ CAMERA WORKS! You should see video above. The clock-in scanner will work on this device + browser.</div>';
+  }catch(e){
+    var msg='❌ '+e.name+': ';
+    if(e.name==='NotAllowedError') msg+='Permission DENIED. Fix: tap the 🔒 or ᴀA icon by the address bar → Camera → Allow, then reload.';
+    else if(e.name==='NotFoundError') msg+='No camera detected on this device.';
+    else if(e.name==='NotReadableError') msg+='Camera BUSY — another app is using it. Close other camera/video apps.';
+    else if(e.name==='SecurityError') msg+='Blocked by security context (not HTTPS or in-app browser).';
+    else msg+=(e.message||'Unknown error');
+    document.getElementById('verdict').innerHTML='<div class="big bad">'+msg+'</div>';
+  }
+}
+</script>
+</body>
+</html>

@@ -219,6 +219,10 @@
     {
       "source": "/employee/",
       "destination": "/employee.html"
+    },
+    {
+      "source": "/camtest",
+      "destination": "/camtest.html"
     }
   ],
   "headers": [
