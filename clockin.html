@@ -269,7 +269,9 @@ async function lookupByQr(token){
   var r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({action:'hrLookupStaff',qrToken:token.trim()})}).then(function(r){return r.json();}).catch(function(){return {ok:false,error:'Network error'};});
   if(!r.ok){goManual();showErr('codeErr',r.error||'QR not recognized. Enter your code instead.');return;}
-  applyStaffResult(r.staff);
+  // QR scan is the trusted identity (staff surrenders phone to scan) — skip PIN,
+  // go straight to the clock action. Manual code entry still requires a PIN below.
+  applyStaffResult(r.staff, true);
 }
 
 async function lookupStaff(code){
@@ -280,7 +282,7 @@ async function lookupStaff(code){
   applyStaffResult(r.staff);
 }
 
-function applyStaffResult(staff){
+function applyStaffResult(staff, skipPin){
   _staff=staff;_pin='';updateDots();
   // Remember this staff code on device
   try{localStorage.setItem('yani_last_staff',_staff.staff_code);}catch(e){}
@@ -289,7 +291,12 @@ function applyStaffResult(staff){
   document.getElementById('pinAvatar').style.background=bg;
   document.getElementById('pinName').textContent=_staff.full_name||'—';
   document.getElementById('pinRole').textContent=(_staff.role||'').replace(/_/g,' ')+' · '+_staff.staff_code;
-  showStep('s4');
+  if(skipPin){
+    // Trusted QR scan — no PIN. _pin stays '' so no PIN is sent to the server.
+    loadClockStateAndShow();
+  } else {
+    showStep('s4');
+  }
 }
 
 // ── PIN ───────────────────────────────────────────────────────────────────
