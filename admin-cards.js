@@ -683,9 +683,53 @@ var _txnCurrentCard=''; async function openCardTxns(cardNumber){ _txnCurrentCard
     var r=await _cardApi('getCardTransactions',{pin:'2026',card_number:cardNumber,limit:50});
     if(!r.ok) throw new Error(r.error||'Failed');
     var txns=r.transactions||[];
-    if(!txns.length){ document.getElementById('cardTxnBody').innerHTML='<p style="text-align:center;padding:30px;color:var(--timber)">No transactions yet</p>'; return; }
+    // Also fetch load requests (pending/approved/rejected) for this card so
+    // customer top-ups submitted via the portal are visible + actionable here.
+    var loadReqs=[];
+    try{
+      var lr=await api('getCardLoadRequests',{status:'ALL',cardNumber:cardNumber});
+      if(lr&&lr.ok) loadReqs=(lr.requests||[]);
+    }catch(_e){}
+    if(!txns.length && !loadReqs.length){ document.getElementById('cardTxnBody').innerHTML='<p style="text-align:center;padding:30px;color:var(--timber)">No transactions yet</p>'; return; }
     var tc={CHARGE:'#B5443A',RELOAD:'#1D4ED8',ACTIVATE:'#065F46',REVERSE:'#92400E',SUSPEND:'#6B7280',REINSTATE:'#065F46',ADJUST:'#5B21B6'};
-    var html='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.8rem">'
+    var html='';
+    // ── Load Requests section (customer top-ups via portal) ──────────────
+    if(loadReqs.length){
+      var isOwnerOrAdmin = currentUser && (currentUser.role==='OWNER'||currentUser.role==='ADMIN');
+      var sc={PENDING:'#B45309',APPROVED:'#065F46',REJECTED:'#B5443A'};
+      html+='<div style="margin-bottom:16px"><div style="font-weight:800;color:var(--forest-deep);margin-bottom:8px;font-size:.85rem">💳 Load Requests</div>';
+      html+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.8rem">';
+      html+='<thead><tr style="background:var(--mist-light)">';
+      ['Date/Time','Amount','Method','Status','Proof','Action'].forEach(function(h){
+        html+='<th style="padding:7px 9px;text-align:left;font-weight:700;color:var(--forest-deep);white-space:nowrap">'+h+'</th>';
+      });
+      html+='</tr></thead><tbody>';
+      loadReqs.forEach(function(lq,i){
+        var bg=i%2===0?'#fff':'var(--mist-light)';
+        var dt=new Date(lq.requested_at);
+        var ds=dt.toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'2-digit'})+' '+dt.toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'});
+        var proofCell = lq.proof_url
+          ? '<a href="'+_esc(lq.proof_url)+'" target="_blank" rel="noopener" style="color:var(--forest-deep);font-weight:700;border-bottom:1.5px solid var(--forest-deep);text-decoration:none">View proof</a>'
+          : '—';
+        var actionCell='—';
+        if(lq.status==='PENDING' && isOwnerOrAdmin){
+          actionCell='<button onclick="_approveLoadFromHistory(&quot;'+_esc(lq.id)+'&quot;,&quot;'+_esc(_txnCurrentCard)+'&quot;)" style="padding:4px 10px;background:#065F46;color:#fff;border:none;border-radius:6px;font-size:.72rem;font-weight:700;cursor:pointer">✅ Approve</button>';
+        } else if(lq.status==='REJECTED' && lq.rejection_reason){
+          actionCell='<span style="color:#9CA3AF;font-size:.68rem;font-style:italic">'+_esc(lq.rejection_reason)+'</span>';
+        }
+        html+='<tr style="background:'+bg+';border-bottom:1px solid var(--mist)">'
+          +'<td style="padding:7px 9px;white-space:nowrap;color:var(--timber)">'+ds+'</td>'
+          +'<td style="padding:7px 9px;font-weight:700">₱'+parseFloat(lq.amount||0).toFixed(2)+'</td>'
+          +'<td style="padding:7px 9px;font-size:.72rem">'+_esc(lq.payment_method||'—')+'</td>'
+          +'<td style="padding:7px 9px"><span style="background:'+(sc[lq.status]||'#374151')+';color:#fff;border-radius:10px;padding:2px 8px;font-size:.7rem;font-weight:700">'+_esc(lq.status)+'</span></td>'
+          +'<td style="padding:7px 9px;font-size:.72rem">'+proofCell+'</td>'
+          +'<td style="padding:4px 9px">'+actionCell+'</td>'
+          +'</tr>';
+      });
+      html+='</tbody></table></div></div>';
+    }
+    if(!txns.length){ document.getElementById('cardTxnBody').innerHTML=html+'<p style="text-align:center;padding:20px;color:var(--timber)">No charge/reload transactions yet</p>'; return; }
+    html+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.8rem">'
       +'<thead><tr style="background:var(--mist-light)">';
     ['Date/Time','Type','Amount','Saved','Before','After','Order','By',''].forEach(function(h){
       html+='<th style="padding:7px 9px;text-align:left;font-weight:700;color:var(--forest-deep);white-space:nowrap">'+h+'</th>';
@@ -703,6 +747,21 @@ var _txnCurrentCard=''; async function openCardTxns(cardNumber){ _txnCurrentCard
     html+='</tbody></table></div>';
     document.getElementById('cardTxnBody').innerHTML=html;
   }catch(e){ document.getElementById('cardTxnBody').innerHTML='<p style="color:#B5443A;padding:20px">❌ '+e.message+'</p>'; }
+}
+
+// Approve a pending load request directly from the History modal.
+async function _approveLoadFromHistory(reqId, cardNumber){
+  if(!confirm('Approve this load request? The card balance will be credited.')) return;
+  try{
+    var r=await api('approveCardLoad',{requestId:reqId});
+    if(r&&r.ok){
+      showToast('✅ Load approved — new balance ₱'+parseFloat(r.newBalance||0).toFixed(2),'success');
+      openCardTxns(cardNumber); // refresh history
+      if(typeof loadCards==='function') loadCards(); // refresh card list balance
+    } else {
+      showToast('❌ '+((r&&r.error)||'Approve failed'),'error');
+    }
+  }catch(e){ showToast('❌ '+e.message,'error'); }
 }
 
 // ── QR helpers ────────────────────────────────────────────────

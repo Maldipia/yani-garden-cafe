@@ -293,9 +293,12 @@ export async function routeCardPortal(action, body, auth, req, res) {
     if (!authR.ok) return res.status(403).json({ ok: false, error: authR.error });
 
     const status = body.status || 'PENDING';
+    const cardFilter = body.cardNumber
+      ? `&card_number=eq.${encodeURIComponent(String(body.cardNumber).toUpperCase())}`
+      : '';
     const url = status === 'ALL'
-      ? `${SUPABASE_URL}/rest/v1/card_load_requests?order=requested_at.desc&limit=100&select=*`
-      : `${SUPABASE_URL}/rest/v1/card_load_requests?status=eq.${status}&order=requested_at.desc&limit=100&select=*`;
+      ? `${SUPABASE_URL}/rest/v1/card_load_requests?order=requested_at.desc&limit=100&select=*${cardFilter}`
+      : `${SUPABASE_URL}/rest/v1/card_load_requests?status=eq.${status}&order=requested_at.desc&limit=100&select=*${cardFilter}`;
     const r = await supaFetch(url);
     return res.status(200).json({ ok: true, requests: r.ok ? r.data : [] });
   }
