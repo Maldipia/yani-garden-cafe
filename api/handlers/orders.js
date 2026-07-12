@@ -584,6 +584,51 @@ export async function routeOrders(action, body, auth, req, res) {
           error: 'Collect the cash first, then mark it received before completing.' });
       }
 
+      // ── YANI Card balance guard ───────────────────────────────────────────
+      // Block completing a YANI_CARD order if the card can't cover the charge.
+      // (Previously the charge was attempted AFTER completion and a failure was
+      //  only logged — letting an under-funded card order complete unpaid.)
+      if (newStatus === 'COMPLETED') {
+        const ycR = await supaFetch(
+          `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}` +
+          `&select=payment_method,discount_type,discount_note,discounted_total,total&limit=1`
+        );
+        const yc = ycR.ok && ycR.data && ycR.data[0] ? ycR.data[0] : null;
+        const isYaniCard = yc && String(yc.payment_method || '').toUpperCase() === 'YANI_CARD';
+        if (isYaniCard) {
+          // Skip if already charged (idempotent — allow completion of a paid order)
+          const chargedR = await supaFetch(
+            `${SUPABASE_URL}/rest/v1/card_transactions?order_id=eq.${encodeURIComponent(orderId)}&type=eq.CHARGE&select=id&limit=1`
+          );
+          const alreadyCharged = chargedR.ok && chargedR.data && chargedR.data.length > 0;
+          if (!alreadyCharged) {
+            const cardNumMatch = String(yc.discount_note || '').match(/YANI-\d+/i);
+            const netCharge = parseFloat(yc.discounted_total || (parseFloat(yc.total || 0) * 0.9));
+            if (cardNumMatch && netCharge > 0) {
+              const cardNum = cardNumMatch[0].toUpperCase();
+              const balR = await supaFetch(
+                `${SUPABASE_URL}/rest/v1/yani_cards?card_number=eq.${encodeURIComponent(cardNum)}&select=balance,status&limit=1`
+              );
+              const cardRow = balR.ok && balR.data && balR.data[0] ? balR.data[0] : null;
+              if (!cardRow) {
+                return res.status(409).json({ ok: false, cardError: true,
+                  error: 'YANI Card ' + cardNum + ' not found — cannot complete.' });
+              }
+              if (String(cardRow.status).toUpperCase() !== 'ACTIVE') {
+                return res.status(409).json({ ok: false, cardError: true,
+                  error: 'YANI Card ' + cardNum + ' is ' + cardRow.status + ' — cannot complete.' });
+              }
+              if (parseFloat(cardRow.balance) < netCharge) {
+                return res.status(409).json({ ok: false, cardError: true, insufficientBalance: true,
+                  balance: parseFloat(cardRow.balance), required: netCharge,
+                  error: 'Insufficient YANI Card balance: ₱' + parseFloat(cardRow.balance).toFixed(2) +
+                         ' available, ₱' + netCharge.toFixed(2) + ' required. Ask customer to reload or pay another way.' });
+              }
+            }
+          }
+        }
+      }
+
       const patch = { status: newStatus };
       if (newStatus === 'CANCELLED' && cancelReason) patch.cancel_reason = cancelReason;
 
