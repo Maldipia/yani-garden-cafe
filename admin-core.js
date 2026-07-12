@@ -712,7 +712,7 @@ function renderStats() {
 
   // ── SALES FIGURES: visible to OWNER + ADMIN only ──────────────────────────
   // CASHIER and KITCHEN see order counts but not revenue totals.
-  var canSeeSales = currentUser && (currentUser.role === 'OWNER' || currentUser.role === 'ADMIN');
+  var canSeeSales = currentUser && currentUser.role === 'OWNER';
   var salesEl = document.getElementById('statSales');
   if (salesEl) salesEl.textContent = canSeeSales ? '₱' + totalSales.toLocaleString() : '—';
   if (avgEl)  avgEl.textContent   = canSeeSales && completed > 0 ? '₱' + Math.round(totalSales / completed).toLocaleString() : '—';
