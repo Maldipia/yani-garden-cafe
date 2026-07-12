@@ -618,11 +618,17 @@ export async function routeOrders(action, body, auth, req, res) {
                 return res.status(409).json({ ok: false, cardError: true,
                   error: 'YANI Card ' + cardNum + ' is ' + cardRow.status + ' — cannot complete.' });
               }
-              if (parseFloat(cardRow.balance) < netCharge) {
+              // ₱500 maintaining balance: the balance must stay at or above ₱500
+              // AFTER paying. So required funds = charge + 500 floor.
+              const MAINTAIN_BALANCE = 500;
+              const bal = parseFloat(cardRow.balance);
+              if (bal - netCharge < MAINTAIN_BALANCE) {
                 return res.status(409).json({ ok: false, cardError: true, insufficientBalance: true,
-                  balance: parseFloat(cardRow.balance), required: netCharge,
-                  error: 'Insufficient YANI Card balance: ₱' + parseFloat(cardRow.balance).toFixed(2) +
-                         ' available, ₱' + netCharge.toFixed(2) + ' required. Ask customer to reload or pay another way.' });
+                  balance: bal, required: netCharge, maintainBalance: MAINTAIN_BALANCE,
+                  error: 'YANI Card must keep a ₱' + MAINTAIN_BALANCE + ' maintaining balance. ' +
+                         'Balance ₱' + bal.toFixed(2) + ' − charge ₱' + netCharge.toFixed(2) +
+                         ' = ₱' + (bal - netCharge).toFixed(2) + ', which is below ₱' + MAINTAIN_BALANCE +
+                         '. Ask customer to reload or pay another way.' });
               }
             }
           }
