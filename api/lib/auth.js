@@ -31,6 +31,16 @@ export async function verifyToken(token) {
   if (!secret) return null;
   try {
     const payload = jwt.verify(token, secret);
+    // Session revocation: if an owner triggered "log out all except owner",
+    // reject non-OWNER tokens that were issued before the cutoff. OWNER is
+    // always exempt. New logins (issued after the cutoff) pass normally.
+    if (payload.role !== 'OWNER') {
+      let cutoff = 0;
+      try { cutoff = parseInt(await getSetting('SESSIONS_INVALIDATED_AT'), 10) || 0; } catch (_) {}
+      if (cutoff && payload.iat && (payload.iat * 1000) < cutoff) {
+        return null; // token predates the mass-logout — force re-login
+      }
+    }
     return { userId: payload.sub, role: payload.role, displayName: payload.displayName || '' };
   } catch { return null; }
 }
