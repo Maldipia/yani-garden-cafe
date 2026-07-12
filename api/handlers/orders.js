@@ -604,7 +604,15 @@ export async function routeOrders(action, body, auth, req, res) {
           if (!alreadyCharged) {
             const cardNumMatch = String(yc.discount_note || '').match(/YANI-\d+/i);
             const netCharge = parseFloat(yc.discounted_total || (parseFloat(yc.total || 0) * 0.9));
-            if (cardNumMatch && netCharge > 0) {
+            // Fail-safe: a YANI_CARD order not yet charged MUST have an
+            // identifiable card and a positive charge. Otherwise block — never
+            // let a card order complete without verifying the ₱500 floor.
+            if (!cardNumMatch || !(netCharge > 0)) {
+              return res.status(409).json({ ok: false, cardError: true,
+                error: 'This YANI Card order is missing its card reference and cannot be verified. ' +
+                       'Re-apply the YANI Card discount (with the card number) or pay another way.' });
+            }
+            {
               const cardNum = cardNumMatch[0].toUpperCase();
               const balR = await supaFetch(
                 `${SUPABASE_URL}/rest/v1/yani_cards?card_number=eq.${encodeURIComponent(cardNum)}&select=balance,status&limit=1`
