@@ -62,6 +62,12 @@ export default async function handler(req, res) {
     const authHeader = (req.headers.authorization || req.headers.Authorization || '').trim();
     const rawToken   = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
     const jwtUser    = rawToken ? await verifyToken(rawToken) : null;
+    // A token was presented but rejected (expired OR revoked via mass-logout).
+    // Tell the client to log out so non-owner sessions are cleared. Owner tokens
+    // are never revoked by the cutoff, so this only bounces expired/revoked ones.
+    if (rawToken && !jwtUser) {
+      return res.status(401).json({ ok: false, error: 'Token expired. Please log in again.' });
+    }
     const auth       = buildAuthCtx(jwtUser, body, action, getRolePermissions);
 
     // ── Dispatch to handler groups ────────────────────────────────────
