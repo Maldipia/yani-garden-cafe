@@ -631,12 +631,14 @@ export async function routeOrders(action, body, auth, req, res) {
               const MAINTAIN_BALANCE = 500;
               const bal = parseFloat(cardRow.balance);
               if (bal - netCharge < MAINTAIN_BALANCE) {
+                const shortBy = Math.max(0, (MAINTAIN_BALANCE + netCharge) - bal);
+                const suggestLoad = Math.ceil(shortBy / 100) * 100;
                 return res.status(409).json({ ok: false, cardError: true, insufficientBalance: true,
-                  balance: bal, required: netCharge, maintainBalance: MAINTAIN_BALANCE,
-                  error: 'YANI Card must keep a ₱' + MAINTAIN_BALANCE + ' maintaining balance. ' +
-                         'Balance ₱' + bal.toFixed(2) + ' − charge ₱' + netCharge.toFixed(2) +
-                         ' = ₱' + (bal - netCharge).toFixed(2) + ', which is below ₱' + MAINTAIN_BALANCE +
-                         '. Ask customer to reload or pay another way.' });
+                  balance: bal, required: netCharge, maintainBalance: MAINTAIN_BALANCE, suggestLoad: suggestLoad,
+                  error: 'YANI Card keeps a ₱' + MAINTAIN_BALANCE + ' maintaining balance to enjoy the 10% discount. ' +
+                         'Balance ₱' + bal.toFixed(2) + ' − charge ₱' + netCharge.toFixed(2) + ' = ₱' +
+                         (bal - netCharge).toFixed(2) + '. Ask the customer to load at least ₱' + suggestLoad +
+                         ' more (reload now) or pay another way.' });
               }
             }
           }

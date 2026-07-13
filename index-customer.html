@@ -2597,11 +2597,26 @@ async function validateYaniCard() {
     } else {
       var bal = parseFloat(d.card.balance || 0);
       var name = d.card.holder_name ? ' · ' + d.card.holder_name : '';
-      state._yaniCardStatus = '✅ Valid card' + name + ' · Balance: ₱' + bal.toFixed(2);
-      state.yaniCardValid = true;
-      // CRITICAL: store the resolved YANI-XXXX number (not raw digits)
-      // so discount_note = "Yani Card: YANI-1009" and auto-charge works
-      if (d.card.card_number) state.yaniCardNumber = d.card.card_number;
+      // ₱500 maintaining balance: card can only be used if the balance stays
+      // at or above ₱500 AFTER the 10% discounted charge. Estimate the charge
+      // from the current cart (subtotal + service charge, then 10% off).
+      var MAINTAIN = 500;
+      var estSubtotal = getCartSubtotal();
+      var estSvc = estSubtotal * SERVICE_CHARGE_RATE;
+      var estCharge = (estSubtotal + estSvc) * 0.9; // 10% Yani Card discount
+      if (bal - estCharge < MAINTAIN) {
+        var shortBy = Math.max(0, (MAINTAIN + estCharge) - bal);
+        state._yaniCardStatus = '⚠️ Balance ₱' + bal.toFixed(2) + '. YANI Cards keep a ₱500 ' +
+          'maintaining balance to enjoy the 10% discount. Please load at least ₱' +
+          (Math.ceil(shortBy / 100) * 100) + ' more (or reload now), then try again.';
+        state.yaniCardValid = false;
+      } else {
+        state._yaniCardStatus = '✅ Valid card' + name + ' · Balance: ₱' + bal.toFixed(2) + ' · You save 10%! 🌿';
+        state.yaniCardValid = true;
+        // CRITICAL: store the resolved YANI-XXXX number (not raw digits)
+        // so discount_note = "Yani Card: YANI-1009" and auto-charge works
+        if (d.card.card_number) state.yaniCardNumber = d.card.card_number;
+      }
     }
   } catch(e) {
     state._yaniCardStatus = '❌ Could not verify card. Try again.';
