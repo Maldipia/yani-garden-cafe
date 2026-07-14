@@ -610,6 +610,9 @@ async function loadAnalytics(silent) {
               var icon = pmIcons[pm] || '💰';
               var pct = pmTotalRev > 0 ? Math.round(d.revenue / pmTotalRev * 100) : 0;
               var isWarn = pm === 'UNRECORDED';
+              var feeLine = (d.mayaFee && d.mayaFee > 0)
+                ? '<div style="font-size:.66rem;color:#B5443A;margin-top:2px">− Maya fee ₱' + parseFloat(d.mayaFee).toFixed(2) + ' → net ₱' + parseFloat(d.netReceived).toFixed(2) + '</div>'
+                : '';
               return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--mist)">' +
                 '<span style="font-size:1rem">' + icon + '</span>' +
                 '<div style="flex:1">' +
@@ -617,6 +620,7 @@ async function loadAnalytics(silent) {
                   '<div style="height:6px;background:#f0f4f0;border-radius:3px;margin-top:3px">' +
                     '<div style="width:' + pct + '%;height:100%;background:' + (isWarn?'#FCD34D':'var(--forest)') + ';border-radius:3px"></div>' +
                   '</div>' +
+                  feeLine +
                 '</div>' +
                 '<div style="text-align:right">' +
                   '<div style="font-size:.8rem;font-weight:800;color:' + (isWarn?'#92400E':'var(--forest)') + '">₱' + parseFloat(d.revenue||0).toFixed(2) + '</div>' +
@@ -627,6 +631,7 @@ async function loadAnalytics(silent) {
         return '<div style="background:#fff;border:1.5px solid var(--mist);border-radius:12px;padding:14px;margin-bottom:16px">' +
           '<div style="font-weight:700;font-size:.9rem;color:var(--forest-deep);margin-bottom:4px">💳 Payment Methods (This Month)</div>' +
           '<div style="font-size:.72rem;color:var(--forest-mid);margin-bottom:10px">Total discounts saved: <strong>₱' + parseFloat(s.totalDiscounts30d||0).toFixed(2) + '</strong></div>' +
+          ((s.mayaFees30d && s.mayaFees30d > 0) ? '<div style="font-size:.72rem;color:#B5443A;margin-bottom:10px">Maya card fees (This Month): <strong>−₱' + parseFloat(s.mayaFees30d).toFixed(2) + '</strong> · 3% + ₱10/txn</div>' : '') +
           '<div style="display:flex;justify-content:space-between;align-items:center;background:var(--forest-deep);color:#fff;border-radius:10px;padding:12px 14px;margin-bottom:12px">' +
             '<div>' +
               '<div style="font-size:.7rem;opacity:.85;text-transform:uppercase;letter-spacing:.05em">Total Sales (This Month)</div>' +
@@ -744,11 +749,15 @@ async function exportReportPDF() {
   var pmTotalRev = Object.values(pb).reduce(function(a,v){ return a+(v.revenue||0); },0);
   var pmHtml = Object.keys(pb).length === 0 ? '<p style="color:#777;font-size:9pt;padding:8px 0">No data</p>'
     : '<table style="width:100%;border-collapse:collapse;font-size:9pt">'
-      + th(['Method','Orders','Revenue','Share'])
+      + th(['Method','Orders','Gross','Maya Fee','Net'])
       + '<tbody>' + Object.keys(pb).sort().map(function(pm){
           var d = pb[pm];
-          return row([pm, d.count, money(d.revenue), pct(d.revenue, pmTotalRev)]);
-        }).join('') + '</tbody></table>';
+          var fee = d.mayaFee || 0;
+          var net = (d.netReceived !== undefined) ? d.netReceived : d.revenue;
+          return row([pm, d.count, money(d.revenue), fee>0?'−'+money(fee):'—', money(net)]);
+        }).join('')
+      + (s.mayaFees30d>0 ? row(['Total Maya fees','', '', '−'+money(s.mayaFees30d), ''], true) : '')
+      + '</tbody></table>';
 
   // Order types
   var dineIn  = s.typeSplit && s.typeSplit['DINE-IN']  || 0;

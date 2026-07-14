@@ -652,6 +652,26 @@ export async function routeAdminOps(action, body, auth, req, res) {
       });
       const totalDiscounts30d = totalDiscountsMTD; // keep alias for response below
 
+      // ── Maya fees on CARD payments (3% + ₱10 per txn, configurable) ────────
+      // Card sales settle net of Maya's fee, so reports show gross, fee, and net.
+      let cardFeePct = 3, cardFeeFixed = 10;
+      try { cardFeePct   = parseFloat(await getSetting('MAYA_CARD_FEE_PCT'))   || 3;  } catch(_) {}
+      try { cardFeeFixed = parseFloat(await getSetting('MAYA_CARD_FEE_FIXED')) || 10; } catch(_) {}
+      let mayaFeesMTD = 0;
+      Object.keys(payBreakdown).forEach(m => {
+        // Any method containing CARD (CARD, CARD+CASH, CARD+GCASH) incurs the fee.
+        if (m.toUpperCase().includes('CARD') && m.toUpperCase() !== 'YANI_CARD') {
+          const b = payBreakdown[m];
+          const fee = (b.revenue * (cardFeePct/100)) + (cardFeeFixed * b.count);
+          b.mayaFee = Math.round(fee*100)/100;
+          b.netReceived = Math.round((b.revenue - fee)*100)/100;
+          mayaFeesMTD += fee;
+        } else {
+          payBreakdown[m].mayaFee = 0;
+          payBreakdown[m].netReceived = Math.round(payBreakdown[m].revenue*100)/100;
+        }
+      });
+
       return res.status(200).json({
         ok: true,
         // Flat aliases for dashboard compatibility
@@ -665,6 +685,7 @@ export async function routeAdminOps(action, body, auth, req, res) {
           totalOrders30d: orders.length,
           typeSplit,
           totalDiscounts30d: Math.round(totalDiscounts30d*100)/100,
+          mayaFees30d: Math.round(mayaFeesMTD*100)/100,
         },
         daily,
         hourly,
