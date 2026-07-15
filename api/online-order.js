@@ -401,7 +401,17 @@ export default async function handler(req, res) {
         const qty = parseInt(item.qty || item.quantity || 1);
         return sum + (price * qty);
       }, 0);
-      
+
+      // ── Zero-total guard ──────────────────────────────────────────────────
+      // Never accept a ₱0 order. This catches unpriced menu items (base_price
+      // not set) and any pricing gap, so a customer can't order for free.
+      const orderTotal = parseFloat(total || subtotal) || subtotal;
+      if (!(subtotal > 0) || !(orderTotal > 0)) {
+        return res.status(400).json({ ok: false, zeroTotal: true,
+          error: 'This order totals ₱0 — one or more items may not have a price set. ' +
+                 'Please contact the café; we cannot accept a ₱0 order.' });
+      }
+
       const orderRef = await generateOrderRef();
       
       // Insert order
