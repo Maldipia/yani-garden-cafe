@@ -262,7 +262,7 @@ export default async function handler(req, res) {
       const items = await supabase('GET', 'menu_items', null, {
         'is_active': 'eq.true',
         'order': 'name.asc',
-        'select': 'id,item_code,name,category_id,base_price,price_short,price_medium,price_tall,has_sizes,has_sugar_levels,image_path,is_signature'
+        'select': 'id,item_code,name,category_id,base_price,price_short,price_medium,price_tall,has_sizes,has_sugar_levels,has_portions,price_slice,price_whole,image_path,is_signature'
       });
       
       const catMap = {};
@@ -296,10 +296,15 @@ export default async function handler(req, res) {
           code: item.item_code,
           name: item.name,
           category: catName,
-          price: parseFloat(item.base_price || 0),
+          price: parseFloat(item.base_price || 0) ||
+                 (item.has_portions && item.price_slice ? parseFloat(item.price_slice) : 0) ||
+                 (item.price_short ? parseFloat(item.price_short) : 0),
           priceShort: item.price_short ? parseFloat(item.price_short) : null,
           priceMedium: item.price_medium ? parseFloat(item.price_medium) : null,
           priceTall: item.price_tall ? parseFloat(item.price_tall) : null,
+          hasPortions: item.has_portions || false,
+          priceSlice: item.price_slice ? parseFloat(item.price_slice) : null,
+          priceWhole: item.price_whole ? parseFloat(item.price_whole) : null,
           hasSizes: item.has_sizes,
           hasSugar: item.has_sugar_levels,
           isSignature: item.is_signature || false,
@@ -380,7 +385,9 @@ export default async function handler(req, res) {
           const sent = parseFloat(it.price !== undefined ? it.price : it.unitPrice);
           if (isNaN(sent) || sent <= 0) continue; // skip free/missing — server uses DB
           const size = String(it.size || '').toLowerCase();
+          // Base valid price: portion items default to slice, else base_price.
           let valid = parseFloat(dbItem.base_price) || 0;
+          if (!valid && dbItem.has_portions && dbItem.price_slice) valid = parseFloat(dbItem.price_slice);
           if (size === 'short'  && dbItem.price_short)  valid = parseFloat(dbItem.price_short);
           if (size === 'medium' && dbItem.price_medium) valid = parseFloat(dbItem.price_medium);
           if (size === 'tall'   && dbItem.price_tall)   valid = parseFloat(dbItem.price_tall);

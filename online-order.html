@@ -1032,9 +1032,31 @@ function onCardClick(itemJson) {
 }
 
 function _openItemFlow(item) {
-  if (item.hasSizes || item.has_sizes) { openSizeModal(item); }
+  if (item.hasPortions || item.has_portions) { openPortionModal(item); }
+  else if (item.hasSizes || item.has_sizes) { openSizeModal(item); }
   else if (item.hasSugar || item.has_sugar_levels) { openSugarOnlyModal(item); }
   else { checkAddons(item, null, '', null, parseFloat(item.base_price||item.price)); }
+}
+
+// Portion items (e.g. bread: Slice / Whole) — reuse the size modal UI.
+function openPortionModal(item) {
+  sizeItem = item; selectedSize = null; selectedSugar = null;
+  document.getElementById('sizeItemName').textContent = item.name;
+  document.getElementById('sizeSubtitle').textContent = 'Choose portion';
+  var portions = [];
+  if (item.priceSlice||item.price_slice) portions.push({key:'Slice', label:'Slice', price:parseFloat(item.priceSlice||item.price_slice)});
+  if (item.priceWhole||item.price_whole) portions.push({key:'Whole', label:'Whole', price:parseFloat(item.priceWhole||item.price_whole)});
+  if (!portions.length) portions.push({key:'Regular', label:'Regular', price:parseFloat(item.price||item.base_price)});
+  document.getElementById('sizeOptions').innerHTML = portions.map(function(s) {
+    return '<div class="opt-row" onclick="selectSize(\''+s.key+'\','+s.price+',this)">' +
+      '<div class="opt-row-left"><div class="opt-radio"></div><div><div class="opt-name">'+s.label+'</div></div></div>' +
+      '<div class="opt-price">₱'+s.price+'</div></div>';
+  }).join('');
+  document.getElementById('sizeStep').style.display='';
+  document.getElementById('sugarStep').style.display='none';
+  document.getElementById('directStep').style.display='none';
+  document.getElementById('sizeNextBtn').disabled=true;
+  document.getElementById('sizeOverlay').classList.remove('hidden');
 }
 
 function openSizeModal(item) {
