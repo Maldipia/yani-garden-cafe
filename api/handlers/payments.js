@@ -173,6 +173,49 @@ export async function routePayments(action, body, auth, req, res) {
       // Base for the incoming discount calculation
       const baseForCalc = isStackingOnCard ? existingDiscTotal : originalTotal;
 
+      // ── BEST WITH bundle exemption ─────────────────────────────────────────
+      // Items in the "BEST WITH" category are already bundle-priced, so regular
+      // discounts (PWD/Senior/Promo/Custom) must NOT apply to them. Only the
+      // YANI Card 10% member discount applies to everything (no exemption).
+      // Category-driven: any item whose menu category is BEST WITH is excluded,
+      // so future BEST WITH items are covered automatically.
+      // discountableBase = baseForCalc minus the order's BEST WITH line totals.
+      let discountableBase = baseForCalc;
+      let bestWithExcluded = 0;
+      if (type !== 'YANI_CARD') {
+        try {
+          // Fetch this order's line items (code + line_total)
+          const itemsR = await supaFetch(
+            `${SUPABASE_URL}/rest/v1/dine_in_order_items?order_id=eq.${encodeURIComponent(orderId)}&select=item_code,line_total,unit_price,qty`
+          );
+          const orderItems = (itemsR.ok && itemsR.data) ? itemsR.data : [];
+          if (orderItems.length) {
+            // Get the set of BEST WITH item codes (category-driven).
+            const bwR = await supaFetch(
+              `${SUPABASE_URL}/rest/v1/menu_items?category_id=eq.5297871b-fa2e-4376-bd81-6d9b0c173be8&select=item_code`
+            );
+            const bwCodes = new Set(((bwR.ok && bwR.data) ? bwR.data : []).map(m => m.item_code));
+            if (bwCodes.size) {
+              for (const it of orderItems) {
+                if (bwCodes.has(it.item_code)) {
+                  const lt = parseFloat(it.line_total);
+                  bestWithExcluded += !isNaN(lt) ? lt
+                    : (parseFloat(it.unit_price || 0) * parseInt(it.qty || 1, 10));
+                }
+              }
+              bestWithExcluded = Math.round(bestWithExcluded * 100) / 100;
+              // Never let the discountable base go below 0.
+              discountableBase = Math.max(0, Math.round((baseForCalc - bestWithExcluded) * 100) / 100);
+            }
+          }
+        } catch (_e) {
+          // On any lookup failure, fall back to baseForCalc (no exemption) rather
+          // than block the discount — safest for staff at the counter.
+          discountableBase = baseForCalc;
+          bestWithExcluded = 0;
+        }
+      }
+
       if (type === 'REMOVE') {
         const r = await supa('PATCH', 'dine_in_orders',
           { discount_type: null, discount_pax: 0, discount_pct: 0, discount_amount: 0,
@@ -188,19 +231,19 @@ export async function routePayments(action, body, auth, req, res) {
       let discountPct = 0;
 
       if (type === 'PWD' || type === 'SENIOR') {
-        const perPerson  = baseForCalc / Math.max(totalPax, 1);
+        const perPerson  = discountableBase / Math.max(totalPax, 1);
         newDiscountAmount = Math.round(perPerson * qualPax * 0.20 * 100) / 100;
         discountPct = 20;
       } else if (type === 'BOTH') {
-        const perPerson  = baseForCalc / Math.max(totalPax, 1);
+        const perPerson  = discountableBase / Math.max(totalPax, 1);
         newDiscountAmount = Math.round(perPerson * qualPax * 0.20 * 100) / 100;
         discountPct = 20;
       } else if (type === 'PROMO') {
         discountPct      = Math.min(promoPct, 100);
-        newDiscountAmount = Math.round(baseForCalc * (discountPct / 100) * 100) / 100;
+        newDiscountAmount = Math.round(discountableBase * (discountPct / 100) * 100) / 100;
       } else if (type === 'CUSTOM') {
-        newDiscountAmount = Math.min(customAmt, baseForCalc);
-        discountPct      = Math.round((newDiscountAmount / baseForCalc) * 100 * 100) / 100;
+        newDiscountAmount = Math.min(customAmt, discountableBase);
+        discountPct      = discountableBase > 0 ? Math.round((newDiscountAmount / discountableBase) * 100 * 100) / 100 : 0;
       } else if (type === 'YANI_CARD') {
         // ── Member Privilege gate: Active Wallet Balance ≥ ₱500 BEFORE payment ──
         // Checked on the balance as it stands now (before this order is charged).
