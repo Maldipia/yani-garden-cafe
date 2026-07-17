@@ -129,7 +129,7 @@ export async function routePayments(action, body, auth, req, res) {
 
       // Fetch current order — need both original total AND any existing discount
       const orderR = await supaFetch(
-        `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=total,status,payment_method,discount_type,discount_amount,discounted_total,discount_note`
+        `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(orderId)}&select=total,subtotal,service_charge,status,payment_method,discount_type,discount_amount,discounted_total,discount_note`
       );
       if (!orderR.ok || !orderR.data?.length)
         return res.status(404).json({ ok: false, error: 'Order not found' });
@@ -204,8 +204,17 @@ export async function routePayments(action, body, auth, req, res) {
                 }
               }
               bestWithExcluded = Math.round(bestWithExcluded * 100) / 100;
+              // The order total includes service charge on all items, so the
+              // BEST WITH portion of the total also carries service charge. Derive
+              // the actual svc ratio from THIS order (handles take-out with no svc
+              // or any rate), then scale the exclusion to remove the BEST WITH item
+              // price AND its proportional service charge from the base.
+              const _sub = parseFloat(orderR.data[0].subtotal) || 0;
+              const _svc = parseFloat(orderR.data[0].service_charge) || 0;
+              const _svcRatio = _sub > 0 ? (_svc / _sub) : 0;
+              const bestWithWithSvc = Math.round(bestWithExcluded * (1 + _svcRatio) * 100) / 100;
               // Never let the discountable base go below 0.
-              discountableBase = Math.max(0, Math.round((baseForCalc - bestWithExcluded) * 100) / 100);
+              discountableBase = Math.max(0, Math.round((baseForCalc - bestWithWithSvc) * 100) / 100);
             }
           }
         } catch (_e) {
