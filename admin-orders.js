@@ -135,7 +135,9 @@ function renderOrders() {
 
     var _pmUpper = (o.paymentMethod || '').toUpperCase();
     var _isCardPaid = (_pmUpper.indexOf('CARD') !== -1 && _pmUpper !== 'YANI_CARD');
-    var html = '<div class="order-card' + (_isCardPaid ? ' card-paid' : '') + '" data-status="' + o.status + '"' + (o.platform ? ' data-platform="' + esc(o.platform) + '"' : '') + (o.source === 'STAFF' ? ' data-source="STAFF"' : '') + '>';
+    var _isGcashPaid = (_pmUpper.indexOf('GCASH') !== -1);
+    var _payClass = _isCardPaid ? ' card-paid' : (_isGcashPaid ? ' gcash-paid' : '');
+    var html = '<div class="order-card' + _payClass + '" data-status="' + o.status + '"' + (o.platform ? ' data-platform="' + esc(o.platform) + '"' : '') + (o.source === 'STAFF' ? ' data-source="STAFF"' : '') + '>';
 
     // Header
     html += '<div class="oc-header">' +
