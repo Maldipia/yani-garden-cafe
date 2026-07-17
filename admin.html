@@ -218,6 +218,12 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
   box-shadow:var(--shadow-sm); border-left:4px solid var(--mist);
   transition:box-shadow .2s;
 }
+/* CARD payment → black highlighted edges so card-paid orders stand out */
+.order-card.card-paid {
+  border:2px solid #111;
+  border-left:4px solid #111;
+  box-shadow:0 0 0 1px #111, var(--shadow-sm);
+}
 #orderGrid .order-card {
   scroll-snap-align:start;
   min-width:280px; max-width:280px; flex-shrink:0;
@@ -2290,7 +2296,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 
 <script src="/admin-core.js?v=44"></script>
 
-  <script src="/admin-orders.js?v=34"></script>
+  <script src="/admin-orders.js?v=35"></script>
 <script src="/admin-payments.js?v=25"></script>
 <script src="/admin-hr.js?v=9"></script>
   <script src="/admin-menu.js?v=26"></script>

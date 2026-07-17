@@ -133,7 +133,9 @@ function renderOrders() {
       else elapsed = Math.floor(mins/60) + 'h ' + (mins%60) + 'm ago';
     } catch(e) {}
 
-    var html = '<div class="order-card" data-status="' + o.status + '"' + (o.platform ? ' data-platform="' + esc(o.platform) + '"' : '') + (o.source === 'STAFF' ? ' data-source="STAFF"' : '') + '>';
+    var _pmUpper = (o.paymentMethod || '').toUpperCase();
+    var _isCardPaid = (_pmUpper.indexOf('CARD') !== -1 && _pmUpper !== 'YANI_CARD');
+    var html = '<div class="order-card' + (_isCardPaid ? ' card-paid' : '') + '" data-status="' + o.status + '"' + (o.platform ? ' data-platform="' + esc(o.platform) + '"' : '') + (o.source === 'STAFF' ? ' data-source="STAFF"' : '') + '>';
 
     // Header
     html += '<div class="oc-header">' +
