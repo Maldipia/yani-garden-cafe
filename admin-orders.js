@@ -151,6 +151,11 @@ function renderOrders() {
     }
     
     html += '<span class="oc-status-badge ' + cfg.badge + '">' + cfg.icon + ' ' + cfg.label + '</span>';
+    // Top quick-Done: marks all items prepared + moves the order to Done.
+    // Only on active orders (not already completed/cancelled).
+    if (o.status !== 'COMPLETED' && o.status !== 'CANCELLED') {
+      html += '<button class="oc-top-done" title="Mark all done and complete" onclick="markAllDoneAndComplete(\'' + esc(o.orderId) + '\')" style="margin-left:auto;background:#065F46;color:#fff;border:none;border-radius:8px;padding:5px 10px;font-size:.72rem;font-weight:700;cursor:pointer;white-space:nowrap">✓ Done</button>';
+    }
     if (o.isTest) html += '<span style="background:#f59e0b;color:#fff;font-size:.6rem;padding:2px 5px;border-radius:4px;font-weight:700;margin-left:4px">🧪 TEST</span>';
     if (o.source === 'STAFF') html += '<span style="background:#6d28d9;color:#fff;font-size:.6rem;padding:2px 6px;border-radius:4px;font-weight:700;margin-left:4px">🧑‍💼 STAFF</span>';
     if (o.isPreorder && o.scheduledFor) {
@@ -518,12 +523,9 @@ async function toggleServiceCharge(orderId, hasSvc) {
 
 async function adminTogglePrep(rowEl, orderId, itemId, currentPrepared) {
   if (!itemId) return;
-  // Hold prep while payment is pending (cash/card chosen, not yet collected)
-  var _ord = allOrders.find(function(o){ return o.orderId === orderId; });
-  if (_ord && _ord.paymentStatus === 'AWAITING_PAYMENT') {
-    showToast('🔔 On hold — collect ' + (_ord.paymentMethod || 'payment') + ' first, then tap “Payment Received”.', 'error');
-    return;
-  }
+  // Item prep is independent of payment — staff can mark items prepared even
+  // while payment is still pending. (Order COMPLETION still enforces payment
+  // guards separately in updateOrderStatus.)
   var newPrepared = currentPrepared ? 0 : 1;
   var icon = rowEl.querySelector('span');
   if (icon) icon.textContent = newPrepared ? '✅' : '⬜';
@@ -585,6 +587,31 @@ async function adminTogglePrep(rowEl, orderId, itemId, currentPrepared) {
     rowEl.style.opacity = currentPrepared ? '.5' : '1';
     rowEl.style.textDecoration = currentPrepared ? 'line-through' : '';
   }
+}
+
+// Top quick-Done: mark every item in the order prepared, then move to Done.
+// Item prep is applied regardless of payment. The move-to-COMPLETED still
+// goes through updateStatus, which keeps all revenue guards (YANI Card ₱500
+// floor, cash collection, charge-on-completion). If a guard blocks completion,
+// items stay marked prepared and the order stays put with a clear message.
+async function markAllDoneAndComplete(orderId) {
+  var ord = allOrders.find(function(o){ return o.orderId === orderId; });
+  if (!ord) return;
+  var items = ord.items || [];
+  var unprepped = items.filter(function(it){ return it.id && !it.prepared; });
+  // 1) Mark all not-yet-prepared items as prepared (payment-independent).
+  for (var i = 0; i < unprepped.length; i++) {
+    try {
+      await api('toggleItemPrepared', {
+        userId: currentUser && currentUser.userId,
+        orderId: orderId, itemId: unprepped[i].id, prepared: true
+      });
+      unprepped[i].prepared = true;
+    } catch (e) {}
+  }
+  // 2) Move the order to Done — reuse the normal completion path so all
+  //    payment guards still apply (YANI Card floor, cash collection, etc.).
+  updateStatus(orderId, 'COMPLETED');
 }
 
 // Direct complete for Yani Card orders — no payment modal needed
