@@ -272,16 +272,8 @@ function renderOrders() {
         })(it.category);
         var catDotHtml = catDotClass ? '<span class="' + catDotClass + '"></span>' : '';
 
-        var kitchenIcon = it.prepared ? '✅' : '⬜';
-        var serverIcon  = it.served ? '✅' : '⬜';
-        var kBox = '<span class="oc-kbox" onclick="event.stopPropagation();adminTogglePrep(this,\'' + esc(o.orderId) + '\',' + (it.id||0) + ',' + (it.prepared ? 1 : 0) + ')" title="' + (it.prepared ? 'Kitchen: cooked — tap to undo' : 'Kitchen: mark cooked') + '" style="display:inline-flex;flex-direction:column;align-items:center;cursor:pointer;user-select:none;flex-shrink:0;padding:2px 4px;border-radius:6px;background:' + (it.prepared ? '#FEF3C7' : '#FafafA') + ';border:1.5px solid ' + (it.prepared ? '#F59E0B' : '#E5E7EB') + ';margin-right:4px">' +
-          '<span style="font-size:1rem;line-height:1">' + kitchenIcon + '</span>' +
-          '<span style="font-size:.52rem;font-weight:800;color:#92400E;letter-spacing:.02em">KITCHEN</span>' +
-        '</span>';
-        var sBox = '<span class="oc-sbox" onclick="event.stopPropagation();adminToggleServed(this,\'' + esc(o.orderId) + '\',' + (it.id||0) + ',' + (it.served ? 1 : 0) + ')" title="' + (it.served ? 'Server: delivered — tap to undo' : 'Server: mark delivered') + '" style="display:inline-flex;flex-direction:column;align-items:center;cursor:pointer;user-select:none;flex-shrink:0;padding:2px 4px;border-radius:6px;background:' + (it.served ? '#D1FAE5' : '#FafafA') + ';border:1.5px solid ' + (it.served ? '#059669' : '#E5E7EB') + ';margin-right:8px">' +
-          '<span style="font-size:1rem;line-height:1">' + serverIcon + '</span>' +
-          '<span style="font-size:.52rem;font-weight:800;color:#065F46;letter-spacing:.02em">SERVER</span>' +
-        '</span>';
+        var kBox = '<span class="oc-kbox" onclick="event.stopPropagation();adminTogglePrep(this,\'' + esc(o.orderId) + '\',' + (it.id||0) + ',' + (it.prepared ? 1 : 0) + ')" title="' + (it.prepared ? 'Kitchen: cooked — tap to undo' : 'Kitchen: mark cooked') + '" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;cursor:pointer;user-select:none;flex-shrink:0;border-radius:5px;font-size:.7rem;font-weight:800;background:' + (it.prepared ? '#F59E0B' : '#F3F4F6') + ';color:' + (it.prepared ? '#fff' : '#9CA3AF') + ';border:1.5px solid ' + (it.prepared ? '#F59E0B' : '#E5E7EB') + ';margin-right:3px">' + (it.prepared ? '✓' : 'K') + '</span>';
+        var sBox = '<span class="oc-sbox" onclick="event.stopPropagation();adminToggleServed(this,\'' + esc(o.orderId) + '\',' + (it.id||0) + ',' + (it.served ? 1 : 0) + ')" title="' + (it.served ? 'Server: delivered — tap to undo' : 'Server: mark delivered') + '" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;cursor:pointer;user-select:none;flex-shrink:0;border-radius:5px;font-size:.7rem;font-weight:800;background:' + (it.served ? '#059669' : '#F3F4F6') + ';color:' + (it.served ? '#fff' : '#9CA3AF') + ';border:1.5px solid ' + (it.served ? '#059669' : '#E5E7EB') + ';margin-right:8px">' + (it.served ? '✓' : 'S') + '</span>';
 
         html += '<div class="oc-item" data-item-id="' + (it.id||'') + '" data-order-created="' + esc(o.createdAt||'') + '" style="' + prepStyle + '">' +
           kBox + sBox +
