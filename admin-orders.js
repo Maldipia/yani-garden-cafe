@@ -272,11 +272,22 @@ function renderOrders() {
         })(it.category);
         var catDotHtml = catDotClass ? '<span class="' + catDotClass + '"></span>' : '';
 
-        html += '<div class="oc-item" data-item-id="' + (it.id||'') + '" data-order-created="' + esc(o.createdAt||'') + '" style="' + prepStyle + 'cursor:pointer;user-select:none;" title="' + (it.prepared ? 'Tap to unmark' : 'Tap to mark prepared') + '" onclick="adminTogglePrep(this,\'' + esc(o.orderId) + '\',' + (it.id||0) + ',' + (it.prepared ? 1 : 0) + ')">' +
-          '<span style="font-size:1.3rem;margin-right:6px;flex-shrink:0;line-height:1;">' + prepIcon + '</span>' +
+        var kitchenIcon = it.prepared ? '✅' : '⬜';
+        var serverIcon  = it.served ? '✅' : '⬜';
+        var kBox = '<span class="oc-kbox" onclick="event.stopPropagation();adminTogglePrep(this,\'' + esc(o.orderId) + '\',' + (it.id||0) + ',' + (it.prepared ? 1 : 0) + ')" title="' + (it.prepared ? 'Kitchen: cooked — tap to undo' : 'Kitchen: mark cooked') + '" style="display:inline-flex;flex-direction:column;align-items:center;cursor:pointer;user-select:none;flex-shrink:0;padding:2px 4px;border-radius:6px;background:' + (it.prepared ? '#FEF3C7' : '#FafafA') + ';border:1.5px solid ' + (it.prepared ? '#F59E0B' : '#E5E7EB') + ';margin-right:4px">' +
+          '<span style="font-size:1rem;line-height:1">' + kitchenIcon + '</span>' +
+          '<span style="font-size:.52rem;font-weight:800;color:#92400E;letter-spacing:.02em">KITCHEN</span>' +
+        '</span>';
+        var sBox = '<span class="oc-sbox" onclick="event.stopPropagation();adminToggleServed(this,\'' + esc(o.orderId) + '\',' + (it.id||0) + ',' + (it.served ? 1 : 0) + ')" title="' + (it.served ? 'Server: delivered — tap to undo' : 'Server: mark delivered') + '" style="display:inline-flex;flex-direction:column;align-items:center;cursor:pointer;user-select:none;flex-shrink:0;padding:2px 4px;border-radius:6px;background:' + (it.served ? '#D1FAE5' : '#FafafA') + ';border:1.5px solid ' + (it.served ? '#059669' : '#E5E7EB') + ';margin-right:8px">' +
+          '<span style="font-size:1rem;line-height:1">' + serverIcon + '</span>' +
+          '<span style="font-size:.52rem;font-weight:800;color:#065F46;letter-spacing:.02em">SERVER</span>' +
+        '</span>';
+
+        html += '<div class="oc-item" data-item-id="' + (it.id||'') + '" data-order-created="' + esc(o.createdAt||'') + '" style="' + prepStyle + '">' +
+          kBox + sBox +
           '<div class="oc-item-qty">' + (it.qty || 1) + '×</div>' +
           '<div class="oc-item-info">' +
-            '<div class="oc-item-name" onclick="showIngCallout(this,\'' + (it.code||'').replace(/'/g,'') + '\',\'' + esc(it.name).replace(/'/g,'') + '\')">' + catDotHtml + esc(it.name) + '</div>' +
+            '<div class="oc-item-name" style="cursor:pointer" onclick="showIngCallout(this,\'' + (it.code||'').replace(/'/g,'') + '\',\'' + esc(it.name).replace(/'/g,'') + '\')">' + catDotHtml + esc(it.name) + '</div>' +
             addedAtBadge +
             preparedBadge +
             pillsHtml +
@@ -521,71 +532,55 @@ async function toggleServiceCharge(orderId, hasSvc) {
   }
 }
 
-async function adminTogglePrep(rowEl, orderId, itemId, currentPrepared) {
+async function adminTogglePrep(boxEl, orderId, itemId, currentPrepared) {
   if (!itemId) return;
-  // Item prep is independent of payment — staff can mark items prepared even
-  // while payment is still pending. (Order COMPLETION still enforces payment
-  // guards separately in updateOrderStatus.)
+  // Kitchen (yellow) confirmation — item cooked. Independent of payment and of
+  // the server (green) box. Persist, update local state, then re-render.
   var newPrepared = currentPrepared ? 0 : 1;
-  var icon = rowEl.querySelector('span');
-  if (icon) icon.textContent = newPrepared ? '✅' : '⬜';
-  rowEl.style.opacity = newPrepared ? '.5' : '1';
-  rowEl.style.textDecoration = newPrepared ? 'line-through' : '';
-  rowEl.setAttribute('onclick', 'adminTogglePrep(this,\'' + orderId + '\',' + itemId + ',' + newPrepared + ')');
-  rowEl.title = newPrepared ? 'Tap to unmark' : 'Tap to mark prepared';
-
-  // Show/hide "done in X min" badge instantly
-  var infoDiv = rowEl.querySelector('.oc-item-info');
-  var existingBadge = rowEl.querySelector('.prep-time-badge');
-  if (existingBadge) existingBadge.remove();
-  if (newPrepared && infoDiv) {
-    var orderCreated = rowEl.getAttribute('data-order-created') || '';
-    var mins = orderCreated ? Math.round((Date.now() - new Date(orderCreated).getTime()) / 60000) : 0;
-    var badge = document.createElement('div');
-    badge.className = 'prep-time-badge';
-    badge.style.marginTop = '3px';
-    badge.innerHTML = '<span style="background:#D1FAE5;color:#065F46;border-radius:6px;padding:2px 8px;font-size:.68rem;font-weight:700">✅ done in ' + mins + ' min</span>';
-    var nameEl = infoDiv.querySelector('.oc-item-name');
-    if (nameEl && nameEl.nextSibling) {
-      infoDiv.insertBefore(badge, nameEl.nextSibling);
-    } else {
-      infoDiv.appendChild(badge);
-    }
-  }
-  // Update prep bar counts
-  var card = rowEl.closest('.order-card') || rowEl.parentElement;
-  while (card && !card.querySelector('.prep-bar-label')) { card = card.parentElement; }
-  if (card) {
-    var allRows = card.querySelectorAll('[data-item-id]');
-    var prepCount = 0;
-    allRows.forEach(function(r) {
-      var ic = r.querySelector('span');
-      if (ic && (ic.textContent === '✅' || ic.textContent.trim() === '✅')) prepCount++;
+  var order = allOrders.find(function(o){ return o.orderId === orderId; });
+  if (order && order.items) {
+    order.items.forEach(function(it){
+      if (it.id === itemId) { it.prepared = !!newPrepared; it.preparedAt = newPrepared ? new Date().toISOString() : null; }
     });
-    var label = card.querySelector('.prep-bar-label');
-    if (label) label.textContent = prepCount + '/' + allRows.length + ' prepped';
-    var fill = card.querySelector('.prep-bar-fill');
-    if (fill && allRows.length > 0) fill.style.width = Math.round((prepCount/allRows.length)*100) + '%';
-
-    // AUTO-READY: if all items prepped and order is still NEW or PREPARING
-    if (newPrepared && prepCount === allRows.length && allRows.length > 0) {
-      var order = allOrders.find(function(o){ return o.orderId === orderId; });
-      if (order && (order.status === 'NEW' || order.status === 'PREPARING')) {
-        showToast('✨ All items prepped — moving to READY');
-        setTimeout(function(){ updateStatus(orderId, 'READY'); }, 600);
-      }
+  }
+  // AUTO-READY: if all items are now kitchen-confirmed and order is NEW/PREPARING.
+  if (order && newPrepared) {
+    var allPrepped = (order.items || []).every(function(it){ return it.prepared; });
+    if (allPrepped && (order.status === 'NEW' || order.status === 'PREPARING') && order.items.length > 0) {
+      showToast('✨ All items cooked — moving to READY');
+      setTimeout(function(){ updateStatus(orderId, 'READY'); }, 600);
     }
   }
+  renderOrders();
   try {
     await api('toggleItemPrepared', {
       userId: currentUser && currentUser.userId,
       orderId: orderId, itemId: itemId, prepared: newPrepared
     });
   } catch(e) {
-    // revert on error
-    if (icon) icon.textContent = currentPrepared ? '✅' : '⬜';
-    rowEl.style.opacity = currentPrepared ? '.5' : '1';
-    rowEl.style.textDecoration = currentPrepared ? 'line-through' : '';
+    showToast('❌ Failed to update — refresh', 'error');
+  }
+}
+
+// Server (green) confirmation — item delivered to the table. Independent of the
+// kitchen box and of payment.
+async function adminToggleServed(boxEl, orderId, itemId, currentServed) {
+  if (!itemId) return;
+  var newServed = currentServed ? 0 : 1;
+  var order = allOrders.find(function(o){ return o.orderId === orderId; });
+  if (order && order.items) {
+    order.items.forEach(function(it){
+      if (it.id === itemId) { it.served = !!newServed; it.servedAt = newServed ? new Date().toISOString() : null; }
+    });
+  }
+  renderOrders();
+  try {
+    await api('toggleItemServed', {
+      userId: currentUser && currentUser.userId,
+      orderId: orderId, itemId: itemId, served: newServed
+    });
+  } catch(e) {
+    showToast('❌ Failed to update — refresh', 'error');
   }
 }
 

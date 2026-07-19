@@ -460,7 +460,7 @@ export async function routeOrders(action, body, auth, req, res) {
       let itemsMap = {};
       if (orderIds.length > 0) {
         const itemsR = await supaFetch(
-          `${SUPABASE_URL}/rest/v1/dine_in_order_items?order_id=in.(${orderIds.map(id => `"${id}"`).join(',')})&order=id.asc&select=id,order_id,item_code,item_name,unit_price,qty,size_choice,sugar_choice,item_notes,prepared,addons,created_at,prepared_at`
+          `${SUPABASE_URL}/rest/v1/dine_in_order_items?order_id=in.(${orderIds.map(id => `"${id}"`).join(',')})&order=id.asc&select=id,order_id,item_code,item_name,unit_price,qty,size_choice,sugar_choice,item_notes,prepared,addons,created_at,prepared_at,served,served_at`
         );
         if (itemsR.ok && Array.isArray(itemsR.data)) {
           // Fetch categories for all unique item codes in one request
@@ -493,6 +493,8 @@ export async function routeOrders(action, body, auth, req, res) {
               addons:   parsedAddons,
               addedAt:  it.created_at || null,
               preparedAt: it.prepared_at || null,
+              served:   it.served || false,
+              servedAt: it.served_at || null,
             });
           });
         }
@@ -1042,6 +1044,26 @@ export async function routeOrders(action, body, auth, req, res) {
         }
       } catch(_) {}
       return res.status(200).json({ ok: true, itemId, prepared, orderStatus });
+    }
+
+    // ── toggleItemServed ──────────────────────────────────────────────────
+    // Server taps an item to mark it served/delivered (green box). Independent
+    // of the kitchen "prepared" (yellow) confirmation.
+    // Allowed for KITCHEN, CASHIER, ADMIN, OWNER.
+    if (action === 'toggleItemServed') {
+      const authK = await checkAuth();
+      if (!authK.ok) return res.status(403).json({ ok: false, error: authK.error });
+
+      const itemId = parseInt(body.itemId, 10);
+      const served = Boolean(body.served);
+      if (!itemId || isNaN(itemId)) return res.status(400).json({ ok: false, error: 'itemId is required' });
+
+      const r = await supa('PATCH', 'dine_in_order_items',
+        { served, served_at: served ? new Date().toISOString() : null },
+        { id: `eq.${itemId}` }
+      );
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to update item' });
+      return res.status(200).json({ ok: true, itemId, served });
     }
 
     // ── setPaymentMethod ──────────────────────────────────────────────────

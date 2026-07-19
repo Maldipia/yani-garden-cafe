@@ -118,6 +118,7 @@ submitPaymentProof
 submitReview
 syncToSheets
 toggleItemPrepared
+toggleItemServed
 triggerScheduledOrders
 updateCardRequestStatus
 updateHRStaff
