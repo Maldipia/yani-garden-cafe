@@ -1301,7 +1301,117 @@ function switchSettingsTab(tab) {
   else if (tab === 'events') { content.innerHTML = '<div style="text-align:center;padding:30px;color:var(--timber)">Loading event packages…</div>'; loadEventPackagesAdmin(); }
 }
 
-// ── Event packages editor (dashboard control of /events pricing) ──────────
+// ── Events CRM (event_inquiries pipeline) ─────────────────────────────────
+var _eventInquiries = [];
+var _crmFilter = 'ALL';
+var _CRM_STATUSES = ['NEW','DISCOVERY','PROPOSAL','RESERVED','DONE','LOST'];
+var _CRM_STATUS_META = {
+  NEW:       { label:'🟢 New',       color:'#16a34a' },
+  DISCOVERY: { label:'🟡 Discovery', color:'#ca8a04' },
+  PROPOSAL:  { label:'🟠 Proposal',  color:'#ea580c' },
+  RESERVED:  { label:'🟣 Reserved',  color:'#7c3aed' },
+  DONE:      { label:'⚫ Done',       color:'#374151' },
+  LOST:      { label:'🔴 Lost',       color:'#dc2626' }
+};
+
+async function loadEventsCrm() {
+  var view = document.getElementById('eventsCrmView');
+  if (!view) return;
+  view.innerHTML = '<div style="text-align:center;padding:40px;color:var(--timber)">Loading inquiries…</div>';
+  try {
+    var r = await api('getEventInquiries', { status: _crmFilter });
+    _eventInquiries = (r && r.inquiries) ? r.inquiries : [];
+    renderEventsCrm();
+  } catch (e) {
+    view.innerHTML = '<div class="s-card" style="margin:16px">Failed to load. <button class="s-save-btn" onclick="loadEventsCrm()">Retry</button></div>';
+  }
+}
+
+function renderEventsCrm() {
+  var view = document.getElementById('eventsCrmView');
+  if (!view) return;
+  // status counts
+  var counts = { ALL: _eventInquiries.length };
+  _CRM_STATUSES.forEach(function(s){ counts[s] = 0; });
+  _eventInquiries.forEach(function(i){ if (counts[i.status]!==undefined) counts[i.status]++; });
+
+  var html = '<div style="padding:16px">';
+  html += '<div style="font-size:1.2rem;font-weight:800;color:var(--forest-deep);margin-bottom:4px">🎉 Events CRM</div>';
+  html += '<div style="font-size:.8rem;color:var(--timber);margin-bottom:16px">Every inquiry from your /events page. Move each lead through the pipeline.</div>';
+
+  // filter pills
+  html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">';
+  var pills = [['ALL','All']].concat(_CRM_STATUSES.map(function(s){ return [s, _CRM_STATUS_META[s].label]; }));
+  pills.forEach(function(p){
+    var active = _crmFilter === p[0];
+    html += '<button onclick="setCrmFilter(\''+p[0]+'\')" style="padding:6px 12px;border-radius:16px;border:1.5px solid '+(active?'var(--forest)':'var(--mist)')+';background:'+(active?'var(--forest)':'#fff')+';color:'+(active?'#fff':'var(--timber)')+';font-size:.75rem;font-weight:700;cursor:pointer">'+p[1]+' ('+(counts[p[0]]||0)+')</button>';
+  });
+  html += '</div>';
+
+  if (!_eventInquiries.length) {
+    html += '<div style="text-align:center;padding:40px;color:var(--timber);background:#fff;border-radius:12px;border:1.5px dashed var(--mist)">No inquiries'+(_crmFilter!=='ALL'?' in this stage':' yet')+'. New ones from /events will appear here.</div>';
+  } else {
+    _eventInquiries.forEach(function(inq){ html += _crmCard(inq); });
+  }
+  html += '</div>';
+  view.innerHTML = html;
+}
+
+function _crmCard(inq) {
+  var meta = _CRM_STATUS_META[inq.status] || { label: inq.status, color:'#666' };
+  var dt = inq.event_date ? new Date(inq.event_date).toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'}) : '—';
+  var created = inq.created_at ? new Date(inq.created_at).toLocaleDateString('en-PH',{month:'short',day:'numeric'}) : '';
+  var statusOpts = _CRM_STATUSES.map(function(s){ return '<option value="'+s+'"'+(s===inq.status?' selected':'')+'>'+_CRM_STATUS_META[s].label+'</option>'; }).join('');
+  var tempOpts = ['','HOT','WARM','COLD'].map(function(t){ return '<option value="'+t+'"'+(t===(inq.lead_temp||'')?' selected':'')+'>'+(t||'— temp —')+'</option>'; }).join('');
+  return '<div style="background:#fff;border-radius:12px;border:1.5px solid var(--mist);border-left:5px solid '+meta.color+';padding:16px;margin-bottom:12px">'
+    + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">'
+      + '<div>'
+        + '<div style="font-weight:800;color:var(--forest-deep);font-size:1rem">'+esc(inq.full_name)+' <span style="font-size:.7rem;color:var(--timber);font-weight:600">'+esc(inq.inquiry_ref||'')+'</span></div>'
+        + '<div style="font-size:.85rem;color:var(--timber);margin-top:2px">'+esc(inq.event_type||'Event')+' · '+(inq.pax||'?')+' pax · '+dt+'</div>'
+        + '<div style="font-size:.78rem;color:var(--timber);margin-top:4px">📧 '+esc(inq.email)+' · 📱 '+esc(inq.phone)+'</div>'
+        + (inq.budget ? '<div style="font-size:.78rem;color:var(--timber);margin-top:2px">💰 '+esc(inq.budget)+'</div>' : '')
+        + (inq.message ? '<div style="font-size:.8rem;color:var(--charcoal);margin-top:6px;font-style:italic;background:var(--mist-light);padding:8px 10px;border-radius:8px">"'+esc(inq.message)+'"</div>' : '')
+      + '</div>'
+      + '<div style="font-size:.68rem;color:var(--timber);white-space:nowrap">'+created+'</div>'
+    + '</div>'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center">'
+      + '<select id="crm_status_'+inq.id+'" onchange="saveCrmField(\''+inq.id+'\',\'status\',this.value)" style="padding:6px 10px;border-radius:8px;border:1.5px solid var(--mist);font-size:.78rem;font-weight:700;cursor:pointer">'+statusOpts+'</select>'
+      + '<select id="crm_temp_'+inq.id+'" onchange="saveCrmField(\''+inq.id+'\',\'lead_temp\',this.value)" style="padding:6px 10px;border-radius:8px;border:1.5px solid var(--mist);font-size:.78rem;cursor:pointer">'+tempOpts+'</select>'
+      + '<a href="tel:'+esc(inq.phone)+'" style="padding:6px 12px;border-radius:8px;background:var(--forest);color:#fff;font-size:.75rem;font-weight:700;text-decoration:none">📱 Call</a>'
+      + '<a href="mailto:'+esc(inq.email)+'" style="padding:6px 12px;border-radius:8px;background:var(--mist-light);color:var(--timber);font-size:.75rem;font-weight:700;text-decoration:none">📧 Email</a>'
+    + '</div>'
+    + '<div style="margin-top:10px">'
+      + '<textarea id="crm_notes_'+inq.id+'" placeholder="Internal notes (site visit booked, proposal sent, follow-up date…)" rows="2" style="width:100%;padding:8px 10px;border:1.5px solid var(--mist);border-radius:8px;font-size:.8rem;font-family:var(--font-body);resize:vertical">'+esc(inq.internal_notes||'')+'</textarea>'
+      + '<button onclick="saveCrmNotes(\''+inq.id+'\',this)" style="margin-top:6px;padding:6px 14px;border-radius:8px;border:none;background:var(--forest-deep);color:#fff;font-size:.75rem;font-weight:700;cursor:pointer">💾 Save notes</button>'
+    + '</div>'
+  + '</div>';
+}
+
+function setCrmFilter(f) { _crmFilter = f; loadEventsCrm(); }
+
+async function saveCrmField(id, field, value) {
+  var payload = { id: id }; payload[field] = value;
+  try {
+    var r = await api('updateEventInquiry', payload);
+    if (r && r.ok) {
+      // update local + re-render if status changed (may move out of filter)
+      var inq = _eventInquiries.find(function(x){ return x.id===id; });
+      if (inq) inq[field] = value;
+      if (field === 'status' && _crmFilter !== 'ALL') loadEventsCrm();
+    }
+  } catch(e) {}
+}
+
+async function saveCrmNotes(id, btn) {
+  var el = document.getElementById('crm_notes_'+id);
+  if (!el) return;
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  try {
+    var r = await api('updateEventInquiry', { id: id, internal_notes: el.value });
+    if (btn) { btn.textContent = r && r.ok ? '✅ Saved' : '❌ Retry'; btn.disabled = false;
+      setTimeout(function(){ btn.textContent='💾 Save notes'; }, 2000); }
+  } catch(e) { if (btn) { btn.textContent='❌ Retry'; btn.disabled=false; } }
+}
 var _eventPackages = [];
 async function loadEventPackagesAdmin() {
   try {

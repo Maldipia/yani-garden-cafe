@@ -968,6 +968,7 @@ function renderSidebar() {
     // Replaces 3 separate sidebar items (Loyalty Points, Yani Cards, Customers)
     // that all represent the same person. The MEMBERS view shows them as tabs.
     html += item('MEMBERS', '👥', 'Members', '');
+    html += item('EVENTS_CRM', '🎉', 'Events CRM', '');
     html += item('DOCS', '📄', 'DOCS', '');
     html += item('HR', '👥', 'HR', '');
   }
@@ -1125,6 +1126,9 @@ function setFilter(f) {
   var docsView = document.getElementById('docsView');
   if (docsView) docsView.style.display = 'none';
 
+  var eventsCrmView = document.getElementById('eventsCrmView');
+  if (eventsCrmView) eventsCrmView.style.display = 'none';
+
   var reviewsView = document.getElementById('reviewsView');
   if (reviewsView) reviewsView.style.display = 'none';
 
@@ -1218,6 +1222,10 @@ function setFilter(f) {
     var dv = document.getElementById('docsView');
     if (dv) dv.style.display = 'block';
     loadDocsView();
+  } else if (f === 'EVENTS_CRM') {
+    var ecv = document.getElementById('eventsCrmView');
+    if (ecv) ecv.style.display = 'block';
+    loadEventsCrm();
   } else if (f === 'REVIEWS') {
     var rv = document.getElementById('reviewsView');
     if (rv) rv.style.display = 'block';

@@ -8,6 +8,48 @@ import { SUPABASE_URL, BUSINESS_NAME, SERVICE_CHARGE_RATE } from '../lib/config.
 export async function routeMenu(action, body, auth, req, res) {
   const { checkAuth, checkAdminAuth, jwtUser } = auth;
 
+    // ── getEventInquiries (ADMIN) — the events CRM pipeline ────────────────
+    if (action === 'getEventInquiries') {
+      const authA = await checkAdminAuth();
+      if (!authA.ok) return res.status(403).json({ ok: false, error: authA.error });
+      let filter = '';
+      if (body.status && body.status !== 'ALL') {
+        filter = `&status=eq.${encodeURIComponent(body.status)}`;
+      }
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/event_inquiries?order=created_at.desc${filter}&select=*`
+      );
+      return res.status(200).json({ ok: true, inquiries: r.ok ? r.data : [] });
+    }
+
+    // ── updateEventInquiry (ADMIN) — move status / add notes ───────────────
+    if (action === 'updateEventInquiry') {
+      const authA = await checkAdminAuth();
+      if (!authA.ok) return res.status(403).json({ ok: false, error: authA.error });
+      const id = String(body.id || '').trim();
+      if (!id) return res.status(400).json({ ok: false, error: 'id is required' });
+      const patch = {};
+      const VALID_STATUS = ['NEW','DISCOVERY','PROPOSAL','RESERVED','DONE','LOST'];
+      const VALID_TEMP = ['HOT','WARM','COLD'];
+      if (body.status !== undefined) {
+        if (!VALID_STATUS.includes(body.status)) return res.status(400).json({ ok:false, error:'Invalid status' });
+        patch.status = body.status;
+      }
+      if (body.lead_temp !== undefined) {
+        if (body.lead_temp && !VALID_TEMP.includes(body.lead_temp)) return res.status(400).json({ ok:false, error:'Invalid lead_temp' });
+        patch.lead_temp = body.lead_temp || null;
+      }
+      if (body.internal_notes !== undefined) patch.internal_notes = String(body.internal_notes).slice(0, 4000);
+      if (body.next_action !== undefined) patch.next_action = String(body.next_action).slice(0, 500);
+      patch.updated_at = new Date().toISOString();
+      const r = await supa('PATCH', 'event_inquiries', patch, { id: `eq.${id}` });
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to update inquiry' });
+      if (typeof auditLog === 'function') {
+        try { auditLog({ action: 'EVENT_INQUIRY_UPDATED', actor: { userId: body.userId }, details: { id, fields: Object.keys(patch) } }); } catch (_) {}
+      }
+      return res.status(200).json({ ok: true, id, updated: Object.keys(patch) });
+    }
+
     // ── getEventPackages (public) — powers the /events pricing page ─────────
     if (action === 'getEventPackages') {
       const r = await supaFetch(

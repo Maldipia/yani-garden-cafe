@@ -6,6 +6,46 @@
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const OPS_EMAIL      = process.env.EVENTS_OPS_EMAIL || 'maldipia@gmail.com';
 const FROM_EMAIL     = 'YANI Garden Cafe <events@yanigardencafe.com>';
+const SUPABASE_URL   = process.env.SUPABASE_URL || 'https://hnynvclpvfxzlfjphefj.supabase.co';
+const SUPABASE_KEY   = process.env.SUPABASE_SECRET_KEY || '';
+
+// Save the inquiry into the events CRM (event_inquiries). Best-effort: never
+// fails the inquiry if the DB write has an issue — emails already went out.
+async function saveInquiryToCRM(data) {
+  if (!SUPABASE_KEY) return { ok: false, skipped: true };
+  try {
+    const row = {
+      full_name:  data.fullName,
+      email:      data.email,
+      phone:      data.phone,
+      event_type: data.eventType,
+      pax:        data.pax,
+      event_date: data.eventDate || null,
+      alt_date:   data.altDate || null,
+      time_of_day:data.timeOfDay || null,
+      budget:     data.budget || null,
+      message:    data.message || null,
+      status:     'NEW',
+      source:     'website',
+    };
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/event_inquiries`, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation',
+      },
+      body: JSON.stringify(row),
+    });
+    if (!r.ok) { console.error('CRM insert failed', r.status, await r.text()); return { ok:false }; }
+    const saved = await r.json();
+    return { ok: true, ref: saved && saved[0] && saved[0].inquiry_ref };
+  } catch (e) {
+    console.error('CRM insert error', e.message);
+    return { ok: false };
+  }
+}
 
 // Simple in-memory rate limit: 5 submissions per IP per hour
 const rateLimitMap = new Map();
@@ -213,9 +253,12 @@ export default async function handler(req, res) {
     console.error('CRITICAL: Ops email failed for inquiry', data.email);
   }
 
+  // Save into the events CRM (best-effort — inquiry already succeeded via email)
+  const crm = await saveInquiryToCRM(data);
+
   return res.status(200).json({
     ok: true,
-    inquiryId: `INQ-${Date.now()}`,
+    inquiryId: crm.ref || `INQ-${Date.now()}`,
     message: 'Thank you. Your inquiry has been received.',
   });
 };

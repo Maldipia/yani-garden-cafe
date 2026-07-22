@@ -52,6 +52,7 @@ getHRLeave
 getHRLoans
 getHRPerformance
 getHRProfile
+getEventInquiries
 getEventPackages
 getHRStaff
 getHRTimeLogs
@@ -122,6 +123,7 @@ toggleItemPrepared
 toggleItemServed
 triggerScheduledOrders
 updateCardRequestStatus
+updateEventInquiry
 updateEventPackage
 updateHRStaff
 updateMenuItem
