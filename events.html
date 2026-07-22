@@ -145,6 +145,22 @@
   /* PACKAGES — 3 cards with Signature highlighted */
   .packages { background: var(--ivory); }
   .pkg-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+
+  /* Private Garden Buyout */
+  .buyout { background: var(--emerald); color: var(--ivory); padding: 100px 0; text-align: center; }
+  .buyout .section-label { color: var(--gold-soft); }
+  .buyout .section-title { color: var(--ivory); }
+  .buyout .section-title em { color: var(--gold-soft); font-style: italic; }
+  .buyout-lede { max-width: 680px; margin: 8px auto 56px; font-size: 1.05rem; line-height: 1.9; color: rgba(245,241,232,0.82); }
+  .buyout-rates { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; max-width: 900px; margin: 0 auto 44px; }
+  .rate-card { border: 1px solid rgba(212,184,150,0.28); border-radius: 4px; padding: 32px 24px; background: rgba(255,255,255,0.02); }
+  .rate-featured { border-color: var(--gold); background: rgba(184,149,106,0.10); }
+  .rate-day { font-size: 0.72rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold-soft); margin-bottom: 18px; font-weight: 500; }
+  .rate-price { font-family: var(--font-display, Georgia, serif); font-size: 2rem; color: var(--ivory); line-height: 1.1; }
+  .rate-price span { font-size: 1.1rem; color: rgba(245,241,232,0.6); font-weight: 300; }
+  .rate-note { margin-top: 14px; font-size: 0.8rem; color: rgba(245,241,232,0.6); line-height: 1.5; }
+  .buyout-foot { max-width: 620px; margin: 0 auto; font-size: 0.9rem; font-style: italic; color: rgba(245,241,232,0.65); line-height: 1.7; }
+  @media (max-width: 860px) { .buyout-rates { grid-template-columns: 1fr; gap: 16px; } .buyout { padding: 72px 0; } }
   .pkg-card {
     background: white; padding: 44px 28px;
     border: 1px solid var(--line); border-radius: 2px;
@@ -466,6 +482,44 @@
         <p>Cozy celebrations with the people who matter</p>
       </div>
     </div>
+  </div>
+</section>
+
+<!-- PRIVATE GARDEN BUYOUT -->
+<section class="buyout">
+  <div class="container">
+    <span class="section-label small-caps">Exclusive Use</span>
+    <h2 class="section-title">The Private <em>Garden Buyout</em></h2>
+    <hr class="hairline">
+    <p class="buyout-lede">
+      When you celebrate at YANI, you're not renting chairs and tables — you're taking
+      over an entire working garden café for the day. No walk-in guests. No shared
+      space. Just your people, our garden, and a setting that's normally open to everyone,
+      made completely yours.
+    </p>
+
+    <div class="buyout-rates">
+      <div class="rate-card">
+        <div class="rate-day">Monday – Thursday</div>
+        <div class="rate-price">₱40k <span>– ₱60k</span></div>
+        <div class="rate-note">Whole-venue buyout · quietest days, best value</div>
+      </div>
+      <div class="rate-card">
+        <div class="rate-day">Friday</div>
+        <div class="rate-price">₱70k <span>– ₱90k</span></div>
+        <div class="rate-note">Whole-venue buyout · the weekend begins</div>
+      </div>
+      <div class="rate-card rate-featured">
+        <div class="rate-day">Saturday & Sunday</div>
+        <div class="rate-price">Starts at ₱120k</div>
+        <div class="rate-note">Prime weekend · quoted to your event</div>
+      </div>
+    </div>
+
+    <p class="buyout-foot">
+      Buyout covers the exclusive use of the garden. Food, styling, and enhancements
+      are added through the packages below — build the celebration that fits your day.
+    </p>
   </div>
 </section>
 
