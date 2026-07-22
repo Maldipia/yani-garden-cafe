@@ -8,6 +8,37 @@ import { SUPABASE_URL, BUSINESS_NAME, SERVICE_CHARGE_RATE } from '../lib/config.
 export async function routeMenu(action, body, auth, req, res) {
   const { checkAuth, checkAdminAuth, jwtUser } = auth;
 
+    // ── getEventPackages (public) — powers the /events pricing page ─────────
+    if (action === 'getEventPackages') {
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/event_packages?is_active=eq.true&order=sort_order.asc&select=slug,name,name_accent,tagline,price_from,price_to,subtitle,features,is_featured,sort_order`
+      );
+      return res.status(200).json({ ok: true, packages: r.ok ? r.data : [] });
+    }
+
+    // ── updateEventPackage (ADMIN) — dashboard edits price/features ─────────
+    if (action === 'updateEventPackage') {
+      const authA = await checkAdminAuth();
+      if (!authA.ok) return res.status(403).json({ ok: false, error: authA.error });
+      const slug = String(body.slug || '').trim();
+      if (!slug) return res.status(400).json({ ok: false, error: 'slug is required' });
+      // Only allow known editable fields (additive-safe)
+      const patch = {};
+      ['name','name_accent','tagline','price_from','price_to','subtitle','is_featured','is_active','sort_order'].forEach(k => {
+        if (body[k] !== undefined) patch[k] = body[k];
+      });
+      if (body.features !== undefined) {
+        patch.features = Array.isArray(body.features) ? body.features : [];
+      }
+      patch.updated_at = new Date().toISOString();
+      const r = await supa('PATCH', 'event_packages', patch, { slug: `eq.${slug}` });
+      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to update package' });
+      if (typeof auditLog === 'function') {
+        try { auditLog({ action: 'EVENT_PACKAGE_UPDATED', actor: { userId: body.userId }, details: { slug, fields: Object.keys(patch) } }); } catch (_) {}
+      }
+      return res.status(200).json({ ok: true, slug, updated: Object.keys(patch) });
+    }
+
     if (action === 'getMenu') {
       const now = Date.now();
       if (menuCache.public && (now - menuCache.tsPublic) < MENU_CACHE_TTL) {

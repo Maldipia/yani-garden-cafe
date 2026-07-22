@@ -1288,7 +1288,7 @@ async function loadSettings() {
 
 function switchSettingsTab(tab) {
   _currentSettingsTab = tab;
-  ['general','payment','branding','operations'].forEach(function(t) {
+  ['general','payment','branding','operations','events'].forEach(function(t) {
     var el = document.getElementById('stab-' + t);
     if (el) el.className = 's-tab' + (t === tab ? ' active' : '');
   });
@@ -1298,6 +1298,74 @@ function switchSettingsTab(tab) {
   else if (tab === 'payment') content.innerHTML = _settingsPayment();
   else if (tab === 'branding') content.innerHTML = _settingsBranding();
   else if (tab === 'operations') content.innerHTML = _settingsOperations();
+  else if (tab === 'events') { content.innerHTML = '<div style="text-align:center;padding:30px;color:var(--timber)">Loading event packages…</div>'; loadEventPackagesAdmin(); }
+}
+
+// ── Event packages editor (dashboard control of /events pricing) ──────────
+var _eventPackages = [];
+async function loadEventPackagesAdmin() {
+  try {
+    var r = await api('getEventPackages', {});
+    _eventPackages = (r && r.packages) ? r.packages : [];
+    renderEventPackagesEditor();
+  } catch (e) {
+    document.getElementById('settingsContent').innerHTML = '<div class="s-card">Failed to load packages. <button class="s-save-btn" onclick="switchSettingsTab(\'events\')">Retry</button></div>';
+  }
+}
+
+function renderEventPackagesEditor() {
+  var content = document.getElementById('settingsContent');
+  if (!content) return;
+  var html = '<div style="font-size:.8rem;color:var(--timber);margin-bottom:12px;line-height:1.5">Edit the packages shown on your public <b>/events</b> page. Changes go live instantly after saving.</div>';
+  _eventPackages.forEach(function(p, idx) {
+    var feats = (p.features || []).join('\n');
+    html += '<div class="s-card" style="margin-bottom:14px">'
+      + '<div class="s-card-title">' + esc(p.name) + ' ' + esc(p.name_accent||'') + (p.is_featured ? ' <span style="background:#8a5220;color:#fff;font-size:.6rem;padding:2px 6px;border-radius:5px;margin-left:4px">FEATURED</span>' : '') + '</div>'
+      + '<input type="hidden" id="ep_slug_' + idx + '" value="' + esc(p.slug) + '">'
+      + _sField('ep_name_' + idx, 'Name', p.name, 'text')
+      + _sField('ep_accent_' + idx, 'Accent word (italic/gold)', p.name_accent, 'text')
+      + _sField('ep_tagline_' + idx, 'Tagline', p.tagline, 'textarea')
+      + '<div style="display:flex;gap:8px">'
+        + '<div style="flex:1">' + _sField('ep_from_' + idx, 'Price from', p.price_from, 'text', '₱45k') + '</div>'
+        + '<div style="flex:1">' + _sField('ep_to_' + idx, 'Price to (optional)', p.price_to, 'text', '₱65k') + '</div>'
+      + '</div>'
+      + _sField('ep_subtitle_' + idx, 'Subtitle (under price)', p.subtitle, 'text')
+      + '<div class="s-field"><label>What\'s included (one per line)</label><textarea id="ep_features_' + idx + '" rows="6">' + esc(feats) + '</textarea></div>'
+      + _sToggle('ep_featured_' + idx, 'Featured package', 'Shows the "Most Couples Choose This" badge', p.is_featured)
+      + '<button class="s-save-btn" onclick="saveEventPackage(' + idx + ', this)">💾 Save ' + esc(p.name) + ' ' + esc(p.name_accent||'') + '</button>'
+      + '</div>';
+  });
+  content.innerHTML = html;
+}
+
+async function saveEventPackage(idx, btn) {
+  var g = function(id){ var el = document.getElementById(id); return el ? el.value : ''; };
+  var featsRaw = g('ep_features_' + idx);
+  var features = featsRaw.split('\n').map(function(s){ return s.trim(); }).filter(function(s){ return s.length; });
+  var payload = {
+    slug: g('ep_slug_' + idx),
+    name: g('ep_name_' + idx),
+    name_accent: g('ep_accent_' + idx),
+    tagline: g('ep_tagline_' + idx),
+    price_from: g('ep_from_' + idx),
+    price_to: g('ep_to_' + idx),
+    subtitle: g('ep_subtitle_' + idx),
+    features: features,
+    is_featured: document.getElementById('ep_featured_' + idx).checked
+  };
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  try {
+    var r = await api('updateEventPackage', payload);
+    if (r && r.ok) {
+      if (btn) { btn.textContent = '✅ Saved — live on /events'; setTimeout(function(){ btn.disabled=false; btn.textContent='💾 Save'; }, 2500); }
+      // update local copy
+      _eventPackages[idx] = Object.assign(_eventPackages[idx], payload);
+    } else {
+      if (btn) { btn.disabled=false; btn.textContent='❌ Failed — retry'; }
+    }
+  } catch(e) {
+    if (btn) { btn.disabled=false; btn.textContent='❌ Failed — retry'; }
+  }
 }
 
 function _sField(id, label, val, type, placeholder) {

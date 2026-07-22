@@ -476,15 +476,15 @@
     <h2 class="section-title">Three <em>Considered</em> Packages</h2>
     <p class="section-sub">Customizable depending on your preferences. Final pricing depends on date, guest count, and chosen enhancements.</p>
 
-    <div class="pkg-grid">
-
-      <!-- BASIC ELEGANT -->
+    <div class="pkg-grid" id="pkgGrid">
+      <!-- Packages render here from the event_packages API (dashboard-editable).
+           Fallback content below shows if the API is slow/unavailable. -->
       <div class="pkg-card">
         <h3>Basic <em>Elegant</em></h3>
         <p class="pkg-tagline">For couples who want a simple, beautiful celebration without the extras.</p>
         <div class="pkg-price-block">
-          <div class="pkg-price-amount">₱18k <span style="font-size:1.2rem;color:var(--charcoal-soft);font-weight:300">– ₱25k</span></div>
-          <div class="pkg-allin">Venue + food + basic styling</div>
+          <div class="pkg-price-amount">₱45k <span style="font-size:1.2rem;color:var(--charcoal-soft);font-weight:300">– ₱65k</span></div>
+          <div class="pkg-allin">Private garden buyout + food + basic styling</div>
         </div>
         <hr class="pkg-divider">
         <ul class="pkg-incl">
@@ -496,47 +496,50 @@
           <li>Drinks (iced tea & water)</li>
         </ul>
       </div>
-
-      <!-- STYLED & COMPLETE — FEATURED -->
-      <div class="pkg-card featured">
-        <span class="pkg-badge">Most Couples Choose This</span>
-        <h3>Styled & <em>Complete</em></h3>
-        <p class="pkg-tagline">Better styling, complete setup, and the flow handled for you on the day.</p>
-        <div class="pkg-price-block">
-          <div class="pkg-price-amount">₱25k <span style="font-size:1.2rem;font-weight:300">– ₱35k</span></div>
-          <div class="pkg-allin">Better styling + full event setup</div>
-        </div>
-        <hr class="pkg-divider">
-        <ul class="pkg-incl">
-          <li>Everything in Basic Elegant</li>
-          <li>Enhanced floral & styling</li>
-          <li>Premium sound system</li>
-          <li>Layered ambient & feature lighting</li>
-          <li>Event coordination on the day</li>
-          <li>Cake table styling</li>
-        </ul>
-      </div>
-
-      <!-- FULL EXPERIENCE -->
-      <div class="pkg-card">
-        <h3>Full <em>Experience</em></h3>
-        <p class="pkg-tagline">All-in package — we handle everything, from flowers to photo & video.</p>
-        <div class="pkg-price-block">
-          <div class="pkg-price-amount">₱30k <span style="font-size:1.2rem;color:var(--charcoal-soft);font-weight:300">– ₱45k</span></div>
-          <div class="pkg-allin">All-in including photo, video & coordination</div>
-        </div>
-        <hr class="pkg-divider">
-        <ul class="pkg-incl">
-          <li>Everything in Styled & Complete</li>
-          <li>Photo & video coverage</li>
-          <li>Host / emcee</li>
-          <li>HMUA service</li>
-          <li>Comprehensive styling upgrade</li>
-          <li>Full day-of coordinator</li>
-        </ul>
-      </div>
-
     </div>
+
+    <script>
+    // Render event packages from the dashboard-editable API.
+    (async function loadEventPackages(){
+      try {
+        var res = await fetch('/api/pos', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ action:'getEventPackages' })
+        });
+        var data = await res.json();
+        if (!data.ok || !data.packages || !data.packages.length) return; // keep fallback
+        var esc = function(s){ var d=document.createElement('div'); d.textContent=s==null?'':s; return d.innerHTML; };
+        var grid = document.getElementById('pkgGrid');
+        grid.innerHTML = data.packages.map(function(p){
+          var feats = (p.features||[]).map(function(f){ return '<li>'+esc(f)+'</li>'; }).join('');
+          var priceTo = p.price_to ? ' <span style="font-size:1.2rem;font-weight:300;color:var(--charcoal-soft)">– '+esc(p.price_to)+'</span>' : '';
+          var badge = p.is_featured ? '<span class="pkg-badge">Most Couples Choose This</span>' : '';
+          var accent = p.name_accent ? ' <em>'+esc(p.name_accent)+'</em>' : '';
+          return '<div class="pkg-card'+(p.is_featured?' featured':'')+'">'+
+            badge+
+            '<h3>'+esc(p.name)+accent+'</h3>'+
+            '<p class="pkg-tagline">'+esc(p.tagline)+'</p>'+
+            '<div class="pkg-price-block">'+
+              '<div class="pkg-price-amount">'+esc(p.price_from)+priceTo+'</div>'+
+              '<div class="pkg-allin">'+esc(p.subtitle)+'</div>'+
+            '</div>'+
+            '<hr class="pkg-divider">'+
+            '<ul class="pkg-incl">'+feats+'</ul>'+
+          '</div>';
+        }).join('');
+        // Sync the inquiry dropdown options to the live packages
+        var sel = document.querySelector('select[name="package"], #packageSelect');
+        if (sel && data.packages.length) {
+          var firstOpt = sel.querySelector('option');
+          var lead = firstOpt ? firstOpt.outerHTML : '';
+          sel.innerHTML = lead + data.packages.map(function(p){
+            var label = p.name + (p.name_accent? ' '+p.name_accent : '') + ' ('+p.price_from+(p.price_to? '–'+p.price_to : '')+')';
+            return '<option>'+esc(label)+'</option>';
+          }).join('');
+        }
+      } catch(e) { /* keep fallback HTML */ }
+    })();
+    </script>
 
     <p class="pkg-fineprint">All packages can be customized. We'll prepare a final quotation based on the details you share.</p>
   </div>
