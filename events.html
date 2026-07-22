@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Intimate Garden Weddings & Events | YANI Garden Cafe Cavite</title>
-<meta name="description" content="Cozy garden venue in Amadeo, Cavite for weddings, anniversaries, christenings, birthdays. Intimate 30–50 pax setups, scalable to 70–100+ guests on request. Buffet + styling packages from ₱18,000.">
+<meta name="description" content="A private garden venue in the highlands of Amadeo, Cavite for weddings, anniversaries, christenings, and celebrations of 15–150 guests. Minutes from Tagaytay. Loved by 674+ guests. Private Garden Buyout, styling, and coordination packages.">
 <meta property="og:title" content="Intimate Garden Weddings at YANI 🌿">
 <meta property="og:description" content="Garden venue in Amadeo, Cavite. Best for 30–50 guests. Larger events of 70–100+ accommodated on request.">
 <meta property="og:type" content="website">
@@ -46,6 +46,38 @@
   .container { max-width: 1200px; margin: 0 auto; padding: 0 32px; }
   .small-caps { font-size: 0.7rem; letter-spacing: 0.3em; text-transform: uppercase; font-weight: 500; color: var(--gold); }
   .hairline { width: 60px; height: 1px; background: var(--gold); margin: 24px auto; opacity: 0.6; border: none; }
+
+  /* Trust bar */
+  .trustbar { background: var(--ivory-soft); padding: 28px 0; border-bottom: 1px solid rgba(184,149,106,0.25); }
+  .trust-grid { display: flex; align-items: center; justify-content: center; gap: 40px; flex-wrap: wrap; }
+  .trust-item { text-align: center; }
+  .trust-stars { color: var(--gold); font-size: 1.1rem; letter-spacing: 2px; margin-bottom: 4px; }
+  .trust-big { font-family: 'Cormorant Garamond', serif; font-size: 1.5rem; color: var(--emerald); line-height: 1; margin-bottom: 4px; }
+  .trust-text { font-size: 0.82rem; color: var(--charcoal-soft); }
+  .trust-text strong { color: var(--emerald); font-weight: 600; }
+  .trust-sep { width: 1px; height: 36px; background: rgba(184,149,106,0.3); }
+  @media (max-width: 720px) { .trust-sep { display: none; } .trust-grid { gap: 24px; } }
+
+  /* Why YANI */
+  .why { background: var(--ivory); padding: 100px 0; text-align: center; }
+  .why-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; max-width: 960px; margin: 48px auto 0; text-align: left; }
+  .why-card { padding: 4px 0; }
+  .why-card .why-ico { font-size: 1.4rem; color: var(--gold); margin-bottom: 12px; }
+  .why-card h4 { font-size: 1.25rem; color: var(--emerald); margin-bottom: 6px; }
+  .why-card p { font-size: 0.92rem; color: var(--charcoal-soft); line-height: 1.7; }
+  .why-lede { max-width: 640px; margin: 8px auto 0; font-size: 1.05rem; line-height: 1.8; color: var(--charcoal-soft); }
+  @media (max-width: 820px) { .why-grid { grid-template-columns: 1fr; gap: 32px; } .why { padding: 72px 0; } }
+
+  /* FAQ */
+  .faq { background: var(--ivory-soft); padding: 100px 0; }
+  .faq .container { max-width: 780px; }
+  .faq-item { border-bottom: 1px solid rgba(184,149,106,0.25); padding: 22px 0; cursor: pointer; }
+  .faq-q { display: flex; justify-content: space-between; align-items: center; gap: 16px; font-family: 'Cormorant Garamond', serif; font-size: 1.25rem; color: var(--emerald); font-weight: 500; }
+  .faq-q .faq-plus { color: var(--gold); font-size: 1.4rem; flex-shrink: 0; transition: transform 0.25s; line-height: 1; }
+  .faq-item.open .faq-plus { transform: rotate(45deg); }
+  .faq-a { max-height: 0; overflow: hidden; transition: max-height 0.3s ease, padding 0.3s ease; }
+  .faq-item.open .faq-a { max-height: 400px; padding-top: 14px; }
+  .faq-a p { font-size: 0.95rem; color: var(--charcoal-soft); line-height: 1.75; }
 
   /* HERO — overlaid on real wedding photo */
   .hero {
@@ -429,14 +461,36 @@
   <div class="hero-bg"></div>
   <div class="hero-content">
     <span class="small-caps">YANI Garden Cafe</span>
-    <div class="script-tagline">Intimate Garden Weddings at YANI</div>
-    <h1>For <em>30–50</em> Guests</h1>
-    <div class="hero-pax">Cozy &nbsp;·&nbsp; Elegant &nbsp;·&nbsp; Memorable</div>
-    <div class="hero-tagline">Amadeo · Cavite</div>
-    <div style="font-size: 0.85rem; color: rgba(245,241,232,0.65); margin: -28px 0 36px; font-style: italic;">Larger events of 70–100+ guests accommodated on request</div>
+    <div class="script-tagline">A Private Garden for Life's Best Moments</div>
+    <h1>Celebrate in the <em>Garden</em></h1>
+    <div class="hero-pax">Weddings &nbsp;·&nbsp; Milestones &nbsp;·&nbsp; Gatherings of 15–150</div>
+    <div class="hero-tagline">In the highlands of Amadeo · Cavite</div>
+    <div style="font-size: 0.85rem; color: rgba(245,241,232,0.65); margin: -28px 0 36px; font-style: italic;">Minutes from Tagaytay · an easy drive from Metro Manila</div>
     <div class="cta-row">
-      <a href="#packages" class="btn btn-primary">View Packages</a>
+      <a href="#inquiry" class="btn btn-primary">Plan Your Event</a>
       <a href="#inquiry" class="btn btn-ghost">Book a Site Visit</a>
+    </div>
+  </div>
+</section>
+
+<!-- TRUST BAR -->
+<section class="trustbar">
+  <div class="container">
+    <div class="trust-grid">
+      <div class="trust-item">
+        <div class="trust-stars">★★★★★</div>
+        <div class="trust-text">Loved by <strong>674+ guests</strong> on Google</div>
+      </div>
+      <div class="trust-sep"></div>
+      <div class="trust-item">
+        <div class="trust-big">15–150</div>
+        <div class="trust-text">guests, indoors &amp; in the garden</div>
+      </div>
+      <div class="trust-sep"></div>
+      <div class="trust-item">
+        <div class="trust-big">Amadeo</div>
+        <div class="trust-text">a true destination garden, not a hall</div>
+      </div>
     </div>
   </div>
 </section>
@@ -480,6 +534,52 @@
         <div class="type-icon">iv</div>
         <h4>Birthdays & Private</h4>
         <p>Cozy celebrations with the people who matter</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- WHY YANI -->
+<section class="why">
+  <div class="container">
+    <span class="section-label small-caps">Why YANI</span>
+    <h2 class="section-title">The Garden, Without the <em>Tagaytay Traffic</em></h2>
+    <hr class="hairline">
+    <p class="why-lede">
+      You want the highland garden setting — the cool air, the greenery, the calm.
+      YANI gives you all of it, minutes from Tagaytay, without the crowds, the markup,
+      or the long queues. A private garden that's genuinely yours for the day.
+    </p>
+    <div class="why-grid">
+      <div class="why-card">
+        <div class="why-ico">❋</div>
+        <h4>A destination, not a hall</h4>
+        <p>A living garden café with character — not a bare function room you have to dress up from scratch.</p>
+      </div>
+      <div class="why-card">
+        <div class="why-ico">★</div>
+        <h4>Loved by 674+ guests</h4>
+        <p>Years of five-star reviews from the people who've celebrated, dined, and gathered here.</p>
+      </div>
+      <div class="why-card">
+        <div class="why-ico">☕</div>
+        <h4>Real café, real coffee</h4>
+        <p>A working specialty café means your guests are served properly — not banquet-hall catering.</p>
+      </div>
+      <div class="why-card">
+        <div class="why-ico">✦</div>
+        <h4>Flexible spaces</h4>
+        <p>Indoor and garden areas for 15 to 150 — sun, shade, or covered, with a rain plan ready.</p>
+      </div>
+      <div class="why-card">
+        <div class="why-ico">✿</div>
+        <h4>We handle the day</h4>
+        <p>Styling, setup, and coordination so you're a guest at your own celebration, not the runner.</p>
+      </div>
+      <div class="why-card">
+        <div class="why-ico">➛</div>
+        <h4>Easy to reach</h4>
+        <p>Minutes from Tagaytay and an easy drive from Metro Manila — close enough for everyone to come.</p>
       </div>
     </div>
   </div>
@@ -772,6 +872,49 @@
         <div class="step-num">5</div>
         <h4>Event Day</h4>
         <p>We handle everything. You enjoy the day.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="faq" id="faq">
+  <div class="container">
+    <span class="section-label small-caps" style="display:block;text-align:center">Good to Know</span>
+    <h2 class="section-title" style="text-align:center">Frequently Asked <em>Questions</em></h2>
+    <hr class="hairline">
+    <div style="margin-top:40px">
+      <div class="faq-item" onclick="this.classList.toggle('open')">
+        <div class="faq-q"><span>How many guests can YANI accommodate?</span><span class="faq-plus">+</span></div>
+        <div class="faq-a"><p>Our garden and indoor spaces comfortably host intimate gatherings of around 15 up to larger celebrations of 150 guests, depending on your chosen setup. We'll recommend the best layout for your headcount during your site visit.</p></div>
+      </div>
+      <div class="faq-item" onclick="this.classList.toggle('open')">
+        <div class="faq-q"><span>How do I reserve my date?</span><span class="faq-plus">+</span></div>
+        <div class="faq-a"><p>Once you've chosen a package, your date is secured with a reservation fee. We'll confirm availability and walk you through the simple booking steps when we send your proposal.</p></div>
+      </div>
+      <div class="faq-item" onclick="this.classList.toggle('open')">
+        <div class="faq-q"><span>What happens if it rains?</span><span class="faq-plus">+</span></div>
+        <div class="faq-a"><p>We always prepare a weather plan for your event. Our covered and indoor areas mean your celebration continues comfortably, rain or shine — we'll go through the details with you ahead of the day.</p></div>
+      </div>
+      <div class="faq-item" onclick="this.classList.toggle('open')">
+        <div class="faq-q"><span>Can we bring our own food, cake, or suppliers?</span><span class="faq-plus">+</span></div>
+        <div class="faq-a"><p>Cakes and select outside arrangements are welcome, and we're happy to coordinate with your suppliers. A few simple guidelines apply — we'll walk you through everything during your site visit so there are no surprises.</p></div>
+      </div>
+      <div class="faq-item" onclick="this.classList.toggle('open')">
+        <div class="faq-q"><span>Is the venue private during our event?</span><span class="faq-plus">+</span></div>
+        <div class="faq-a"><p>Yes. Our Private Garden Buyout gives you exclusive use of the space for your celebration — no walk-in café guests, just your people and the garden.</p></div>
+      </div>
+      <div class="faq-item" onclick="this.classList.toggle('open')">
+        <div class="faq-q"><span>Do you provide styling and coordination?</span><span class="faq-plus">+</span></div>
+        <div class="faq-a"><p>Yes — depending on your package, we handle styling, setup, and on-the-day coordination so you can simply enjoy your celebration. Our Styled &amp; Complete and Full Experience packages include full event coordination.</p></div>
+      </div>
+      <div class="faq-item" onclick="this.classList.toggle('open')">
+        <div class="faq-q"><span>How far is YANI from Tagaytay and Manila?</span><span class="faq-plus">+</span></div>
+        <div class="faq-a"><p>We're in the highlands of Amadeo, Cavite — just minutes from Tagaytay and an easy drive from Metro Manila. Close enough that your guests from the city can comfortably join.</p></div>
+      </div>
+      <div class="faq-item" onclick="this.classList.toggle('open')">
+        <div class="faq-q"><span>Can I customize a package?</span><span class="faq-plus">+</span></div>
+        <div class="faq-a"><p>Absolutely. Every package is a starting point — we tailor the final proposal to your date, guest count, and the details that matter most to you. Just tell us your vision when you inquire.</p></div>
       </div>
     </div>
   </div>
