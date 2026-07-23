@@ -3316,17 +3316,61 @@ function processPayFile(file) {
   if (!file.type.match(/^image\/(jpeg|png)$/)) {
     toast('Please upload a JPG or PNG image'); return;
   }
-  if (file.size > 10 * 1024 * 1024) {
-    toast('File too large. Max 10MB'); return;
+  if (file.size > 25 * 1024 * 1024) {
+    toast('File too large. Max 25MB'); return;
   }
 
-  uploadedFile = file;
   uploadStep = 2;
+  // Compress/resize on-device so the upload stays well under the server limit.
+  // Phone screenshots are often 3-6MB; base64 in JSON inflates ~33% and Vercel
+  // rejects payloads over ~4.5MB (413). We downscale to <=1280px and re-encode
+  // JPEG so every upload is small, fast, and always accepted.
+  _compressImage(file, function(compressedDataUrl, compressedBlob) {
+    uploadPreviewSrc = compressedDataUrl;
+    // Wrap the compressed blob so submitPaymentProof reads the small version.
+    uploadedFile = compressedBlob || file;
+    if (uploadedFile && !uploadedFile.name) {
+      try { uploadedFile.name = (file.name || 'payment') + '.jpg'; } catch(e) {}
+    }
+    switchPayTab('upload');
+  });
+}
+
+// Downscale + re-encode an image file to a compact JPEG data URL + Blob.
+function _compressImage(file, cb) {
   var reader = new FileReader();
   reader.onload = function(e) {
-    uploadPreviewSrc = e.target.result;
-    switchPayTab('upload');
+    var img = new Image();
+    img.onload = function() {
+      try {
+        var maxDim = 1280;
+        var w = img.naturalWidth || img.width;
+        var h = img.naturalHeight || img.height;
+        if (w > maxDim || h > maxDim) {
+          if (w >= h) { h = Math.round(h * (maxDim / w)); w = maxDim; }
+          else { w = Math.round(w * (maxDim / h)); h = maxDim; }
+        }
+        var canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        var ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+        var dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+        if (canvas.toBlob) {
+          canvas.toBlob(function(blob){ cb(dataUrl, blob); }, 'image/jpeg', 0.82);
+        } else {
+          cb(dataUrl, null);
+        }
+      } catch (err) {
+        // If compression fails for any reason, fall back to the original file.
+        cb(e.target.result, file);
+      }
+    };
+    img.onerror = function() { cb(e.target.result, file); };
+    img.src = e.target.result;
   };
+  reader.onerror = function() { toast('Could not read image — please try again'); };
   reader.readAsDataURL(file);
 }
 

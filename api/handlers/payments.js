@@ -961,6 +961,13 @@ export async function routePayments(action, body, auth, req, res) {
       if (!orderId) return res.status(400).json({ ok: false, error: 'orderId is required' });
       if (amount <= 0) return res.status(400).json({ ok: false, error: 'amount must be positive' });
 
+      // Guard against oversized images (Vercel rejects >4.5MB payloads with a
+      // cryptic 413). The client compresses before upload, but if a large image
+      // still arrives, return a clear, actionable message instead.
+      if (imageData && imageData.length > 3500000) {
+        return res.status(413).json({ ok: false, error: 'Image too large — please retake a smaller screenshot or try again.' });
+      }
+
       // Generate payment ID
       const paymentId = `PAY-${Date.now().toString(36).toUpperCase()}`;
 
