@@ -5,6 +5,7 @@
 import { supaFetch, supa, auditLog } from '../lib/db.js';
 import { SUPABASE_URL, TNC_VERSION }              from '../lib/config.js';
 import { checkRateLimit }            from '../lib/cache.js';
+import { ocrReadProof, ocrAvailable } from '../lib/ocr.js';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 function randomToken() {
@@ -266,6 +267,102 @@ export async function routeCardPortal(action, body, auth, req, res) {
 
     auditLog({ action: 'CARD_LOAD_REQUESTED', details: { cardNumber, amount: amt, method } });
 
+    const newReqId = reqR.data?.[0]?.id;
+
+    // ── AI OCR AUTO-CREDIT ────────────────────────────────────────────────
+    // Reads the uploaded proof and auto-credits ONLY when every guard passes:
+    //   1. Master switch on   2. OCR available (Google Vision key set)
+    //   3. OCR read succeeds   4. read amount == typed amount (exact)
+    //   5. amount <= dashboard cap   6. reference not already used (no dup)
+    // Any failure → stays PENDING for manual review (current behaviour).
+    let aiOutcome = 'HELD_NO_OCR';
+    let responseMsg = `Load request for ₱${amt} submitted. Staff will credit your card shortly.`;
+    let autoCredited = false;
+    try {
+      // Master switch + OCR availability
+      let enabled = false;
+      try {
+        const setR = await supaFetch(`${SUPABASE_URL}/rest/v1/settings?key=eq.CARD_AUTOCREDIT_ENABLED&select=value&limit=1`);
+        enabled = setR.ok && setR.data?.[0]?.value === 'true';
+      } catch(_) {}
+
+      if (enabled && ocrAvailable() && proofBase64) {
+        const ocr = await ocrReadProof(proofBase64);
+        let aiReadAmount = null, aiReadRef = null, aiMatch = false;
+
+        if (!ocr.available)      aiOutcome = 'HELD_NO_OCR';
+        else if (!ocr.ok)        aiOutcome = 'HELD_OCR_FAIL';
+        else {
+          aiReadAmount = ocr.amount;
+          aiReadRef    = ocr.reference;
+
+          // Cap (dashboard-editable)
+          let cap = 2000;
+          try {
+            const capR = await supaFetch(`${SUPABASE_URL}/rest/v1/settings?key=eq.CARD_AUTOCREDIT_CAP&select=value&limit=1`);
+            if (capR.ok && capR.data?.[0]) cap = parseFloat(capR.data[0].value) || 2000;
+          } catch(_) {}
+
+          // Duplicate reference guard
+          let dup = false;
+          if (aiReadRef) {
+            const dupR = await supaFetch(
+              `${SUPABASE_URL}/rest/v1/card_load_requests?ai_read_reference=eq.${encodeURIComponent(aiReadRef)}&ai_status=eq.AUTO_CREDITED&select=id&limit=1`
+            );
+            dup = dupR.ok && dupR.data?.length > 0;
+          }
+
+          aiMatch = aiReadAmount !== null && Math.abs(aiReadAmount - amt) < 0.01;
+
+          if (dup)                       aiOutcome = 'HELD_DUPLICATE';
+          else if (!aiMatch)             aiOutcome = 'HELD_MISMATCH';
+          else if (amt > cap)            aiOutcome = 'HELD_OVER_CAP';
+          else {
+            // ALL GUARDS PASSED → auto-credit via the SAME safe RPC as manual approval
+            const reloadR = await supaFetch(`${SUPABASE_URL}/rest/v1/rpc/reload_card`, {
+              method: 'POST',
+              body: JSON.stringify({
+                p_card_number:  cardNumber,
+                p_amount:       amt,
+                p_performed_by: 'AI_VERIFIED',
+              })
+            });
+            if (reloadR.ok && reloadR.data?.ok !== false) {
+              autoCredited = true;
+              aiOutcome = 'AUTO_CREDITED';
+              await supa('PATCH','card_load_requests',
+                { status: 'APPROVED', reviewed_at: new Date().toISOString(),
+                  txn_id: reloadR.data?.txn_id || null },
+                { id: `eq.${newReqId}` }
+              );
+              responseMsg = `✅ ₱${amt} credited to your card automatically! Your new balance is ₱${reloadR.data?.balance_after ?? '—'}.`;
+              auditLog({ action: 'CARD_LOAD_AI_AUTOCREDITED', details: { cardNumber, amount: amt, reference: aiReadRef } });
+            } else {
+              aiOutcome = 'HELD_OCR_FAIL'; // credit failed → manual
+            }
+          }
+        }
+
+        // Log AI findings on the request (every path)
+        await supa('PATCH','card_load_requests',
+          { ai_read_amount: aiReadAmount, ai_read_reference: aiReadRef,
+            ai_match: aiMatch, ai_status: aiOutcome,
+            credited_by: autoCredited ? 'AI_VERIFIED' : null },
+          { id: `eq.${newReqId}` }
+        );
+
+        if (!autoCredited && aiOutcome !== 'HELD_NO_OCR') {
+          responseMsg = `Load request for ₱${amt} submitted for review. Staff will confirm and credit your card shortly.`;
+        }
+      } else {
+        // AI off or no proof → normal manual flow; record why
+        await supa('PATCH','card_load_requests', { ai_status: 'HELD_NO_OCR' }, { id: `eq.${newReqId}` });
+      }
+    } catch (e) {
+      console.error('AI auto-credit error (falling back to manual):', e.message);
+      // Never let AI errors break the load request — it stays PENDING for staff.
+    }
+
     // ── Record T&C acceptance for this reload (append-only audit) ────────────
     try {
       await supaFetch(`${SUPABASE_URL}/rest/v1/tnc_acceptances`, {
@@ -283,7 +380,33 @@ export async function routeCardPortal(action, body, auth, req, res) {
       });
     } catch(e) { console.error('T&C acceptance log (reload) failed:', e.message); }
 
-    return res.status(200).json({ ok: true, message: `Load request for ₱${amt} submitted. Staff will credit your card shortly.`, requestId: reqR.data?.[0]?.id });
+    return res.status(200).json({ ok: true, message: responseMsg, requestId: reqR.data?.[0]?.id, autoCredited });
+  }
+
+  // ── getAiCreditedLoads (ADMIN) — daily review of AI auto-credits ─────────────
+  if (action === 'getAiCreditedLoads') {
+    const { checkAdminAuth } = auth;
+    const authR = await checkAdminAuth();
+    if (!authR.ok) return res.status(403).json({ ok: false, error: authR.error });
+
+    // Optional date filter (YYYY-MM-DD, PH). Defaults to today (PH).
+    const day = String(body.date || '').trim();
+    let dateFilter = '';
+    if (day) {
+      // requested_at is timestamptz; filter the PH calendar day
+      dateFilter = `&requested_at=gte.${day}T00:00:00%2B08:00&requested_at=lte.${day}T23:59:59%2B08:00`;
+    }
+    // Show AI-auto-credited + AI-held (mismatch/cap/dup) so owner sees the full picture
+    const r = await supaFetch(
+      `${SUPABASE_URL}/rest/v1/card_load_requests?ai_status=in.(AUTO_CREDITED,HELD_MISMATCH,HELD_OVER_CAP,HELD_DUPLICATE,HELD_OCR_FAIL)&order=requested_at.desc&limit=200${dateFilter}&select=id,card_number,holder_name,amount,ai_read_amount,ai_read_reference,ai_match,ai_status,credited_by,proof_url,status,requested_at`
+    );
+    const rows = r.ok ? r.data : [];
+    const summary = {
+      auto_credited: rows.filter(x => x.ai_status === 'AUTO_CREDITED').length,
+      auto_credited_total: rows.filter(x => x.ai_status === 'AUTO_CREDITED').reduce((s,x)=>s+parseFloat(x.amount||0),0),
+      held: rows.filter(x => x.ai_status !== 'AUTO_CREDITED').length,
+    };
+    return res.status(200).json({ ok: true, loads: rows, summary });
   }
 
   // ── getCardLoadRequests (ADMIN) ─────────────────────────────────────────────

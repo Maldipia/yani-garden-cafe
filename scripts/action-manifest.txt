@@ -35,6 +35,7 @@ editOrderItems
 flagPaymentIntent
 getAddons
 getAddonsAdmin
+getAiCreditedLoads
 getAnalytics
 getAuditLogs
 getBusinessExpenses

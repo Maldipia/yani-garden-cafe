@@ -1773,6 +1773,14 @@ function _settingsOperations() {
     + '<strong>TOTAL:           ₱526.90</strong><br><br>'
     + '<span style="color:#888">' + (vatEnabled ? '✅ VAT Registered' : 'Non-VAT Registered') + '</span>'
     + '</div></div>'
+    // AI Card Auto-Credit
+    + '<div class="s-card"><div class="s-card-title">🤖 AI Card Auto-Credit</div>'
+    + '<div style="font-size:.76rem;color:var(--timber);margin-bottom:10px;line-height:1.5">When ON, AI reads a customer\'s uploaded payment proof and auto-credits their card <b>only if</b> the read amount matches what they typed, is under the cap, and isn\'t a duplicate. Otherwise it goes to your manual queue. Requires Google Vision key.</div>'
+    + _sToggle('s_autocredit_enabled', 'Enable AI Auto-Credit', 'Master switch — keep OFF until Google Vision key is added', s.CARD_AUTOCREDIT_ENABLED === 'true')
+    + '<div style="padding:10px 0">'
+    + '<div class="s-toggle-label">Auto-Credit Cap</div><div class="s-toggle-sub">Loads above this always go to manual review</div>'
+    + '<div style="display:flex;align-items:center;gap:8px;margin-top:8px"><span style="font-weight:600">₱</span><input type="number" id="s_autocredit_cap" value="' + (s.CARD_AUTOCREDIT_CAP||'2000') + '" min="1" max="10000" style="width:110px;padding:8px;border:1.5px solid var(--mist);border-radius:8px;font-size:.95rem;font-weight:700;text-align:center"></div>'
+    + '</div></div>'
     + '<button class="s-save-btn" onclick="saveOperationsSettings(this)">💾 Save Operations</button>';
 }
 
@@ -1881,6 +1889,8 @@ async function saveOperationsSettings(btn) {
     PWD_SENIOR_ENABLED: String(document.getElementById('s_pwd_senior').checked),
     SERVICE_CHARGE: String(isNaN(svc) ? 0.10 : svc),
     AVG_PREP_TIME: document.getElementById('s_avg_prep').value,
+    CARD_AUTOCREDIT_ENABLED: String(document.getElementById('s_autocredit_enabled').checked),
+    CARD_AUTOCREDIT_CAP: document.getElementById('s_autocredit_cap').value,
   };
   await _saveSettingsMap(fields, 'Operations settings saved ✅', btn);
 }
