@@ -490,11 +490,20 @@ export async function routeAdminOps(action, body, auth, req, res) {
 
       // ── Daily revenue last 30 days ─────────────────────────────────────
       const thirtyAgo = new Date(Date.now() - 30*24*3600*1000).toISOString();
-      const ordersR = await fetch(
-        `${BASE}/dine_in_orders?status=eq.COMPLETED&is_test=eq.false&is_deleted=eq.false&created_at=gte.${thirtyAgo}&select=created_at,total,discounted_total,order_type`,
-        { headers: H }
-      );
-      const orders = ordersR.ok ? (await ordersR.json()) : [];
+      // The REST API caps each response at 1000 rows. With >1000 orders in the
+      // window this silently drops the newest orders and skews every downstream
+      // metric (daily revenue, peak hours, order-type split). Paginate fully.
+      let orders = [];
+      for (let off = 0; off < 100000; off += 1000) {
+        const r = await fetch(
+          `${BASE}/dine_in_orders?status=eq.COMPLETED&is_test=eq.false&is_deleted=eq.false&created_at=gte.${thirtyAgo}&select=created_at,total,discounted_total,order_type&order=created_at.asc&offset=${off}&limit=1000`,
+          { headers: H }
+        );
+        if (!r.ok) break;
+        const chunk = await r.json();
+        orders = orders.concat(chunk);
+        if (chunk.length < 1000) break;
+      }
 
       // Daily revenue map
       const phOffset = 8 * 3600000; // UTC+8 Philippines time
@@ -545,10 +554,12 @@ export async function routeAdminOps(action, body, auth, req, res) {
       daily.forEach(d => { if (d.day >= sevenAgoStr) { rev7+=d.revenue; cnt7+=d.count; } });
 
       // ── Hourly distribution (today) ────────────────────────────────────
+      // Must use the SAME business-day grouping as todayStr, otherwise the
+      // filter compares a business-day string against a calendar-day string
+      // and matches nothing (empty peak-hours panel in the evening).
       const hourly = Array.from({length:24}, (_,i) => ({ hour:i, count:0, revenue:0 }));
       orders.filter(o => {
-        const phDate = new Date(new Date(o.created_at).getTime() + phOffset);
-        return phDate.toISOString().slice(0,10) === todayStr;
+        return getBusinessDay(o.created_at) === todayStr;
       }).forEach(o => {
         const phDate = new Date(new Date(o.created_at).getTime() + phOffset);
         const h = phDate.getUTCHours(); // hour in PH time
@@ -593,26 +604,40 @@ export async function routeAdminOps(action, body, auth, req, res) {
           name: r.name, qty: r.qty, revenue: r.revenue
         })) : [];
       }
-      // Fallback: if PAT not set, use the old method with higher limit
+      // Fallback: if PAT not set, paginate through ALL rows. The REST API caps
+      // each response at 1000 rows, so we must page with Range headers until
+      // exhausted — otherwise top items are severely undercounted.
       if (topItems.length === 0) {
-        const ordersWithId = await fetch(
-          `${BASE}/dine_in_orders?status=eq.COMPLETED&is_test=eq.false&is_deleted=eq.false&select=order_id&limit=5000`,
-          { headers: H }
-        );
-        const completedIds = new Set((ordersWithId.ok ? await ordersWithId.json() : []).map(o=>o.order_id));
-        const rawItemsR = await fetch(
-          `${BASE}/dine_in_order_items?select=item_name,qty,line_total,order_id&limit=5000`,
-          { headers: H }
-        );
-        const rawItems = rawItemsR.ok ? (await rawItemsR.json()) : [];
+        // Get all completed order ids (paginated)
+        const completedIds = new Set();
+        for (let off = 0; off < 100000; off += 1000) {
+          const r = await fetch(
+            `${BASE}/dine_in_orders?status=eq.COMPLETED&is_test=eq.false&is_deleted=eq.false&select=order_id&order=order_id.asc&offset=${off}&limit=1000`,
+            { headers: H }
+          );
+          if (!r.ok) break;
+          const chunk = await r.json();
+          chunk.forEach(o => completedIds.add(o.order_id));
+          if (chunk.length < 1000) break;
+        }
+        // Get all order items (paginated) and aggregate the completed ones
         const itemMap = {};
-        rawItems.forEach(i => {
-          if (!completedIds.has(i.order_id)) return;
-          const name = i.item_name || 'Unknown';
-          if (!itemMap[name]) itemMap[name] = { name, qty:0, revenue:0 };
-          itemMap[name].qty     += parseInt(i.qty || 0);
-          itemMap[name].revenue += parseFloat(i.line_total || 0);
-        });
+        for (let off = 0; off < 200000; off += 1000) {
+          const r = await fetch(
+            `${BASE}/dine_in_order_items?select=item_name,qty,line_total,order_id&order=id.asc&offset=${off}&limit=1000`,
+            { headers: H }
+          );
+          if (!r.ok) break;
+          const chunk = await r.json();
+          chunk.forEach(i => {
+            if (!completedIds.has(i.order_id)) return;
+            const name = i.item_name || 'Unknown';
+            if (!itemMap[name]) itemMap[name] = { name, qty:0, revenue:0 };
+            itemMap[name].qty     += parseInt(i.qty || 0);
+            itemMap[name].revenue += parseFloat(i.line_total || 0);
+          });
+          if (chunk.length < 1000) break;
+        }
         topItems = Object.values(itemMap).sort((a,b) => b.qty - a.qty).slice(0,20);
       }
 
