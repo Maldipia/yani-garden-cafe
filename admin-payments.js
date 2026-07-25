@@ -162,15 +162,18 @@ async function openVerifyFromOrder(orderId) {
   // Find the paymentId for this order from the payments list
   var r = await api('listPayments', { userId: currentUser && currentUser.userId });
   if (!r || !r.ok) { showToast('Could not load payment data', 3500); return; }
-  var payment = (r.payments || []).find(function(p) {
-    return p.orderId === orderId && (p.status === 'SUBMITTED' || p.status === 'PENDING');
-  });
+  var allForOrder = (r.payments || []).filter(function(p) { return p.orderId === orderId; });
+  // Prefer a still-pending payment (needs action); otherwise show the most recent
+  // one so an ALREADY-VERIFIED proof still displays instead of a blank modal.
+  var payment = allForOrder.find(function(p) {
+    return p.status === 'SUBMITTED' || p.status === 'PENDING';
+  }) || allForOrder[0];
   if (!payment) {
-    // No payment record — maybe proof was uploaded directly to order
-    // Fall back to opening the set payment modal
+    // No payment record at all — fall back to the set-payment modal
     openPaymentModal(orderId);
     return;
   }
+  var alreadyDone = payment.status === 'VERIFIED' || payment.status === 'REJECTED';
 
   // Build a verify modal that shows proof + verify/reject buttons
   var existing = document.getElementById('proofModalOverlay');
@@ -191,10 +194,13 @@ async function openVerifyFromOrder(orderId) {
     '<div style="font-weight:700;font-size:1rem;margin-bottom:4px">Payment Proof</div>' +
     '<div style="font-size:.82rem;color:#6B7280;margin-bottom:8px;display:flex;align-items:center;gap:6px">' + esc(orderId) + ' ' + pmBadge(payment.paymentMethod) + ' ' + amtStr + '</div>' +
     '<div id="proofImgWrap2"><div style="color:#9CA3AF;padding:10px">Loading...</div></div>' +
-    '<div style="display:flex;gap:10px;margin-top:16px;justify-content:center">' +
-      '<button id="vfVerifyBtn" style="flex:1;max-width:160px;padding:10px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer;font-size:.9rem">Verify</button>' +
-      '<button id="vfRejectBtn" style="flex:1;max-width:160px;padding:10px;background:#dc2626;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer;font-size:.9rem">Reject</button>' +
-    '</div>' +
+    (alreadyDone
+      ? '<div style="margin-top:16px;font-weight:700;font-size:.9rem;color:' + (payment.status === 'VERIFIED' ? '#16a34a' : '#dc2626') + '">' + (payment.status === 'VERIFIED' ? '✅ Already verified' : '❌ Rejected') + '</div>'
+      : '<div style="display:flex;gap:10px;margin-top:16px;justify-content:center">' +
+        '<button id="vfVerifyBtn" style="flex:1;max-width:160px;padding:10px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer;font-size:.9rem">Verify</button>' +
+        '<button id="vfRejectBtn" style="flex:1;max-width:160px;padding:10px;background:#dc2626;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer;font-size:.9rem">Reject</button>' +
+      '</div>'
+    ) +
     '<button id="vfCloseBtn" style="margin-top:10px;padding:8px 20px;background:transparent;color:#6B7280;border:1px solid #e5e7eb;border-radius:8px;cursor:pointer;font-size:.82rem">Close</button>';
   var img = document.createElement('img');
   img.src = imgSrc;
@@ -202,8 +208,10 @@ async function openVerifyFromOrder(orderId) {
   img.onload  = function() { var p = this.previousSibling; if (p) p.remove(); };
   img.onerror = function() { this.parentNode.innerHTML = '<div style="color:#9CA3AF;padding:20px">No screenshot found</div>'; };
   inner.querySelector('#proofImgWrap2').appendChild(img);
-  inner.querySelector('#vfVerifyBtn').onclick = function() { closeProofModal(); doVerifyPayment(payment.paymentId); };
-  inner.querySelector('#vfRejectBtn').onclick = function() { closeProofModal(); doRejectPayment(payment.paymentId); };
+  var vBtn = inner.querySelector('#vfVerifyBtn');
+  var rBtn = inner.querySelector('#vfRejectBtn');
+  if (vBtn) vBtn.onclick = function() { closeProofModal(); doVerifyPayment(payment.paymentId); };
+  if (rBtn) rBtn.onclick = function() { closeProofModal(); doRejectPayment(payment.paymentId); };
   inner.querySelector('#vfCloseBtn').onclick  = function() { closeProofModal(); };
   modal.appendChild(inner);
   document.body.appendChild(modal);
