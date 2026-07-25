@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="robots" content="noindex">
+<title>Rate Your Visit · YANI Garden Café</title>
+<style>
+  :root{
+    --forest:#1a3a2a; --forest-mid:#2d5a3a; --forest-light:#4a9b5a;
+    --gold:#d4a017; --gold-light:#f5d060;
+    --ivory:#f5f0ea; --mist:#e8ded4; --ink:#243027;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--forest);min-height:100vh;color:var(--ink);display:flex;align-items:center;justify-content:center;padding:20px}
+  .wrap{width:100%;max-width:420px;background:var(--ivory);border-radius:24px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.35)}
+  .head{background:var(--forest);text-align:center;padding:32px 24px 26px;color:#fff}
+  .head img{width:64px;height:64px;border-radius:50%;object-fit:cover;background:#fff;margin-bottom:14px;padding:4px}
+  .head .name{font-size:1.35rem;font-weight:800;letter-spacing:.02em}
+  .head .sub{font-size:.82rem;color:rgba(245,240,234,.8);margin-top:4px;font-style:italic}
+  .body{padding:32px 26px 34px;text-align:center}
+  .prompt{font-size:1.3rem;font-weight:700;color:var(--forest);margin-bottom:6px}
+  .prompt-sub{font-size:.88rem;color:#6b7a6f;margin-bottom:26px;line-height:1.5}
+  .stars{display:flex;justify-content:center;gap:8px;margin-bottom:8px}
+  .star{font-size:2.9rem;line-height:1;cursor:pointer;color:#d8d2c8;transition:transform .12s,color .12s;-webkit-tap-highlight-color:transparent}
+  .star:active{transform:scale(.9)}
+  .star.lit{color:var(--gold)}
+  .hint{font-size:.72rem;color:#9aa89e;margin-top:12px;letter-spacing:.04em}
+
+  /* Screens */
+  .screen{display:none}
+  .screen.active{display:block;animation:fade .3s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+  /* Positive → Google */
+  .cta{display:block;width:100%;padding:15px;border-radius:12px;border:none;font-size:1rem;font-weight:700;cursor:pointer;text-decoration:none;text-align:center;transition:.2s}
+  .cta-google{background:var(--gold);color:var(--ink);margin-top:8px}
+  .cta-google:active{background:var(--gold-light)}
+  .thanks-big{font-size:2.4rem;margin-bottom:8px}
+
+  /* Private feedback */
+  textarea{width:100%;min-height:120px;padding:14px;border:2px solid var(--mist);border-radius:12px;font-size:.95rem;font-family:inherit;resize:vertical;outline:none;margin:6px 0 14px;transition:border .2s}
+  textarea:focus{border-color:var(--forest-mid)}
+  .cta-send{background:var(--forest);color:#fff}
+  .cta-send:active{background:var(--forest-mid)}
+  .priv-note{font-size:.78rem;color:#6b7a6f;line-height:1.55;margin-bottom:18px;background:#fff;border:1px solid var(--mist);border-radius:10px;padding:12px 14px}
+  .done{text-align:center}
+  .done .ic{font-size:2.6rem;margin-bottom:10px}
+  .done h3{font-size:1.2rem;color:var(--forest);margin-bottom:6px}
+  .done p{font-size:.9rem;color:#6b7a6f;line-height:1.55}
+  .foot{text-align:center;font-size:.68rem;color:#9aa89e;padding:0 24px 22px}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="head">
+      <img src="/images/yani-logo.png" alt="YANI Garden Café" onerror="this.style.display='none'">
+      <div class="name">YANI Garden Café</div>
+      <div class="sub">Holding a cup of YANI, everyday.</div>
+    </div>
+
+    <div class="body">
+      <!-- SCREEN 1: star rating -->
+      <div class="screen active" id="screenRate">
+        <div class="prompt">How was your visit?</div>
+        <div class="prompt-sub">Tap a star to let us know — it only takes a second.</div>
+        <div class="stars" id="stars">
+          <span class="star" data-v="1">★</span>
+          <span class="star" data-v="2">★</span>
+          <span class="star" data-v="3">★</span>
+          <span class="star" data-v="4">★</span>
+          <span class="star" data-v="5">★</span>
+        </div>
+        <div class="hint">tap 1 to 5 stars</div>
+      </div>
+
+      <!-- SCREEN 2A: positive → Google -->
+      <div class="screen" id="screenPositive">
+        <div class="thanks-big">🌿</div>
+        <div class="prompt">Thank you so much!</div>
+        <div class="prompt-sub">We'd love it if you shared your experience on Google — it means the world to our little garden.</div>
+        <a class="cta cta-google" id="googleBtn" href="#" target="_blank" rel="noopener">⭐ Leave a Google review</a>
+      </div>
+
+      <!-- SCREEN 2B: low → private feedback ONLY -->
+      <div class="screen" id="screenFeedback">
+        <div class="prompt">We're sorry to hear that</div>
+        <div class="prompt-sub">Please tell us what went wrong — this goes straight to the owner, privately.</div>
+        <div class="priv-note">🔒 Your feedback stays with us. It is <b>not</b> posted publicly.</div>
+        <textarea id="fbText" placeholder="What could we have done better?"></textarea>
+        <button class="cta cta-send" id="sendFbBtn" onclick="sendFeedback()">Send private feedback</button>
+      </div>
+
+      <!-- SCREEN 3: done -->
+      <div class="screen" id="screenDone">
+        <div class="done">
+          <div class="ic">💚</div>
+          <h3>Thank you!</h3>
+          <p id="doneMsg">Your feedback helps us grow. We appreciate you.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="foot">Amadeo, Cavite · yanigardencafe.com</div>
+  </div>
+
+<script>
+(function(){
+  var chosen = 0;
+  var submitting = false;
+  var stars = Array.prototype.slice.call(document.querySelectorAll('.star'));
+
+  function paint(n){ stars.forEach(function(s){ s.classList.toggle('lit', Number(s.dataset.v) <= n); }); }
+
+  // Hover/preview on desktop
+  stars.forEach(function(s){
+    s.addEventListener('mouseenter', function(){ if(!chosen) paint(Number(s.dataset.v)); });
+    s.addEventListener('click', function(){ pick(Number(s.dataset.v)); });
+  });
+  document.getElementById('stars').addEventListener('mouseleave', function(){ if(!chosen) paint(0); });
+
+  function show(id){
+    document.querySelectorAll('.screen').forEach(function(el){ el.classList.remove('active'); });
+    document.getElementById(id).classList.add('active');
+  }
+
+  function getParam(k){ try { return new URLSearchParams(location.search).get(k); } catch(e){ return null; } }
+
+  async function pick(n){
+    if (submitting || chosen) return;
+    chosen = n;
+    paint(n);
+
+    // GATE: 4-5 stars → Google. 1-3 stars → private feedback ONLY (never Google).
+    if (n >= 4) {
+      // Log the positive rating now and fetch the Google URL.
+      submitting = true;
+      var payload = { action:'submitReview', rating:n };
+      var t = getParam('table'); if (t) payload.tableNo = t;
+      var o = getParam('order'); if (o) payload.orderId = o;
+      var reviewUrl = '';
+      try {
+        var res = await fetch('/api/pos', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify(payload)
+        });
+        var data = await res.json();
+        reviewUrl = (data && data.reviewUrl) || '';
+      } catch(e) {}
+      submitting = false;
+      var gb = document.getElementById('googleBtn');
+      if (reviewUrl) gb.href = reviewUrl; else gb.style.display = 'none';
+      show('screenPositive');
+    } else {
+      // Low rating: DON'T post to Google. Log happens once, when they send
+      // feedback (or when they leave without typing — see sendFeedback).
+      show('screenFeedback');
+    }
+  }
+
+  window.sendFeedback = async function(){
+    var btn = document.getElementById('sendFbBtn');
+    var txt = document.getElementById('fbText').value.trim();
+    btn.disabled = true; btn.textContent = 'Sending…';
+    var payload = { action:'submitReview', rating:chosen, feedback:txt };
+    var t = getParam('table'); if (t) payload.tableNo = t;
+    var o = getParam('order'); if (o) payload.orderId = o;
+    try {
+      await fetch('/api/pos', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    } catch(e){}
+    document.getElementById('doneMsg').textContent = 'Thank you for telling us — we\u2019ll use this to do better. We appreciate you.';
+    show('screenDone');
+  };
+})();
+</script>
+</body>
+</html>

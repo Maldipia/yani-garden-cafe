@@ -209,6 +209,14 @@
       "destination": "/clockin.html"
     },
     {
+      "source": "/rate",
+      "destination": "/rate.html"
+    },
+    {
+      "source": "/rate/",
+      "destination": "/rate.html"
+    },
+    {
       "source": "/clockin/",
       "destination": "/clockin.html"
     },
