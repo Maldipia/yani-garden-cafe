@@ -560,9 +560,20 @@ async function adminToggleServed(boxEl, orderId, itemId, currentServed) {
   if (!itemId) return;
   var newServed = currentServed ? 0 : 1;
   var order = allOrders.find(function(o){ return o.orderId === orderId; });
+  // If serving an item, the kitchen must have cooked it — auto-check K too.
+  var alsoMarkPrepared = false;
   if (order && order.items) {
     order.items.forEach(function(it){
-      if (it.id === itemId) { it.served = !!newServed; it.servedAt = newServed ? new Date().toISOString() : null; }
+      if (it.id === itemId) {
+        it.served = !!newServed;
+        it.servedAt = newServed ? new Date().toISOString() : null;
+        // Auto-mark prepared when serving (never auto-UNmark on un-serve)
+        if (newServed && !it.prepared) {
+          it.prepared = true;
+          it.preparedAt = new Date().toISOString();
+          alsoMarkPrepared = true;
+        }
+      }
     });
   }
   renderOrders();
@@ -571,6 +582,13 @@ async function adminToggleServed(boxEl, orderId, itemId, currentServed) {
       userId: currentUser && currentUser.userId,
       orderId: orderId, itemId: itemId, served: newServed
     });
+    // Persist the auto-prepared change to the kitchen column as well
+    if (alsoMarkPrepared) {
+      await api('toggleItemPrepared', {
+        userId: currentUser && currentUser.userId,
+        orderId: orderId, itemId: itemId, prepared: 1
+      });
+    }
   } catch(e) {
     showToast('❌ Failed to update — refresh', 'error');
   }
