@@ -137,7 +137,7 @@ function _appendCardModals() {
     + 'style="width:100%;padding:9px 12px;border:1.5px solid var(--mist);border-radius:8px;font-size:.88rem;font-family:var(--font-body);box-sizing:border-box;margin-bottom:14px">'
     + '<div style="display:flex;gap:8px">'
     + '<button onclick="_closeManageModal()" style="flex:1;padding:10px;background:var(--mist-light);border:none;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;color:var(--timber)">Cancel</button>'
-    + '<button onclick="_submitEditHolder()" style="flex:1;padding:10px;background:var(--forest);color:#fff;border:none;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer">Save Info</button>'
+    + '<button id="manageSaveBtn" onclick="_submitEditHolder()" style="flex:1;padding:10px;background:var(--forest);color:#fff;border:none;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer">Save Info</button>'
     + '</div>'
     + '</div>'
     + '</div>';
@@ -388,6 +388,10 @@ function openManageCard(cardNumber){
   }
 
   document.getElementById('cardManageModal').style.display='flex';
+
+  // Ensure the save button is in EDIT mode (activate flow may have changed it)
+  var saveBtn=document.getElementById('manageSaveBtn');
+  if(saveBtn){ saveBtn.textContent='Save Info'; saveBtn.onclick=function(){ _submitEditHolder(); }; }
 }
 function _closeManageModal(){ document.getElementById('cardManageModal').style.display='none'; }
 
@@ -607,9 +611,10 @@ function openCardActivate(cardNumber){
   if(topUpSec) topUpSec.style.display='none'; // hidden until activated
   document.getElementById('cardManageModal').style.display='flex';
 
-  // Override save to activate instead
-  var saveBtn=document.querySelector('#cardManageModal button[onclick="_submitEditHolder()"]');
-  if(saveBtn){ saveBtn.textContent='✅ Activate'; saveBtn.setAttribute('onclick','_activateFromManage()'); }
+  // Override save to activate instead. Target by stable ID and set the onclick
+  // PROPERTY (not attribute-string matching, which breaks after the first open).
+  var saveBtn=document.getElementById('manageSaveBtn');
+  if(saveBtn){ saveBtn.textContent='✅ Activate'; saveBtn.onclick=function(){ _activateFromManage(); }; }
 }
 
 async function _activateFromManage(){
