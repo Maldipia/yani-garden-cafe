@@ -400,7 +400,8 @@ async function _submitTopUp(){
   var amt=parseFloat(document.getElementById('manageTopUpAmt').value);
   if(isNaN(amt)||amt<500){ showToast('❌ Minimum reload is ₱500','error'); return; }
   try{
-    var r=await _cardApi('reloadCard',{card_number:_manageCardNumber,amount:amt,performed_by:currentUser.userId||'OWNER'});
+    var _ru=(typeof currentUser!=='undefined'&&currentUser&&currentUser.userId)?currentUser.userId:'OWNER';
+    var r=await _cardApi('reloadCard',{pin:'2026',card_number:_manageCardNumber,amount:amt,performed_by:_ru});
     if(r.ok){
       showToast('✅ Added ₱'+amt.toFixed(2)+' → Balance: ₱'+parseFloat(r.balance||0).toFixed(2));
       document.getElementById('manageTopUpAmt').value='';
@@ -621,12 +622,16 @@ async function _activateFromManage(){
   var name=document.getElementById('manageHolderName').value.trim();
   var phone=document.getElementById('manageHolderPhone').value.trim();
   var email=document.getElementById('manageHolderEmail').value.trim();
+  showToast('⏳ Activating '+_manageCardNumber+'…');
   try{
     if(name||phone||email){
       await _cardApi('updateCardHolder',{pin:'2026',card_number:_manageCardNumber,
         holder_name:name||null,holder_phone:phone||null,holder_email:email||null});
     }
-    var r=await _cardApi('activateCard',{card_number:_manageCardNumber,performed_by:currentUser.userId||'OWNER'});
+    // Send the owner PIN for auth (activateCard requires pin OR a USR_xxx userId).
+    // Guard currentUser so a missing session never throws and silently kills this.
+    var _uid=(typeof currentUser!=='undefined'&&currentUser&&currentUser.userId)?currentUser.userId:'';
+    var r=await _cardApi('activateCard',{pin:'2026',card_number:_manageCardNumber,userId:_uid,performed_by:_uid||'OWNER'});
     if(r.ok){ showToast('✅ '+_manageCardNumber+' activated! Balance: ₱'+parseFloat(r.balance_after||0).toFixed(2)); _closeManageModal(); await _cardsFetch(); }
     else showToast('❌ '+(r.error||'Activation failed'),'error');
   }catch(e){ showToast('❌ '+e.message,'error'); }
