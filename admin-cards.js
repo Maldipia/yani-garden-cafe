@@ -312,7 +312,7 @@ function _cardsRender() {
     html+='<td style="padding:9px 10px">'
       +'<div onclick="'+togFn+'" title="'+(isOn?'Suspend':'Activate')+'" '
       +'style="width:40px;height:22px;background:'+togBg+';border-radius:11px;cursor:pointer;position:relative;transition:background .2s;display:inline-block">'
-      +'<div style="position:absolute;top:2px;width:18px;height:18px;background:#fff;border-radius:50%;transform:'+togPos+';transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.25)"></div>'
+      +'<div style="position:absolute;top:2px;width:18px;height:18px;background:#fff;border-radius:50%;transform:'+togPos+';transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.25);pointer-events:none"></div>'
       +'</div></td>';
 
     // Actions — Manage button covers Edit+TopUp+Activate
@@ -634,6 +634,7 @@ async function _activateFromManage(){
 
 // ── Toggle ON/OFF ─────────────────────────────────────────────
 async function _cardToggleOn(cardNumber){
+  showToast('⏳ Toggling '+cardNumber+'…');
   try{
     var r=await _cardApi('setCardStatus',{pin:'2026',card_number:cardNumber,status:'ACTIVE',reason:'Reinstated by owner'});
     if(r.ok){ showToast('✅ '+cardNumber+' reinstated'); await _cardsFetch(); }
@@ -642,6 +643,7 @@ async function _cardToggleOn(cardNumber){
 }
 async function _cardToggleOff(cardNumber){
   if(!confirm('Suspend '+cardNumber+'? Customer won\'t be able to use it until reinstated.')) return;
+  showToast('⏳ Suspending '+cardNumber+'…');
   try{
     var r=await _cardApi('setCardStatus',{pin:'2026',card_number:cardNumber,status:'SUSPENDED',reason:'Suspended by owner'});
     if(r.ok){ showToast('⚠️ '+cardNumber+' suspended'); await _cardsFetch(); }
