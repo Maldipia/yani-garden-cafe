@@ -642,11 +642,18 @@ export async function routeAdminOps(action, body, auth, req, res) {
       }
 
       // ── Cancellation stats ────────────────────────────────────────────
-      const cancelR = await fetch(
-        `${BASE}/dine_in_orders?status=eq.CANCELLED&is_test=eq.false&is_deleted=eq.false&select=cancel_reason`,
-        { headers: H }
-      );
-      const cancelled = cancelR.ok ? (await cancelR.json()) : [];
+      // Paginate — cancellations will eventually exceed the 1000-row cap too.
+      let cancelled = [];
+      for (let off = 0; off < 100000; off += 1000) {
+        const cr = await fetch(
+          `${BASE}/dine_in_orders?status=eq.CANCELLED&is_test=eq.false&is_deleted=eq.false&select=cancel_reason&order=created_at.asc&offset=${off}&limit=1000`,
+          { headers: H }
+        );
+        if (!cr.ok) break;
+        const chunk = await cr.json();
+        cancelled = cancelled.concat(chunk);
+        if (chunk.length < 1000) break;
+      }
       const cancelMap = {};
       cancelled.forEach(o => {
         const r = o.cancel_reason || 'unspecified';
@@ -661,11 +668,20 @@ export async function routeAdminOps(action, body, auth, req, res) {
       const nowPH = new Date(Date.now() + phOffset);
       // First day of the current PH month at 06:00 PH == (1st 06:00 +08) in UTC
       const monthStartUTC = new Date(Date.UTC(nowPH.getUTCFullYear(), nowPH.getUTCMonth(), 1, 6, 0, 0) - phOffset).toISOString();
-      const payR = await fetch(
-        `${BASE}/dine_in_orders?status=eq.COMPLETED&is_test=eq.false&is_deleted=eq.false&created_at=gte.${monthStartUTC}&select=payment_method,total,discounted_total,discount_amount`,
-        { headers: H }
-      );
-      const payOrders = payR.ok ? (await payR.json()) : [];
+      // The REST API caps each response at 1000 rows. Once the month exceeds
+      // 1000 orders this silently truncates the Payment Methods panel and the
+      // month total. Paginate fully so every sale is counted.
+      let payOrders = [];
+      for (let off = 0; off < 100000; off += 1000) {
+        const pr = await fetch(
+          `${BASE}/dine_in_orders?status=eq.COMPLETED&is_test=eq.false&is_deleted=eq.false&created_at=gte.${monthStartUTC}&select=payment_method,total,discounted_total,discount_amount&order=created_at.asc&offset=${off}&limit=1000`,
+          { headers: H }
+        );
+        if (!pr.ok) break;
+        const chunk = await pr.json();
+        payOrders = payOrders.concat(chunk);
+        if (chunk.length < 1000) break;
+      }
       const payBreakdown = {};
       let totalDiscountsMTD = 0;
       payOrders.forEach(o => {
