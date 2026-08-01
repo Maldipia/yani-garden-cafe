@@ -384,6 +384,7 @@ export async function routePayments(action, body, auth, req, res) {
                       p_order_id:     orderId,
                       p_performed_by: body.userId || 'STAFF',
                       p_description:  `Order ${orderId} — Yani Card charge on completed order ₱${netCharge2}`,
+                      p_discount_amount: Math.max(0, Math.round((parseFloat(originalTotal||0) - netCharge2) * 100) / 100),
                     })
                   });
                   if (chargeR.ok) {

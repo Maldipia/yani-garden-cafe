@@ -925,6 +925,7 @@ export async function routeOrders(action, body, auth, req, res) {
                         p_order_id:     orderId,
                         p_performed_by: userId || 'SYSTEM',
                         p_description:  `Order ${orderId} — stacked discount final ₱${yaniOrd.discounted_total}`,
+                        p_discount_amount: Math.max(0, Math.round((parseFloat(yaniOrd.total||0) - parseFloat(yaniOrd.discounted_total||0)) * 100) / 100),
                       })
                     });
                   } else {
@@ -938,6 +939,7 @@ export async function routeOrders(action, body, auth, req, res) {
                         p_order_id:     orderId,
                         p_performed_by: userId || 'SYSTEM',
                         p_description:  `Order ${orderId} — Yani Card 10% discount final ₱${netCharge}`,
+                        p_discount_amount: Math.max(0, Math.round((parseFloat(yaniOrd.total||0) - netCharge) * 100) / 100),
                       })
                     });
                     if (chargeResult.ok) {
