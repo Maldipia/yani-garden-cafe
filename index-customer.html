@@ -1452,6 +1452,7 @@ function apiItemToMenuData(item) {
   // Prefer Supabase storage URL over local path (for newly uploaded items)
   // Ignore Google Drive URLs as they don't display directly
   var apiImg = item.image && item.image.startsWith('https://hnynvclpvfxzlfjphefj.supabase.co') ? item.image : null;
+  if (apiImg && item.updatedAt) { apiImg += (apiImg.indexOf('?') >= 0 ? '&' : '?') + 'v=' + encodeURIComponent(item.updatedAt); }
   var img = apiImg || localImg;
   var sizes = null;
   if (item.hasSizes) {

@@ -88,6 +88,8 @@ function renderMenuMgrGrid() {
   var grid = document.getElementById('menuMgrGrid');
   var searchEl = document.getElementById('menuMgrSearch');
   var search = searchEl ? searchEl.value.toLowerCase().trim() : '';
+  // Fallback cache-buster for items without an updatedAt (changes each menu load)
+  var _menuImgBust = String(Date.now());
 
   var filtered = menuMgrItems.filter(function(item) {
     if (!menuMgrShowInactive && !item.active) return false;
@@ -112,7 +114,11 @@ function renderMenuMgrGrid() {
     var isActive = item.active;
     var localPath = getLocalMenuImgPath(item.code);
     var hasExternalImg = item.image && item.image.startsWith('http');
-    var imgSrc = hasExternalImg ? item.image : localPath;
+    // Cache-bust: new photos reuse the same filename (ITEM_xxx.png), so browsers
+    // serve the stale cached copy. Append the item's updatedAt (or a per-render
+    // timestamp) so the freshest image always loads after an edit.
+    var bust = item.updatedAt ? encodeURIComponent(item.updatedAt) : _menuImgBust;
+    var imgSrc = hasExternalImg ? (item.image + (item.image.indexOf('?') >= 0 ? '&' : '?') + 'v=' + bust) : localPath;
     var fallbackSrc = hasExternalImg ? localPath : '';
     var onerrorAttr = fallbackSrc
       ? 'this.onerror=null;this.src=\'' + fallbackSrc + '\';'
