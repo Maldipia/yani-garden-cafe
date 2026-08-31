@@ -487,7 +487,7 @@ function startPolling() {
       _refreshOnlineCount().catch(function(){});
     }
     if (currentFilter !== 'REVIEWS') _refreshReviewAlert().catch(function(){});
-  }, 30000);
+  }, 180000);  // 3 min (was 30s — online channel is dormant; reduces DB/disk-IO load)
   // Load online count immediately on startup for all roles
   setTimeout(function(){ _refreshOnlineCount().catch(function(){}); }, 1500);
   setTimeout(function(){ _refreshReviewAlert().catch(function(){}); }, 2000);
