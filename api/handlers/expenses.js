@@ -94,6 +94,55 @@ export async function routeExpenses(action, body, auth, req, res) {
     return res.status(200).json({ ok:true, expenses:items, total, byCat });
   }
 
+  // ── saveExpensePurchase (multi-line, one supplier receipt) ───────────────
+  if (action === 'saveExpensePurchase') {
+    const a = await checkAdminAuth();
+    if (!a.ok) return res.status(403).json({ ok:false, error:a.error });
+    const { supplier, category, paidVia, referenceNo, expenseDate, notes, isPaid, lines } = body;
+    if (!Array.isArray(lines) || !lines.length) return res.status(400).json({ ok:false, error:'At least one line item required' });
+    const groupId = 'grp_' + Date.now() + '_' + Math.random().toString(36).slice(2,8);
+    const date = expenseDate || new Date().toISOString().split('T')[0];
+    const rows = [];
+    for (const ln of lines) {
+      const desc = String(ln.description||'').trim();
+      const amt  = parseFloat(ln.amount);
+      if (!desc)          return res.status(400).json({ ok:false, error:'Each line needs a description' });
+      if (!amt || amt<=0) return res.status(400).json({ ok:false, error:'Each line needs a valid total' });
+      rows.push({
+        expense_group_id: groupId,
+        description: desc.substring(0,300),
+        amount: amt,
+        category: String(category||'Other').trim(),
+        paid_via: String(paidVia||'Cash').trim(),
+        reference_no: referenceNo ? String(referenceNo).trim().substring(0,100) : null,
+        notes: notes ? String(notes).trim().substring(0,500) : null,
+        expense_date: date,
+        is_paid: isPaid !== false,
+        qty: (ln.qty!=null && String(ln.qty).trim()!=='') ? String(ln.qty).trim().substring(0,100) : null,
+        store: supplier ? String(supplier).trim().substring(0,120) : null,
+        unit: ln.unit ? String(ln.unit).trim().substring(0,40) : null,
+        unit_price: (ln.unitPrice!=null && String(ln.unitPrice).trim()!=='' && !isNaN(parseFloat(ln.unitPrice))) ? parseFloat(ln.unitPrice) : null,
+        added_by: a.userId||'staff', added_by_role: a.role||'',
+      });
+    }
+    const r = await supa('POST','business_expenses', rows);
+    if (!r.ok) return res.status(500).json({ ok:false, error:'Failed to save purchase' });
+    return res.status(200).json({ ok:true, groupId, lines: rows.length });
+  }
+
+  // ── markExpenseReceived (explicit inventory linkage — never automatic) ────
+  if (action === 'markExpenseReceived') {
+    const a = await checkAdminAuth();
+    if (!a.ok) return res.status(403).json({ ok:false, error:a.error });
+    const id = String(body.id||'').trim();
+    if (!id) return res.status(400).json({ ok:false, error:'id required' });
+    const patch = { inv_received: true, inv_received_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+    if (body.stockUnitId) patch.inv_stock_unit_id = parseInt(body.stockUnitId);
+    const r = await supa('PATCH','business_expenses', patch, { id: `eq.${id}` });
+    if (!r.ok) return res.status(500).json({ ok:false, error:'Failed to link expense to stock' });
+    return res.status(200).json({ ok:true });
+  }
+
   // ── deleteBusinessExpense ────────────────────────────────────────────────
   if (action === 'deleteBusinessExpense') {
     const a = await checkAdminAuth();
