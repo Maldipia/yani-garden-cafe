@@ -139,8 +139,8 @@ function _invSummaryCards(){
   var low=(_invDash&&_invDash.lowStock)?_invDash.lowStock.length:0;
   var usageToday=0;
   if(_invDash&&_invDash.recentTransactions){ _invDash.recentTransactions.forEach(function(t){ var d=new Date(t.performed_at); if(d.toDateString()===today.toDateString() && String(t.transaction_type).toUpperCase().indexOf('CONSUM')>-1) usageToday++; }); }
+  var filteredCount=_invFilteredUnits().length;
   var cards=[
-    ['Stock Units', total, '#314C47'],
     ['Low Stock', low, '#b45309'],
     ['Expiring Soon', expiring, '#c2410c'],
     ['Expired', expired, '#b91c1c'],
@@ -148,6 +148,11 @@ function _invSummaryCards(){
     ['Usage Events Today', usageToday, '#15803d'],
   ];
   var h='<div class="inv-sumgrid" style="gap:8px;margin-bottom:12px">';
+  // Stock Units card — reflects the CURRENT filter so the count is never ambiguous
+  h+='<div style="background:#fff;border:1px solid var(--mist);border-radius:9px;padding:8px 10px">'
+    +'<div style="font-size:.62rem;color:var(--timber);text-transform:uppercase;letter-spacing:.3px;font-weight:600">Stock Units</div>'
+    +'<div id="invSUCount" style="font-size:1.35rem;font-weight:800;color:#314C47;line-height:1.1;margin-top:2px">'+filteredCount+'</div>'
+    +'<div id="invSULabel" style="font-size:.6rem;color:var(--forest);font-weight:700;text-transform:uppercase;letter-spacing:.3px">'+_invFilterLabel()+'</div></div>';
   cards.forEach(function(c){
     h+='<div style="background:#fff;border:1px solid var(--mist);border-radius:9px;padding:8px 10px">'
       +'<div style="font-size:.62rem;color:var(--timber);text-transform:uppercase;letter-spacing:.3px;font-weight:600">'+c[0]+'</div>'
@@ -155,6 +160,10 @@ function _invSummaryCards(){
   });
   h+='</div>';
   return h;
+}
+function _invFilterLabel(){
+  var m={ACTIVE:'Active',ALL:'All',AVAILABLE:'Available',LOW:'Low',OPEN:'Open',EXPIRING:'Expiring',EXPIRED:'Expired',PORTIONED:'Portioned',DEPLETED:'Depleted',WASTED:'Wasted'};
+  return m[_invSStatus]||_invSStatus;
 }
 
 function _invStockHtml(){
@@ -206,6 +215,8 @@ function _invFilteredUnits(){
 function _invRenderStockTable(){
   var wrap=document.getElementById('invStockTableWrap'); if(!wrap) return;
   var rows=_invFilteredUnits();
+  var suc=document.getElementById('invSUCount'); if(suc) suc.textContent=rows.length;
+  var sul=document.getElementById('invSULabel'); if(sul) sul.textContent=_invFilterLabel();
   if(!_invUnits2.length){
     wrap.innerHTML='<div style="background:#fff;border:1px dashed var(--mist);border-radius:12px;padding:44px 20px;text-align:center">'
       +'<div style="font-size:1.6rem">📦</div>'
