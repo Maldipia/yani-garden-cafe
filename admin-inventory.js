@@ -706,8 +706,9 @@ async function _invOpenProduce(){
 
 function _invOpenPortion(stockUnitId){
   if(!_invIsAdmin()){showToast('ADMIN/OWNER only','error');return;}
-  var units=_invUnits2.filter(function(u){var it=u.inv_items||{};return _invNum(u.quantity_remaining)>0 && (it.is_portionable||it.item_type==='PORTIONABLE'||it.item_type==='PRODUCED') && String(u.status).toUpperCase()!=='PORTIONED';});
-  if(!units.length){showToast('No portionable stock units available','error');return;}
+  var _ut={}; _invRef.units.forEach(function(u){_ut[u.id]=u.unit_type;});
+  var units=_invUnits2.filter(function(u){var it=u.inv_items||{};return _invNum(u.quantity_remaining)>0 && (it.is_portionable||it.item_type==='PORTIONABLE'||it.item_type==='PRODUCED') && _ut[u.unit_id]==='count' && String(u.status).toUpperCase()!=='PORTIONED';});
+  if(!units.length){showToast('No whole-unit portionable stock available (portioning needs a count-based unit like whole/pc)','error');return;}
   var opts=units.map(function(u){return '<option value="'+u.id+'"'+(stockUnitId==u.id?' selected':'')+'>'+_invEsc(u.stock_unit_code)+' — '+_invEsc((u.inv_items||{}).name||'')+'</option>';}).join('');
   var body=_invField('Whole unit to portion',_invSelect('ptUnit',opts))
     +_invField('Number of portions',_invInput('ptN','number','4'))

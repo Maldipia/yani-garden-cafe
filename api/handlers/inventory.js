@@ -350,6 +350,16 @@ export async function routeInventory(action, body, auth, req, res) {
     const id = int(body.stockUnitId), portions = num(body.portions);
     if (!id) return bad(res, 'stockUnitId required');
     if (!(portions > 0)) return bad(res, 'portions must be > 0');
+    // GUARDRAIL: portioning requires a whole/count-based parent. A measurement-based
+    // parent (g/kg/ml/L) would silently take 1 base unit and mis-portion, so block it.
+    const suRes = await supaFetch(`${SUPABASE_URL}/rest/v1/inv_stock_units?id=eq.${id}&select=quantity_remaining,inv_units(name,unit_type)`);
+    const su = (suRes.data || [])[0];
+    if (!su) return bad(res, 'stock unit not found');
+    const uType = su.inv_units ? su.inv_units.unit_type : null;
+    const uName = su.inv_units ? su.inv_units.name : '';
+    if (uType && uType !== 'count') {
+      return bad(res, `Portioning requires a whole-unit parent (a count-based unit like whole or pc). This unit is measured in ${uName} (${uType}) — produce or receive it as a whole first, then portion.`);
+    }
     const r = await rpc('inv_portion', {
       p_stock_unit_id: id, p_portions: portions,
       p_actor: actor, p_notes: str(body.notes, 500),
