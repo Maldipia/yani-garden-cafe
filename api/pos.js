@@ -20,6 +20,7 @@ import { routeCustomers }  from './handlers/customers.js';
 import { routeAdminOps }    from './handlers/admin-ops.js';
 import { routeReviews }    from './handlers/reviews.js';
 import { routeDocs }       from './handlers/docs.js';
+import { routeInventory }  from './handlers/inventory.js';
 
 const ALLOWED_ORIGINS = (
   process.env.ALLOWED_ORIGINS ||
@@ -85,7 +86,8 @@ export default async function handler(req, res) {
       await routeDocs       (action, body, auth, req, res) ||
       await routeHR         (action, body, auth, req, res) ||
       await routeAdmin      (action, body, auth, req, res) ||
-      await routeAdminOps   (action, body, auth, req, res);
+      await routeAdminOps   (action, body, auth, req, res) ||
+      await routeInventory  (action, body, auth, req, res);
 
     if (!handled) {
       return res.status(400).json({ ok: false, error: `Unknown action: ${action}` });
