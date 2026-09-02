@@ -82,7 +82,16 @@ async function _invLoadAll() {
     var ref = await api('invGetRefData', {}); if (ref && ref.ok) _invRef = { units:ref.units||[], locations:ref.locations||[], suppliers:ref.suppliers||[], itemTypes:ref.itemTypes||[] };
     await _invLoadItems();
     await _invLoadStock();
+    await _invLoadRecipes();
   } catch(e) {}
+}
+var _invRecipes=[];
+async function _invLoadRecipes(){ var r=await api('invListRecipes',{}); _invRecipes=(r&&r.ok)?(r.recipes||[]):[]; }
+// latest received unit-cost per ingredient item (client-side cost basis)
+function _invIngredientCost(itemId){
+  var best=null;
+  _invUnits2.forEach(function(u){ if(u.item_id===itemId && u.unit_cost!=null){ if(best===null || new Date(u.date_received)>best.d){ best={c:_invNum(u.unit_cost),d:new Date(u.date_received)}; } } });
+  return best?best.c:null;
 }
 async function _invLoadItems(){ var b={activeOnly:true}; if(_invItemFilter!=='ALL')b.itemType=_invItemFilter; var r=await api('invListItems',b); _invItems=(r&&r.ok)?(r.items||r.data||[]):[]; }
 async function _invLoadStock(){
@@ -111,7 +120,7 @@ function _invRender() {
   h += '</div>';
   // tabs
   h += '<div style="display:flex;gap:4px;border-bottom:2px solid var(--mist-light);margin:10px 0 14px">';
-  [['stock','📊 Stock'],['items','🏷️ Items'],['settings','⚙️ Settings']].forEach(function(t){
+  [['stock','📊 Stock'],['recipes','📖 Recipes'],['items','🏷️ Items'],['settings','⚙️ Settings']].forEach(function(t){
     var on=_invTab===t[0];
     h += '<button onclick="_invSetTab(\''+t[0]+'\')" style="background:none;border:none;cursor:pointer;padding:7px 14px;font-size:.8rem;font-weight:700;'
        + (on?'color:var(--forest-deep);border-bottom:3px solid var(--gold);margin-bottom:-2px':'color:var(--timber)')+'">'+t[1]+'</button>';
@@ -125,6 +134,7 @@ function _invSetTab(t){ _invTab=t; _invRender(); }
 function _invRenderTab(){
   var b=document.getElementById('invTabBody'); if(!b) return;
   if (_invTab==='stock') b.innerHTML=_invStockHtml();
+  else if (_invTab==='recipes') b.innerHTML=_invRecipesHtml();
   else if (_invTab==='items') b.innerHTML=_invItemsHtml();
   else b.innerHTML=_invSettingsHtml();
 }
@@ -783,4 +793,153 @@ function _invOpenTransfer(stockUnitId){
     if(r&&r.ok){showToast('Transfer recorded','success');_invCloseModal();_invCloseDrawer();await _invLoadStock();_invRenderTab();}
     else showToast((r&&r.error)||'Failed','error');
   });
+}
+
+// ══ RECIPES TAB (definition only — never consumes stock) ════════════════════
+var _invRecLines=[];   // working ingredient rows for the form
+function _invRecipesHtml(){
+  var h='';
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">';
+  h+='<div style="font-size:.75rem;color:var(--timber)">A recipe defines what a made item consumes and how much it yields. Creating or editing a recipe <b>never</b> deducts stock.</div>';
+  h+='<button onclick="_invOpenRecipeForm()" style="font-size:.78rem;font-weight:700;background:var(--forest);color:#fff;border:none;border-radius:8px;padding:7px 14px;cursor:pointer;white-space:nowrap">+ New Recipe</button>';
+  h+='</div>';
+  if(!_invRecipes.length){
+    h+='<div style="background:#fff;border:1px dashed var(--mist);border-radius:12px;padding:40px;text-align:center;color:var(--timber);font-size:.82rem">No recipes yet. Tap <b>+ New Recipe</b> to define one (e.g. a cake from flour, eggs, sugar).</div>';
+    return h;
+  }
+  h+='<div style="display:flex;flex-direction:column;gap:8px">';
+  _invRecipes.forEach(function(rc){
+    var out=(rc.inv_items||{}).name||'—';
+    var yUnit=(_invRef.units.filter(function(u){return u.id===rc.yield_unit_id;})[0]||{}).name||'';
+    var lines=rc.inv_recipe_ingredients||[];
+    var cost=_invRecipeCostOf(lines);
+    var cpy=(cost!=null && _invNum(rc.yield_qty)>0)? (cost/_invNum(rc.yield_qty)) : null;
+    h+='<div style="background:#fff;border:1px solid var(--mist);border-radius:10px;padding:11px 13px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'
+        +'<div><div style="font-size:.9rem;font-weight:700;color:var(--forest-deep)">📖 '+_invEsc(rc.name)+'</div>'
+        +'<div style="font-size:.7rem;color:var(--timber);margin-top:1px">makes <b>'+_invEsc(out)+'</b> · yields '+_invFmtQty(rc.yield_qty)+' '+_invEsc(yUnit)+' · '+lines.length+' ingredient'+(lines.length!==1?'s':'')+'</div></div>'
+        +'<div style="text-align:right;white-space:nowrap"><div style="font-size:.62rem;color:var(--timber);text-transform:uppercase;letter-spacing:.3px">Cost</div>'
+        +'<div style="font-size:.95rem;font-weight:800;color:var(--forest-deep)">'+(cost!=null?('₱'+cost.toFixed(2)):'—')+'</div>'
+        +'<div style="font-size:.62rem;color:var(--timber)">'+(cpy!=null?('₱'+cpy.toFixed(2)+' / '+_invEsc(yUnit)):'cost pending')+'</div></div>'
+      +'</div>'
+      +'<div style="display:flex;gap:6px;margin-top:8px">'
+        +'<button onclick="_invOpenRecipeForm('+rc.id+')" style="font-size:.7rem;font-weight:700;background:var(--mist-light);color:var(--forest);border:none;border-radius:7px;padding:6px 12px;cursor:pointer">Edit</button>'
+        +(_invIsOwner()?'<button onclick="_invArchiveRecipe('+rc.id+',\''+_invEsc(rc.name).replace(/\x27/g,"")+'\')" style="font-size:.7rem;font-weight:700;background:#fff;color:#b91c1c;border:1px solid #f0caca;border-radius:7px;padding:6px 12px;cursor:pointer">Archive</button>':'')
+      +'</div></div>';
+  });
+  h+='</div>';
+  if(!_invUnits2.length) h+='<div style="font-size:.68rem;color:var(--timber);margin-top:10px">💡 Ingredient costs appear once you receive that ingredient into stock with a unit cost. Recipe definition works fully without costs.</div>';
+  return h;
+}
+function _invRecipeCostOf(lines){
+  var total=0, known=false;
+  (lines||[]).forEach(function(l){
+    var iid=l.ingredient_item_id||l.ingredientItemId;
+    var c=_invIngredientCost(iid);
+    if(c!=null){ known=true; total+=_invNum(l.quantity)*c; }
+  });
+  return known?total:null;
+}
+
+function _invOpenRecipeForm(id){
+  if(!_invIsAdmin()){showToast('ADMIN/OWNER only','error');return;}
+  var rc = id ? _invRecipes.filter(function(x){return x.id===id;})[0] : null;
+  // output items = PRODUCED or PREP; ingredients = RAW_MATERIAL or PREP
+  var outOpts=_invItems.filter(function(it){return it.item_type==='PRODUCED'||it.item_type==='PREP'||it.item_type==='PORTIONABLE';})
+    .map(function(it){return '<option value="'+it.id+'"'+(rc&&rc.item_id===it.id?' selected':'')+'>'+INV_TYPE_META[it.item_type].ico+' '+_invEsc(it.name)+'</option>';}).join('');
+  if(!outOpts){showToast('Create a Produced or Prep item first (Items tab)','error');return;}
+  var unitOpts=_invRef.units.map(function(u){return '<option value="'+u.id+'"'+(rc&&rc.yield_unit_id===u.id?' selected':'')+'>'+_invEsc(u.name)+'</option>';}).join('');
+  // init working lines
+  _invRecLines = rc ? (rc.inv_recipe_ingredients||[]).map(function(l){return {ingredientItemId:l.ingredient_item_id,quantity:l.quantity,unitId:l.unit_id,yieldLossPct:l.yield_loss_pct};}) : [{}];
+  if(!_invRecLines.length) _invRecLines=[{}];
+  var m=document.createElement('div'); m.id='invActionModal';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10000;display:flex;align-items:flex-start;justify-content:center;padding:14px;overflow:auto';
+  m.innerHTML='<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;padding:18px;margin-top:16px">'
+    +'<div style="font-size:1rem;font-weight:800;color:var(--forest-deep)">'+(rc?'Edit recipe':'New recipe')+'</div>'
+    +'<div style="font-size:.66rem;color:var(--timber);margin-bottom:12px">Definition only — saving does NOT deduct stock. Writes to inv_recipes / inv_recipe_ingredients.</div>'
+    +_invField('Recipe name',_invInput('rcName','text','e.g. Chocolate Cake 4\\" recipe', rc?rc.name:''))
+    +_invField('This recipe makes (output item)',_invSelect('rcOut',outOpts))
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+      +'<div>'+_invField('Yield quantity',_invInput('rcYQty','number','1', rc?rc.yield_qty:''))+'</div>'
+      +'<div>'+_invField('Yield unit',_invSelect('rcYUnit',unitOpts))+'</div></div>'
+    +'<div style="font-size:.66rem;color:var(--timber);text-transform:uppercase;letter-spacing:.4px;font-weight:800;margin:14px 0 4px">Ingredients</div>'
+    +'<div id="recLines"></div>'
+    +'<button onclick="_invRecipeAddLine()" style="font-size:.72rem;font-weight:700;background:var(--mist-light);color:var(--forest);border:none;border-radius:7px;padding:7px 12px;cursor:pointer;margin-top:4px">+ Add ingredient</button>'
+    +'<div id="recCost" style="margin-top:12px;background:var(--mist-light);border-radius:8px;padding:10px 12px"></div>'
+    +_invField('Notes (optional)',_invInput('rcNotes','text','', rc?(rc.notes||''):''))
+    +'<div style="display:flex;gap:8px;margin-top:14px"><button onclick="_invCloseModal()" style="flex:1;font-size:.82rem;font-weight:700;background:var(--mist-light);color:var(--forest);border:none;border-radius:8px;padding:10px;cursor:pointer">Cancel</button>'
+    +'<button onclick="_invSaveRecipe('+(rc?rc.id:'0')+')" style="flex:2;font-size:.82rem;font-weight:700;background:var(--forest);color:#fff;border:none;border-radius:8px;padding:10px;cursor:pointer">'+(rc?'Save changes':'Create recipe')+'</button></div></div>';
+  document.body.appendChild(m);
+  _invRecipeRenderLines();
+}
+function _invRecipeIngOpts(sel){
+  return _invItems.filter(function(it){return it.item_type==='RAW_MATERIAL'||it.item_type==='PREP';})
+    .map(function(it){return '<option value="'+it.id+'"'+(sel==it.id?' selected':'')+'>'+INV_TYPE_META[it.item_type].ico+' '+_invEsc(it.name)+'</option>';}).join('');
+}
+function _invRecipeUnitOpts(sel){ return _invRef.units.map(function(u){return '<option value="'+u.id+'"'+(sel==u.id?' selected':'')+'>'+_invEsc(u.name)+'</option>';}).join(''); }
+function _invRecipeRenderLines(){
+  var box=document.getElementById('recLines'); if(!box) return;
+  var h='';
+  _invRecLines.forEach(function(l,i){
+    h+='<div style="display:grid;grid-template-columns:1fr 64px 70px 30px;gap:5px;margin-bottom:5px;align-items:center">'
+      +'<select id="rl_ing_'+i+'" oninput="_invRecipeCostLive()" onchange="_invRecipeCostLive()" style="font-size:.76rem;padding:6px;border:1.5px solid var(--mist);border-radius:7px">'+_invRecipeIngOpts(l.ingredientItemId)+'</select>'
+      +'<input id="rl_qty_'+i+'" type="number" step="0.001" value="'+(l.quantity!=null?_invEsc(l.quantity):'')+'" placeholder="qty" oninput="_invRecipeCostLive()" style="font-size:.76rem;padding:6px;border:1.5px solid var(--mist);border-radius:7px">'
+      +'<select id="rl_unit_'+i+'" style="font-size:.74rem;padding:6px;border:1.5px solid var(--mist);border-radius:7px">'+_invRecipeUnitOpts(l.unitId)+'</select>'
+      +'<button onclick="_invRecipeRemoveLine('+i+')" style="font-size:.9rem;background:none;border:none;color:#b91c1c;cursor:pointer">✕</button>'
+      +'</div>';
+  });
+  box.innerHTML=h;
+  _invRecipeCostLive();
+}
+function _invRecipeSyncDom(){
+  _invRecLines.forEach(function(l,i){
+    var ing=document.getElementById('rl_ing_'+i), qty=document.getElementById('rl_qty_'+i), un=document.getElementById('rl_unit_'+i);
+    if(ing) l.ingredientItemId=+ing.value;
+    if(qty) l.quantity=parseFloat(qty.value)||0;
+    if(un) l.unitId=+un.value;
+  });
+}
+function _invRecipeAddLine(){ _invRecipeSyncDom(); _invRecLines.push({}); _invRecipeRenderLines(); }
+function _invRecipeRemoveLine(i){ _invRecipeSyncDom(); _invRecLines.splice(i,1); if(!_invRecLines.length)_invRecLines=[{}]; _invRecipeRenderLines(); }
+function _invRecipeCostLive(){
+  _invRecipeSyncDom();
+  var box=document.getElementById('recCost'); if(!box) return;
+  var total=0, known=false, anyLine=false;
+  _invRecLines.forEach(function(l){
+    if(l.ingredientItemId && l.quantity>0){ anyLine=true; var c=_invIngredientCost(l.ingredientItemId); if(c!=null){ known=true; total+=l.quantity*c; } }
+  });
+  var yq=parseFloat((document.getElementById('rcYQty')||{}).value)||0;
+  var yu=(_invRef.units.filter(function(u){return u.id===+(document.getElementById('rcYUnit')||{}).value;})[0]||{}).name||'';
+  var cpy=(known && yq>0)?(total/yq):null;
+  box.innerHTML='<div style="display:flex;justify-content:space-between;font-size:.82rem"><span style="color:var(--timber)">Recipe cost</span><b style="color:var(--forest-deep)">'+(known?('₱'+total.toFixed(2)):'—')+'</b></div>'
+    +'<div style="display:flex;justify-content:space-between;font-size:.78rem;margin-top:3px"><span style="color:var(--timber)">Cost per yield unit</span><b style="color:var(--forest)">'+(cpy!=null?('₱'+cpy.toFixed(2)+' / '+_invEsc(yu)):'—')+'</b></div>'
+    +(!known&&anyLine?'<div style="font-size:.64rem;color:var(--timber);margin-top:4px">Cost appears once these ingredients are received into stock with a unit cost.</div>':'');
+}
+async function _invSaveRecipe(id){
+  _invRecipeSyncDom();
+  var name=(document.getElementById('rcName')||{}).value.trim();
+  var itemId=+(document.getElementById('rcOut')||{}).value;
+  var yieldQty=parseFloat((document.getElementById('rcYQty')||{}).value)||1;
+  var yieldUnitId=+(document.getElementById('rcYUnit')||{}).value;
+  var yUnit=_invRef.units.filter(function(u){return u.id===yieldUnitId;})[0]||{};
+  var yieldType = (yUnit.name==='whole')?'whole':(yUnit.unit_type||'count');
+  var notes=(document.getElementById('rcNotes')||{}).value.trim();
+  if(!name){showToast('Enter a recipe name','error');return;}
+  if(!itemId){showToast('Pick the output item','error');return;}
+  var lines=_invRecLines.filter(function(l){return l.ingredientItemId && l.quantity>0 && l.unitId;});
+  if(!lines.length){showToast('Add at least one ingredient','error');return;}
+  if(lines.some(function(l){return l.ingredientItemId===itemId;})){showToast('A recipe cannot use its own output as an ingredient','error');return;}
+  var payload={name:name,itemId:itemId,yieldQty:yieldQty,yieldUnitId:yieldUnitId,yieldType:yieldType,notes:notes,
+    ingredients:lines.map(function(l){return {ingredientItemId:l.ingredientItemId,quantity:l.quantity,unitId:l.unitId};})};
+  if(id) payload.id=id;
+  var r=await api('invSaveRecipe',payload);
+  if(r&&r.ok){ showToast(id?'Recipe updated':'Recipe created','success'); _invCloseModal(); await _invLoadRecipes(); _invRenderTab(); }
+  else showToast((r&&r.error)||'Failed to save recipe','error');
+}
+async function _invArchiveRecipe(id,name){
+  if(!_invIsOwner()){showToast('OWNER only','error');return;}
+  if(!confirm('Archive recipe "'+name+'"? It will be hidden but not deleted.')) return;
+  var r=await api('invArchiveRecipe',{id:id});
+  if(r&&r.ok){ showToast('Recipe archived','success'); await _invLoadRecipes(); _invRenderTab(); }
+  else showToast((r&&r.error)||'Failed','error');
 }
