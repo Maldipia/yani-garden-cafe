@@ -15,7 +15,7 @@ var _invItemFilter = 'ALL';
 var _invSearch = '';
 var _invSType  = 'ALL';
 var _invSLoc   = 'ALL';
-var _invSStatus= 'ALL';
+var _invSStatus= 'ACTIVE';
 var _invSLowOnly = false;
 var _invSExpiry  = 'ALL';
 
@@ -94,6 +94,13 @@ async function _invLoadStock(){
 // ── SHELL ──────────────────────────────────────────────────────────────────
 function _invRender() {
   var v = document.getElementById('inventoryView'); if (!v) return;
+  if (!document.getElementById('invStyles')) {
+    var st=document.createElement('style'); st.id='invStyles';
+    st.textContent='.inv-sumgrid{display:grid;grid-template-columns:repeat(6,1fr)}.inv-mob{display:none}'
+      +'.invsec{font-size:.6rem;color:var(--timber);text-transform:uppercase;letter-spacing:.5px;font-weight:800;margin:12px 0 2px}'
+      +'@media(max-width:640px){.inv-sumgrid{grid-template-columns:repeat(3,1fr)}.inv-desk{display:none !important}.inv-mob{display:block !important}}';
+    document.head.appendChild(st);
+  }
   var enabled = (_invCfg.module_enabled === 'true');
   var h = '<div style="max-width:1240px;margin:0 auto;padding:14px 14px 60px">';
   h += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">';
@@ -133,14 +140,14 @@ function _invSummaryCards(){
   var usageToday=0;
   if(_invDash&&_invDash.recentTransactions){ _invDash.recentTransactions.forEach(function(t){ var d=new Date(t.performed_at); if(d.toDateString()===today.toDateString() && String(t.transaction_type).toUpperCase().indexOf('CONSUM')>-1) usageToday++; }); }
   var cards=[
-    ['Total Stock', total, '#314C47'],
+    ['Stock Units', total, '#314C47'],
     ['Low Stock', low, '#b45309'],
     ['Expiring Soon', expiring, '#c2410c'],
     ['Expired', expired, '#b91c1c'],
     ['Partial / Open', partial, '#1d4ed8'],
-    ["Today's Usage", usageToday, '#15803d'],
+    ['Usage Events Today', usageToday, '#15803d'],
   ];
-  var h='<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:12px">';
+  var h='<div class="inv-sumgrid" style="gap:8px;margin-bottom:12px">';
   cards.forEach(function(c){
     h+='<div style="background:#fff;border:1px solid var(--mist);border-radius:9px;padding:8px 10px">'
       +'<div style="font-size:.62rem;color:var(--timber);text-transform:uppercase;letter-spacing:.3px;font-weight:600">'+c[0]+'</div>'
@@ -171,7 +178,8 @@ function _invStockHtml(){
   _invRef.locations.forEach(function(l){ locSel+='<option value="'+_invEsc(l.name)+'"'+(_invSLoc===l.name?' selected':'')+'>'+_invEsc(l.name)+'</option>'; });
   locSel+='</select>'; h+=locSel;
   var stSel='<select onchange="_invSStatus=this.value;_invRenderStockTable()" style="font-size:.74rem;padding:7px 8px;border:1.5px solid var(--mist);border-radius:8px">';
-  ['ALL','AVAILABLE','OPEN','LOW','EXPIRING','EXPIRED','PORTIONED','DEPLETED'].forEach(function(s){ stSel+='<option value="'+s+'"'+(_invSStatus===s?' selected':'')+'>'+(s==='ALL'?'All status':s)+'</option>'; });
+  var _stOpts=[['ACTIVE','Active stock'],['ALL','All status'],['AVAILABLE','Available'],['LOW','Low'],['OPEN','Open'],['EXPIRING','Expiring'],['EXPIRED','Expired'],['PORTIONED','Portioned'],['DEPLETED','Depleted'],['WASTED','Wasted']];
+  _stOpts.forEach(function(s){ stSel+='<option value="'+s[0]+'"'+(_invSStatus===s[0]?' selected':'')+'>'+s[1]+'</option>'; });
   stSel+='</select>'; h+=stSel;
   h+='<label style="font-size:.72rem;color:var(--forest);display:flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" '+(_invSLowOnly?'checked':'')+' onchange="_invSLowOnly=this.checked;_invRenderStockTable()"> Low stock only</label>';
   h+='</div>';
@@ -187,7 +195,8 @@ function _invFilteredUnits(){
     var it=u.inv_items||{}, loc=(u.inv_locations||{}).name||'';
     if(_invSType!=='ALL' && it.item_type!==_invSType) return false;
     if(_invSLoc!=='ALL' && loc!==_invSLoc) return false;
-    if(_invSStatus!=='ALL'){ var ds=_invUnitStatus(u); if(ds!==_invSStatus) return false; }
+    if(_invSStatus==='ACTIVE'){ var b=String(u.status||'').toUpperCase(); if(_invNum(u.quantity_remaining)<=0) return false; if(b==='PORTIONED'||b==='WASTED') return false; }
+    else if(_invSStatus!=='ALL'){ var ds=_invUnitStatus(u); if(ds!==_invSStatus) return false; }
     if(_invSLowOnly){ var r=_invNum(u.quantity_remaining),o=_invNum(u.quantity_original); if(!(o>0 && r/o<=0.2)) return false; }
     if(q){ var hay=((u.stock_unit_code||'')+' '+(it.name||'')+' '+(u.batch_id||'')).toLowerCase(); if(hay.indexOf(q)<0) return false; }
     return true;
@@ -205,7 +214,7 @@ function _invRenderStockTable(){
     return;
   }
   var cols=['Stock Code','Item','Type','Qty','Unit','Batch','Received','Expiry','Location','Status'];
-  var h='<div style="background:#fff;border:1px solid var(--mist);border-radius:10px;overflow:auto">';
+  var h='<div class="inv-desk" style="background:#fff;border:1px solid var(--mist);border-radius:10px;overflow:auto">';
   h+='<table style="width:100%;border-collapse:collapse;font-size:.73rem;min-width:900px">';
   h+='<thead><tr style="background:var(--forest-deep)">';
   cols.forEach(function(c,i){ h+='<th style="text-align:'+(i===3?'right':'left')+';padding:7px 9px;color:#fff;font-weight:700;font-size:.66rem;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap">'+c+'</th>'; });
@@ -230,6 +239,26 @@ function _invRenderStockTable(){
     h+='</tr>';
   });
   h+='</tbody></table></div>';
+  // mobile: compact cards (no horizontal scroll)
+  h+='<div class="inv-mob">';
+  rows.forEach(function(u){
+    var it=u.inv_items||{}, un=(u.inv_units||{}).name||'', loc=(u.inv_locations||{}).name||'—';
+    var ds=_invUnitStatus(u); var dexp=_invDaysTo(u.expiry_date);
+    var meta=[];
+    if(u.expiry_date){ meta.push('Exp '+_invDate(u.expiry_date)); } else if(u.expected_use_date){ meta.push('Use by '+_invDate(u.expected_use_date)); }
+    if(loc&&loc!=='—') meta.push(loc);
+    h+='<div onclick="_invOpenDrawer('+u.id+')" style="background:#fff;border:1px solid var(--mist);border-radius:10px;padding:10px 12px;margin-bottom:8px;cursor:pointer">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'
+        +'<div style="min-width:0"><div style="font-size:.7rem;font-weight:700;color:var(--forest)">'+_invEsc(u.stock_unit_code||'—')+' <span style="font-weight:600;color:var(--timber)">'+_invTypeIco(it.item_type)+' '+_invEsc(_invTypeShort(it.item_type))+'</span></div>'
+        +'<div style="font-size:.86rem;font-weight:700;color:var(--forest-deep);margin-top:1px">'+_invEsc(it.name||'—')+'</div></div>'
+        +_invStatusPillBig(ds)
+      +'</div>'
+      +'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:6px">'
+        +'<div style="font-size:1.05rem;font-weight:800;color:var(--forest-deep)">'+_invFmtQty(u.quantity_remaining)+' <span style="font-size:.78rem;font-weight:600;color:var(--timber)">'+_invEsc(un)+'</span></div>'
+        +'<div style="font-size:.68rem;color:'+((dexp!==null&&dexp<=3)?'#c2410c':'var(--timber)')+';font-weight:'+((dexp!==null&&dexp<=3)?'700':'400')+'">'+_invEsc(meta.join(' · '))+'</div>'
+      +'</div></div>';
+  });
+  h+='</div>';
   h+='<div style="font-size:.68rem;color:var(--timber);margin-top:6px">'+rows.length+' of '+_invUnits2.length+' stock units'+(rows.length!==_invUnits2.length?' (filtered)':'')+'</div>';
   wrap.innerHTML=h;
 }
@@ -253,11 +282,14 @@ async function _invOpenDrawer(id){
     +'<div style="display:flex;align-items:baseline;gap:8px;margin:12px 0 4px"><span style="font-size:1.9rem;font-weight:800;color:var(--forest-deep)">'+rem+'</span><span style="font-size:.9rem;color:var(--timber)">'+_invEsc(un)+' remaining</span> '+_invStatusPillBig(ds)+'</div>'
     +'<div style="font-size:.72rem;color:var(--timber);margin-bottom:12px">Original quantity: '+orig+' '+_invEsc(un)+'</div>'
     +_invDrawerRow('Received', _invDate(u.date_received))
-    +_invDrawerRow('Expected use', _invDate(u.expected_use_date))
-    +_invDrawerRow('Expiry', _invDate(u.expiry_date))
     +_invDrawerRow('Location', _invEsc(loc))
     +_invDrawerRow('Batch', _invEsc(u.batch_id||'—'))
     +_invDrawerRow('Unit cost', u.unit_cost?('₱'+_invNum(u.unit_cost).toFixed(2)):'—')
+    +'<div class="invsec">Planning</div>'
+    +_invDrawerRow('Expected use', _invDate(u.expected_use_date))
+    +'<div style="font-size:.64rem;color:var(--timber);margin-top:2px">Planning info only — never deducts or consumes stock.</div>'
+    +'<div class="invsec">Food safety</div>'
+    +_invDrawerRow('Expiry', _invDate(u.expiry_date))
     +'<div style="font-size:.66rem;color:var(--timber);text-transform:uppercase;letter-spacing:.4px;font-weight:700;margin:14px 0 6px">Usage history</div>'
     +'<div id="invHist" style="font-size:.74rem;color:var(--timber)">Loading…</div>'
     +'<div style="font-size:.66rem;color:var(--timber);text-transform:uppercase;letter-spacing:.4px;font-weight:700;margin:16px 0 6px">Actions</div>'
