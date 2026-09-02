@@ -8,7 +8,7 @@ import { SUPABASE_URL }    from '../lib/config.js';
 
 const INV_ACTIONS = new Set([
   // meta
-  'invGetConfig','invSetConfig','invGetRefData',
+  'invGetConfig','invSetConfig','invGetRefData','invSettingAudit',
   // items
   'invListItems','invSaveItem','invArchiveItem',
   // recipes
@@ -74,11 +74,30 @@ export async function routeInventory(action, body, auth, req, res) {
     if (!isOwner) return res.status(403).json({ ok: false, error: 'OWNER only' });
     const key = str(body.key, 60);
     const value = str(body.value, 200);
+    const reason = str(body.reason, 500);
     if (!key || value === null) return bad(res, 'key and value required');
+    // Dangerous settings must carry a reason (enforced here, not just in the UI)
+    if (key === 'allow_negative' && value === 'true' && !reason)
+      return bad(res, 'reason required to allow negative inventory');
+    // Read the current value first so the audit shows old -> new
+    const cur = await supaFetch(`${SUPABASE_URL}/rest/v1/inv_config?key=eq.${q(key)}&select=value`);
+    const oldValue = (cur.data && cur.data[0]) ? cur.data[0].value : null;
     const r = await supa('PATCH', 'inv_config', { value, updated_at: new Date().toISOString() },
                          { key: `eq.${key}` });
     if (!r.ok) return boom(res, 'Failed to update config');
+    // Append-only audit — never fails the request if logging hiccups
+    try {
+      await supa('POST', 'inv_setting_audit', {
+        key, old_value: oldValue, new_value: value, reason: reason || null, changed_by: actor,
+      });
+    } catch (_) {}
     return res.status(200).json({ ok: true, key, value });
+  }
+
+  if (action === 'invSettingAudit') {
+    const r = await supaFetch(`${SUPABASE_URL}/rest/v1/inv_setting_audit?select=*&order=changed_at.desc&limit=50`);
+    if (!r.ok) return boom(res, 'Failed to load setting audit');
+    return res.status(200).json({ ok: true, rows: r.data || [] });
   }
 
   if (action === 'invGetRefData') {

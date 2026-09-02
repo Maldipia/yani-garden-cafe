@@ -962,6 +962,7 @@ function renderSidebar() {
     html += item('TABLES', '🪑', 'Tables & QR', '');
     html += item('FLOOR_MAP', '🗺️', 'Floor Plan', '');
     html += item('INV_COSTING', '📦', 'Inventory / Costing', '');
+    html += item('INVENTORY', '🏬', 'Stock Control', 'NEW');
     html += item('ADDONS', '➕', 'Add-ons', '');
     html += item('PROMO_CODES', '🏷️', 'Promo Codes', '');
     // ── Unified Members hub ──
@@ -1168,6 +1169,13 @@ function setFilter(f) {
       expView.style.display = 'block';
       expView.innerHTML = '<div style="padding:32px;text-align:center;color:var(--timber)">Loading expenses...</div>';
       initExpenses();
+    }
+  } else if (f === 'INVENTORY') {
+    var invView = document.getElementById('inventoryView');
+    if (invView) {
+      invView.style.display = 'block';
+      invView.innerHTML = '<div style="padding:32px;text-align:center;color:var(--timber)">Loading inventory…</div>';
+      initInventory();
     }
   } else if (f === 'SHEETS') {
     if (sheetsView) sheetsView.style.display = 'block';
