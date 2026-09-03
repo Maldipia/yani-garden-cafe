@@ -213,7 +213,13 @@ export async function routeExpenses(action, body, auth, req, res) {
   if (action === 'scanReceipt') {
     const a = await checkAdminAuth();
     if (!a.ok) return res.status(403).json({ ok:false, error:a.error });
-    const key = process.env.GEMINI_API_KEY;
+    let key = process.env.GEMINI_API_KEY;
+    if (!key) {
+      try {
+        const cf = await supaFetch(`${SUPABASE_URL}/rest/v1/secure_config?key=eq.GEMINI_API_KEY&select=value`);
+        if (cf.ok && cf.data && cf.data[0]) key = cf.data[0].value;
+      } catch(_) {}
+    }
     if (!key) return res.status(500).json({ ok:false, error:'Scan not set up yet (GEMINI_API_KEY missing)' });
     const imageBase64 = String(body.imageBase64 || '');
     const mimeType = String(body.mimeType || 'image/jpeg');
