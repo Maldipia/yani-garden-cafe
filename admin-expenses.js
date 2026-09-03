@@ -273,7 +273,7 @@ function _expPurchaseDrawer(g, lines, summary){
     if(lines){ lines.forEach(function(l){ if(l._status!=='RECEIVED' && l.item_id){ h+='<button onclick="_expOpenReceiveLine('+l.id+','+l.item_id+',\''+escH(l.item_name).replace(/\x27/g,'')+'\','+(l.base_quantity||l.quantity||0)+','+(l.base_unit_id||l.purchase_unit_id||'null')+','+(l.unit_price||0)+',\''+escH(ref||'')+'\',\''+escH(sup||'')+'\','+(l._received||0)+')" style="display:block;width:100%;text-align:left;font-size:.74rem;font-weight:700;background:#fff;color:var(--forest);border:1.5px solid var(--forest);border-radius:8px;padding:8px 10px;cursor:pointer;margin-bottom:6px">📦 Receive \u201c'+escH(l.item_name)+'\u201d to Inventory</button>'; } }); }
     else { h+='<div style="font-size:.68rem;color:var(--timber)">This purchase\u2019s items aren\u2019t mapped to inventory items, so receiving isn\u2019t available. Map items in Stock Control \u2192 Items to enable receiving.</div>'; }
   }
-  return _expDrawerShell(h);
+  return _expDrawerShell(h + _expOwnerActions(g));
 }
 
 function _expGeneralDrawer(g){
@@ -290,7 +290,7 @@ function _expGeneralDrawer(g){
   if(g.notes) h+='<div style="margin-top:8px;font-size:.74rem;color:var(--forest-deep)"><span style="color:var(--timber)">Notes:</span> '+escH(g.notes)+'</div>';
   h+='<div style="font-size:.64rem;color:var(--timber);text-transform:uppercase;letter-spacing:.4px;font-weight:700;margin:16px 0 6px">Inventory</div>';
   h+='<div style="background:var(--mist-light);border-radius:8px;padding:10px 12px;font-size:.74rem;color:var(--timber)">ⓘ Not applicable — this is a '+escH(g.category||'general')+' expense, not physical stock.</div>';
-  return _expDrawerShell(h);
+  return _expDrawerShell(h + _expOwnerActions(g));
 }
 function _expDateFull(d){ if(!d)return '—'; try{ var x=new Date(d); return MONTHS[x.getMonth()]+' '+x.getDate()+', '+x.getFullYear(); }catch(e){ return String(d).substring(0,10);} }
 function _expFmt(n){ var x=parseFloat(n); if(isNaN(x))return n; return x%1===0?String(x):x.toFixed(2).replace(/\.?0+$/,''); }
@@ -469,4 +469,63 @@ async function _expReceiveSubmit(ref,supplier){
   var r=await api('invReceiveStock',{ itemId:itemId, qty:qty, unitId:unitId, unitCost:parseFloat((document.getElementById('rvCost')||{}).value)||0, locationId:+(document.getElementById('rvLoc')||{}).value||null, expiryDate:(document.getElementById('rvExp')||{}).value||null, purchaseLineId:lineId, notes:'Received from purchase'+(ref?(' '+ref):'')+(supplier?(' · '+supplier):'')+(((document.getElementById('rvBatch')||{}).value)?(' · batch '+(document.getElementById('rvBatch')||{}).value):'') });
   if(r&&r.ok){ showToast('Received to inventory: '+(r.stock_unit_code||'')+' ✅'); _expCloseModal2(); _expCloseDrawer(); await initExpenses(); }
   else showToast('Failed: '+((r&&r.error)||'Unknown'),'error');
+}
+
+// ── OWNER edit / void (keeps record for audit; drops from totals) ───────────
+function _expIsOwner(){ return currentUser && currentUser.role==='OWNER'; }
+function _expOwnerActions(g){
+  if(!_expIsOwner()) return '';
+  return '<div style="display:flex;gap:8px;margin-top:18px;padding-top:12px;border-top:1px solid var(--mist-light)">'
+    +'<button onclick="_expOpenEdit(\''+g.key+'\')" style="flex:1;font-size:.78rem;font-weight:700;background:var(--mist-light);color:var(--forest);border:none;border-radius:8px;padding:9px;cursor:pointer">✏️ Edit</button>'
+    +'<button onclick="_expVoid(\''+g.key+'\')" style="flex:1;font-size:.78rem;font-weight:700;background:#fff;color:#b91c1c;border:1.5px solid #f0caca;border-radius:8px;padding:9px;cursor:pointer">🚫 Void</button>'
+    +'</div>';
+}
+function _expOpenEdit(key){
+  if(!_expIsOwner()){ showToast('OWNER only','error'); return; }
+  var g=_expRecords().filter(function(x){return x.key===key;})[0]; if(!g) return;
+  var l0=g.lines[0], isPurchase=g.isPurchase;
+  var catOpts=BIZ_CATEGORIES.map(function(c){return '<option'+(g.category===c?' selected':'')+'>'+escH(c)+'</option>';}).join('');
+  var payOpts=PAID_VIA_OPTS.map(function(c){return '<option'+(g.paid===c?' selected':'')+'>'+escH(c)+'</option>';}).join('');
+  var body;
+  if(isPurchase){
+    body='<div style="font-size:.64rem;color:var(--timber);margin-bottom:8px">Edit the purchase header. Line prices are immutable — to change item prices, void this purchase and re-add it.</div>'
+      +_expField('Supplier / Store',_expInput('edSup','text','',g.supplier||''))
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div>'+_expField('Date',_expInput('edDate','date','',g.date))+'</div><div>'+_expField('Payment',_expSel('edPay',payOpts))+'</div></div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div>'+_expField('Category',_expSel('edCat',catOpts))+'</div><div>'+_expField('Reference',_expInput('edRef','text','',g.ref||''))+'</div></div>'
+      +_expField('Notes',_expInput('edNotes','text','',g.notes||''));
+  } else {
+    body=_expField('Title',_expInput('edDesc','text','',g.desc||l0.description||''))
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div>'+_expField('Amount',_expInput('edAmt','number','',g.total))+'</div><div>'+_expField('Date',_expInput('edDate','date','',g.date))+'</div></div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div>'+_expField('Category',_expSel('edCat',catOpts))+'</div><div>'+_expField('Payment',_expSel('edPay',payOpts))+'</div></div>'
+      +_expField('Reference',_expInput('edRef','text','',g.ref||''))
+      +_expField('Notes',_expInput('edNotes','text','',g.notes||''));
+  }
+  _expModal('<div style="font-size:1rem;font-weight:800;color:var(--forest-deep);margin-bottom:8px">Edit '+(isPurchase?'purchase':'expense')+'</div>'+body
+    +'<div style="display:flex;gap:8px;margin-top:16px"><button onclick="_expCloseModal()" style="flex:1;font-size:.82rem;font-weight:700;background:var(--mist-light);color:var(--forest);border:none;border-radius:8px;padding:10px;cursor:pointer">Cancel</button>'
+    +'<button onclick="_expSaveEdit(\''+key+'\','+(isPurchase?'true':'false')+')" style="flex:2;font-size:.82rem;font-weight:700;background:var(--forest);color:#fff;border:none;border-radius:8px;padding:10px;cursor:pointer">Save changes</button></div>');
+}
+async function _expSaveEdit(key, isPurchase){
+  var g=_expRecords().filter(function(x){return x.key===key;})[0]; if(!g) return;
+  var V=function(id){var e=document.getElementById(id);return e?e.value:undefined;};
+  var payload={};
+  if(isPurchase){ payload={ store:V('edSup'), expenseDate:V('edDate'), paidVia:V('edPay'), category:V('edCat'), referenceNo:V('edRef'), notes:V('edNotes') }; }
+  else { payload={ description:V('edDesc'), amount:V('edAmt'), expenseDate:V('edDate'), category:V('edCat'), paidVia:V('edPay'), referenceNo:V('edRef'), notes:V('edNotes') }; }
+  var ok=true;
+  for(var i=0;i<g.lines.length;i++){
+    var r=await api('updateExpense', Object.assign({id:g.lines[i].id}, payload));
+    if(!(r&&r.ok)) ok=false;
+    if(!isPurchase) break;   // general expense is a single row
+  }
+  if(ok){ showToast('Saved ✅'); _expCloseModal(); _expCloseDrawer(); await initExpenses(); }
+  else showToast('Failed to save','error');
+}
+async function _expVoid(key){
+  if(!_expIsOwner()){ showToast('OWNER only','error'); return; }
+  var g=_expRecords().filter(function(x){return x.key===key;})[0]; if(!g) return;
+  var reason=prompt('Void "'+(g.supplier||g.desc||'this record')+'" (₱'+g.total.toFixed(2)+')?\n\nThe record is KEPT for audit but removed from your totals.\n\nReason (optional):');
+  if(reason===null) return;
+  var ok=true;
+  for(var i=0;i<g.lines.length;i++){ var r=await api('voidExpense',{ id:g.lines[i].id, reason:reason }); if(!(r&&r.ok)) ok=false; }
+  if(ok){ showToast('Voided ✅ (kept for audit)'); _expCloseDrawer(); await initExpenses(); }
+  else showToast('Failed to void','error');
 }

@@ -5,6 +5,7 @@ import { SUPABASE_URL }            from '../lib/config.js';
 const EXPENSE_ACTIONS = new Set([
   'addShiftExpense','getShiftExpenses',
   'addBusinessExpense','getBusinessExpenses','deleteBusinessExpense',
+  'updateExpense','voidExpense',
   'saveExpensePurchase','markExpenseReceived'
 ]);
 
@@ -85,6 +86,7 @@ export async function routeExpenses(action, body, auth, req, res) {
       url += `&expense_date=gte.${from}&expense_date=lte.${toDate}`;
     }
     if (category && category !== 'All') url += `&category=eq.${encodeURIComponent(category)}`;
+    url += '&is_void=eq.false';
     url += '&select=*';
     const r = await supaFetch(url);
     if (!r.ok) return res.status(500).json({ ok:false, error:'Failed to fetch' });
@@ -154,6 +156,57 @@ export async function routeExpenses(action, body, auth, req, res) {
     const r = await supa('DELETE','business_expenses',null,{ id:`eq.${expenseId}` });
     if (!r.ok) return res.status(500).json({ ok:false, error:'Failed to delete' });
     return res.status(200).json({ ok:true });
+  }
+
+  // ── updateExpense (OWNER edit; propagates header fixes to purchase history) ─
+  if (action === 'updateExpense') {
+    const a = await checkAdminAuth();
+    if (!a.ok) return res.status(403).json({ ok:false, error:a.error });
+    if (a.role !== 'OWNER') return res.status(403).json({ ok:false, error:'OWNER only' });
+    const id = String(body.id||'').trim();
+    if (!id) return res.status(400).json({ ok:false, error:'id required' });
+    const cur = await supaFetch(`${SUPABASE_URL}/rest/v1/business_expenses?id=eq.${id}&select=purchase_group`);
+    const pg = cur.ok && cur.data && cur.data[0] ? cur.data[0].purchase_group : null;
+    const patch = { updated_at: new Date().toISOString() };
+    if (body.description !== undefined) patch.description = String(body.description).trim().substring(0,300);
+    if (body.amount !== undefined && !isNaN(parseFloat(body.amount))) patch.amount = parseFloat(body.amount);
+    if (body.category !== undefined) patch.category = String(body.category||'Other').trim();
+    if (body.paidVia !== undefined) patch.paid_via = String(body.paidVia||'').trim();
+    if (body.referenceNo !== undefined) patch.reference_no = body.referenceNo ? String(body.referenceNo).trim().substring(0,100) : null;
+    if (body.notes !== undefined) patch.notes = body.notes ? String(body.notes).trim().substring(0,500) : null;
+    if (body.expenseDate !== undefined) patch.expense_date = body.expenseDate;
+    if (body.store !== undefined) patch.store = body.store ? String(body.store).trim().substring(0,120) : null;
+    const r = await supa('PATCH','business_expenses', patch, { id:`eq.${id}` });
+    if (!r.ok) return res.status(500).json({ ok:false, error:'Failed to update' });
+    // header-only corrections carry to the immutable purchase-history rows (never prices)
+    if (pg) {
+      const hp = {};
+      if (body.category !== undefined) hp.category = String(body.category||'Other').trim();
+      if (body.referenceNo !== undefined) hp.reference_no = body.referenceNo ? String(body.referenceNo).trim() : null;
+      if (body.expenseDate !== undefined) hp.purchase_date = body.expenseDate;
+      if (body.store !== undefined) { hp.supplier_name = String(body.store||'').trim(); hp.store = String(body.store||'').trim(); }
+      if (body.paidVia !== undefined) hp.payment_method = String(body.paidVia||'').trim();
+      if (Object.keys(hp).length) { try { await supa('PATCH','inv_purchases', hp, { purchase_group:`eq.${pg}` }); } catch(_){} }
+    }
+    return res.status(200).json({ ok:true, purchase_group: pg||null });
+  }
+
+  // ── voidExpense (OWNER soft-void; keeps record for audit, drops from totals) ─
+  if (action === 'voidExpense') {
+    const a = await checkAdminAuth();
+    if (!a.ok) return res.status(403).json({ ok:false, error:a.error });
+    if (a.role !== 'OWNER') return res.status(403).json({ ok:false, error:'OWNER only' });
+    const id = String(body.id||'').trim();
+    if (!id) return res.status(400).json({ ok:false, error:'id required' });
+    const cur = await supaFetch(`${SUPABASE_URL}/rest/v1/business_expenses?id=eq.${id}&select=purchase_group`);
+    const pg = cur.ok && cur.data && cur.data[0] ? cur.data[0].purchase_group : null;
+    const now = new Date().toISOString();
+    const r = await supa('PATCH','business_expenses',
+      { is_void:true, voided_at:now, voided_reason: body.reason ? String(body.reason).trim().substring(0,300) : null, updated_at:now },
+      { id:`eq.${id}` });
+    if (!r.ok) return res.status(500).json({ ok:false, error:'Failed to void' });
+    if (pg) { try { await supa('PATCH','inv_purchases', { is_void:true, voided_at:now }, { purchase_group:`eq.${pg}` }); } catch(_){} }
+    return res.status(200).json({ ok:true, voided:true, purchase_group: pg||null });
   }
 
   return false;
