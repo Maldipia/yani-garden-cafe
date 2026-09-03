@@ -135,14 +135,24 @@ function _expRenderTable(){
   var recs=_expFiltered();
   if(!recs.length){ wrap.innerHTML='<div style="background:#fff;border:1px dashed var(--mist);border-radius:12px;padding:40px;text-align:center;color:var(--timber);font-size:.82rem">No records for this filter.</div>'; return; }
   var h='<div style="background:#fff;border:1px solid var(--mist);border-radius:12px;overflow:auto;max-height:calc(100vh - 300px)">';
-  h+='<table style="width:100%;border-collapse:collapse;font-size:.76rem;min-width:900px">';
+  h+='<table style="width:100%;border-collapse:collapse;font-size:.76rem;min-width:1000px">';
   h+='<thead><tr style="background:var(--forest-deep)">';
-  ['Date','Supplier / Store','Description','Category','Amount','Inventory','Status'].forEach(function(c,i){
-    h+='<th style="position:sticky;top:0;z-index:2;background:var(--forest-deep);text-align:'+(i===4?'right':'left')+';padding:9px 12px;color:#fff;font-weight:700;font-size:.64rem;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap">'+c+'</th>'; });
+  ['Date','Supplier / Store','Description','Qty','Unit Price','Category','Amount','Inventory','Status'].forEach(function(c,i){
+    h+='<th style="position:sticky;top:0;z-index:2;background:var(--forest-deep);text-align:'+(i===6?'right':'left')+';padding:9px 12px;color:#fff;font-weight:700;font-size:.64rem;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap">'+c+'</th>'; });
   h+='</tr></thead><tbody>';
   recs.forEach(function(g,idx){
     var bg=idx%2?'var(--mist-light)':'#fff';
     var _l0=g.lines[0];
+    var _multi=(g.pgroup||g.lines.length>1);
+    var _q=(_l0.qty!=null&&_l0.qty!=='')?_expFmt(_l0.qty):'';
+    var _u=_l0.unit||'';
+    var _up=(_l0.unit_price!=null&&_l0.unit_price!=='')?parseFloat(_l0.unit_price):null;
+    // fall back to effective per-unit = amount / qty when unit_price missing
+    if(_up==null && _q && parseFloat(_l0.qty)>0 && _l0.amount) _up=Math.round((parseFloat(_l0.amount)/parseFloat(_l0.qty))*100)/100;
+    var qtyCell = _multi ? '<span style="color:var(--timber)">'+((g.lineCount||g.lines.length)+' lines')+'</span>'
+      : (_q ? '<span style="font-weight:600;color:var(--forest-deep)">'+_q+(_u?' '+escH(_u):'')+'</span>' : '<span style="color:var(--timber)">—</span>');
+    var upCell = _multi ? '<span style="color:var(--timber)">—</span>'
+      : (_up!=null ? '<span style="color:var(--forest-deep)">'+peso(_up)+(_u?' <span style="color:var(--timber)">/ '+escH(_u)+'</span>':'')+'</span>' : '<span style="color:var(--timber)">—</span>');
     var desc;
     if(g.pgroup){ desc=escH((g.lineCount||1)+' item'+((g.lineCount||1)>1?'s':'')); }
     else if(g.lines.length>1){ desc=escH(g.lines.length+' items'); }
@@ -159,6 +169,8 @@ function _expRenderTable(){
       +'<td style="padding:9px 12px;color:var(--forest-deep);font-weight:600;white-space:nowrap">'+_expDate(g.date)+'</td>'
       +'<td style="padding:9px 12px;color:var(--forest-deep);white-space:nowrap">'+escH(g.supplier||'—')+'</td>'
       +'<td style="padding:9px 12px;color:var(--forest-deep)">'+desc+badge+'</td>'
+      +'<td style="padding:9px 12px;font-size:.74rem;white-space:nowrap">'+qtyCell+'</td>'
+      +'<td style="padding:9px 12px;font-size:.74rem;white-space:nowrap">'+upCell+'</td>'
       +'<td style="padding:9px 12px;color:var(--timber);white-space:nowrap">'+escH(g.category||'—')+'</td>'
       +'<td style="padding:9px 12px;text-align:right;font-weight:700;color:#dc2626;white-space:nowrap">'+peso(g.total)+'</td>'
       +'<td style="padding:9px 12px;font-size:.72rem;white-space:nowrap">'+inv+'</td>'
