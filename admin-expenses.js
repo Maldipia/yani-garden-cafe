@@ -25,6 +25,12 @@ var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov',
 function peso(n){ return '₱' + Math.abs(parseFloat(n)||0).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function escH(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
 function _expIsUtil(c){ return UTILITY_CATS.indexOf(c)>-1; }
+// Parse pack count from item name: "24s"=24, "6s"=6, "190/4s"=4 (last N before a trailing s)
+function _expPackCount(name){
+  if(!name) return null; var m, last=null, re=/(\d+)\s*s\b/gi;
+  while((m=re.exec(String(name)))!==null){ last=parseInt(m[1],10); }
+  return (last && last>1) ? last : null;
+}
 function _expIsPurchCat(c){ return PURCHASE_CATS.indexOf(c)>-1; }
 
 async function initExpenses(){
@@ -149,10 +155,15 @@ function _expRenderTable(){
     var _up=(_l0.unit_price!=null&&_l0.unit_price!=='')?parseFloat(_l0.unit_price):null;
     // fall back to effective per-unit = amount / qty when unit_price missing
     if(_up==null && _q && parseFloat(_l0.qty)>0 && _l0.amount) _up=Math.round((parseFloat(_l0.amount)/parseFloat(_l0.qty))*100)/100;
+    // pack count from item name ("24s" = 24 pcs, "6s" = 6, "190/4s" = 4) — only for pack-type units
+    var _packUnits=['case','pk','pack','box','tray','set','bundle','dozen','ctn','carton'];
+    var _pack=_expPackCount(_l0.description);
+    var _perPc=(_pack && _up!=null && _packUnits.indexOf((_u||'').toLowerCase())>-1) ? Math.round((_up/_pack)*100)/100 : null;
+    var _totalPcs=(_pack && _q) ? _expFmt(parseFloat(_l0.qty)*_pack) : null;
     var qtyCell = _multi ? '<span style="color:var(--timber)">'+((g.lineCount||g.lines.length)+' lines')+'</span>'
-      : (_q ? '<span style="font-weight:600;color:var(--forest-deep)">'+_q+(_u?' '+escH(_u):'')+'</span>' : '<span style="color:var(--timber)">—</span>');
+      : (_q ? '<span style="font-weight:600;color:var(--forest-deep)">'+_q+(_u?' '+escH(_u):'')+'</span>'+(_totalPcs?'<div style="font-size:.64rem;color:var(--timber)">'+_totalPcs+' pcs</div>':'') : '<span style="color:var(--timber)">—</span>');
     var upCell = _multi ? '<span style="color:var(--timber)">—</span>'
-      : (_up!=null ? '<span style="color:var(--forest-deep)">'+peso(_up)+(_u?' <span style="color:var(--timber)">/ '+escH(_u)+'</span>':'')+'</span>' : '<span style="color:var(--timber)">—</span>');
+      : (_up!=null ? '<span style="color:var(--forest-deep)">'+peso(_up)+(_u?' <span style="color:var(--timber)">/ '+escH(_u)+'</span>':'')+'</span>'+(_perPc!=null?'<div style="font-size:.64rem;color:var(--gold);font-weight:700">'+peso(_perPc)+' / pc</div>':'') : '<span style="color:var(--timber)">—</span>');
     var desc;
     if(g.pgroup){ desc=escH((g.lineCount||1)+' item'+((g.lineCount||1)>1?'s':'')); }
     else if(g.lines.length>1){ desc=escH(g.lines.length+' items'); }
