@@ -5,7 +5,7 @@ import { SUPABASE_URL }            from '../lib/config.js';
 const EXPENSE_ACTIONS = new Set([
   'addShiftExpense','getShiftExpenses',
   'addBusinessExpense','getBusinessExpenses','deleteBusinessExpense',
-  'updateExpense','voidExpense',
+  'updateExpense','voidExpense','scanReceipt',
   'saveExpensePurchase','markExpenseReceived'
 ]);
 
@@ -207,6 +207,42 @@ export async function routeExpenses(action, body, auth, req, res) {
     if (!r.ok) return res.status(500).json({ ok:false, error:'Failed to void' });
     if (pg) { try { await supa('PATCH','inv_purchases', { is_void:true, voided_at:now }, { purchase_group:`eq.${pg}` }); } catch(_){} }
     return res.status(200).json({ ok:true, voided:true, purchase_group: pg||null });
+  }
+
+  // ── scanReceipt (AI reads a receipt photo → structured data for the form) ──
+  if (action === 'scanReceipt') {
+    const a = await checkAdminAuth();
+    if (!a.ok) return res.status(403).json({ ok:false, error:a.error });
+    const key = process.env.GEMINI_API_KEY;
+    if (!key) return res.status(500).json({ ok:false, error:'Scan not set up yet (GEMINI_API_KEY missing)' });
+    const imageBase64 = String(body.imageBase64 || '');
+    const mimeType = String(body.mimeType || 'image/jpeg');
+    if (!imageBase64) return res.status(400).json({ ok:false, error:'image required' });
+    const prompt = 'You are reading a Philippine business receipt/bill for a cafe. Return ONLY JSON (no markdown) with this exact schema:\n'
+      + '{"kind":"purchase|expense","supplier":"","date":"YYYY-MM-DD","reference_no":"","payment_method":"","category":"",\n'
+      + ' "lines":[{"item":"","qty":0,"unit":"pc|kg|g|L|ml|case|pk|box|btl","unit_price":0,"total":0}],"grand_total":0}\n'
+      + 'Rules: kind="expense" for utility bills (water/electric/internet/rent/repair) with lines=[]; kind="purchase" for itemized goods. '
+      + 'Use the actual TRANSACTION date (not any accreditation/permit date). category must be one of: '
+      + 'Stocks & Groceries, Utilities, Electricity, Water, Internet / Cable, Gas / Fuel, Rent, Equipment Repair, Packaging, Cleaning / Supplies, Office / Admin, Marketing, Transport / Delivery, Other. '
+      + 'unit_price is per single unit; total is the line amount. Numbers only for numeric fields.';
+    const gBody = {
+      contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mimeType, data: imageBase64 } }] }],
+      generationConfig: { temperature: 0, responseMimeType: 'application/json' },
+    };
+    const MODELS = ['gemini-3.1-flash-lite', 'gemini-3.5-flash', 'gemini-flash-latest'];
+    for (const model of MODELS) {
+      try {
+        const gr = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
+          { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(gBody) });
+        if (gr.status === 503 || gr.status === 429) continue;  // busy → next model
+        const gj = await gr.json();
+        const txt = gj && gj.candidates && gj.candidates[0] && gj.candidates[0].content && gj.candidates[0].content.parts && gj.candidates[0].content.parts[0] && gj.candidates[0].content.parts[0].text;
+        if (!txt) continue;
+        let data; try { data = JSON.parse(txt); } catch(_) { continue; }
+        return res.status(200).json({ ok:true, extracted: data, model });
+      } catch(_) { /* try next model */ }
+    }
+    return res.status(502).json({ ok:false, error:'Could not read the receipt (AI busy or image unclear) — try again or enter it manually.' });
   }
 
   return false;

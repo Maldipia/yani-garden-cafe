@@ -91,7 +91,10 @@ function renderExpensesView(){
   h+='<div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">';
   h+='<div><h2 style="margin:0;color:var(--forest-deep);font-size:1.3rem">💰 Expenses</h2>'
     +'<div style="font-size:.74rem;color:var(--timber);margin-top:2px">Track business spending and build YANI\u2019s purchasing history.</div></div>';
-  h+='<button onclick="_expOpenRecord()" style="background:var(--forest);color:#fff;border:none;border-radius:var(--r-sm,8px);padding:9px 16px;font-size:.8rem;font-weight:700;cursor:pointer;white-space:nowrap">+ Record Purchase</button>';
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap">'
+    +'<button onclick="_expScanReceipt()" style="background:#fff;color:var(--forest);border:1.5px solid var(--forest);border-radius:var(--r-sm,8px);padding:9px 16px;font-size:.8rem;font-weight:700;cursor:pointer;white-space:nowrap">📷 Scan Receipt</button>'
+    +'<button onclick="_expOpenRecord()" style="background:var(--forest);color:#fff;border:none;border-radius:var(--r-sm,8px);padding:9px 16px;font-size:.8rem;font-weight:700;cursor:pointer;white-space:nowrap">+ Record Purchase</button>'
+    +'</div>';
   h+='</div>';
   // 3 summary cards
   h+='<div class="exp-sum" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">';
@@ -528,4 +531,54 @@ async function _expVoid(key){
   for(var i=0;i<g.lines.length;i++){ var r=await api('voidExpense',{ id:g.lines[i].id, reason:reason }); if(!(r&&r.ok)) ok=false; }
   if(ok){ showToast('Voided ✅ (kept for audit)'); _expCloseDrawer(); await initExpenses(); }
   else showToast('Failed to void','error');
+}
+
+// ── SCAN RECEIPT (upload photo → Gemini reads → pre-fills the form) ─────────
+function _expScanReceipt(){
+  if(!_expIsOwner() && !(currentUser && currentUser.role==='ADMIN')){ showToast('ADMIN/OWNER only','error'); return; }
+  var inp=document.createElement('input'); inp.type='file'; inp.accept='image/*'; inp.capture='environment';
+  inp.onchange=function(){
+    var f=inp.files && inp.files[0]; if(!f) return;
+    if(f.size > 8*1024*1024){ showToast('Image too large (max 8MB) — retake smaller','error'); return; }
+    var reader=new FileReader();
+    reader.onload=async function(){
+      var res=String(reader.result||''); var b64=res.split(',')[1]; var mime=f.type||'image/jpeg';
+      if(!b64){ showToast('Could not read the image','error'); return; }
+      showToast('📷 Reading receipt…');
+      try{
+        var r=await api('scanReceipt',{ imageBase64:b64, mimeType:mime });
+        if(r&&r.ok&&r.extracted){ _expOpenFromScan(r.extracted); }
+        else showToast((r&&r.error)||'Could not read the receipt','error');
+      }catch(e){ showToast('Scan failed — try again or enter manually','error'); }
+    };
+    reader.readAsDataURL(f);
+  };
+  inp.click();
+}
+function _expUnitIdByName(n){ if(!n) return ''; var u=_expUnits.filter(function(x){return x.name.toLowerCase()===String(n).toLowerCase();})[0]; return u?u.id:''; }
+function _expSetSelect(id,val){ var s=document.getElementById(id); if(!s||val==null)return; var v=String(val).toLowerCase(); for(var i=0;i<s.options.length;i++){ if(s.options[i].value.toLowerCase()===v||s.options[i].text.toLowerCase()===v){ s.selectedIndex=i; return; } } }
+function _expOpenFromScan(d){
+  var isPurchase = (d.kind!=='expense') && Array.isArray(d.lines) && d.lines.length>0;
+  if(isPurchase){
+    _expRecMode='purchase';
+    _expLines = d.lines.map(function(l){ return { item:l.item||'', qty:l.qty, unitId:_expUnitIdByName(l.unit), unitPrice:l.unit_price, total:l.total }; });
+    if(!_expLines.length) _expLines=[{}];
+    _expModal(_expRecordShell());
+    setTimeout(function(){
+      var S=function(id,v){var e=document.getElementById(id); if(e&&v!=null&&v!=='') e.value=v;};
+      S('epSup',d.supplier); S('epDate',d.date); S('epRef',d.reference_no);
+      _expSetSelect('epPay',d.payment_method); _expSetSelect('epCat',d.category);
+      _expRenderLines();
+      showToast('✅ Receipt read — review each line & Save');
+    },50);
+  } else {
+    _expRecMode='general';
+    _expModal(_expRecordShell());
+    setTimeout(function(){
+      var S=function(id,v){var e=document.getElementById(id); if(e&&v!=null&&v!=='') e.value=v;};
+      S('geTitle',d.supplier||d.reference_no||'Bill'); S('geAmt',d.grand_total); S('geDate',d.date); S('geRef',d.reference_no);
+      _expSetSelect('geCat',d.category);
+      showToast('✅ Bill read — review & Save');
+    },50);
+  }
 }
