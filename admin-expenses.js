@@ -286,9 +286,12 @@ function _expGeneralDrawer(g){
     +'<div style="font-size:1.15rem;font-weight:800;color:var(--forest-deep)">'+escH(g.desc||l.description||'Expense')+'</div></div>'
     +'<button onclick="_expCloseDrawer()" style="background:var(--mist-light);border:none;border-radius:8px;width:30px;height:30px;cursor:pointer;font-size:1rem;color:var(--forest)">✕</button></div>';
   h+='<div style="font-size:.72rem;color:var(--timber);margin:6px 0 12px">🗓 '+_expDateFull(g.date)+'</div>';
+  if(g.supplier||l.store) h+=_expDrawerRow('Supplier / Payee', escH(g.supplier||l.store));
   h+=_expDrawerRow('Category', escH(g.category||'—'));
+  if(l.qty||l.unit_price!=null) h+=_expDrawerRow('Qty', escH(_expFmt(l.qty||''))+(l.unit?' '+escH(l.unit):'')+(l.unit_price!=null?' × '+peso(l.unit_price):''));
   h+=_expDrawerRow('Amount', '<span style="color:#dc2626">'+peso(g.total)+'</span>');
   h+=_expDrawerRow('Payment', escH(g.paid||'—'));
+  h+=_expDrawerRow('Status', l.is_paid===false?'<span style="color:#b45309">Unpaid / Due</span>':'<span style="color:#15803d">Paid</span>');
   if(g.ref) h+=_expDrawerRow('Reference', escH(g.ref));
   if(g.notes) h+='<div style="margin-top:8px;font-size:.74rem;color:var(--forest-deep)"><span style="color:var(--timber)">Notes:</span> '+escH(g.notes)+'</div>';
   h+='<div style="font-size:.64rem;color:var(--timber);text-transform:uppercase;letter-spacing:.4px;font-weight:700;margin:16px 0 6px">Inventory</div>';
@@ -311,6 +314,8 @@ function _expField(l,i){ return '<label style="font-size:.72rem;font-weight:700;
 function _expInput(id,t,ph,v){ return '<input id="'+id+'" type="'+(t||'text')+'"'+(ph?' placeholder="'+ph+'"':'')+(v!=null?' value="'+escH(v)+'"':'')+' style="width:100%;margin-top:3px;font-size:.82rem;padding:8px;border:1.5px solid var(--mist);border-radius:8px">'; }
 function _expSel(id,opts,onch){ return '<select id="'+id+'"'+(onch?' onchange="'+onch+'"':'')+' style="width:100%;margin-top:3px;font-size:.82rem;padding:8px;border:1.5px solid var(--mist);border-radius:8px">'+opts+'</select>'; }
 
+function _expVal(id){ var e=document.getElementById(id); return e ? String(e.value||'').trim() : ''; }
+function _expPaidOpts(isPaid){ return '<option value="PAID"'+(isPaid!==false?' selected':'')+'>Paid</option><option value="UNPAID"'+(isPaid===false?' selected':'')+'>Unpaid / Due</option>'; }
 function _expOpenRecord(){ _expRecMode='purchase'; _expLines=[{}]; _expModal(_expRecordShell()); _expRenderLines(); }
 function _expRecordShell(){
   var tab=function(m,label){ var on=_expRecMode===m; return '<button onclick="_expSetMode(\''+m+'\')" style="flex:1;padding:8px;font-size:.8rem;font-weight:700;border:none;cursor:pointer;border-radius:8px;'+(on?'background:var(--forest);color:#fff':'background:var(--mist-light);color:var(--timber)')+'">'+label+'</button>'; };
@@ -417,11 +422,18 @@ function _expGeneralForm(){
   return '<div style="font-size:.64rem;color:var(--timber);margin-bottom:8px">Simple expense — no itemization, no inventory link (water, rent, repairs, etc.).</div>'
     +_expField('Expense Title *',_expInput('geTitle','text','e.g. Water Bill'))
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
-      +'<div>'+_expField('Category *',_expSel('geCat',catOpts))+'</div>'
-      +'<div>'+_expField('Expense Date *',_expInput('geDate','date','',today))+'</div></div>'
+      +'<div>'+_expField('Supplier / Payee',_expInput('geStore','text','e.g. Amadeo Water District'))+'</div>'
+      +'<div>'+_expField('Category *',_expSel('geCat',catOpts))+'</div></div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
-      +'<div>'+_expField('Amount *',_expInput('geAmt','number','0'))+'</div>'
-      +'<div>'+_expField('Payment Method *',_expSel('gePay',payOpts))+'</div></div>'
+      +'<div>'+_expField('Expense Date *',_expInput('geDate','date','',today))+'</div>'
+      +'<div>'+_expField('Amount *',_expInput('geAmt','number','0'))+'</div></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+      +'<div>'+_expField('Payment Method *',_expSel('gePay',payOpts))+'</div>'
+      +'<div>'+_expField('Status',_expSel('gePaid',_expPaidOpts(true)))+'</div></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">'
+      +'<div>'+_expField('Qty',_expInput('geQty','text','optional'))+'</div>'
+      +'<div>'+_expField('Unit',_expInput('geUnit','text','e.g. tank'))+'</div>'
+      +'<div>'+_expField('Unit price',_expInput('geUP','number','optional'))+'</div></div>'
     +_expField('Reference No. (optional)',_expInput('geRef','text',''))
     +_expField('Notes (optional)',_expInput('geNotes','text',''))
     +'<div style="display:flex;gap:8px;margin-top:16px"><button onclick="_expCloseModal()" style="flex:1;font-size:.82rem;font-weight:700;background:var(--mist-light);color:var(--forest);border:none;border-radius:8px;padding:10px;cursor:pointer">Cancel</button>'
@@ -435,9 +447,12 @@ async function _expSaveGeneral(){
   var pay=(document.getElementById('gePay')||{}).value;
   var ref=(document.getElementById('geRef')||{}).value.trim();
   var notes=(document.getElementById('geNotes')||{}).value.trim();
+  var store=_expVal('geStore'), qty=_expVal('geQty'), unit=_expVal('geUnit'), up=_expVal('geUP');
+  var paid=_expVal('gePaid')!=='UNPAID';
   if(!title){ showToast('Enter a title','error'); return; }
   if(!(amt>0)){ showToast('Enter amount','error'); return; }
-  var r=await api('addBusinessExpense',{ description:title, amount:amt, category:cat, paidVia:pay, referenceNo:ref, notes:notes, expenseDate:date });
+  var r=await api('addBusinessExpense',{ description:title, amount:amt, category:cat, paidVia:pay, referenceNo:ref, notes:notes, expenseDate:date,
+    store:store, qty:qty, unit:unit, unitPrice:up, isPaid:paid });
   if(r&&r.ok){ showToast('Expense saved ✅'); _expCloseModal(); await initExpenses(); }
   else showToast('Failed: '+((r&&r.error)||'Unknown'),'error');
 }
@@ -498,8 +513,13 @@ function _expOpenEdit(key){
       +_expField('Notes',_expInput('edNotes','text','',g.notes||''));
   } else {
     body=_expField('Title',_expInput('edDesc','text','',g.desc||l0.description||''))
-      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div>'+_expField('Amount',_expInput('edAmt','number','',g.total))+'</div><div>'+_expField('Date',_expInput('edDate','date','',g.date))+'</div></div>'
-      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div>'+_expField('Category',_expSel('edCat',catOpts))+'</div><div>'+_expField('Payment',_expSel('edPay',payOpts))+'</div></div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div>'+_expField('Supplier / Payee',_expInput('edStore','text','',g.supplier||l0.store||''))+'</div><div>'+_expField('Category',_expSel('edCat',catOpts))+'</div></div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div>'+_expField('Date',_expInput('edDate','date','',g.date))+'</div><div>'+_expField('Amount',_expInput('edAmt','number','',g.total))+'</div></div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div>'+_expField('Payment',_expSel('edPay',payOpts))+'</div><div>'+_expField('Status',_expSel('edPaid',_expPaidOpts(l0.is_paid)))+'</div></div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">'
+        +'<div>'+_expField('Qty',_expInput('edQty','text','',l0.qty||''))+'</div>'
+        +'<div>'+_expField('Unit',_expInput('edUnit','text','',l0.unit||''))+'</div>'
+        +'<div>'+_expField('Unit price',_expInput('edUP','number','',l0.unit_price!=null?l0.unit_price:''))+'</div></div>'
       +_expField('Reference',_expInput('edRef','text','',g.ref||''))
       +_expField('Notes',_expInput('edNotes','text','',g.notes||''));
   }
@@ -512,7 +532,8 @@ async function _expSaveEdit(key, isPurchase){
   var V=function(id){var e=document.getElementById(id);return e?e.value:undefined;};
   var payload={};
   if(isPurchase){ payload={ store:V('edSup'), expenseDate:V('edDate'), paidVia:V('edPay'), category:V('edCat'), referenceNo:V('edRef'), notes:V('edNotes') }; }
-  else { payload={ description:V('edDesc'), amount:V('edAmt'), expenseDate:V('edDate'), category:V('edCat'), paidVia:V('edPay'), referenceNo:V('edRef'), notes:V('edNotes') }; }
+  else { payload={ description:V('edDesc'), amount:V('edAmt'), expenseDate:V('edDate'), category:V('edCat'), paidVia:V('edPay'), referenceNo:V('edRef'), notes:V('edNotes'),
+    store:V('edStore'), qty:V('edQty'), unit:V('edUnit'), unitPrice:V('edUP'), isPaid:(V('edPaid')!=='UNPAID') }; }
   var ok=true;
   for(var i=0;i<g.lines.length;i++){
     var r=await api('updateExpense', Object.assign({id:g.lines[i].id}, payload));
@@ -576,7 +597,8 @@ function _expOpenFromScan(d){
     _expModal(_expRecordShell());
     setTimeout(function(){
       var S=function(id,v){var e=document.getElementById(id); if(e&&v!=null&&v!=='') e.value=v;};
-      S('geTitle',d.supplier||d.reference_no||'Bill'); S('geAmt',d.grand_total); S('geDate',d.date); S('geRef',d.reference_no);
+      S('geTitle',d.description||d.supplier||d.reference_no||'Bill'); S('geStore',d.supplier);
+      S('geAmt',d.grand_total); S('geDate',d.date); S('geRef',d.reference_no);
       _expSetSelect('geCat',d.category);
       showToast('✅ Bill read — review & Save');
     },50);

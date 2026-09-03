@@ -176,6 +176,10 @@ export async function routeExpenses(action, body, auth, req, res) {
     if (body.notes !== undefined) patch.notes = body.notes ? String(body.notes).trim().substring(0,500) : null;
     if (body.expenseDate !== undefined) patch.expense_date = body.expenseDate;
     if (body.store !== undefined) patch.store = body.store ? String(body.store).trim().substring(0,120) : null;
+    if (body.qty !== undefined) patch.qty = body.qty ? String(body.qty).trim().substring(0,100) : null;
+    if (body.unit !== undefined) patch.unit = body.unit ? String(body.unit).trim().substring(0,40) : null;
+    if (body.unitPrice !== undefined) patch.unit_price = (body.unitPrice !== null && String(body.unitPrice).trim() !== '' && !isNaN(parseFloat(body.unitPrice))) ? parseFloat(body.unitPrice) : null;
+    if (body.isPaid !== undefined) patch.is_paid = body.isPaid !== false;
     const r = await supa('PATCH','business_expenses', patch, { id:`eq.${id}` });
     if (!r.ok) return res.status(500).json({ ok:false, error:'Failed to update' });
     // header-only corrections carry to the immutable purchase-history rows (never prices)
