@@ -141,7 +141,14 @@ function _expRenderTable(){
   h+='</tr></thead><tbody>';
   recs.forEach(function(g,idx){
     var bg=idx%2?'var(--mist-light)':'#fff';
-    var desc = g.isPurchase ? (g.lineCount?(g.lineCount+' item'+(g.lineCount>1?'s':'')):(g.desc||'Purchase')) : (g.desc||g.lines[0].description||'—');
+    var _l0=g.lines[0];
+    var _qu=((_l0.qty!=null&&_l0.qty!=='')?_expFmt(_l0.qty):'')+(_l0.unit?(' '+escH(_l0.unit)):'');
+    _qu=_qu.trim();
+    var _quHtml=_qu?' <span style="color:var(--timber);font-weight:400;font-size:.72rem">· '+_qu+'</span>':'';
+    var desc;
+    if(g.pgroup){ desc=escH((g.lineCount||1)+' item'+((g.lineCount||1)>1?'s':'')); }
+    else if(g.lines.length>1){ desc=escH(g.lines.length+' items'); }
+    else { desc=escH(_l0.description||g.desc||'—')+_quHtml; }
     var badge = g.isPurchase
       ? '<span style="font-size:.58rem;font-weight:700;background:#eef5ff;color:#1d4ed8;padding:1px 6px;border-radius:4px;margin-left:6px">Purchase</span>'
       : '<span style="font-size:.58rem;font-weight:700;background:var(--mist-light);color:var(--timber);padding:1px 6px;border-radius:4px;margin-left:6px">Expense</span>';
@@ -153,7 +160,7 @@ function _expRenderTable(){
     h+='<tr onclick="_expOpenDetail(\''+g.key+'\')" style="cursor:pointer;background:'+bg+';border-top:1px solid var(--mist-light)" onmouseover="this.style.background=\'#eef5f0\'" onmouseout="this.style.background=\''+bg+'\'">'
       +'<td style="padding:9px 12px;color:var(--forest-deep);font-weight:600;white-space:nowrap">'+_expDate(g.date)+'</td>'
       +'<td style="padding:9px 12px;color:var(--forest-deep);white-space:nowrap">'+escH(g.supplier||'—')+'</td>'
-      +'<td style="padding:9px 12px;color:var(--forest-deep)">'+escH(desc)+badge+'</td>'
+      +'<td style="padding:9px 12px;color:var(--forest-deep)">'+desc+badge+'</td>'
       +'<td style="padding:9px 12px;color:var(--timber);white-space:nowrap">'+escH(g.category||'—')+'</td>'
       +'<td style="padding:9px 12px;text-align:right;font-weight:700;color:#dc2626;white-space:nowrap">'+peso(g.total)+'</td>'
       +'<td style="padding:9px 12px;font-size:.72rem;white-space:nowrap">'+inv+'</td>'
