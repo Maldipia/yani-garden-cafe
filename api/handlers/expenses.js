@@ -52,7 +52,7 @@ export async function routeExpenses(action, body, auth, req, res) {
   if (action === 'addBusinessExpense') {
     const a = await checkAdminAuth();
     if (!a.ok) return res.status(403).json({ ok:false, error:a.error });
-    const { description, amount, category, paidVia, referenceNo, notes, expenseDate, isPaid, qty, store, unit, unitPrice } = body;
+    const { description, amount, category, paidVia, referenceNo, notes, expenseDate, isPaid, qty, store, unit, unitPrice, sizePerUnit } = body;
     if (!description?.trim()) return res.status(400).json({ ok:false, error:'Description required' });
     const amt = parseFloat(amount);
     if (!amt || amt <= 0) return res.status(400).json({ ok:false, error:'Valid amount required' });
@@ -68,6 +68,7 @@ export async function routeExpenses(action, body, auth, req, res) {
       store: store ? String(store).trim().substring(0,120) : null,
       unit: unit ? String(unit).trim().substring(0,40) : null,
       unit_price: (unitPrice!==undefined && unitPrice!==null && String(unitPrice).trim()!=='' && !isNaN(parseFloat(unitPrice))) ? parseFloat(unitPrice) : null,
+      size_per_unit: (sizePerUnit!==undefined && sizePerUnit!==null && String(sizePerUnit).trim()!=='' && !isNaN(parseFloat(sizePerUnit))) ? parseFloat(sizePerUnit) : null,
       added_by: a.userId||'staff', added_by_role: a.role||'',
     });
     if (!r.ok) return res.status(500).json({ ok:false, error:'Failed to save' });
@@ -179,6 +180,7 @@ export async function routeExpenses(action, body, auth, req, res) {
     if (body.qty !== undefined) patch.qty = body.qty ? String(body.qty).trim().substring(0,100) : null;
     if (body.unit !== undefined) patch.unit = body.unit ? String(body.unit).trim().substring(0,40) : null;
     if (body.unitPrice !== undefined) patch.unit_price = (body.unitPrice !== null && String(body.unitPrice).trim() !== '' && !isNaN(parseFloat(body.unitPrice))) ? parseFloat(body.unitPrice) : null;
+    if (body.sizePerUnit !== undefined) patch.size_per_unit = (body.sizePerUnit !== null && String(body.sizePerUnit).trim() !== '' && !isNaN(parseFloat(body.sizePerUnit))) ? parseFloat(body.sizePerUnit) : null;
     if (body.isPaid !== undefined) patch.is_paid = body.isPaid !== false;
     const r = await supa('PATCH','business_expenses', patch, { id:`eq.${id}` });
     if (!r.ok) return res.status(500).json({ ok:false, error:'Failed to update' });

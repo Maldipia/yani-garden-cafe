@@ -288,7 +288,15 @@ function _expGeneralDrawer(g){
   h+='<div style="font-size:.72rem;color:var(--timber);margin:6px 0 12px">🗓 '+_expDateFull(g.date)+'</div>';
   if(g.supplier||l.store) h+=_expDrawerRow('Supplier / Payee', escH(g.supplier||l.store));
   h+=_expDrawerRow('Category', escH(g.category||'—'));
-  if(l.qty||l.unit_price!=null) h+=_expDrawerRow('Qty', escH(_expFmt(l.qty||''))+(l.unit?' '+escH(l.unit):'')+(l.unit_price!=null?' × '+peso(l.unit_price):''));
+  if(l.qty||l.unit_price!=null){
+    var _q=parseFloat(l.qty)||0, _sz=parseFloat(l.size_per_unit)||0, _u=l.unit||'';
+    var _line=(l.qty?escH(_expFmt(l.qty)):'—')+(_sz>0?' × '+_expFmt(_sz)+' '+escH(_u):(_u?' '+escH(_u):''))+(l.unit_price!=null?' @ '+peso(l.unit_price):'');
+    h+=_expDrawerRow('Qty', _line);
+    if(_q>0&&_sz>0&&_u){ var _base=_q*_sz;
+      h+=_expDrawerRow('Total measure', _expFmt(Math.round(_base*100)/100)+' '+escH(_u));
+      if(g.total>0) h+=_expDrawerRow('Cost per '+escH(_u), '₱'+(g.total/_base).toFixed(4).replace(/0+$/,'').replace(/\.$/,''));
+    }
+  }
   h+=_expDrawerRow('Amount', '<span style="color:#dc2626">'+peso(g.total)+'</span>');
   h+=_expDrawerRow('Payment', escH(g.paid||'—'));
   h+=_expDrawerRow('Status', l.is_paid===false?'<span style="color:#b45309">Unpaid / Due</span>':'<span style="color:#15803d">Paid</span>');
@@ -312,14 +320,14 @@ function _expModal(inner){
 function _expCloseModal(){ var m=document.getElementById('expModal'); if(m) m.remove(); }
 function _expField(l,i){ return '<label style="font-size:.72rem;font-weight:700;color:var(--forest-deep);display:block;margin-top:8px">'+l+'</label>'+i; }
 function _expInput(id,t,ph,v,ex){ return '<input id="'+id+'" type="'+(t||'text')+'"'+(ph?' placeholder="'+ph+'"':'')+(v!=null?' value="'+escH(v)+'"':'')+(ex||'')+' style="width:100%;margin-top:3px;font-size:.82rem;padding:8px;border:1.5px solid var(--mist);border-radius:8px">'; }
-// Unit picker: dropdown suggestions but still free-text (so "150 g" or "1.5L pack" stay valid)
+// Unit picker: dropdown suggestions but still free-text (so legacy values survive)
 var _EXP_COMMON_UNITS = ['pcs','pack','box','bottle','can','sachet','bag','tray','dozen','sack','tank','set','roll','bundle','kg','g','L','mL'];
 function _expUnitDatalist(){
   var names=_EXP_COMMON_UNITS.slice();
   (_expUnits||[]).forEach(function(u){ if(u&&u.name&&names.indexOf(u.name)<0) names.push(u.name); });
   return '<datalist id="expUnitOpts">'+names.map(function(n){return '<option value="'+escH(n)+'">';}).join('')+'</datalist>';
 }
-function _expUnitInput(id,val){ return _expInput(id,'text','pcs, kg, 150 g…',val||'',' list="expUnitOpts"')+_expUnitDatalist(); }
+function _expUnitInput(id,val){ return _expInput(id,'text','g, kg, mL, pcs…',val||'',' list="expUnitOpts" oninput="_expAutoAmt(\''+id.substring(0,2)+'\')"')+_expUnitDatalist(); }
 // qty ↔ unit price ↔ amount auto-compute (p = 'ge' or 'ed')
 function _expNum(id){ var v=parseFloat(_expVal(id)); return isNaN(v)?0:v; }
 function _exp2(n){ return Math.round(n*100)/100; }
@@ -328,10 +336,26 @@ function _expAutoAmt(p){
   var A=document.getElementById(p+'Amt'), U=document.getElementById(p+'UP');
   if(q>0 && u>0){ if(A) A.value=_exp2(q*u); }
   else if(q>0 && u===0 && a>0){ if(U) U.value=_exp2(a/q); }
+  _expBreakdown(p);
 }
 function _expAutoUP(p){
   var q=_expNum(p+'Qty'), a=_expNum(p+'Amt'), U=document.getElementById(p+'UP');
   if(q>0 && a>0 && U) U.value=_exp2(a/q);
+  _expBreakdown(p);
+}
+// live "6 × 150 g = 900 g · ₱2.13/g" readout
+function _expBreakdown(p){
+  var box=document.getElementById(p+'Calc'); if(!box) return;
+  var q=_expNum(p+'Qty'), sz=_expNum(p+'Size'), un=_expVal(p+'Unit'), up=_expNum(p+'UP'), a=_expNum(p+'Amt');
+  if(!(q>0)){ box.innerHTML='Qty × Unit price fills Amount automatically. Type Amount first and Qty back-solves the unit price.'; return; }
+  var parts=[];
+  if(sz>0 && un){
+    var base=_exp2(q*sz);
+    parts.push('<b>'+_expFmt(q)+' × '+_expFmt(sz)+' '+escH(un)+' = '+_expFmt(base)+' '+escH(un)+'</b>');
+    if(a>0 && base>0) parts.push('₱'+(a/base).toFixed(4).replace(/0+$/,'').replace(/\.$/,'')+' / '+escH(un));
+  } else if(un){ parts.push('<b>'+_expFmt(q)+' '+escH(un)+'</b>'); }
+  if(up>0) parts.push('₱'+_exp2(up).toLocaleString('en-PH')+' per unit');
+  box.innerHTML=parts.join(' · ')||'&nbsp;';
 }
 function _expSel(id,opts,onch){ return '<select id="'+id+'"'+(onch?' onchange="'+onch+'"':'')+' style="width:100%;margin-top:3px;font-size:.82rem;padding:8px;border:1.5px solid var(--mist);border-radius:8px">'+opts+'</select>'; }
 
@@ -451,11 +475,12 @@ function _expGeneralForm(){
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
       +'<div>'+_expField('Payment Method *',_expSel('gePay',payOpts))+'</div>'
       +'<div>'+_expField('Status',_expSel('gePaid',_expPaidOpts(true)))+'</div></div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">'
-      +'<div>'+_expField('Qty',_expInput('geQty','number','optional','',' step="any" oninput="_expAutoAmt(\'ge\')"'))+'</div>'
+    +'<div style="display:grid;grid-template-columns:.8fr .9fr .9fr 1fr;gap:8px">'
+      +'<div>'+_expField('Qty',_expInput('geQty','number','0','',' step="any" oninput="_expAutoAmt(\'ge\')"'))+'</div>'
+      +'<div>'+_expField('Size / unit',_expInput('geSize','number','150','',' step="any" oninput="_expBreakdown(\'ge\')"'))+'</div>'
       +'<div>'+_expField('Unit',_expUnitInput('geUnit',''))+'</div>'
-      +'<div>'+_expField('Unit price',_expInput('geUP','number','optional','',' step="any" oninput="_expAutoAmt(\'ge\')"'))+'</div></div>'
-    +'<div style="font-size:.64rem;color:var(--timber);margin-top:4px">Qty × Unit price fills Amount automatically. Type Amount first and Qty back-solves the unit price.</div>'
+      +'<div>'+_expField('Unit price',_expInput('geUP','number','0','',' step="any" oninput="_expAutoAmt(\'ge\')"'))+'</div></div>'
+    +'<div id="geCalc" style="font-size:.68rem;color:var(--timber);margin-top:5px">Qty × Unit price fills Amount automatically. Type Amount first and Qty back-solves the unit price.</div>'
     +_expField('Reference No. (optional)',_expInput('geRef','text',''))
     +_expField('Notes (optional)',_expInput('geNotes','text',''))
     +'<div style="display:flex;gap:8px;margin-top:16px"><button onclick="_expCloseModal()" style="flex:1;font-size:.82rem;font-weight:700;background:var(--mist-light);color:var(--forest);border:none;border-radius:8px;padding:10px;cursor:pointer">Cancel</button>'
@@ -469,12 +494,12 @@ async function _expSaveGeneral(){
   var pay=(document.getElementById('gePay')||{}).value;
   var ref=(document.getElementById('geRef')||{}).value.trim();
   var notes=(document.getElementById('geNotes')||{}).value.trim();
-  var store=_expVal('geStore'), qty=_expVal('geQty'), unit=_expVal('geUnit'), up=_expVal('geUP');
+  var store=_expVal('geStore'), qty=_expVal('geQty'), unit=_expVal('geUnit'), up=_expVal('geUP'), sz=_expVal('geSize');
   var paid=_expVal('gePaid')!=='UNPAID';
   if(!title){ showToast('Enter a title','error'); return; }
   if(!(amt>0)){ showToast('Enter amount','error'); return; }
   var r=await api('addBusinessExpense',{ description:title, amount:amt, category:cat, paidVia:pay, referenceNo:ref, notes:notes, expenseDate:date,
-    store:store, qty:qty, unit:unit, unitPrice:up, isPaid:paid });
+    store:store, qty:qty, unit:unit, unitPrice:up, sizePerUnit:sz, isPaid:paid });
   if(r&&r.ok){ showToast('Expense saved ✅'); _expCloseModal(); await initExpenses(); }
   else showToast('Failed: '+((r&&r.error)||'Unknown'),'error');
 }
@@ -538,17 +563,19 @@ function _expOpenEdit(key){
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div>'+_expField('Supplier / Payee',_expInput('edStore','text','',g.supplier||l0.store||''))+'</div><div>'+_expField('Category',_expSel('edCat',catOpts))+'</div></div>'
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div>'+_expField('Date',_expInput('edDate','date','',g.date))+'</div><div>'+_expField('Amount',_expInput('edAmt','number','',g.total,' oninput="_expAutoUP(\'ed\')"'))+'</div></div>'
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div>'+_expField('Payment',_expSel('edPay',payOpts))+'</div><div>'+_expField('Status',_expSel('edPaid',_expPaidOpts(l0.is_paid)))+'</div></div>'
-      +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">'
-        +'<div>'+_expField('Qty',_expInput('edQty','number','',l0.qty||'',' step="any" oninput="_expAutoAmt(\'ed\')"'))+'</div>'
+      +'<div style="display:grid;grid-template-columns:.8fr .9fr .9fr 1fr;gap:8px">'
+        +'<div>'+_expField('Qty',_expInput('edQty','number','0',l0.qty||'',' step="any" oninput="_expAutoAmt(\'ed\')"'))+'</div>'
+        +'<div>'+_expField('Size / unit',_expInput('edSize','number','150',l0.size_per_unit!=null?l0.size_per_unit:'',' step="any" oninput="_expBreakdown(\'ed\')"'))+'</div>'
         +'<div>'+_expField('Unit',_expUnitInput('edUnit',l0.unit||''))+'</div>'
-        +'<div>'+_expField('Unit price',_expInput('edUP','number','',l0.unit_price!=null?l0.unit_price:'',' step="any" oninput="_expAutoAmt(\'ed\')"'))+'</div></div>'
-      +'<div style="font-size:.64rem;color:var(--timber);margin-top:4px">Qty × Unit price fills Amount automatically. Type Amount first and Qty back-solves the unit price.</div>'
+        +'<div>'+_expField('Unit price',_expInput('edUP','number','0',l0.unit_price!=null?l0.unit_price:'',' step="any" oninput="_expAutoAmt(\'ed\')"'))+'</div></div>'
+      +'<div id="edCalc" style="font-size:.68rem;color:var(--timber);margin-top:5px">&nbsp;</div>'
       +_expField('Reference',_expInput('edRef','text','',g.ref||''))
       +_expField('Notes',_expInput('edNotes','text','',g.notes||''));
   }
   _expModal('<div style="font-size:1rem;font-weight:800;color:var(--forest-deep);margin-bottom:8px">Edit '+(isPurchase?'purchase':'expense')+'</div>'+body
     +'<div style="display:flex;gap:8px;margin-top:16px"><button onclick="_expCloseModal()" style="flex:1;font-size:.82rem;font-weight:700;background:var(--mist-light);color:var(--forest);border:none;border-radius:8px;padding:10px;cursor:pointer">Cancel</button>'
     +'<button onclick="_expSaveEdit(\''+key+'\','+(isPurchase?'true':'false')+')" style="flex:2;font-size:.82rem;font-weight:700;background:var(--forest);color:#fff;border:none;border-radius:8px;padding:10px;cursor:pointer">Save changes</button></div>');
+  if(!isPurchase) setTimeout(function(){ _expBreakdown('ed'); },30);
 }
 async function _expSaveEdit(key, isPurchase){
   var g=_expRecords().filter(function(x){return x.key===key;})[0]; if(!g) return;
@@ -556,7 +583,7 @@ async function _expSaveEdit(key, isPurchase){
   var payload={};
   if(isPurchase){ payload={ store:V('edSup'), expenseDate:V('edDate'), paidVia:V('edPay'), category:V('edCat'), referenceNo:V('edRef'), notes:V('edNotes') }; }
   else { payload={ description:V('edDesc'), amount:V('edAmt'), expenseDate:V('edDate'), category:V('edCat'), paidVia:V('edPay'), referenceNo:V('edRef'), notes:V('edNotes'),
-    store:V('edStore'), qty:V('edQty'), unit:V('edUnit'), unitPrice:V('edUP'), isPaid:(V('edPaid')!=='UNPAID') }; }
+    store:V('edStore'), qty:V('edQty'), unit:V('edUnit'), unitPrice:V('edUP'), sizePerUnit:V('edSize'), isPaid:(V('edPaid')!=='UNPAID') }; }
   var ok=true;
   for(var i=0;i<g.lines.length;i++){
     var r=await api('updateExpense', Object.assign({id:g.lines[i].id}, payload));
