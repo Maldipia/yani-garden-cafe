@@ -92,7 +92,7 @@ function renderExpensesView(){
   h+='<div><h2 style="margin:0;color:var(--forest-deep);font-size:1.3rem">💰 Expenses</h2>'
     +'<div style="font-size:.74rem;color:var(--timber);margin-top:2px">Track business spending and build YANI\u2019s purchasing history.</div></div>';
   h+='<div style="display:flex;gap:8px;flex-wrap:wrap">'
-    +'<button onclick="_expScanReceipt()" style="background:#fff;color:var(--forest);border:1.5px solid var(--forest);border-radius:var(--r-sm,8px);padding:9px 16px;font-size:.8rem;font-weight:700;cursor:pointer;white-space:nowrap">📷 Scan Receipt</button>'
+    +'<button onclick="_expScanReceipt()" style="background:#fff;color:var(--forest);border:1.5px solid var(--forest);border-radius:var(--r-sm,8px);padding:9px 16px;font-size:.8rem;font-weight:700;cursor:pointer;white-space:nowrap">📷 Scan / Upload</button>'
     +'<button onclick="_expOpenRecord()" style="background:var(--forest);color:#fff;border:none;border-radius:var(--r-sm,8px);padding:9px 16px;font-size:.8rem;font-weight:700;cursor:pointer;white-space:nowrap">+ Record Purchase</button>'
     +'</div>';
   h+='</div>';
@@ -536,7 +536,7 @@ async function _expVoid(key){
 // ── SCAN RECEIPT (upload photo → Gemini reads → pre-fills the form) ─────────
 function _expScanReceipt(){
   if(!_expIsOwner() && !(currentUser && currentUser.role==='ADMIN')){ showToast('ADMIN/OWNER only','error'); return; }
-  var inp=document.createElement('input'); inp.type='file'; inp.accept='image/*'; inp.capture='environment';
+  var inp=document.createElement('input'); inp.type='file'; inp.accept='image/*';
   inp.onchange=function(){
     var f=inp.files && inp.files[0]; if(!f) return;
     if(f.size > 8*1024*1024){ showToast('Image too large (max 8MB) — retake smaller','error'); return; }
