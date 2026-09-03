@@ -70,6 +70,7 @@ function _expFiltered(){
     if(_expQuick==='PURCHASES' && !g.isPurchase) return false;
     if(_expQuick==='UTILITIES' && !_expIsUtil(g.category)) return false;
     if(_expQuick==='OPERATING' && (g.isPurchase||_expIsUtil(g.category))) return false;
+    if(_expQuick==='INCOMPLETE' && !_expMissing(g).length) return false;
     if(q){ var hay=((g.supplier||'')+' '+(g.desc||'')+' '+(g.category||'')+' '+(g.ref||'')).toLowerCase(); if(hay.indexOf(q)<0) return false; }
     return true;
   });
@@ -121,7 +122,7 @@ function renderExpensesView(){
   h+='</div>';
   // quick filters
   h+='<div style="display:flex;gap:6px;margin-bottom:12px">';
-  [['ALL','All'],['PURCHASES','Purchases'],['UTILITIES','Utilities'],['OPERATING','Operating']].forEach(function(f){
+  [['ALL','All'],['PURCHASES','Purchases'],['UTILITIES','Utilities'],['OPERATING','Operating'],['INCOMPLETE','⚠ Incomplete']].forEach(function(f){
     var on=_expQuick===f[0];
     h+='<button onclick="_expQuick=\''+f[0]+'\';renderExpensesView()" style="font-size:.72rem;font-weight:600;border-radius:20px;padding:5px 13px;cursor:pointer;border:1.5px solid '+(on?'var(--forest);background:var(--forest);color:#fff':'var(--mist);background:#fff;color:var(--timber)')+'">'+f[1]+'</button>';
   });
@@ -151,6 +152,8 @@ function _expRenderTable(){
   h+='</tr></thead><tbody>';
   recs.forEach(function(g,idx){
     var bg=idx%2?'var(--mist-light)':'#fff';
+    var _miss=_expMissing(g);
+    if(_miss.length){ bg=EXP_AMBER_BG; }
     var _l0=g.lines[0];
     var _multi=(g.pgroup||g.lines.length>1);
     var _q=(_l0.qty!=null&&_l0.qty!=='')?_expFmt(_l0.qty):'';
@@ -164,9 +167,9 @@ function _expRenderTable(){
     var _perPc=(_pack && _up!=null && _packUnits.indexOf((_u||'').toLowerCase())>-1) ? Math.round((_up/_pack)*100)/100 : null;
     var _totalPcs=(_pack && _q) ? _expFmt(parseFloat(_l0.qty)*_pack) : null;
     var qtyCell = _multi ? '<span style="color:var(--timber)">'+((g.lineCount||g.lines.length)+' lines')+'</span>'
-      : (_q ? '<span style="font-weight:600;color:var(--forest-deep)">'+_q+(_u?' '+escH(_u):'')+'</span>'+(_totalPcs?'<div style="font-size:.64rem;color:var(--timber)">'+_totalPcs+' pcs</div>':'') : '<span style="color:var(--timber)">—</span>');
+      : (_q ? '<span style="font-weight:600;color:var(--forest-deep)">'+_q+(_u?' '+escH(_u):'')+'</span>'+(_totalPcs?'<div style="font-size:.64rem;color:var(--timber)">'+_totalPcs+' pcs</div>':'') : _expDash(true));
     var upCell = _multi ? '<span style="color:var(--timber)">—</span>'
-      : (_up!=null ? '<span style="color:var(--forest-deep)">'+peso(_up)+(_u?' <span style="color:var(--timber)">/ '+escH(_u)+'</span>':'')+'</span>'+(_perPc!=null?'<div style="font-size:.64rem;color:var(--gold);font-weight:700">'+peso(_perPc)+' / pc</div>':'') : '<span style="color:var(--timber)">—</span>');
+      : (_up!=null ? '<span style="color:var(--forest-deep)">'+peso(_up)+(_u?' <span style="color:var(--timber)">/ '+escH(_u)+'</span>':'')+'</span>'+(_perPc!=null?'<div style="font-size:.64rem;color:var(--gold);font-weight:700">'+peso(_perPc)+' / pc</div>':'') : _expDash(true));
     var desc;
     if(g.pgroup){ desc=escH((g.lineCount||1)+' item'+((g.lineCount||1)>1?'s':'')); }
     else if(g.lines.length>1){ desc=escH(g.lines.length+' items'); }
@@ -174,14 +177,15 @@ function _expRenderTable(){
     var badge = g.isPurchase
       ? '<span style="font-size:.58rem;font-weight:700;background:#eef5ff;color:#1d4ed8;padding:1px 6px;border-radius:4px;margin-left:6px">Purchase</span>'
       : '<span style="font-size:.58rem;font-weight:700;background:var(--mist-light);color:var(--timber);padding:1px 6px;border-radius:4px;margin-left:6px">Expense</span>';
+    if(_miss.length) badge += '<span style="font-size:.58rem;font-weight:700;background:#fef3c7;color:'+EXP_AMBER+';padding:1px 6px;border-radius:4px;margin-left:6px" title="Missing: '+_miss.join(', ')+'">⚠ incomplete</span>';
     var inv = !g.isPurchase ? '<span style="color:var(--timber)">—</span>'
       : (g.recStatus==='RECEIVED' ? '<span style="color:#15803d">received</span>'
         : g.recStatus==='PARTIAL' ? '<span style="color:#b45309">partial</span>'
         : '<span style="color:var(--timber)">not received</span>');
     var status = !g.isPurchase ? '<span style="font-size:.62rem;font-weight:700;color:var(--timber);background:var(--mist-light);padding:2px 8px;border-radius:5px">N/A</span>' : _expStatusBadge(g.recStatus);
-    h+='<tr onclick="_expOpenDetail(\''+g.key+'\')" style="cursor:pointer;background:'+bg+';border-top:1px solid var(--mist-light)" onmouseover="this.style.background=\'#eef5f0\'" onmouseout="this.style.background=\''+bg+'\'">'
+    h+='<tr onclick="_expOpenDetail(\''+g.key+'\')" title="'+(_miss.length?'Missing: '+_miss.join(', '):'')+'" style="cursor:pointer;background:'+bg+';border-left:3px solid '+(_miss.length?EXP_AMBER:'transparent')+';border-top:1px solid var(--mist-light)" onmouseover="this.style.background=\'#eef5f0\'" onmouseout="this.style.background=\''+bg+'\'">'
       +'<td style="padding:9px 12px;color:var(--forest-deep);font-weight:600;white-space:nowrap">'+_expDate(g.date)+'</td>'
-      +'<td style="padding:9px 12px;color:var(--forest-deep);white-space:nowrap">'+escH(g.supplier||'—')+'</td>'
+      +'<td style="padding:9px 12px;color:var(--forest-deep);white-space:nowrap">'+(g.supplier?escH(g.supplier):_expDash(true))+'</td>'
       +'<td style="padding:9px 12px;color:var(--forest-deep)">'+desc+badge+'</td>'
       +'<td style="padding:9px 12px;font-size:.74rem;white-space:nowrap">'+qtyCell+'</td>'
       +'<td style="padding:9px 12px;font-size:.74rem;white-space:nowrap">'+upCell+'</td>'
@@ -191,8 +195,29 @@ function _expRenderTable(){
       +'<td style="padding:9px 12px;white-space:nowrap">'+status+'</td></tr>';
   });
   h+='</tbody></table></div>';
-  h+='<div style="font-size:.68rem;color:var(--timber);margin-top:6px">Showing '+recs.length+' record'+(recs.length!==1?'s':'')+'</div>';
+  var _incomplete=recs.filter(function(x){return _expMissing(x).length;}).length;
+  h+='<div style="font-size:.68rem;color:var(--timber);margin-top:6px">Showing '+recs.length+' record'+(recs.length!==1?'s':'')
+    +(_incomplete?' · <span style="color:'+EXP_AMBER+';font-weight:700">'+_incomplete+' missing details</span>':'')+'</div>';
   wrap.innerHTML=h;
+}
+// A general expense is "complete" when supplier, qty, unit and unit price are all present.
+// Purchases carry their detail on the lines, so they are judged on supplier only.
+function _expMissing(g){
+  var l=g.lines[0]||{}, miss=[];
+  if(!(g.supplier||l.store)) miss.push('supplier');
+  if(!g.isPurchase){
+    if(l.qty==null||l.qty==='')                 miss.push('qty');
+    if(!l.unit)                                  miss.push('unit');
+    if(l.unit_price==null||l.unit_price==='')    miss.push('unit price');
+    if(l.size_per_unit==null||l.size_per_unit==='') miss.push('size');
+  }
+  return miss;
+}
+var EXP_AMBER='#b45309', EXP_AMBER_BG='#fffbeb';
+function _expDash(isMissing){
+  return isMissing
+    ? '<span style="color:'+EXP_AMBER+';font-weight:700" title="Not filled in yet">—</span>'
+    : '<span style="color:var(--timber)">—</span>';
 }
 function _expStatusBadge(st){
   var m={RECEIVED:{bg:'#e7f3ea',fg:'#15803d',t:'Received'},PARTIAL:{bg:'#fef3c7',fg:'#b45309',t:'Partial'},NOT_RECEIVED:{bg:'#fde8e8',fg:'#b91c1c',t:'Not Received'}};
