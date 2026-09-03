@@ -1312,6 +1312,29 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 .ing-callout-cost b{color:#fcd34d}
 .oc-item-name{cursor:pointer}
 .oc-item-name:hover{color:var(--forest);text-decoration:underline;text-underline-offset:2px}
+
+/* ══ GLOBAL STICKY TABLE HEADERS ═══════════════════════════════════════════
+   Sticky applies per-cell, so the <th> needs its own background — a colour set
+   on the parent <tr> does not paint behind a sticky cell and rows bleed through.
+   Inline th styles still win, so tables that already handle this are untouched. */
+table thead th{
+  position:sticky;
+  top:0;
+  z-index:3;
+  background:#fff;
+}
+/* Re-apply the row's intended colour onto the cells */
+table thead tr[style*="forest-deep"] th{background:var(--forest-deep);color:#fff}
+table thead tr[style*="mist-light"] th{background:var(--mist-light)}
+table thead tr[style*="--forest)"] th{background:var(--forest);color:#fff}
+/* Keep a visible edge once the header detaches from the rows */
+table thead th::after{
+  content:"";
+  position:absolute;
+  left:0;right:0;bottom:0;
+  height:1px;
+  background:rgba(0,0,0,.10);
+}
 </style>
 <style id="menu-tag-styles">
 .menu-tag-row{background:#f0f7f0;border-radius:8px;padding:8px 12px}
