@@ -7,6 +7,7 @@ var _bizExpenses = [];
 var _bizPurch    = {};          // purchase_group -> summary (received status)
 var _expItems    = [];          // inv_items (mapping)
 var _expUnits    = [];          // inv_units (normalization)
+var _expLocs     = [];          // inv_locations
 var _bizMonth = new Date().getMonth() + 1;
 var _bizYear  = new Date().getFullYear();
 var _expCat    = 'All';
@@ -31,7 +32,7 @@ async function initExpenses(){
   await loadBizExpenses();
   try { var pr=await api('invListPurchases',{}); if(pr&&pr.ok){ _bizPurch={}; (pr.purchases||[]).forEach(function(p){_bizPurch[p.purchase_group]=p;}); } } catch(e){}
   try { var ir=await api('invListItems',{activeOnly:true}); _expItems=(ir&&ir.ok)?(ir.items||[]):[]; } catch(e){}
-  try { var rr=await api('invGetRefData',{}); _expUnits=(rr&&rr.ok)?(rr.units||[]):[]; } catch(e){}
+  try { var rr=await api('invGetRefData',{}); if(rr&&rr.ok){ _expUnits=rr.units||[]; _expLocs=rr.locations||[]; } } catch(e){}
   renderExpensesView();
 }
 async function loadBizExpenses(){
@@ -136,15 +137,12 @@ function _expRenderTable(){
   var h='<div style="background:#fff;border:1px solid var(--mist);border-radius:12px;overflow:auto;max-height:calc(100vh - 300px)">';
   h+='<table style="width:100%;border-collapse:collapse;font-size:.76rem;min-width:900px">';
   h+='<thead><tr style="background:var(--forest-deep)">';
-  ['Date','Supplier / Store','Description','Qty','Category','Amount','Inventory','Status'].forEach(function(c,i){
-    h+='<th style="position:sticky;top:0;z-index:2;background:var(--forest-deep);text-align:'+(i===5?'right':'left')+';padding:9px 12px;color:#fff;font-weight:700;font-size:.64rem;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap">'+c+'</th>'; });
+  ['Date','Supplier / Store','Description','Category','Amount','Inventory','Status'].forEach(function(c,i){
+    h+='<th style="position:sticky;top:0;z-index:2;background:var(--forest-deep);text-align:'+(i===4?'right':'left')+';padding:9px 12px;color:#fff;font-weight:700;font-size:.64rem;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap">'+c+'</th>'; });
   h+='</tr></thead><tbody>';
   recs.forEach(function(g,idx){
     var bg=idx%2?'var(--mist-light)':'#fff';
     var _l0=g.lines[0];
-    var _qu=((_l0.qty!=null&&_l0.qty!=='')?_expFmt(_l0.qty):'')+(_l0.unit?(' '+escH(_l0.unit)):'');
-    _qu=_qu.trim();
-    var qtyCell = (g.pgroup||g.lines.length>1) ? '<span style="color:var(--timber)">'+((g.lineCount||g.lines.length)+' lines')+'</span>' : (_qu?'<span style="font-weight:600;color:var(--forest-deep)">'+_qu+'</span>':'<span style="color:var(--timber)">—</span>');
     var desc;
     if(g.pgroup){ desc=escH((g.lineCount||1)+' item'+((g.lineCount||1)>1?'s':'')); }
     else if(g.lines.length>1){ desc=escH(g.lines.length+' items'); }
@@ -161,7 +159,6 @@ function _expRenderTable(){
       +'<td style="padding:9px 12px;color:var(--forest-deep);font-weight:600;white-space:nowrap">'+_expDate(g.date)+'</td>'
       +'<td style="padding:9px 12px;color:var(--forest-deep);white-space:nowrap">'+escH(g.supplier||'—')+'</td>'
       +'<td style="padding:9px 12px;color:var(--forest-deep)">'+desc+badge+'</td>'
-      +'<td style="padding:9px 12px;font-size:.74rem;white-space:nowrap">'+qtyCell+'</td>'
       +'<td style="padding:9px 12px;color:var(--timber);white-space:nowrap">'+escH(g.category||'—')+'</td>'
       +'<td style="padding:9px 12px;text-align:right;font-weight:700;color:#dc2626;white-space:nowrap">'+peso(g.total)+'</td>'
       +'<td style="padding:9px 12px;font-size:.72rem;white-space:nowrap">'+inv+'</td>'
@@ -207,6 +204,7 @@ function _expPurchaseDrawer(g, lines, summary){
   h+='<div style="display:flex;gap:12px;flex-wrap:wrap;font-size:.72rem;color:var(--timber);margin:8px 0 4px">'
     +'<span>🗓 '+_expDateFull(date)+'</span>'+(pay?'<span>💳 '+escH(pay)+'</span>':'')+(ref?'<span>🧾 '+escH(ref)+'</span>':'')+'</div>';
   h+='<div style="font-size:.72rem;color:var(--timber);margin-bottom:10px">Category: <b style="color:var(--forest)">'+escH(cat||'—')+'</b></div>';
+  if(g.notes) h+='<div style="font-size:.72rem;color:var(--forest-deep);margin:-6px 0 10px"><span style="color:var(--timber)">Notes:</span> '+escH(g.notes)+'</div>';
   // items
   h+='<div style="font-size:.64rem;color:var(--timber);text-transform:uppercase;letter-spacing:.4px;font-weight:700;margin:6px 0 4px">Items</div>';
   h+='<table style="width:100%;border-collapse:collapse;font-size:.72rem"><thead><tr style="color:var(--timber);font-size:.58rem;text-transform:uppercase"><th style="text-align:left;padding:3px 2px">Item</th><th style="text-align:right;padding:3px 2px">Qty</th><th style="text-align:right;padding:3px 2px">Unit ₱</th><th style="text-align:right;padding:3px 2px">Total</th></tr></thead><tbody>';
@@ -230,12 +228,26 @@ function _expPurchaseDrawer(g, lines, summary){
   // inventory status + receive
   h+='<div style="font-size:.64rem;color:var(--timber);text-transform:uppercase;letter-spacing:.4px;font-weight:700;margin:16px 0 6px">Inventory</div>';
   var st=g.recStatus||'NOT_RECEIVED';
+  // per-line receiving detail (received / remaining / stock code)
+  if(lines){
+    h+='<div style="margin-bottom:8px">';
+    lines.forEach(function(l){
+      var pq=parseFloat(l.base_quantity||l.quantity||0), rq=parseFloat(l._received||0), rem=Math.max(0,pq-rq);
+      var bu=l.base_unit||l.purchase_unit||'';
+      var badge=l._status==='RECEIVED'?'<span style="color:#15803d;font-weight:700">received</span>':l._status==='PARTIAL'?'<span style="color:#b45309;font-weight:700">partial</span>':'<span style="color:var(--timber)">not received</span>';
+      h+='<div style="font-size:.7rem;padding:5px 0;border-bottom:1px solid var(--mist-light)">'
+        +'<div style="display:flex;justify-content:space-between"><span style="color:var(--forest-deep);font-weight:600">'+escH(l.item_name)+'</span>'+badge+'</div>'
+        +'<div style="color:var(--timber);margin-top:1px">received '+_expFmt(rq)+' / '+_expFmt(pq)+' '+escH(bu)+' · remaining '+_expFmt(rem)+' '+escH(bu)
+        +((l._received_codes&&l._received_codes.length)?(' · '+l._received_codes.map(escH).join(', ')):'')+'</div></div>';
+    });
+    h+='</div>';
+  }
   if(st==='RECEIVED'){ h+='<div style="background:#e7f3ea;border-radius:8px;padding:10px 12px;font-size:.76rem;color:#15803d;font-weight:600">✓ All items received to inventory. Physical stock was created; the financial amount is not duplicated.</div>'; }
   else {
     h+='<div style="background:'+(st==='PARTIAL'?'#fef8ec':'#fff8ec')+';border:1px solid #f0d9a8;border-radius:8px;padding:10px 12px;margin-bottom:8px">'
       +'<div style="font-size:.78rem;font-weight:700;color:#b45309">'+(st==='PARTIAL'?'Partially received':'Not received to inventory yet')+'</div>'
       +'<div style="font-size:.68rem;color:var(--timber);margin-top:2px">Saving this purchase did not create stock. Receiving is explicit.</div></div>';
-    if(lines){ lines.forEach(function(l){ if(l._status!=='RECEIVED' && l.item_id){ h+='<button onclick="_expOpenReceiveLine('+l.id+','+l.item_id+',\''+escH(l.item_name).replace(/\x27/g,'')+'\','+(l.base_quantity||l.quantity||0)+','+(l.base_unit_id||l.purchase_unit_id||'null')+','+(l.unit_price||0)+',\''+escH(ref||'')+'\',\''+escH(sup||'')+'\')" style="display:block;width:100%;text-align:left;font-size:.74rem;font-weight:700;background:#fff;color:var(--forest);border:1.5px solid var(--forest);border-radius:8px;padding:8px 10px;cursor:pointer;margin-bottom:6px">📦 Receive \u201c'+escH(l.item_name)+'\u201d to Inventory</button>'; } }); }
+    if(lines){ lines.forEach(function(l){ if(l._status!=='RECEIVED' && l.item_id){ h+='<button onclick="_expOpenReceiveLine('+l.id+','+l.item_id+',\''+escH(l.item_name).replace(/\x27/g,'')+'\','+(l.base_quantity||l.quantity||0)+','+(l.base_unit_id||l.purchase_unit_id||'null')+','+(l.unit_price||0)+',\''+escH(ref||'')+'\',\''+escH(sup||'')+'\','+(l._received||0)+')" style="display:block;width:100%;text-align:left;font-size:.74rem;font-weight:700;background:#fff;color:var(--forest);border:1.5px solid var(--forest);border-radius:8px;padding:8px 10px;cursor:pointer;margin-bottom:6px">📦 Receive \u201c'+escH(l.item_name)+'\u201d to Inventory</button>'; } }); }
     else { h+='<div style="font-size:.68rem;color:var(--timber)">This purchase\u2019s items aren\u2019t mapped to inventory items, so receiving isn\u2019t available. Map items in Stock Control \u2192 Items to enable receiving.</div>'; }
   }
   return _expDrawerShell(h);
@@ -306,24 +318,38 @@ function _expPurchaseForm(){
 function _expUnitOpts(sel){ return '<option value="">unit</option>'+_expUnits.map(function(u){return '<option value="'+u.id+'"'+(sel==u.id?' selected':'')+'>'+escH(u.name)+'</option>';}).join(''); }
 function _expRenderLines(){
   var box=document.getElementById('epLines'); if(!box) return;
-  var h='<div style="display:grid;grid-template-columns:1fr 50px 60px 60px 66px 22px;gap:4px;font-size:.58rem;color:var(--timber);font-weight:700;text-transform:uppercase;margin-bottom:2px"><span>Item</span><span>Qty</span><span>Unit</span><span>Unit ₱</span><span>Total</span><span></span></div>';
+  var G='display:grid;grid-template-columns:1fr 42px 48px 50px 58px 56px 18px;gap:3px';
+  var h='<div style="'+G+';font-size:.54rem;color:var(--timber);font-weight:700;text-transform:uppercase;margin-bottom:2px"><span>Item</span><span>Qty</span><span>Unit</span><span>Unit ₱</span><span>₱/base</span><span>Total</span><span></span></div>';
   _expLines.forEach(function(l,i){
-    h+='<div style="display:grid;grid-template-columns:1fr 50px 60px 60px 66px 22px;gap:4px;margin-bottom:4px;align-items:center">'
-      +'<input id="el_i_'+i+'" list="expItemList" value="'+(l.item!=null?escH(l.item):'')+'" placeholder="item" style="font-size:.74rem;padding:6px;border:1.5px solid var(--mist);border-radius:6px">'
-      +'<input id="el_q_'+i+'" type="number" step="0.001" value="'+(l.qty!=null?escH(l.qty):'')+'" oninput="_expLineCalc('+i+')" style="font-size:.74rem;padding:6px;border:1.5px solid var(--mist);border-radius:6px">'
-      +'<select id="el_u_'+i+'" style="font-size:.7rem;padding:6px;border:1.5px solid var(--mist);border-radius:6px">'+_expUnitOpts(l.unitId)+'</select>'
-      +'<input id="el_p_'+i+'" type="number" step="0.01" value="'+(l.unitPrice!=null?escH(l.unitPrice):'')+'" oninput="_expLineCalc('+i+')" style="font-size:.74rem;padding:6px;border:1.5px solid var(--mist);border-radius:6px">'
-      +'<input id="el_t_'+i+'" type="number" step="0.01" value="'+(l.total!=null?escH(l.total):'')+'" readonly style="font-size:.74rem;padding:6px;border:1.5px solid var(--mist);border-radius:6px;background:var(--mist-light)">'
-      +'<button onclick="_expRemoveLine('+i+')" style="font-size:.85rem;background:none;border:none;color:#b91c1c;cursor:pointer">✕</button></div>';
+    h+='<div style="'+G+';margin-bottom:4px;align-items:center">'
+      +'<input id="el_i_'+i+'" list="expItemList" value="'+(l.item!=null?escH(l.item):'')+'" placeholder="item" style="font-size:.72rem;padding:5px;border:1.5px solid var(--mist);border-radius:6px">'
+      +'<input id="el_q_'+i+'" type="number" step="0.001" value="'+(l.qty!=null?escH(l.qty):'')+'" oninput="_expLineCalc('+i+')" style="font-size:.72rem;padding:5px;border:1.5px solid var(--mist);border-radius:6px">'
+      +'<select id="el_u_'+i+'" onchange="_expLineCalc('+i+')" style="font-size:.66rem;padding:5px;border:1.5px solid var(--mist);border-radius:6px">'+_expUnitOpts(l.unitId)+'</select>'
+      +'<input id="el_p_'+i+'" type="number" step="0.01" value="'+(l.unitPrice!=null?escH(l.unitPrice):'')+'" oninput="_expLineCalc('+i+')" style="font-size:.72rem;padding:5px;border:1.5px solid var(--mist);border-radius:6px">'
+      +'<input id="el_n_'+i+'" readonly title="normalized cost per base unit" style="font-size:.66rem;padding:5px;border:1.5px solid var(--mist);border-radius:6px;background:#eef5ff;color:#1d4ed8;font-weight:700">'
+      +'<input id="el_t_'+i+'" type="number" step="0.01" value="'+(l.total!=null?escH(l.total):'')+'" readonly style="font-size:.72rem;padding:5px;border:1.5px solid var(--mist);border-radius:6px;background:var(--mist-light)">'
+      +'<button onclick="_expRemoveLine('+i+')" style="font-size:.8rem;background:none;border:none;color:#b91c1c;cursor:pointer">✕</button></div>';
   });
-  box.innerHTML=h; _expTotals();
+  box.innerHTML=h;
+  _expLines.forEach(function(l,i){ _expLineCalc(i); });
+  _expTotals();
 }
 function _expSyncLines(){ _expLines.forEach(function(l,i){
   var g=function(id){var e=document.getElementById(id);return e?e.value:undefined;};
   l.item=g('el_i_'+i); l.qty=g('el_q_'+i); l.unitId=g('el_u_'+i); l.unitPrice=g('el_p_'+i); l.total=g('el_t_'+i);
 }); }
-function _expLineCalc(i){ var q=parseFloat((document.getElementById('el_q_'+i)||{}).value), p=parseFloat((document.getElementById('el_p_'+i)||{}).value), t=document.getElementById('el_t_'+i); if(t&&!isNaN(q)&&!isNaN(p)) t.value=Math.round(q*p*100)/100; _expTotals(); }
-function _expTotals(){ _expSyncLines(); var box=document.getElementById('epTotals'); if(!box)return; var total=_expLines.reduce(function(s,l){return s+(parseFloat(l.total)||0);},0); box.innerHTML='<div style="display:flex;justify-content:space-between;font-size:.9rem"><span style="color:var(--timber);font-weight:700">TOTAL</span><b style="color:#dc2626">'+peso(total)+'</b></div>'; }
+function _expLineCalc(i){
+  var q=parseFloat((document.getElementById('el_q_'+i)||{}).value), p=parseFloat((document.getElementById('el_p_'+i)||{}).value);
+  var t=document.getElementById('el_t_'+i), n=document.getElementById('el_n_'+i);
+  if(t&&!isNaN(q)&&!isNaN(p)) t.value=Math.round(q*p*100)/100;
+  if(n){ var uid=+(document.getElementById('el_u_'+i)||{}).value; var u=_expUnits.filter(function(x){return x.id===uid;})[0];
+    if(u && !isNaN(p)){ var rate=parseFloat(u.conversion_rate)||1; var bc=p/rate; var b=u.base_unit_id?(_expUnits.filter(function(x){return x.id===u.base_unit_id;})[0]||{}).name:u.name; n.value='₱'+(Math.round(bc*100)/100)+'/'+(b||''); }
+    else n.value=''; }
+  _expTotals();
+}
+function _expTotals(){ _expSyncLines(); var box=document.getElementById('epTotals'); if(!box)return; var total=_expLines.reduce(function(s,l){return s+(parseFloat(l.total)||0);},0);
+  box.innerHTML='<div style="display:flex;justify-content:space-between;font-size:.78rem;color:var(--timber)"><span>Subtotal</span><span>'+peso(total)+'</span></div>'
+    +'<div style="display:flex;justify-content:space-between;font-size:.95rem;margin-top:3px;padding-top:3px;border-top:1px solid var(--mist)"><span style="color:var(--timber);font-weight:700">TOTAL</span><b style="color:#dc2626">'+peso(total)+'</b></div>'; }
 function _expAddLine(){ _expSyncLines(); _expLines.push({}); _expRenderLines(); }
 function _expRemoveLine(i){ _expSyncLines(); _expLines.splice(i,1); if(!_expLines.length)_expLines=[{}]; _expRenderLines(); }
 
@@ -391,18 +417,25 @@ async function _expSaveGeneral(){
 }
 
 // ── RECEIVE TO INVENTORY (explicit; from a purchase line) ───────────────────
-function _expOpenReceiveLine(lineId,itemId,itemName,baseQty,baseUnitId,unitCost,ref,supplier){
+function _expOpenReceiveLine(lineId,itemId,itemName,baseQty,baseUnitId,unitCost,ref,supplier,alreadyRecv){
   var unitOpts=_expUnits.map(function(u){return '<option value="'+u.id+'"'+(baseUnitId==u.id?' selected':'')+'>'+escH(u.name)+'</option>';}).join('');
+  var pq=parseFloat(baseQty)||0, ar=parseFloat(alreadyRecv)||0, rem=Math.max(0,pq-ar);
+  var bu=(_expUnits.filter(function(x){return x.id===+baseUnitId;})[0]||{}).name||'';
   var inner='<div style="font-size:1rem;font-weight:800;color:var(--forest-deep)">Receive to Inventory</div>'
-    +'<div style="font-size:.66rem;color:var(--timber);margin-bottom:4px">From purchase: <b>'+escH(itemName)+'</b>'+(supplier?(' · '+escH(supplier)):'')+'</div>'
+    +'<div style="font-size:.66rem;color:var(--timber);margin-bottom:4px">From purchase: <b>'+escH(itemName)+'</b>'+(supplier?(' · '+escH(supplier)):'')+(ref?(' · '+escH(ref)):'')+'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;background:var(--mist-light);border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:.66rem">'
+      +'<div><div style="color:var(--timber)">Purchased</div><b style="color:var(--forest-deep)">'+_expFmt(pq)+' '+escH(bu)+'</b></div>'
+      +'<div><div style="color:var(--timber)">Already received</div><b style="color:var(--forest-deep)">'+_expFmt(ar)+' '+escH(bu)+'</b></div>'
+      +'<div><div style="color:var(--timber)">Remaining</div><b style="color:#b45309">'+_expFmt(rem)+' '+escH(bu)+'</b></div></div>'
     +'<div style="font-size:.64rem;color:#b45309;margin-bottom:10px">Confirm to create physical stock (inv_* module). The purchase & financial records are unchanged.</div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div>'+_expField('Quantity',_expInput('rvQty','number','',baseQty||''))+'</div><div>'+_expField('Unit',_expSel('rvUnit',unitOpts))+'</div></div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div>'+_expField('Unit cost ₱',_expInput('rvCost','number','',unitCost||''))+'</div><div>'+_expField('Expiry (optional)',_expInput('rvExp','date'))+'</div></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div>'+_expField('Receive now',_expInput('rvQty','number','',rem||''))+'</div><div>'+_expField('Unit',_expSel('rvUnit',unitOpts))+'</div></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div>'+_expField('Unit cost ₱',_expInput('rvCost','number','',unitCost||''))+'</div><div>'+_expField('Location',_expSel('rvLoc','<option value="">—</option>'+(_expLocs||[]).map(function(l){return '<option value="'+l.id+'">'+escH(l.name)+'</option>';}).join('')))+'</div></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div>'+_expField('Batch (optional)',_expInput('rvBatch','text',''))+'</div><div>'+_expField('Expiry (optional)',_expInput('rvExp','date'))+'</div></div>'
     +'<input type="hidden" id="rvLine" value="'+lineId+'"><input type="hidden" id="rvItem" value="'+itemId+'">'
     +'<div style="display:flex;gap:8px;margin-top:14px"><button onclick="_expCloseModal2()" style="flex:1;font-size:.82rem;font-weight:700;background:var(--mist-light);color:var(--forest);border:none;border-radius:8px;padding:10px;cursor:pointer">Cancel</button>'
     +'<button onclick="_expReceiveSubmit(\''+escH(ref||'')+'\',\''+escH(supplier||'')+'\')" style="flex:2;font-size:.82rem;font-weight:700;background:var(--forest);color:#fff;border:none;border-radius:8px;padding:10px;cursor:pointer">Confirm — Receive Stock</button></div>';
   var m=document.createElement('div'); m.id='expModal2'; m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10002;display:flex;align-items:flex-start;justify-content:center;padding:14px;overflow:auto';
-  m.innerHTML='<div style="background:#fff;border-radius:14px;max-width:440px;width:100%;padding:18px;margin-top:20px">'+inner+'</div>';
+  m.innerHTML='<div style="background:#fff;border-radius:14px;max-width:460px;width:100%;padding:18px;margin-top:20px">'+inner+'</div>';
   document.body.appendChild(m);
 }
 function _expCloseModal2(){ var m=document.getElementById('expModal2'); if(m) m.remove(); }
@@ -410,7 +443,7 @@ async function _expReceiveSubmit(ref,supplier){
   var lineId=+(document.getElementById('rvLine')||{}).value, itemId=+(document.getElementById('rvItem')||{}).value;
   var qty=parseFloat((document.getElementById('rvQty')||{}).value), unitId=+(document.getElementById('rvUnit')||{}).value;
   if(!(qty>0)){ showToast('Enter quantity','error'); return; }
-  var r=await api('invReceiveStock',{ itemId:itemId, qty:qty, unitId:unitId, unitCost:parseFloat((document.getElementById('rvCost')||{}).value)||0, expiryDate:(document.getElementById('rvExp')||{}).value||null, purchaseLineId:lineId, notes:'Received from purchase'+(ref?(' '+ref):'')+(supplier?(' · '+supplier):'') });
+  var r=await api('invReceiveStock',{ itemId:itemId, qty:qty, unitId:unitId, unitCost:parseFloat((document.getElementById('rvCost')||{}).value)||0, locationId:+(document.getElementById('rvLoc')||{}).value||null, expiryDate:(document.getElementById('rvExp')||{}).value||null, purchaseLineId:lineId, notes:'Received from purchase'+(ref?(' '+ref):'')+(supplier?(' · '+supplier):'')+(((document.getElementById('rvBatch')||{}).value)?(' · batch '+(document.getElementById('rvBatch')||{}).value):'') });
   if(r&&r.ok){ showToast('Received to inventory: '+(r.stock_unit_code||'')+' ✅'); _expCloseModal2(); _expCloseDrawer(); await initExpenses(); }
   else showToast('Failed: '+((r&&r.error)||'Unknown'),'error');
 }
