@@ -134,21 +134,21 @@ function _expRenderTable(){
   var recs=_expFiltered();
   if(!recs.length){ wrap.innerHTML='<div style="background:#fff;border:1px dashed var(--mist);border-radius:12px;padding:40px;text-align:center;color:var(--timber);font-size:.82rem">No records for this filter.</div>'; return; }
   var h='<div style="background:#fff;border:1px solid var(--mist);border-radius:12px;overflow:auto">';
-  h+='<table style="width:100%;border-collapse:collapse;font-size:.76rem;min-width:820px">';
+  h+='<table style="width:100%;border-collapse:collapse;font-size:.76rem;min-width:900px">';
   h+='<thead><tr style="background:var(--forest-deep)">';
-  ['Date','Supplier / Store','Description','Category','Amount','Inventory','Status'].forEach(function(c,i){
-    h+='<th style="text-align:'+(i===4?'right':'left')+';padding:9px 12px;color:#fff;font-weight:700;font-size:.64rem;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap">'+c+'</th>'; });
+  ['Date','Supplier / Store','Description','Qty','Category','Amount','Inventory','Status'].forEach(function(c,i){
+    h+='<th style="text-align:'+(i===5?'right':'left')+';padding:9px 12px;color:#fff;font-weight:700;font-size:.64rem;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap">'+c+'</th>'; });
   h+='</tr></thead><tbody>';
   recs.forEach(function(g,idx){
     var bg=idx%2?'var(--mist-light)':'#fff';
     var _l0=g.lines[0];
     var _qu=((_l0.qty!=null&&_l0.qty!=='')?_expFmt(_l0.qty):'')+(_l0.unit?(' '+escH(_l0.unit)):'');
     _qu=_qu.trim();
-    var _quHtml=_qu?' <span style="color:var(--timber);font-weight:400;font-size:.72rem">· '+_qu+'</span>':'';
+    var qtyCell = (g.pgroup||g.lines.length>1) ? '<span style="color:var(--timber)">'+((g.lineCount||g.lines.length)+' lines')+'</span>' : (_qu?'<span style="font-weight:600;color:var(--forest-deep)">'+_qu+'</span>':'<span style="color:var(--timber)">—</span>');
     var desc;
     if(g.pgroup){ desc=escH((g.lineCount||1)+' item'+((g.lineCount||1)>1?'s':'')); }
     else if(g.lines.length>1){ desc=escH(g.lines.length+' items'); }
-    else { desc=escH(_l0.description||g.desc||'—')+_quHtml; }
+    else { desc=escH(_l0.description||g.desc||'—'); }
     var badge = g.isPurchase
       ? '<span style="font-size:.58rem;font-weight:700;background:#eef5ff;color:#1d4ed8;padding:1px 6px;border-radius:4px;margin-left:6px">Purchase</span>'
       : '<span style="font-size:.58rem;font-weight:700;background:var(--mist-light);color:var(--timber);padding:1px 6px;border-radius:4px;margin-left:6px">Expense</span>';
@@ -161,6 +161,7 @@ function _expRenderTable(){
       +'<td style="padding:9px 12px;color:var(--forest-deep);font-weight:600;white-space:nowrap">'+_expDate(g.date)+'</td>'
       +'<td style="padding:9px 12px;color:var(--forest-deep);white-space:nowrap">'+escH(g.supplier||'—')+'</td>'
       +'<td style="padding:9px 12px;color:var(--forest-deep)">'+desc+badge+'</td>'
+      +'<td style="padding:9px 12px;font-size:.74rem;white-space:nowrap">'+qtyCell+'</td>'
       +'<td style="padding:9px 12px;color:var(--timber);white-space:nowrap">'+escH(g.category||'—')+'</td>'
       +'<td style="padding:9px 12px;text-align:right;font-weight:700;color:#dc2626;white-space:nowrap">'+peso(g.total)+'</td>'
       +'<td style="padding:9px 12px;font-size:.72rem;white-space:nowrap">'+inv+'</td>'
