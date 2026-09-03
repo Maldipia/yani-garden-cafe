@@ -311,7 +311,28 @@ function _expModal(inner){
 }
 function _expCloseModal(){ var m=document.getElementById('expModal'); if(m) m.remove(); }
 function _expField(l,i){ return '<label style="font-size:.72rem;font-weight:700;color:var(--forest-deep);display:block;margin-top:8px">'+l+'</label>'+i; }
-function _expInput(id,t,ph,v){ return '<input id="'+id+'" type="'+(t||'text')+'"'+(ph?' placeholder="'+ph+'"':'')+(v!=null?' value="'+escH(v)+'"':'')+' style="width:100%;margin-top:3px;font-size:.82rem;padding:8px;border:1.5px solid var(--mist);border-radius:8px">'; }
+function _expInput(id,t,ph,v,ex){ return '<input id="'+id+'" type="'+(t||'text')+'"'+(ph?' placeholder="'+ph+'"':'')+(v!=null?' value="'+escH(v)+'"':'')+(ex||'')+' style="width:100%;margin-top:3px;font-size:.82rem;padding:8px;border:1.5px solid var(--mist);border-radius:8px">'; }
+// Unit picker: dropdown suggestions but still free-text (so "150 g" or "1.5L pack" stay valid)
+var _EXP_COMMON_UNITS = ['pcs','pack','box','bottle','can','sachet','bag','tray','dozen','sack','tank','set','roll','bundle','kg','g','L','mL'];
+function _expUnitDatalist(){
+  var names=_EXP_COMMON_UNITS.slice();
+  (_expUnits||[]).forEach(function(u){ if(u&&u.name&&names.indexOf(u.name)<0) names.push(u.name); });
+  return '<datalist id="expUnitOpts">'+names.map(function(n){return '<option value="'+escH(n)+'">';}).join('')+'</datalist>';
+}
+function _expUnitInput(id,val){ return _expInput(id,'text','pcs, kg, 150 g…',val||'',' list="expUnitOpts"')+_expUnitDatalist(); }
+// qty ↔ unit price ↔ amount auto-compute (p = 'ge' or 'ed')
+function _expNum(id){ var v=parseFloat(_expVal(id)); return isNaN(v)?0:v; }
+function _exp2(n){ return Math.round(n*100)/100; }
+function _expAutoAmt(p){
+  var q=_expNum(p+'Qty'), u=_expNum(p+'UP'), a=_expNum(p+'Amt');
+  var A=document.getElementById(p+'Amt'), U=document.getElementById(p+'UP');
+  if(q>0 && u>0){ if(A) A.value=_exp2(q*u); }
+  else if(q>0 && u===0 && a>0){ if(U) U.value=_exp2(a/q); }
+}
+function _expAutoUP(p){
+  var q=_expNum(p+'Qty'), a=_expNum(p+'Amt'), U=document.getElementById(p+'UP');
+  if(q>0 && a>0 && U) U.value=_exp2(a/q);
+}
 function _expSel(id,opts,onch){ return '<select id="'+id+'"'+(onch?' onchange="'+onch+'"':'')+' style="width:100%;margin-top:3px;font-size:.82rem;padding:8px;border:1.5px solid var(--mist);border-radius:8px">'+opts+'</select>'; }
 
 function _expVal(id){ var e=document.getElementById(id); return e ? String(e.value||'').trim() : ''; }
@@ -426,14 +447,15 @@ function _expGeneralForm(){
       +'<div>'+_expField('Category *',_expSel('geCat',catOpts))+'</div></div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
       +'<div>'+_expField('Expense Date *',_expInput('geDate','date','',today))+'</div>'
-      +'<div>'+_expField('Amount *',_expInput('geAmt','number','0'))+'</div></div>'
+      +'<div>'+_expField('Amount *',_expInput('geAmt','number','0','',' oninput="_expAutoUP(\'ge\')"'))+'</div></div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
       +'<div>'+_expField('Payment Method *',_expSel('gePay',payOpts))+'</div>'
       +'<div>'+_expField('Status',_expSel('gePaid',_expPaidOpts(true)))+'</div></div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">'
-      +'<div>'+_expField('Qty',_expInput('geQty','text','optional'))+'</div>'
-      +'<div>'+_expField('Unit',_expInput('geUnit','text','e.g. tank'))+'</div>'
-      +'<div>'+_expField('Unit price',_expInput('geUP','number','optional'))+'</div></div>'
+      +'<div>'+_expField('Qty',_expInput('geQty','number','optional','',' step="any" oninput="_expAutoAmt(\'ge\')"'))+'</div>'
+      +'<div>'+_expField('Unit',_expUnitInput('geUnit',''))+'</div>'
+      +'<div>'+_expField('Unit price',_expInput('geUP','number','optional','',' step="any" oninput="_expAutoAmt(\'ge\')"'))+'</div></div>'
+    +'<div style="font-size:.64rem;color:var(--timber);margin-top:4px">Qty × Unit price fills Amount automatically. Type Amount first and Qty back-solves the unit price.</div>'
     +_expField('Reference No. (optional)',_expInput('geRef','text',''))
     +_expField('Notes (optional)',_expInput('geNotes','text',''))
     +'<div style="display:flex;gap:8px;margin-top:16px"><button onclick="_expCloseModal()" style="flex:1;font-size:.82rem;font-weight:700;background:var(--mist-light);color:var(--forest);border:none;border-radius:8px;padding:10px;cursor:pointer">Cancel</button>'
@@ -514,12 +536,13 @@ function _expOpenEdit(key){
   } else {
     body=_expField('Title',_expInput('edDesc','text','',g.desc||l0.description||''))
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div>'+_expField('Supplier / Payee',_expInput('edStore','text','',g.supplier||l0.store||''))+'</div><div>'+_expField('Category',_expSel('edCat',catOpts))+'</div></div>'
-      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div>'+_expField('Date',_expInput('edDate','date','',g.date))+'</div><div>'+_expField('Amount',_expInput('edAmt','number','',g.total))+'</div></div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div>'+_expField('Date',_expInput('edDate','date','',g.date))+'</div><div>'+_expField('Amount',_expInput('edAmt','number','',g.total,' oninput="_expAutoUP(\'ed\')"'))+'</div></div>'
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div>'+_expField('Payment',_expSel('edPay',payOpts))+'</div><div>'+_expField('Status',_expSel('edPaid',_expPaidOpts(l0.is_paid)))+'</div></div>'
       +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">'
-        +'<div>'+_expField('Qty',_expInput('edQty','text','',l0.qty||''))+'</div>'
-        +'<div>'+_expField('Unit',_expInput('edUnit','text','',l0.unit||''))+'</div>'
-        +'<div>'+_expField('Unit price',_expInput('edUP','number','',l0.unit_price!=null?l0.unit_price:''))+'</div></div>'
+        +'<div>'+_expField('Qty',_expInput('edQty','number','',l0.qty||'',' step="any" oninput="_expAutoAmt(\'ed\')"'))+'</div>'
+        +'<div>'+_expField('Unit',_expUnitInput('edUnit',l0.unit||''))+'</div>'
+        +'<div>'+_expField('Unit price',_expInput('edUP','number','',l0.unit_price!=null?l0.unit_price:'',' step="any" oninput="_expAutoAmt(\'ed\')"'))+'</div></div>'
+      +'<div style="font-size:.64rem;color:var(--timber);margin-top:4px">Qty × Unit price fills Amount automatically. Type Amount first and Qty back-solves the unit price.</div>'
       +_expField('Reference',_expInput('edRef','text','',g.ref||''))
       +_expField('Notes',_expInput('edNotes','text','',g.notes||''));
   }
