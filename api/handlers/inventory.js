@@ -20,6 +20,8 @@ const INV_ACTIONS = new Set([
   'invProduce','invListProductionBatches','invPortion',
   // sale bridge
   'invConsumeOrder','invListMenuMap','invSaveMenuMap',
+  // purchases (itemized expense / purchasing history)
+  'invSavePurchase','invListPurchases','invGetPurchase',
   // reports
   'invDashboard','invLowStock','invExpiringSoon','invTransactions',
 ]);
@@ -253,6 +255,13 @@ export async function routeInventory(action, body, auth, req, res) {
       p_expected_use: body.expectedUseDate || null,   // PLANNING ONLY — never deducts
       p_split_units: !!body.splitUnits,
     });
+    // Link this received stock to its originating purchase line (partial-receiving status).
+    // Done post-RPC via PATCH so the RPC stays untouched.
+    const plId = int(body.purchaseLineId);
+    if (plId && r && r.ok && r.data && (r.data.stock_unit_id || r.data.stock_unit_ids)) {
+      const ids = r.data.stock_unit_ids || [r.data.stock_unit_id];
+      for (const sid of ids) { try { await supa('PATCH','inv_stock_units',{ purchase_line_id: plId },{ id: `eq.${sid}` }); } catch(_){} }
+    }
     return rpcResult(res, r, 'Receive failed');
   }
 
@@ -402,6 +411,96 @@ export async function routeInventory(action, body, auth, req, res) {
                          'resolution=merge-duplicates,return=representation');
     if (!r.ok) return boom(res, 'Failed to save mapping');
     return res.status(200).json({ ok: true, mapping: (r.data || [])[0] || row });
+  }
+
+  // ══ PURCHASES (itemized expense / immutable purchasing history) ═════════
+  // A purchase creates: (1) immutable inv_purchases line rows, (2) ONE financial
+  // business_expenses summary row. It NEVER creates inventory stock.
+  if (action === 'invSavePurchase') {
+    const lines = Array.isArray(body.lines) ? body.lines : [];
+    if (!lines.length) return bad(res, 'at least one purchase line required');
+    for (const ln of lines) {
+      if (!str(ln.itemName)) return bad(res, 'each line needs an item name');
+      if (!(num(ln.quantity) > 0)) return bad(res, 'each line needs quantity > 0');
+      if (num(ln.unitPrice) == null || num(ln.unitPrice) < 0) return bad(res, 'each line needs a unit price');
+    }
+    const group = 'PUR-' + Date.now();
+    const supplierName = str(body.supplierName, 150);
+    const store = str(body.store, 150);
+    const category = str(body.category, 60) || 'Stocks & Groceries';
+    const ref = str(body.referenceNo, 100);
+    const pay = str(body.paymentMethod, 60);
+    const pdate = body.purchaseDate || new Date().toISOString().split('T')[0];
+    let grand = 0;
+    const rows = lines.map(ln => {
+      const qty = num(ln.quantity);
+      const up = num(ln.unitPrice);
+      const total = Math.round(qty * up * 100) / 100;
+      grand += total;
+      const baseQty = num(ln.baseQuantity);
+      const baseUnitCost = (baseQty && baseQty > 0) ? Math.round((total / baseQty) * 10000) / 10000 : null;
+      return {
+        purchase_group: group,
+        item_id: int(ln.itemId), item_name: str(ln.itemName, 200), category,
+        supplier_id: int(body.supplierId), supplier_name: supplierName, store,
+        purchase_date: pdate,
+        quantity: qty, purchase_unit_id: int(ln.purchaseUnitId), purchase_unit: str(ln.purchaseUnit, 40),
+        unit_price: up, total_price: total,
+        base_unit_id: int(ln.baseUnitId), base_unit: str(ln.baseUnit, 40),
+        base_quantity: baseQty, base_unit_cost: baseUnitCost,
+        reference_no: ref, payment_method: pay, notes: str(ln.notes, 300),
+        source: 'expense', source_ref: group, created_by: actor,
+      };
+    });
+    grand = Math.round(grand * 100) / 100;
+    const insLines = await supa('POST', 'inv_purchases', rows);
+    if (!insLines.ok) return boom(res, 'Failed to save purchase lines');
+    try {
+      await supa('POST', 'business_expenses', {
+        expense_date: pdate,
+        description: (supplierName || store || 'Purchase') + ' — ' + lines.length + ' item' + (lines.length !== 1 ? 's' : ''),
+        amount: grand, category, paid_via: pay, reference_no: ref,
+        store: supplierName || store, purchase_group: group,
+        added_by: actor, added_by_role: (isOwner ? 'OWNER' : 'ADMIN'), is_paid: true,
+      });
+    } catch (_) {}
+    return res.status(200).json({ ok: true, purchase_group: group, lines: lines.length, total: grand });
+  }
+
+  if (action === 'invListPurchases') {
+    const r = await supaFetch(`${SUPABASE_URL}/rest/v1/inv_v_purchase_summary?select=*&order=purchase_date.desc,created_at.desc&limit=200`);
+    if (!r.ok) return boom(res, 'Failed to load purchases');
+    return res.status(200).json({ ok: true, purchases: r.data || [] });
+  }
+
+  if (action === 'invGetPurchase') {
+    const group = str(body.purchaseGroup, 60);
+    if (!group) return bad(res, 'purchaseGroup required');
+    const lr = await supaFetch(`${SUPABASE_URL}/rest/v1/inv_purchases?purchase_group=eq.${encodeURIComponent(group)}&select=*&order=id.asc`);
+    if (!lr.ok) return boom(res, 'Failed to load purchase');
+    const lines = lr.data || [];
+    const ids = lines.map(l => l.id);
+    const received = {};
+    if (ids.length) {
+      const sr = await supaFetch(`${SUPABASE_URL}/rest/v1/inv_stock_units?purchase_line_id=in.(${ids.join(',')})&select=purchase_line_id,quantity_original,stock_unit_code`);
+      if (sr.ok) (sr.data || []).forEach(su => {
+        received[su.purchase_line_id] = received[su.purchase_line_id] || { qty: 0, codes: [] };
+        received[su.purchase_line_id].qty += parseFloat(su.quantity_original) || 0;
+        received[su.purchase_line_id].codes.push(su.stock_unit_code);
+      });
+    }
+    lines.forEach(l => {
+      const rec = received[l.id] || { qty: 0, codes: [] };
+      l._received = rec.qty; l._received_codes = rec.codes;
+      l._status = rec.qty <= 0 ? 'NOT_RECEIVED' : (rec.qty >= (parseFloat(l.base_quantity) || 0) ? 'RECEIVED' : 'PARTIAL');
+    });
+    const summary = lines.length ? {
+      purchase_group: group, supplier_name: lines[0].supplier_name, store: lines[0].store,
+      category: lines[0].category, reference_no: lines[0].reference_no,
+      payment_method: lines[0].payment_method, purchase_date: lines[0].purchase_date,
+      total_amount: lines.reduce((s, l) => s + (parseFloat(l.total_price) || 0), 0),
+    } : null;
+    return res.status(200).json({ ok: true, summary, lines });
   }
 
   // ══ REPORTS ═══════════════════════════════════════════════════════════
