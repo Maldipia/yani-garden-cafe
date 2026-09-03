@@ -235,10 +235,10 @@ function _invRenderStockTable(){
     return;
   }
   var cols=['Stock Code','Item','Type','Qty','Unit','Batch','Received','Expiry','Location','Status'];
-  var h='<div class="inv-desk" style="background:#fff;border:1px solid var(--mist);border-radius:10px;overflow:auto">';
+  var h='<div class="inv-desk" style="background:#fff;border:1px solid var(--mist);border-radius:10px;overflow:auto;max-height:calc(100vh - 320px)">';
   h+='<table style="width:100%;border-collapse:collapse;font-size:.73rem;min-width:900px">';
   h+='<thead><tr style="background:var(--forest-deep)">';
-  cols.forEach(function(c,i){ h+='<th style="text-align:'+(i===3?'right':'left')+';padding:7px 9px;color:#fff;font-weight:700;font-size:.66rem;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap">'+c+'</th>'; });
+  cols.forEach(function(c,i){ h+='<th style="position:sticky;top:0;z-index:2;background:var(--forest-deep);text-align:'+(i===3?'right':'left')+';padding:7px 9px;color:#fff;font-weight:700;font-size:.66rem;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap">'+c+'</th>'; });
   h+='</tr></thead><tbody>';
   rows.forEach(function(u,idx){
     var it=u.inv_items||{}, un=(u.inv_units||{}).name||'', loc=(u.inv_locations||{}).name||'—';

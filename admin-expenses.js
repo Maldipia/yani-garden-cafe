@@ -133,11 +133,11 @@ function _expRenderTable(){
   var wrap=document.getElementById('expTableWrap'); if(!wrap) return;
   var recs=_expFiltered();
   if(!recs.length){ wrap.innerHTML='<div style="background:#fff;border:1px dashed var(--mist);border-radius:12px;padding:40px;text-align:center;color:var(--timber);font-size:.82rem">No records for this filter.</div>'; return; }
-  var h='<div style="background:#fff;border:1px solid var(--mist);border-radius:12px;overflow:auto">';
+  var h='<div style="background:#fff;border:1px solid var(--mist);border-radius:12px;overflow:auto;max-height:calc(100vh - 300px)">';
   h+='<table style="width:100%;border-collapse:collapse;font-size:.76rem;min-width:900px">';
   h+='<thead><tr style="background:var(--forest-deep)">';
   ['Date','Supplier / Store','Description','Qty','Category','Amount','Inventory','Status'].forEach(function(c,i){
-    h+='<th style="text-align:'+(i===5?'right':'left')+';padding:9px 12px;color:#fff;font-weight:700;font-size:.64rem;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap">'+c+'</th>'; });
+    h+='<th style="position:sticky;top:0;z-index:2;background:var(--forest-deep);text-align:'+(i===5?'right':'left')+';padding:9px 12px;color:#fff;font-weight:700;font-size:.64rem;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap">'+c+'</th>'; });
   h+='</tr></thead><tbody>';
   recs.forEach(function(g,idx){
     var bg=idx%2?'var(--mist-light)':'#fff';
