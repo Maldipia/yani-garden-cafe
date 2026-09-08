@@ -1316,13 +1316,25 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 /* ══ GLOBAL STICKY TABLE HEADERS ═══════════════════════════════════════════
    Sticky applies per-cell, so the <th> needs its own background — a colour set
    on the parent <tr> does not paint behind a sticky cell and rows bleed through.
-   Inline th styles still win, so tables that already handle this are untouched. */
+   Inline th styles still win, so tables that already handle this are untouched.
+
+   .topbar is sticky at top:0 (z-index 100) and .filter-bar at top:64px
+   (z-index 60). A table header at top:0 would slide underneath both and
+   vanish, so page-level tables offset below them. Tables inside their own
+   scroll box stick to the top of that box instead — top:0 is correct there. */
+:root{ --topbar-h:64px; --stickybar-h:41px }
+
 table thead th{
   position:sticky;
-  top:0;
+  top:calc(var(--topbar-h) + var(--stickybar-h));
   z-index:3;
   background:#fff;
 }
+/* Inside a scroll container the header pins to the box, not the page */
+[style*="overflow-y:auto"] table thead th,
+[style*="overflow-y: auto"] table thead th,
+[style*="overflow:auto"] table thead th{ top:0 }
+
 /* Re-apply the row's intended colour onto the cells */
 table thead tr[style*="forest-deep"] th{background:var(--forest-deep);color:#fff}
 table thead tr[style*="mist-light"] th{background:var(--mist-light)}
