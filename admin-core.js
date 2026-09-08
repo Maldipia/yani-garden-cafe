@@ -302,6 +302,15 @@ function tryRestoreSession() {
 
 function applyRoleUI() {
   var role = currentUser.role || 'KITCHEN';
+
+  // HARD GUARD: TIMEKEEPER (the HR clock account) must never render the admin
+  // panel. This catches every entry path — fresh login, PIN switch, session
+  // restore, back button — not just the login branch.
+  if (role === 'TIMEKEEPER') {
+    try { localStorage.removeItem(POS_SESSION_KEY); } catch(_) {}
+    window.location.replace('/clockin.html');
+    return;
+  }
   
   // Update topbar user info
   document.getElementById('topbarUser').style.display = 'flex';
