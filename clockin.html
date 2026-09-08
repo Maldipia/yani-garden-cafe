@@ -495,7 +495,7 @@ async function loadClockStateAndShow(){
 async function clockEvent(type){
   document.getElementById('evErr').style.display='none';
   var r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({action:'hrClockEvent',staffCode:_staff.staff_code,eventType:type,pin:_pin})}).then(function(r){return r.json();}).catch(function(){return {ok:false,error:'Network error'};});
+    body:JSON.stringify({action:'hrClockEvent',staffCode:_staff.staff_code,eventType:type,pin:_pin||undefined,kioskToken:kioskToken()})}).then(function(r){return r.json();}).catch(function(){return {ok:false,error:'Network error'};});
   if(!r.ok){showErr('evErr','Error: '+(r.error||'Failed. Try again.'));return;}
   var color=EV_COLOR[type]||'#4ade80';
   var icon=document.getElementById('doneIcon');
