@@ -510,7 +510,7 @@ async function loadOrders() {
     const r = await fetch(API, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'getOrders', limit: 100, excludeTest: true, status: 'ACTIVE' })
+      body: JSON.stringify({ action: 'getOrders', limit: 100, excludeTest: true, status: 'ACTIVE', userId: userId })
     });
     const d = await r.json();
     if (!d.ok) return;

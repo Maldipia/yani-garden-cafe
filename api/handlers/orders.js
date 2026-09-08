@@ -436,7 +436,28 @@ export async function routeOrders(action, body, auth, req, res) {
     }
 
     // ── getOrders ──────────────────────────────────────────────────────────
+    // Public order-status lookup for the customer's phone. Returns the status
+    // and nothing else — no customer name, contact, totals or receipt details.
+    // Order IDs are sequential and therefore guessable, so this deliberately
+    // exposes the minimum the status screen needs.
+    if (action === 'getOrderStatus') {
+      const oid = body.orderId ? String(body.orderId).trim() : null;
+      if (!oid) return res.status(400).json({ ok:false, error:'orderId required' });
+      const r = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/dine_in_orders?order_id=eq.${encodeURIComponent(oid)}` +
+        `&is_deleted=eq.false&select=order_id,status&limit=1`);
+      const row = Array.isArray(r.data) ? r.data[0] : null;
+      if (!row) return res.status(200).json({ ok:false, error:'Order not found' });
+      return res.status(200).json({ ok:true, orderId: row.order_id, status: row.status });
+    }
+
     if (action === 'getOrders') {
+      // SECURITY: returned every live order — customer names, contacts and
+      // totals — to any unauthenticated caller. Staff-only now; the customer
+      // status screen uses getOrderStatus instead.
+      const authGO = await checkAuth(['OWNER','ADMIN','MANAGER','CASHIER','KITCHEN']);
+      if (!authGO.ok) return res.status(403).json({ ok:false, error:'Unauthorized' });
+
       const orderId     = body.orderId ? String(body.orderId).trim() : null;
       const status      = body.status  ? String(body.status).toUpperCase() : null;
       const limit       = Math.min(parseInt(body.limit) || 200, 500);

@@ -3713,9 +3713,9 @@ function startStatusPolling() {
   renderStatusPage();
   if (state.statusInterval) clearInterval(state.statusInterval);
   state.statusInterval = setInterval(async function() {
-    var result = await api('getOrders', { orderId: state.orderId });
-    if (result.ok && result.orders && result.orders.length > 0) {
-      var newStatus = result.orders[0].status.toUpperCase();
+    var result = await api('getOrderStatus', { orderId: state.orderId });
+    if (result.ok && result.status) {
+      var newStatus = String(result.status).toUpperCase();
       if (newStatus !== state.orderStatus) {
         state.orderStatus = newStatus;
         renderStatusPage();
