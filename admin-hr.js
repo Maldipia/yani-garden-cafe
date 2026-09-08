@@ -79,6 +79,13 @@ function hrDate(d) { if(!d) return '—'; try { return new Date(d).toLocaleDateS
 
 // ── State ──────────────────────────────────────────────────────────────────
 let _hrStaff=[], _hrSelected=null, _hrActiveTab='profile', _hrSearchTerm='', _hrFilterStatus='ALL';
+// 7 of 12 staff are suspended placeholders, so the list defaults to active only.
+let _hrHideInactive = (function(){ try{ return localStorage.getItem('hr_show_inactive')!=='1'; }catch(_){ return true; } })();
+function toggleInactiveStaff(){
+  _hrHideInactive = !_hrHideInactive;
+  try{ localStorage.setItem('hr_show_inactive', _hrHideInactive?'0':'1'); }catch(_){}
+  renderHRStaffList();
+}
 let _hrTabCache={};  // {staffId_tab: data}
 
 // ── Load module ────────────────────────────────────────────────────────────
@@ -114,6 +121,10 @@ function renderHRModule() {
           ${['ALL','ACTIVE','ON_LEAVE','SUSPENDED'].map(s=>
             `<button class="hr-filter-btn${_hrFilterStatus===s?' active':''}" onclick="_hrFilterStatus='${s}';renderHRStaffList()">${s==='ALL'?'All':(HR_STATUS_STYLE[s]?.label||s)}</button>`
           ).join('')}
+          <button class="hr-filter-btn" id="hrInactiveToggle" onclick="toggleInactiveStaff()"
+            title="Show or hide staff who are not active"
+            style="margin-left:auto">${_hrHideInactive?'👁 Show inactive':'🙈 Hide inactive'}${
+              _hrHideInactive ? ` (${(_hrStaff||[]).filter(x=>x.employment_status!=='ACTIVE').length})` : ''}</button>
         </div>
         <div class="hr-staff-list" id="hrStaffList"></div>
       </div>
@@ -138,7 +149,8 @@ function renderHRStaffList() {
   let list=_hrStaff;
   if(_hrSearchTerm) { const q=_hrSearchTerm.toLowerCase(); list=list.filter(s=>(s.full_name||'').toLowerCase().includes(q)||(s.role||'').toLowerCase().includes(q)); }
   if(_hrFilterStatus!=='ALL') list=list.filter(s=>s.employment_status===_hrFilterStatus);
-  if(!list.length) { el.innerHTML='<div class="hr-list-empty">No staff found</div>'; return; }
+  else if(_hrHideInactive)    list=list.filter(s=>s.employment_status==='ACTIVE');
+  if(!list.length) { el.innerHTML='<div class="hr-list-empty">No staff found'+((_hrHideInactive&&_hrFilterStatus==='ALL')?' — inactive staff are hidden':'')+'</div>'; return; }
   el.innerHTML=list.map(s=>{
     const rs=HR_ROLE_STYLE[s.role]||HR_ROLE_STYLE.STAFF;
     const ss=HR_STATUS_STYLE[s.employment_status]||HR_STATUS_STYLE.ACTIVE;
