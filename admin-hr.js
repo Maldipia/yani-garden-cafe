@@ -844,7 +844,9 @@ async function renderPayrollSection(s, tc){
             : (x.break_mins>0 ? Math.round(x.break_mins)+'m' : '—');
     var ut = parseFloat(x.undertime_hours||0), ot = parseFloat(x.ot_hours||0);
     totUt += ut;
-    var rowBg = ot>0 ? '#eff6ff' : (ut>0 ? '#fffbeb' : (x.is_holiday?'#fff7ed':''));
+    // only holidays get a row tint — tinting every undertime row made the
+    // whole table amber and unreadable
+    var rowBg = x.is_holiday ? '#fff7ed' : '';
     return `<tr${rowBg?' style="background:'+rowBg+'"':''}>
       <td style="padding:5px 7px">${esc(x.work_date)}${x.is_holiday?` <span title="${esc(x.holiday_name||'')}" style="font-size:.58rem;font-weight:700;background:#ffedd5;color:#c2410c;padding:1px 5px;border-radius:20px">HOL</span>`:''}</td>
       <td style="padding:5px 7px">${esc(x.clock_in||'—')}</td>
@@ -902,7 +904,7 @@ async function renderPayrollSection(s, tc){
       ` : '<div class="hr-empty-sm">Not computed for this cut-off yet — press Recompute.</div>'}
 
       <div class="hr-section-title" style="margin-top:14px">📅 Daily breakdown — how this was computed</div>
-      <div style="overflow-x:auto">
+      <div style="overflow-x:auto;overflow-y:auto;max-height:420px;border:1px solid var(--mist,#e2e5df);border-radius:8px">
       <table style="width:100%;border-collapse:collapse;font-size:.72rem;white-space:nowrap">
         <thead><tr style="background:var(--mist-light,#f1f5f9);text-align:left">
           <th style="padding:5px 7px">DATE</th><th style="padding:5px 7px">IN</th>

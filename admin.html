@@ -1313,39 +1313,23 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 .oc-item-name{cursor:pointer}
 .oc-item-name:hover{color:var(--forest);text-decoration:underline;text-underline-offset:2px}
 
-/* ══ GLOBAL STICKY TABLE HEADERS ═══════════════════════════════════════════
-   Sticky applies per-cell, so the <th> needs its own background — a colour set
-   on the parent <tr> does not paint behind a sticky cell and rows bleed through.
-   Inline th styles still win, so tables that already handle this are untouched.
-
-   .topbar is sticky at top:0 (z-index 100) and .filter-bar at top:64px
-   (z-index 60). A table header at top:0 would slide underneath both and
-   vanish, so page-level tables offset below them. Tables inside their own
-   scroll box stick to the top of that box instead — top:0 is correct there. */
-:root{ --topbar-h:64px; --stickybar-h:41px }
-
-table thead th{
+/* ══ STICKY TABLE HEADERS ══════════════════════════════════════════════════
+   Sticky ONLY inside an explicit scroll container. A page-level table pinned
+   to the viewport drifts into the middle of its own rows as you scroll, which
+   is what happened to the payroll breakdown. Tables that want a sticky header
+   must opt in by living in an overflow-y container. */
+[style*="overflow-y:auto"] table thead th,
+[style*="overflow-y: auto"] table thead th,
+[style*="overflow:auto"] table thead th{
   position:sticky;
-  top:calc(var(--topbar-h) + var(--stickybar-h));
+  top:0;
   z-index:3;
   background:#fff;
 }
-/* Inside a scroll container the header pins to the box, not the page */
-[style*="overflow-y:auto"] table thead th,
-[style*="overflow-y: auto"] table thead th,
-[style*="overflow:auto"] table thead th{ top:0 }
-
-/* Re-apply the row's intended colour onto the cells */
-table thead tr[style*="forest-deep"] th{background:var(--forest-deep);color:#fff}
-table thead tr[style*="mist-light"] th{background:var(--mist-light)}
-table thead tr[style*="--forest)"] th{background:var(--forest);color:#fff}
-/* Keep a visible edge once the header detaches from the rows */
-table thead th::after{
-  content:"";
-  position:absolute;
-  left:0;right:0;bottom:0;
-  height:1px;
-  background:rgba(0,0,0,.10);
+[style*="overflow-y:auto"] table thead tr[style*="forest-deep"] th{background:var(--forest-deep);color:#fff}
+[style*="overflow-y:auto"] table thead tr[style*="mist-light"] th{background:var(--mist-light)}
+[style*="overflow-y:auto"] table thead th::after{
+  content:"";position:absolute;left:0;right:0;bottom:0;height:1px;background:rgba(0,0,0,.10);
 }
 </style>
 <style id="menu-tag-styles">
@@ -2341,7 +2325,7 @@ table thead th::after{
 
   <script src="/admin-orders.js?v=40"></script>
 <script src="/admin-payments.js?v=26"></script>
-<script src="/admin-hr.js?v=20"></script>
+<script src="/admin-hr.js?v=21"></script>
   <script src="/admin-menu.js?v=27"></script>
 <script src="/admin-online.js?v=36"></script>
 <script src="/admin-tables.js?v=20"></script>
