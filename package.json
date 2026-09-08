@@ -14,6 +14,6 @@
   "type": "module",
   "scripts": {
     "guard": "node scripts/check-actions.mjs",
-    "test": "node scripts/check-actions.mjs"
+    "test": "node tests/smoke.mjs"
   }
 }
