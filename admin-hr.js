@@ -834,25 +834,29 @@ async function renderPayrollSection(s, tc){
     + `${esc(c.cutoff_name)} · ${c.payroll_status}</option>`).join('');
 
   const money = v => hrPeso(parseFloat(v||0));
-  let totHrs=0, totOt=0, totPay=0;
+  let totHrs=0, totOt=0, totPay=0, totUt=0;
   const dayRows = (br.days||[]).length ? (br.days||[]).map(function(x){
     totHrs += parseFloat(x.regular_hours||0);
     totOt  += parseFloat(x.ot_hours||0);
     totPay += parseFloat(x.day_pay||0);
     var brk = (x.break_start&&x.break_end) ? x.break_start+'–'+x.break_end
             : (x.break_mins>0 ? Math.round(x.break_mins)+'m' : '—');
-    return `<tr${x.is_holiday?' style="background:#fff7ed"':''}>
+    var ut = parseFloat(x.undertime_hours||0), ot = parseFloat(x.ot_hours||0);
+    totUt += ut;
+    var rowBg = ot>0 ? '#eff6ff' : (ut>0 ? '#fffbeb' : (x.is_holiday?'#fff7ed':''));
+    return `<tr${rowBg?' style="background:'+rowBg+'"':''}>
       <td style="padding:5px 7px">${esc(x.work_date)}${x.is_holiday?` <span title="${esc(x.holiday_name||'')}" style="font-size:.58rem;font-weight:700;background:#ffedd5;color:#c2410c;padding:1px 5px;border-radius:20px">HOL</span>`:''}</td>
       <td style="padding:5px 7px">${esc(x.clock_in||'—')}</td>
       <td style="padding:5px 7px">${esc(brk)}</td>
       <td style="padding:5px 7px">${esc(x.clock_out||'—')}</td>
       <td style="padding:5px 7px;text-align:right">${parseFloat(x.regular_hours||0).toFixed(2)}</td>
-      <td style="padding:5px 7px;text-align:right">${parseFloat(x.ot_hours||0).toFixed(2)}</td>
+      <td style="padding:5px 7px;text-align:right${ot>0?';color:#1d4ed8;font-weight:700':''}">${ot>0?ot.toFixed(2):'—'}</td>
+      <td style="padding:5px 7px;text-align:right${ut>0?';color:#b45309;font-weight:700':''}">${ut>0?ut.toFixed(2):'—'}</td>
       <td style="padding:5px 7px;text-align:right;color:#6b7280">${hrPeso(parseFloat(x.hourly_rate||0))}</td>
       <td style="padding:5px 7px;text-align:right;font-weight:700">${hrPeso(parseFloat(x.day_pay||0))}</td>
       <td style="padding:5px 7px;font-size:.6rem;color:#6b7280">${esc(x.sources||'—')}</td>
     </tr>`;
-  }).join('') : '<tr><td colspan="9" style="padding:10px;color:#9ca3af;font-size:.75rem">No attendance in this cut-off</td></tr>';
+  }).join('') : '<tr><td colspan="10" style="padding:10px;color:#9ca3af;font-size:.75rem">No attendance in this cut-off</td></tr>';
 
   const dedRows = myDeds.length ? myDeds.map(d=>`<tr>
       <td style="padding:6px 8px">${esc(d.deduction_date||'—')}</td>
@@ -878,7 +882,12 @@ async function renderPayrollSection(s, tc){
       <div class="hr-grid-2">
         <div class="hr-pay-card"><div class="hr-pay-label">GROSS PAY</div>
           <div class="hr-pay-amount">${money(mine.gross_pay)}</div>
-          <div class="hr-pay-sub">${parseFloat(mine.approved_regular_hours||0)} reg hrs · ${parseFloat(mine.approved_ot_hours||0)} OT hrs @ ${money(mine.hourly_rate)}/hr</div></div>
+          <div class="hr-pay-sub">${parseFloat(mine.approved_regular_hours||0)} reg hrs @ ${money(mine.hourly_rate)}/hr</div>
+          <div class="hr-pay-sub" style="margin-top:3px">
+            ${parseFloat(mine.approved_ot_hours||0)>0?`<span style="color:#1d4ed8;font-weight:700">OT ${parseFloat(mine.approved_ot_hours).toFixed(2)} hrs</span>`:''}
+            ${parseFloat(mine.undertime_minutes||0)>0?`<span style="color:#b45309;font-weight:700">⚠ Undertime ${(parseFloat(mine.undertime_minutes)/60).toFixed(2)} hrs</span>`:''}
+            ${(parseFloat(mine.approved_ot_hours||0)===0&&parseFloat(mine.undertime_minutes||0)===0)?'No OT or undertime':''}
+          </div></div>
         <div class="hr-pay-card"><div class="hr-pay-label">NET PAY</div>
           <div class="hr-pay-amount" style="color:#15803d">${money(mine.net_pay)}</div>
           <div class="hr-pay-sub">after ${money(mine.total_deductions)} deductions</div></div>
@@ -894,6 +903,7 @@ async function renderPayrollSection(s, tc){
           <th style="padding:5px 7px">BREAK</th><th style="padding:5px 7px">OUT</th>
           <th style="padding:5px 7px;text-align:right">HRS</th>
           <th style="padding:5px 7px;text-align:right">OT</th>
+          <th style="padding:5px 7px;text-align:right">UT</th>
           <th style="padding:5px 7px;text-align:right">RATE</th>
           <th style="padding:5px 7px;text-align:right">DAY PAY</th>
           <th style="padding:5px 7px">SRC</th>
@@ -902,7 +912,8 @@ async function renderPayrollSection(s, tc){
         <tfoot><tr style="border-top:2px solid #d8ddd5;font-weight:700">
           <td colspan="4" style="padding:7px">${(br.days||[]).length} day(s)</td>
           <td style="padding:7px;text-align:right">${totHrs.toFixed(2)}</td>
-          <td style="padding:7px;text-align:right">${totOt.toFixed(2)}</td>
+          <td style="padding:7px;text-align:right${'' }">${totOt.toFixed(2)}</td>
+          <td style="padding:7px;text-align:right;color:#b45309">${totUt.toFixed(2)}</td>
           <td></td>
           <td style="padding:7px;text-align:right">${money(totPay)}</td>
           <td></td></tr></tfoot>
@@ -945,8 +956,11 @@ async function printPayslip(){
     <td>${(x.break_start&&x.break_end)?x.break_start+'-'+x.break_end:'-'}</td>
     <td>${x.clock_out||'-'}</td>
     <td class="r">${parseFloat(x.regular_hours||0).toFixed(2)}</td>
-    <td class="r">${parseFloat(x.ot_hours||0).toFixed(2)}</td>
+    <td class="r">${parseFloat(x.ot_hours||0)>0?parseFloat(x.ot_hours).toFixed(2):'-'}</td>
+    <td class="r"${parseFloat(x.undertime_hours||0)>0?' style="color:#b45309;font-weight:700"':''}>${parseFloat(x.undertime_hours||0)>0?parseFloat(x.undertime_hours).toFixed(2):'-'}</td>
     <td class="r">${P(x.day_pay)}</td></tr>`).join('');
+  const totUt=(br.days||[]).reduce((a,x)=>a+parseFloat(x.undertime_hours||0),0);
+  const stdH=parseFloat(s.standard_hours_per_day||8);
 
   const dedRows=deds.length?deds.map(d=>`<tr>
     <td>${d.deduction_date||'-'}</td><td>${esc(d.details||d.reason||d.deduction_type)}</td>
@@ -992,12 +1006,16 @@ async function printPayslip(){
   </div></div>
 
   <div class="sec">Attendance detail</div>
-  <table><thead><tr><th>DATE</th><th>IN</th><th>BREAK</th><th>OUT</th><th class="r">HRS</th><th class="r">OT</th><th class="r">DAY PAY</th></tr></thead>
+  <table><thead><tr><th>DATE</th><th>IN</th><th>BREAK</th><th>OUT</th><th class="r">HRS</th><th class="r">OT</th><th class="r">UT</th><th class="r">DAY PAY</th></tr></thead>
   <tbody>${days}</tbody>
   <tfoot><tr><td colspan="4">${(br.days||[]).length} day(s)</td>
     <td class="r">${parseFloat(row.approved_regular_hours||0).toFixed(2)}</td>
     <td class="r">${parseFloat(row.approved_ot_hours||0).toFixed(2)}</td>
+    <td class="r">${totUt>0?totUt.toFixed(2):'-'}</td>
     <td class="r">${P(row.gross_pay)}</td></tr></tfoot></table>
+  ${totUt>0?`<div style="margin-top:6px;font-size:11px;background:#fffbeb;border:1px solid #fde68a;border-radius:5px;padding:7px 9px">
+    <b>Undertime: ${totUt.toFixed(2)} hours</b> — paid hours fell short of the ${stdH}-hour standard day.
+    Meal breaks are unpaid and are not counted as work hours.</div>`:''}
 
   <div class="sec">Deductions</div>
   <table><thead><tr><th>DATE</th><th>DETAILS</th><th class="r">TOTAL</th><th class="r">DEDUCTED</th><th class="r">BALANCE</th></tr></thead>
@@ -1008,7 +1026,8 @@ async function printPayslip(){
 
   <div class="note">
     Gross = regular hours x hourly rate${parseFloat(row.approved_ot_hours||0)>0?' + overtime at 1.25x':''}.
-    Hourly rate = daily rate / ${parseFloat(s.standard_hours_per_day||8)} hours. Unpaid meal breaks are excluded from paid hours.
+    Hourly rate = daily rate / ${stdH} hours. Meal breaks are unpaid and excluded from paid hours.
+    Undertime = ${stdH}-hour standard day minus actual paid hours. Overtime is paid at 1.25x beyond ${stdH} hours.
     ${hol?'<br>* Dates marked with an asterisk fall on a declared holiday. No holiday premium has been applied to this payslip.':''}
     <br>Government contributions (SSS, PhilHealth, Pag-IBIG) are not included in this computation.
     <br>Please review and raise any discrepancy with management within 5 days of receipt.
