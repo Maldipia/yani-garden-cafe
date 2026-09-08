@@ -147,7 +147,7 @@ function renderHRStaffList() {
       <div class="hr-avatar" style="background:${rs.bg};color:${rs.fg}">${(s.full_name||'?').charAt(0).toUpperCase()}</div>
       <div class="hr-card-info">
         <div class="hr-card-name">${esc(s.full_name||'—')}</div>
-        <div class="hr-card-sub">${esc(s.role||'')}${s.daily_rate?' · ₱'+parseFloat(s.daily_rate).toLocaleString('en-PH'):''}</div>
+        <div class="hr-card-sub">${esc(s.role||'')}${hrRowBadges(s)}</div>
       </div>
       <div class="hr-card-right">
         <span class="hr-dot-lg" style="background:${ss.dot}" title="${ss.label}"></span>
@@ -1086,3 +1086,21 @@ function printHRQR(qrToken, name, staffCode) {
 }
 
 function hf(label,value){return`<div class="hr-field"><div class="hr-field-label">${esc(label)}</div><div class="hr-field-value">${esc(String(value??'—'))}</div></div>`;}
+
+// Row badges for the staff list. Shows what needs DOING (missing PIN or QR)
+// and where the person is right now — never their pay, which was previously
+// printed next to every name on a screen visible from the counter.
+function hrRowBadges(s){
+  var out=[];
+  if(s.employment_status==='ACTIVE'){
+    if(!s.has_qr)  out.push(['No QR','#fef3c7','#b45309']);
+    if(!s.has_pin) out.push(['No PIN','#fef3c7','#b45309']);
+    if(s.clock_state==='IN')    out.push(['In','#dcfce7','#15803d']);
+    if(s.clock_state==='BREAK') out.push(['Break','#ffedd5','#c2410c']);
+  }
+  if(!out.length) return '';
+  return ' ' + out.map(function(b){
+    return '<span style="font-size:.58rem;font-weight:700;padding:1px 6px;border-radius:20px;'
+      + 'background:'+b[1]+';color:'+b[2]+';margin-left:4px">'+b[0]+'</span>';
+  }).join('');
+}

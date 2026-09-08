@@ -23,7 +23,29 @@ export async function routeAdmin(action, body, auth, req, res) {
         '&select=id,staff_code,full_name,nickname,role,employment_type,employment_status,pay_basis,daily_rate,hourly_rate,standard_hours_per_day,overtime_allowed,mobile,email,date_of_birth,date_hired,department,payout_method,payout_details,gender,civil_status,notes,qr_token&order=full_name.asc'
       );
       if (!rHR.ok) return res.status(500).json({ ok:false, error:'Supabase HR error: ' + rHR.status });
-      return res.status(200).json({ ok:true, staff: Array.isArray(rHR.data) ? rHR.data : [] });
+      const staffRows = Array.isArray(rHR.data) ? rHR.data : [];
+
+      // Enrich each row with what the HR list actually needs to show: can this
+      // person clock in, and where are they right now. Never their pay.
+      const today = new Date(Date.now() + 8*3600*1000).toISOString().slice(0,10);
+      const [rLogin, rLogs] = await Promise.all([
+        supaFetch(SUPABASE_URL + '/rest/v1/hr_staff_login?select=staff_id,pin_hash'),
+        supaFetch(SUPABASE_URL + '/rest/v1/hr_time_logs?tenant_id=eq.' + TENANT_HR +
+                  '&log_date=eq.' + today + '&select=staff_id,event_type,event_time&order=event_time.asc'),
+      ]);
+      const pinBy = {};
+      (Array.isArray(rLogin.data) ? rLogin.data : []).forEach(l => { if (l.pin_hash) pinBy[l.staff_id] = true; });
+      const lastBy = {};
+      (Array.isArray(rLogs.data) ? rLogs.data : []).forEach(l => { lastBy[l.staff_id] = l.event_type; });
+      const STATE = { CLOCK_IN:'IN', BREAK_END:'IN', BROKEN_TIME_END:'IN',
+                      BREAK_START:'BREAK', BROKEN_TIME_START:'BREAK', CLOCK_OUT:'OUT' };
+
+      staffRows.forEach(s => {
+        s.has_pin    = !!pinBy[s.id];
+        s.has_qr     = !!(s.qr_token && String(s.qr_token).trim());
+        s.clock_state = STATE[lastBy[s.id]] || 'OUT';
+      });
+      return res.status(200).json({ ok:true, staff: staffRows });
     } catch(hrErr) {
       return res.status(500).json({ ok:false, error:'HR fetch error: ' + hrErr.message });
     }
