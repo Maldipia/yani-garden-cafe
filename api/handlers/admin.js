@@ -221,14 +221,27 @@ export async function routeAdmin(action, body, auth, req, res) {
     const authT = await checkAuth(['OWNER','ADMIN','MANAGER']);
     if (!authT.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     const TENANT_HR2 = '11111111-1111-4111-8111-111111111111';
-    const {staffId,event_type,log_date,event_time,attendance_source,notes} = body;
+    const {staffId,event_type,log_date,event_time,notes} = body;
+    // A manual entry alters paid hours, so it must say WHY and WHO.
+    const reason = String(notes||'').trim();
+    if (reason.length < 3) {
+      return res.status(400).json({ok:false,error:'A reason is required for manual entries'});
+    }
+    const who = authT.userId || 'UNKNOWN';
     const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_time_logs',
       {method:'POST',headers:{Prefer:'return=representation'},
        body:JSON.stringify({tenant_id:TENANT_HR2,staff_id:staffId,
          event_type,log_date,event_time,
-         attendance_source:attendance_source||'MANUAL',
-         notes:notes||null,approval_status:'PENDING'})
+         attendance_source:'MANUAL',      // never spoofable as a scan
+         device:'ADMIN_PANEL',
+         notes:'['+who+'] '+reason.substring(0,400),
+         approval_status:'PENDING'})
       });
+    if (r.ok) {
+      await hrAudit({ action:'ATTENDANCE_MANUAL_ENTRY', module:'ATTENDANCE',
+        recordId: staffId, next:{event_type, log_date, event_time},
+        reason, actorCode: who, role: authT.role, req });
+    }
     return res.status(200).json({ok:r.ok});
   }
 
