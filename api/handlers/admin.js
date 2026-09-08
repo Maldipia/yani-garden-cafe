@@ -17,7 +17,7 @@ export async function routeAdmin(action, body, auth, req, res) {
   // ── getHRStaff ──────────────────────────────────────────────────────────
   // ── PAYROLL ────────────────────────────────────────────────────────────
   if (action === 'hrListCutoffs') {
-    const authC = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    const authC = await checkAuth(['OWNER']);
     if (!authC.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     const TENANT_HR = '11111111-1111-4111-8111-111111111111';
     const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_payroll_cut_offs?tenant_id=eq.'+TENANT_HR+
@@ -26,7 +26,7 @@ export async function routeAdmin(action, body, auth, req, res) {
   }
 
   if (action === 'hrComputePayroll') {
-    const authP = await checkAuth(['OWNER','ADMIN']);
+    const authP = await checkAuth(['OWNER']);
     if (!authP.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     if (!body.cutoffId) return res.status(400).json({ok:false,error:'cutoffId required'});
     const r = await supaFetch(SUPABASE_URL+'/rest/v1/rpc/hr_compute_payroll',
@@ -39,7 +39,7 @@ export async function routeAdmin(action, body, auth, req, res) {
   }
 
   if (action === 'hrGetPayroll') {
-    const authG = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    const authG = await checkAuth(['OWNER']);
     if (!authG.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     if (!body.cutoffId) return res.status(400).json({ok:false,error:'cutoffId required'});
     const TENANT_HR = '11111111-1111-4111-8111-111111111111';
@@ -55,7 +55,7 @@ export async function routeAdmin(action, body, auth, req, res) {
   }
 
   if (action === 'hrOvertimeReview') {
-    const authOr = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    const authOr = await checkAuth(['OWNER']);
     if (!authOr.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     if (!body.cutoffId || !body.staffId) return res.status(400).json({ok:false,error:'cutoffId + staffId required'});
     const r = await supaFetch(SUPABASE_URL+'/rest/v1/rpc/hr_overtime_review',
@@ -64,7 +64,7 @@ export async function routeAdmin(action, body, auth, req, res) {
   }
 
   if (action === 'hrOvertimeDecide') {
-    const authOd = await checkAuth(['OWNER','ADMIN']);
+    const authOd = await checkAuth(['OWNER']);
     if (!authOd.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     if (!body.cutoffId || !body.staffId) return res.status(400).json({ok:false,error:'cutoffId + staffId required'});
     const who = authOd.userId || body.userId || 'UNKNOWN';
@@ -81,7 +81,7 @@ export async function routeAdmin(action, body, auth, req, res) {
   }
 
   if (action === 'hrSavePayrollManual') {
-    const authM = await checkAuth(['OWNER','ADMIN']);
+    const authM = await checkAuth(['OWNER']);
     if (!authM.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     if (!body.cutoffId || !body.staffId) return res.status(400).json({ok:false,error:'cutoffId + staffId required'});
     const num = v => (v===''||v==null||isNaN(parseFloat(v))) ? 0 : Math.round(parseFloat(v)*100)/100;
@@ -113,7 +113,7 @@ export async function routeAdmin(action, body, auth, req, res) {
   }
 
   if (action === 'hrIssuePayslip') {
-    const authI = await checkAuth(['OWNER','ADMIN']);
+    const authI = await checkAuth(['OWNER']);
     if (!authI.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     const TENANT_HR = '11111111-1111-4111-8111-111111111111';
     if (!body.cutoffId || !body.staffId) return res.status(400).json({ok:false,error:'cutoffId + staffId required'});
@@ -135,7 +135,7 @@ export async function routeAdmin(action, body, auth, req, res) {
   }
 
   if (action === 'hrPayrollDaily') {
-    const authB = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    const authB = await checkAuth(['OWNER']);
     if (!authB.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     if (!body.cutoffId || !body.staffId) return res.status(400).json({ok:false,error:'cutoffId + staffId required'});
     const r = await supaFetch(SUPABASE_URL+'/rest/v1/rpc/hr_payroll_daily',
@@ -145,7 +145,7 @@ export async function routeAdmin(action, body, auth, req, res) {
   }
 
   if (action === 'hrAddDeduction') {
-    const authD = await checkAuth(['OWNER','ADMIN']);
+    const authD = await checkAuth(['OWNER']);
     if (!authD.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     const TENANT_HR = '11111111-1111-4111-8111-111111111111';
     const det = String(body.details||'').trim();
@@ -173,7 +173,7 @@ export async function routeAdmin(action, body, auth, req, res) {
     // SECURITY: this returns the full staff master — rates, mobile numbers,
     // dates of birth, payout details and the clock-in QR tokens. It was
     // reachable with no credentials at all.
-    const authGS = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    const authGS = await checkAuth(['OWNER']);
     if (!authGS.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     try {
       const TENANT_HR = '11111111-1111-4111-8111-111111111111';
@@ -211,6 +211,8 @@ export async function routeAdmin(action, body, auth, req, res) {
   }
 
   if (action === 'getHRProfile') {
+    const authP1 = await checkAuth(['OWNER']);
+    if (!authP1.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     const { staffId } = body;
     if (!staffId) return res.status(400).json({ok:false,error:'staffId required'});
     const TENANT_HR = '11111111-1111-4111-8111-111111111111';
@@ -222,7 +224,7 @@ export async function routeAdmin(action, body, auth, req, res) {
   }
 
   if (action === 'updateHRStaff') {
-    const authHR = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    const authHR = await checkAuth(['OWNER']);
     if (!authHR.ok) return res.status(403).json({ok:false, error:'Unauthorized'});
     const hrStaffId = body.staffId;
     if (!hrStaffId) return res.status(400).json({ok:false, error:'staffId required'});
@@ -297,11 +299,13 @@ export async function routeAdmin(action, body, auth, req, res) {
   const TENANT_HR = '11111111-1111-4111-8111-111111111111';
 
   if (action === 'getHRLoans') {
+    const authL1 = await checkAuth(['OWNER']);
+    if (!authL1.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_staff_loans?staff_id=eq.'+body.staffId+'&tenant_id=eq.'+TENANT_HR+'&order=created_at.desc');
     return res.status(200).json({ ok:true, loans: r.data||[] });
   }
   if (action === 'addHRLoan') {
-    const authL = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    const authL = await checkAuth(['OWNER']);
     if (!authL.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     const {staffId,principal,notes,start_date,monthly_amortization} = body;
     const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_staff_loans',
@@ -310,18 +314,20 @@ export async function routeAdmin(action, body, auth, req, res) {
     return res.status(200).json({ok:r.ok,loan:Array.isArray(r.data)?r.data[0]:r.data});
   }
   if (action === 'updateHRLoan') {
-    const authL = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    const authL = await checkAuth(['OWNER']);
     if (!authL.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     const p={};['status','balance_remaining','notes','monthly_amortization'].forEach(k=>{if(body[k]!==undefined)p[k]=body[k];});
     const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_staff_loans?id=eq.'+body.loanId,{method:'PATCH',body:JSON.stringify(p)});
     return res.status(200).json({ok:r.ok});
   }
   if (action === 'getHRDocuments') {
+    const authD1 = await checkAuth(['OWNER']);
+    if (!authD1.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_staff_documents?staff_id=eq.'+body.staffId+'&tenant_id=eq.'+TENANT_HR+'&order=created_at.desc');
     return res.status(200).json({ok:true,documents:r.data||[]});
   }
   if (action === 'addHRDocument') {
-    const authD = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    const authD = await checkAuth(['OWNER']);
     if (!authD.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     const {staffId,document_type,notes,expiry_date,file_link} = body;
     const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_staff_documents',
@@ -330,11 +336,13 @@ export async function routeAdmin(action, body, auth, req, res) {
     return res.status(200).json({ok:r.ok,document:Array.isArray(r.data)?r.data[0]:r.data});
   }
   if (action === 'getHRIncidents') {
+    const authI1 = await checkAuth(['OWNER']);
+    if (!authI1.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_staff_incidents?staff_id=eq.'+body.staffId+'&tenant_id=eq.'+TENANT_HR+'&order=incident_date.desc');
     return res.status(200).json({ok:true,incidents:r.data||[]});
   }
   if (action === 'addHRIncident') {
-    const authI = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    const authI = await checkAuth(['OWNER']);
     if (!authI.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     const {staffId,incident_type,incident_date,description,action_taken} = body;
     const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_staff_incidents',
@@ -343,11 +351,13 @@ export async function routeAdmin(action, body, auth, req, res) {
     return res.status(200).json({ok:r.ok,incident:Array.isArray(r.data)?r.data[0]:r.data});
   }
   if (action === 'getHRPerformance') {
+    const authPf = await checkAuth(['OWNER']);
+    if (!authPf.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_performance?staff_id=eq.'+body.staffId+'&tenant_id=eq.'+TENANT_HR+'&order=record_date.desc');
     return res.status(200).json({ok:true,records:r.data||[]});
   }
   if (action === 'addHRPerformance') {
-    const authP = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    const authP = await checkAuth(['OWNER']);
     if (!authP.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     const {staffId,record_type,title,description,record_date,rating} = body;
     const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_performance',
@@ -356,6 +366,8 @@ export async function routeAdmin(action, body, auth, req, res) {
     return res.status(200).json({ok:r.ok,record:Array.isArray(r.data)?r.data[0]:r.data});
   }
   if (action === 'getHRLeave') {
+    const authLv = await checkAuth(['OWNER']);
+    if (!authLv.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     const [reqs,bals] = await Promise.all([
       supaFetch(SUPABASE_URL+'/rest/v1/hr_leave_requests?staff_id=eq.'+body.staffId+'&tenant_id=eq.'+TENANT_HR+'&order=requested_at.desc&limit=20'),
       supaFetch(SUPABASE_URL+'/rest/v1/hr_leave_balances?staff_id=eq.'+body.staffId+'&tenant_id=eq.'+TENANT_HR)
@@ -363,12 +375,14 @@ export async function routeAdmin(action, body, auth, req, res) {
     return res.status(200).json({ok:true,requests:reqs.data||[],balances:bals.data||[]});
   }
   if (action === 'getHRTimeLogs') {
+    const authTl = await checkAuth(['OWNER']);
+    if (!authTl.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_time_logs?staff_id=eq.'+body.staffId+'&tenant_id=eq.'+TENANT_HR+'&order=event_time.desc&limit='+(body.limit||20));
     return res.status(200).json({ok:true,logs:r.data||[]});
   }
 
   if (action === 'addHRStaff') {
-    const authS = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    const authS = await checkAuth(['OWNER']);
     if (!authS.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     const {full_name,role,daily_rate,mobile} = body;
     if (!full_name) return res.status(400).json({ok:false,error:'full_name required'});
@@ -388,6 +402,8 @@ export async function routeAdmin(action, body, auth, req, res) {
     return res.status(200).json({ok:r.ok,staff:Array.isArray(r.data)?r.data[0]:r.data});
   }
   if (action === 'addHRLeaveRequest') {
+    const authLr = await checkAuth(['OWNER']);
+    if (!authLr.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     const TENANT_HR2 = '11111111-1111-4111-8111-111111111111';
     const {staffId,leave_type,start_date,end_date,number_of_days,reason} = body;
     const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_leave_requests',
@@ -399,7 +415,7 @@ export async function routeAdmin(action, body, auth, req, res) {
     return res.status(200).json({ok:r.ok});
   }
   if (action === 'addHRTimeLog') {
-    const authT = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    const authT = await checkAuth(['OWNER']);
     if (!authT.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     const TENANT_HR2 = '11111111-1111-4111-8111-111111111111';
     const {staffId,event_type,log_date,event_time,notes} = body;
@@ -436,7 +452,7 @@ export async function routeAdmin(action, body, auth, req, res) {
 
   // ── hrCompute13thMonth ────────────────────────────────────────────────────
   if (action === 'hrCompute13thMonth') {
-    const authHR = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    const authHR = await checkAuth(['OWNER']);
     if (!authHR.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     const TENANT_HR = '11111111-1111-4111-8111-111111111111';
     const year = body.year || new Date().getFullYear();
@@ -475,7 +491,7 @@ export async function routeAdmin(action, body, auth, req, res) {
 
   // ── hrSetPin — sets the ATTENDANCE PIN (clock-in/clock-out only) ───────────
   if (action === 'hrSetPin') {
-    const authSP = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    const authSP = await checkAuth(['OWNER']);
     if (!authSP.ok) return res.status(403).json({ok:false,error:authSP.error});
     const {staffId, pin} = body;
     if (!staffId||!pin) return res.status(400).json({ok:false,error:'staffId + pin required'});
@@ -495,7 +511,7 @@ export async function routeAdmin(action, body, auth, req, res) {
   // Deliberately a different secret from the attendance PIN so a PIN
   // shoulder-surfed at the clock-in kiosk can't unlock the portal.
   if (action === 'hrSetPortalPin') {
-    const authSPP = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    const authSPP = await checkAuth(['OWNER']);
     if (!authSPP.ok) return res.status(403).json({ok:false,error:authSPP.error});
     const {staffId, pin} = body;
     if (!staffId||!pin) return res.status(400).json({ok:false,error:'staffId + pin required'});
@@ -514,7 +530,7 @@ export async function routeAdmin(action, body, auth, req, res) {
   // Any photo/copy of the previous QR code becomes useless immediately —
   // it no longer resolves to a valid staff record.
   if (action === 'hrRotateQrToken') {
-    const authRQ = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    const authRQ = await checkAuth(['OWNER']);
     if (!authRQ.ok) return res.status(403).json({ok:false,error:authRQ.error});
     const {staffId} = body;
     if (!staffId) return res.status(400).json({ok:false,error:'staffId required'});
