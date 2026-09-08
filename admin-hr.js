@@ -806,7 +806,7 @@ function renderScheduleTab(s) {
 
 // ── PAYROLL TAB ───────────────────────────────────────────────────────────
 // Payroll cutoff selector + computed detail for the selected staff member.
-let _hrCutoffs=[], _hrCutoffId=null;
+let _hrCutoffs=[], _hrCutoffId=null, _hrPayRow=null;
 
 async function loadPayrollTab(s,tc) {
   const cs = await api('hrListCutoffs', {userId:currentUser?.userId});
@@ -828,6 +828,7 @@ async function renderPayrollSection(s, tc){
   ]);
   const cut = _hrCutoffs.find(c=>c.id===_hrCutoffId)||{};
   const mine = (pr.rows||[]).find(r=>r.staff_id===s.id);
+  _hrPayRow = mine || null;
   const myDeds = (pr.deductions||[]).filter(d=>d.staff_id===s.id);
 
   const opts = _hrCutoffs.map(c=>`<option value="${c.id}"${c.id===_hrCutoffId?' selected':''}>`
@@ -890,7 +891,12 @@ async function renderPayrollSection(s, tc){
           </div></div>
         <div class="hr-pay-card"><div class="hr-pay-label">NET PAY</div>
           <div class="hr-pay-amount" style="color:#15803d">${money(mine.net_pay)}</div>
-          <div class="hr-pay-sub">after ${money(mine.total_deductions)} deductions</div></div>
+          <div class="hr-pay-sub">after ${money(mine.total_deductions)} deductions</div>
+          <div class="hr-pay-sub" style="margin-top:3px">
+            ${parseFloat(mine.tips_share||0)>0?`Tips/SC ${money(mine.tips_share)} · `:''}
+            ${parseFloat(mine.government_deduction||0)>0?`Gov't ${money(mine.government_deduction)} · `:''}
+            ${parseFloat(mine.thirteenth_month_accrual||0)>0?`13th accrual ${money(mine.thirteenth_month_accrual)}`:'13th: not eligible'}
+          </div></div>
       </div>
       <div style="font-size:.66rem;color:#9ca3af;margin:6px 0 14px">${esc(mine.notes||'')}</div>
       ` : '<div class="hr-empty-sm">Not computed for this cut-off yet — press Recompute.</div>'}
@@ -930,6 +936,7 @@ async function renderPayrollSection(s, tc){
         <tbody>${dedRows}</tbody>
       </table>
       <button onclick="addDeductionDialog()" style="margin-top:10px;font-size:.78rem;font-weight:700;background:#fff;color:#1f3d2b;border:1.5px solid #d8ddd5;border-radius:8px;padding:8px 14px;cursor:pointer">+ Add deduction</button>
+      ${mine?`<button onclick="manualPayDialog()" style="margin-top:10px;margin-left:8px;font-size:.78rem;font-weight:700;background:#fff;color:#1f3d2b;border:1.5px solid #d8ddd5;border-radius:8px;padding:8px 14px;cursor:pointer">✎ Tips / premiums / gov't</button>`:''}
       ${mine?`<button onclick="printPayslip()" style="margin-top:10px;margin-left:8px;font-size:.78rem;font-weight:700;background:#1f3d2b;color:#fff;border:none;border-radius:8px;padding:9px 16px;cursor:pointer">🧾 Print payslip</button>`:''}
     </div>`;
 }
@@ -1042,6 +1049,36 @@ async function printPayslip(){
   </body></html>`);
   w.document.close();
   api('hrIssuePayslip',{userId:currentUser?.userId,staffId:s.id,cutoffId:_hrCutoffId});
+}
+
+
+// Manual payroll components. Entered by HR only when applicable — tips and
+// service-charge share, rest day and holiday premium, night differential,
+// allowances, and government contributions. A recompute preserves these.
+function manualPayDialog(){
+  const s=_hrSelected; if(!s||!_hrCutoffId) return;
+  const m=_hrPayRow||{};
+  const f=(id,label,val,hint)=>`<div class="hr-edit-row"><label class="hr-edit-label">${label}</label>
+    <input class="hr-edit-input" id="${id}" type="number" step="0.01" value="${val!=null?parseFloat(val):''}" placeholder="0.00">
+    ${hint?`<div style="font-size:.62rem;color:#8a7a6a;margin-top:2px">${hint}</div>`:''}</div>`;
+  hrModal('Manual pay components', `
+    <div style="font-size:.68rem;color:#6b7280;margin-bottom:8px">Leave blank or 0 when not applicable. These survive a recompute.</div>
+    ${f('mpTips','Tips / service charge share', m.tips_share, 'RA 11360 — service charge distributed to staff')}
+    ${f('mpHol','Holiday premium', m.holiday_pay, 'Extra pay for work on a declared holiday')}
+    ${f('mpRest','Rest day premium', m.rest_day_pay)}
+    ${f('mpNight','Night differential', m.night_diff_pay, '+10% for hours between 10pm and 6am')}
+    ${f('mpAllow','Allowances', m.allowances)}
+    ${f('mpInc','Incentives', m.incentives)}
+    ${f('mpGov','Government deductions', m.government_deduction, 'SSS + PhilHealth + Pag-IBIG employee share')}
+  `, async function(){
+    const v=id=>document.getElementById(id).value;
+    const r=await api('hrSavePayrollManual',{userId:currentUser?.userId,staffId:s.id,cutoffId:_hrCutoffId,
+      tipsShare:v('mpTips'), holidayPay:v('mpHol'), restDayPay:v('mpRest'), nightDiffPay:v('mpNight'),
+      allowances:v('mpAllow'), incentives:v('mpInc'), governmentDeduction:v('mpGov')});
+    if(!r.ok){ showToast(r.error||'Failed','error'); return false; }
+    showToast('Saved and recomputed ✅','success');
+    await loadHRTab(_hrSelected,'payroll');
+  });
 }
 
 async function recomputePayroll(){

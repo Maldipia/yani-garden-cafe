@@ -54,6 +54,38 @@ export async function routeAdmin(action, body, auth, req, res) {
       deductions: Array.isArray(deds.data)?deds.data:[]});
   }
 
+  if (action === 'hrSavePayrollManual') {
+    const authM = await checkAuth(['OWNER','ADMIN']);
+    if (!authM.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
+    if (!body.cutoffId || !body.staffId) return res.status(400).json({ok:false,error:'cutoffId + staffId required'});
+    const num = v => (v===''||v==null||isNaN(parseFloat(v))) ? 0 : Math.round(parseFloat(v)*100)/100;
+    const patch = {
+      tips_share:          num(body.tipsShare),
+      holiday_pay:         num(body.holidayPay),
+      rest_day_pay:        num(body.restDayPay),
+      night_diff_pay:      num(body.nightDiffPay),
+      allowances:          num(body.allowances),
+      incentives:          num(body.incentives),
+      government_deduction:num(body.governmentDeduction),
+      updated_at: new Date().toISOString(),
+    };
+    const before = await supaFetch(SUPABASE_URL+'/rest/v1/hr_payroll_details?cutoff_id=eq.'+body.cutoffId+
+      '&staff_id=eq.'+body.staffId+'&select=tips_share,holiday_pay,rest_day_pay,night_diff_pay,allowances,incentives,government_deduction&limit=1');
+    const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_payroll_details?cutoff_id=eq.'+body.cutoffId+
+      '&staff_id=eq.'+body.staffId, {method:'PATCH', body:JSON.stringify(patch)});
+    if (!r.ok) return res.status(500).json({ok:false,error:'Could not save'});
+
+    // recompute so gross and net pick the manual figures up
+    await supaFetch(SUPABASE_URL+'/rest/v1/rpc/hr_compute_payroll',
+      {method:'POST',body:JSON.stringify({p_cutoff_id:body.cutoffId,p_actor:body.userId||null})});
+
+    await hrAudit({ action:'PAYROLL_MANUAL_ENTRY', module:'PAYROLL', recordId:body.staffId,
+      previous: Array.isArray(before.data)?before.data[0]:null, next: patch,
+      reason: body.reason || 'Manual payroll components entered',
+      actorCode: authM.userId || body.userId, role: authM.role, req });
+    return res.status(200).json({ok:true});
+  }
+
   if (action === 'hrIssuePayslip') {
     const authI = await checkAuth(['OWNER','ADMIN']);
     if (!authI.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
