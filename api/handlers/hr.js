@@ -133,6 +133,62 @@ export async function routeHR(action, body, auth, req, res) {
     });
   }
 
+  // ── hrKioskBoard ───────────────────────────────────────────────────────
+  // Attendance summary for the HR kiosk home screen. Kiosk-token only: it
+  // returns staff names and today's clock events, nothing financial.
+  if (action === 'hrKioskBoard') {
+    const k = body.kioskToken ? await verifyToken(String(body.kioskToken)) : null;
+    if (!k || k.role !== 'TIMEKEEPER') {
+      return res.status(403).json({ok:false,error:'Kiosk not authorised'});
+    }
+    const today = new Date(Date.now() + 8*3600*1000).toISOString().slice(0,10); // PH date
+    const [staffR, logsR] = await Promise.all([
+      supaFetch(SUPABASE_URL+'/rest/v1/hr_staff_master?tenant_id=eq.'+TENANT_HR+
+        '&employment_status=eq.ACTIVE&select=id,staff_code,full_name,role,qr_token&order=full_name.asc'),
+      supaFetch(SUPABASE_URL+'/rest/v1/hr_time_logs?tenant_id=eq.'+TENANT_HR+
+        '&log_date=eq.'+today+'&select=staff_id,event_type,event_time&order=event_time.asc'),
+    ]);
+    const staff = Array.isArray(staffR.data) ? staffR.data : [];
+    const logs  = Array.isArray(logsR.data)  ? logsR.data  : [];
+
+    const byStaff = {};
+    for (const l of logs) {
+      (byStaff[l.staff_id] = byStaff[l.staff_id] || []).push(l);
+    }
+    const STATE = { CLOCK_IN:'IN', CLOCK_OUT:'OUT', BREAK_START:'BREAK', BREAK_END:'IN' };
+    const board = staff.map(s => {
+      const evs = byStaff[s.id] || [];
+      const last = evs.length ? evs[evs.length-1] : null;
+      // worked seconds = paired IN/BREAK_END -> OUT/BREAK_START
+      let secs = 0, openAt = null;
+      for (const e of evs) {
+        if (e.event_type === 'CLOCK_IN' || e.event_type === 'BREAK_END') openAt = new Date(e.event_time);
+        else if ((e.event_type === 'CLOCK_OUT' || e.event_type === 'BREAK_START') && openAt) {
+          secs += (new Date(e.event_time) - openAt) / 1000; openAt = null;
+        }
+      }
+      if (openAt) secs += (Date.now() - openAt) / 1000;
+      return {
+        staffCode: s.staff_code, name: s.full_name, role: s.role,
+        hasQr: !!s.qr_token,
+        state: last ? (STATE[last.event_type] || 'OUT') : 'OUT',
+        lastEvent: last ? last.event_type : null,
+        lastEventTime: last ? last.event_time : null,
+        hoursToday: Math.round((secs/3600) * 100) / 100,
+      };
+    });
+    return res.status(200).json({
+      ok: true, date: today, board,
+      counts: {
+        total: board.length,
+        in: board.filter(b => b.state === 'IN').length,
+        onBreak: board.filter(b => b.state === 'BREAK').length,
+        out: board.filter(b => b.state === 'OUT').length,
+      },
+      events: logs.length,
+    });
+  }
+
   // ── hrClockEvent ───────────────────────────────────────────────────────
   if (action === 'hrClockEvent') {
     const {staffCode, eventType, pin} = body;

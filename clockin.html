@@ -74,6 +74,22 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .back a{font-size:.73rem;color:rgba(255,255,255,.3);cursor:pointer;text-decoration:none}
 .back a:hover{color:rgba(255,255,255,.6)}
 .err{background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.25);border-radius:8px;padding:9px 12px;font-size:.75rem;color:#fca5a5;margin-top:10px;text-align:center;display:none}
+.kb-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+.kb-stat{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:10px 8px;text-align:center}
+.kb-num{font-size:1.5rem;font-weight:700;line-height:1.1}
+.kb-lbl{font-size:.6rem;font-weight:700;letter-spacing:.06em;color:rgba(255,255,255,.4);margin-top:3px;text-transform:uppercase}
+.kb-row{display:flex;align-items:center;gap:10px;padding:9px 2px;border-bottom:1px solid rgba(255,255,255,.05)}
+.kb-row:last-child{border-bottom:none}
+.kb-av{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0;background:rgba(255,255,255,.08)}
+.kb-nm{flex:1;min-width:0}
+.kb-nm b{display:block;font-size:.8rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kb-nm span{font-size:.65rem;color:rgba(255,255,255,.35)}
+.kb-pill{font-size:.6rem;font-weight:700;padding:3px 8px;border-radius:20px;flex-shrink:0}
+.kb-IN{background:rgba(74,222,128,.15);color:#4ade80}
+.kb-BREAK{background:rgba(251,191,36,.15);color:#fbbf24}
+.kb-OUT{background:rgba(255,255,255,.06);color:rgba(255,255,255,.35)}
+.kb-hrs{font-size:.68rem;color:rgba(255,255,255,.4);width:44px;text-align:right;flex-shrink:0}
+.kb-warn{font-size:.62rem;color:#fca5a5}
 .info{background:rgba(234,179,8,.1);border:1px solid rgba(234,179,8,.2);border-radius:8px;padding:8px 12px;font-size:.7rem;color:#fde68a;margin-bottom:12px;line-height:1.5;display:none}
 </style>
 </head>
@@ -87,8 +103,23 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 <div class="card">
 
+  <!-- STEP 0: HR home board -->
+  <div class="step active" id="s0">
+    <div class="step-title">Attendance Today</div>
+    <div class="step-sub" id="kbDate">—</div>
+    <div class="kb-grid">
+      <div class="kb-stat"><div class="kb-num" style="color:#4ade80" id="kbIn">0</div><div class="kb-lbl">Clocked in</div></div>
+      <div class="kb-stat"><div class="kb-num" style="color:#fbbf24" id="kbBreak">0</div><div class="kb-lbl">On break</div></div>
+      <div class="kb-stat"><div class="kb-num" style="color:rgba(255,255,255,.5)" id="kbOut">0</div><div class="kb-lbl">Out</div></div>
+    </div>
+    <div id="kbList"></div>
+    <button class="ci-btn ci-primary" onclick="startScan()" style="margin-top:16px">📷 &nbsp;Scan QR Code</button>
+    <button class="ci-btn ci-secondary" onclick="goManual()">⌨️ &nbsp;Enter Staff Code</button>
+    <div class="back"><a onclick="loadBoard()">↻ Refresh</a> &nbsp;·&nbsp; <a onclick="kioskSignOut()">Sign out</a></div>
+  </div>
+
   <!-- STEP 1: Method -->
-  <div class="step active" id="s1">
+  <div class="step" id="s1">
     <div class="step-title">Clock In / Out</div>
     <div class="step-sub">Choose how to identify yourself</div>
     <div class="methods">
@@ -115,7 +146,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="scan-hint">Hold your QR code inside the green frame</div>
     <div class="err" id="camErr"></div>
     <button class="ci-btn ci-secondary" onclick="goManual()">⌨️ Enter code instead</button>
-    <div class="back"><a onclick="goBack('s1')">← Back</a></div>
+    <div class="back"><a onclick="goHome()">← Back</a></div>
   </div>
 
   <!-- STEP 3: Manual code -->
@@ -126,7 +157,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <input id="codeInput" class="ci-input" placeholder="e.g. USR_001" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
     <div class="err" id="codeErr"></div>
     <button class="ci-btn ci-primary" style="margin-top:14px" onclick="lookupCode()">Continue →</button>
-    <div class="back"><a onclick="goBack('s1')">← Back</a></div>
+    <div class="back"><a onclick="goHome()">← Back</a></div>
   </div>
 
   <!-- STEP 4: PIN -->
@@ -162,7 +193,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
     <div class="back" style="margin-top:14px">
       <a onclick="clearRemembered()" style="margin-right:16px">✕ Not me?</a>
-      <a onclick="goBack('s1')">← Back</a>
+      <a onclick="goHome()">← Back</a>
     </div>
   </div>
 
@@ -189,7 +220,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       </button>
     </div>
     <div class="err" id="evErr"></div>
-    <div class="back" style="margin-top:14px"><a onclick="goBack('s1')">← Start over</a></div>
+    <div class="back" style="margin-top:14px"><a onclick="goHome()">← Start over</a></div>
   </div>
 
   <!-- STEP 6: Done -->
@@ -313,8 +344,33 @@ async function autoClockInAfterScan(){
   var t=document.getElementById('doneTitle'); if(t) t.textContent=EV_LABEL.CLOCK_IN;
   var n=document.getElementById('doneName'); if(n) n.textContent=_staff.full_name||'';
   showStep('s6');
-  setTimeout(function(){ _staff=null;_pin='';updateDots();showStep('s1'); },3500);
+  setTimeout(goHome,3500);
 }
+
+// ── HR home board ─────────────────────────────────────────────────────────
+async function loadBoard(){
+  var r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({action:'hrKioskBoard',kioskToken:kioskToken()})})
+    .then(function(x){return x.json();}).catch(function(){return {ok:false};});
+  if(!r.ok){ document.getElementById('kbList').innerHTML='<div class="kb-warn" style="text-align:center;padding:12px">Could not load board</div>'; return; }
+  document.getElementById('kbDate').textContent=new Date().toLocaleDateString('en-PH',{weekday:'long',day:'numeric',month:'long'});
+  document.getElementById('kbIn').textContent=r.counts.in;
+  document.getElementById('kbBreak').textContent=r.counts.onBreak;
+  document.getElementById('kbOut').textContent=r.counts.out;
+  var LBL={IN:'IN',BREAK:'BREAK',OUT:'OUT'};
+  document.getElementById('kbList').innerHTML=r.board.map(function(b){
+    var initial=(b.name||'?').trim().charAt(0).toUpperCase();
+    var t=b.lastEventTime?new Date(b.lastEventTime).toLocaleTimeString('en-PH',{hour:'numeric',minute:'2-digit'}):'—';
+    return '<div class="kb-row"><div class="kb-av">'+initial+'</div>'
+      +'<div class="kb-nm"><b>'+escapeHtml(b.name)+'</b><span>'+escapeHtml(b.role||'')
+      +(b.hasQr?'':' · <span class="kb-warn">no QR</span>')+' · '+t+'</span></div>'
+      +'<div class="kb-hrs">'+(b.hoursToday>0?b.hoursToday.toFixed(2)+'h':'')+'</div>'
+      +'<div class="kb-pill kb-'+b.state+'">'+LBL[b.state]+'</div></div>';
+  }).join('')||'<div class="kb-warn" style="text-align:center;padding:12px">No active staff</div>';
+}
+function escapeHtml(x){return String(x==null?'':x).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function kioskSignOut(){ try{localStorage.removeItem('yani_kiosk');}catch(_){} window.location.replace('/admin.html'); }
+function goHome(){ stopScan();_staff=null;_pin='';updateDots();showStep('s0');loadBoard(); }
 
 async function lookupByQr(token){
   if(!token||!token.trim()){goManual();showErr('codeErr','QR not recognized. Enter your code instead.');return;}
@@ -438,32 +494,23 @@ function clearRemembered(){
   _staff=null;_pin='';updateDots();
   var inp=document.getElementById('codeInput');
   if(inp) inp.value='';
-  showStep('s1');
+  goHome();
 }
 
 function reset(){
   stopScan();_staff=null;_pin='';updateDots();
   // If code is remembered, skip step 1 and go straight to PIN
-  var saved=localStorage.getItem('yani_last_staff');
-  if(saved){
-    // Auto-lookup remembered staff → land on PIN pad
-    lookupStaff(saved);
-  } else {
-    showStep('s1');
-  }
+  goHome();
 }
 
 // Auto-fill from URL ?staff=USR_001 OR remembered code
 (function(){
   if(!requireKiosk()) return;   // unauthorised device: page is replaced, stop here
+  loadBoard();
+  setInterval(loadBoard, 30000);
   var p=new URLSearchParams(location.search);
   var s=p.get('staff');
-  if(s){ lookupStaff(s); return; }
-  // If code remembered, go straight to PIN entry on open
-  var saved=localStorage.getItem('yani_last_staff');
-  if(saved){
-    lookupStaff(saved);
-  }
+  if(s){ lookupStaff(s); }
 })();
 </script>
 </body>
