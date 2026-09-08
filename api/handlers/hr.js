@@ -255,7 +255,8 @@ export async function routeHR(action, body, auth, req, res) {
       // response is sent, so a fire-and-forget PATCH silently never runs.
       try {
         await supaFetch(SUPABASE_URL+'/rest/v1/hr_time_logs?id=eq.'+inner.event_id,
-          {method:'PATCH', body:JSON.stringify({attendance_source: source})});
+          {method:'PATCH', body:JSON.stringify({attendance_source: source,
+            notes: body.build ? ('build '+String(body.build).substring(0,12)) : null})});
       } catch(_) { /* the clock event itself already succeeded — don't fail it */ }
     }
     if (!inner || inner.ok !== true) {

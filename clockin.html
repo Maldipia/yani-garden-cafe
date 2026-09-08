@@ -99,6 +99,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <img src="https://hnynvclpvfxzlfjphefj.supabase.co/storage/v1/object/public/card-assets/fathers-day-logo.png" onerror="this.style.display='none'" alt="YANI">
   <h1>YANI Garden Cafe</h1>
   <p>Employee Time Tracker</p>
+  <p id="buildStamp" style="font-size:.6rem;opacity:.35;margin-top:2px">build k12</p>
 </div>
 
 <div class="card">
@@ -451,7 +452,7 @@ async function loadClockStateAndShow(){
 async function clockEvent(type){
   document.getElementById('evErr').style.display='none';
   var r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({action:'hrClockEvent',staffCode:_staff.staff_code,eventType:type,pin:_pin||undefined,kioskToken:kioskToken(),source:(_via==='QR'?'QR':'PIN')})}).then(function(r){return r.json();}).catch(function(){return {ok:false,error:'Network error'};});
+    body:JSON.stringify({action:'hrClockEvent',staffCode:_staff.staff_code,eventType:type,pin:_pin||undefined,kioskToken:kioskToken(),source:(_via==='QR'?'QR':'PIN'),build:'k12'})}).then(function(r){return r.json();}).catch(function(){return {ok:false,error:'Network error'};});
   if(!r.ok){showErr('evErr','Error: '+(r.error||'Failed. Try again.'));return;}
   var color=EV_COLOR[type]||'#4ade80';
   var icon=document.getElementById('doneIcon');
