@@ -54,6 +54,32 @@ export async function routeAdmin(action, body, auth, req, res) {
       deductions: Array.isArray(deds.data)?deds.data:[]});
   }
 
+  if (action === 'hrOvertimeReview') {
+    const authOr = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    if (!authOr.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
+    if (!body.cutoffId || !body.staffId) return res.status(400).json({ok:false,error:'cutoffId + staffId required'});
+    const r = await supaFetch(SUPABASE_URL+'/rest/v1/rpc/hr_overtime_review',
+      {method:'POST',body:JSON.stringify({p_cutoff_id:body.cutoffId,p_staff_id:body.staffId})});
+    return res.status(200).json({ok:r.ok, rows: Array.isArray(r.data)?r.data:[]});
+  }
+
+  if (action === 'hrOvertimeDecide') {
+    const authOd = await checkAuth(['OWNER','ADMIN']);
+    if (!authOd.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
+    if (!body.cutoffId || !body.staffId) return res.status(400).json({ok:false,error:'cutoffId + staffId required'});
+    const who = authOd.userId || body.userId || 'UNKNOWN';
+    const r = await supaFetch(SUPABASE_URL+'/rest/v1/rpc/hr_overtime_decide',
+      {method:'POST',body:JSON.stringify({p_cutoff_id:body.cutoffId,p_staff_id:body.staffId,
+        p_approve: body.approve !== false, p_actor: who, p_note: body.note || null})});
+    if (!r.ok) return res.status(500).json({ok:false,error:'Overtime decision failed'});
+    await supaFetch(SUPABASE_URL+'/rest/v1/rpc/hr_compute_payroll',
+      {method:'POST',body:JSON.stringify({p_cutoff_id:body.cutoffId,p_actor:who})});
+    await hrAudit({ action: body.approve!==false ? 'OVERTIME_APPROVED' : 'OVERTIME_REJECTED',
+      module:'PAYROLL', recordId: body.staffId, next:{days:r.data}, reason: body.note||null,
+      actorCode: who, role: authOd.role, req });
+    return res.status(200).json({ok:true, days:r.data});
+  }
+
   if (action === 'hrSavePayrollManual') {
     const authM = await checkAuth(['OWNER','ADMIN']);
     if (!authM.ok) return res.status(403).json({ok:false,error:'Unauthorized'});

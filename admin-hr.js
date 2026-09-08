@@ -938,6 +938,18 @@ async function renderPayrollSection(s, tc){
         <tbody>${dedRows}</tbody>
       </table>
       <button onclick="addDeductionDialog()" style="margin-top:10px;font-size:.78rem;font-weight:700;background:#fff;color:#1f3d2b;border:1.5px solid #d8ddd5;border-radius:8px;padding:8px 14px;cursor:pointer">+ Add deduction</button>
+      ${(mine && parseFloat(mine.actual_ot_hours||0) > parseFloat(mine.approved_ot_hours||0)) ? `
+      <div style="background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:8px;padding:10px 12px;margin-bottom:12px">
+        <div style="font-size:.78rem;font-weight:700;color:#1d4ed8">
+          ⏱ ${(parseFloat(mine.actual_ot_hours)-parseFloat(mine.approved_ot_hours||0)).toFixed(2)} hrs of overtime worked but not approved
+        </div>
+        <div style="font-size:.68rem;color:#475569;margin:3px 0 8px">
+          Worked ${parseFloat(mine.actual_ot_hours).toFixed(2)} hrs · approved ${parseFloat(mine.approved_ot_hours||0).toFixed(2)} hrs.
+          Only approved overtime is paid — worth ${money(( parseFloat(mine.actual_ot_hours)-parseFloat(mine.approved_ot_hours||0))*parseFloat(mine.hourly_rate||0)*1.25)} if approved.
+        </div>
+        <button onclick="decideOvertime(true)" style="font-size:.74rem;font-weight:700;background:#1d4ed8;color:#fff;border:none;border-radius:7px;padding:7px 13px;cursor:pointer">Approve overtime</button>
+        <button onclick="decideOvertime(false)" style="font-size:.74rem;font-weight:700;background:#fff;color:#b91c1c;border:1.5px solid #fecaca;border-radius:7px;padding:7px 13px;margin-left:6px;cursor:pointer">Reject</button>
+      </div>`:''}
       ${mine?`<button onclick="manualPayDialog()" style="margin-top:10px;margin-left:8px;font-size:.78rem;font-weight:700;background:#fff;color:#1f3d2b;border:1.5px solid #d8ddd5;border-radius:8px;padding:8px 14px;cursor:pointer">✎ Tips / premiums / gov't</button>`:''}
       ${mine?`<button onclick="printPayslip()" style="margin-top:10px;margin-left:8px;font-size:.78rem;font-weight:700;background:#1f3d2b;color:#fff;border:none;border-radius:8px;padding:9px 16px;cursor:pointer">🧾 Print payslip</button>`:''}
     </div>`;
@@ -1120,6 +1132,20 @@ async function printPayslip(){
   </body></html>`);
   w.document.close();
   api('hrIssuePayslip',{userId:currentUser?.userId,staffId:s.id,cutoffId:_hrCutoffId});
+}
+
+
+async function decideOvertime(approve){
+  const s=_hrSelected; if(!s||!_hrCutoffId) return;
+  const note = prompt(approve ? 'Reason for approving this overtime (optional):'
+                              : 'Reason for rejecting this overtime:') ;
+  if(note===null) return;
+  if(!approve && !note.trim()){ showToast('A reason is required to reject','error'); return; }
+  const r=await api('hrOvertimeDecide',{userId:currentUser?.userId,staffId:s.id,
+    cutoffId:_hrCutoffId, approve:approve, note:note});
+  if(!r.ok){ showToast(r.error||'Failed','error'); return; }
+  showToast(approve?'Overtime approved and payroll recomputed ✅':'Overtime rejected','success');
+  await loadHRTab(_hrSelected,'payroll');
 }
 
 async function recomputePayroll(){
