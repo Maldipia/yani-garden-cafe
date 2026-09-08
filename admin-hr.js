@@ -840,7 +840,7 @@ async function renderPayrollSection(s, tc){
     totHrs += parseFloat(x.regular_hours||0);
     totOt  += parseFloat(x.ot_hours||0);
     totPay += parseFloat(x.day_pay||0);
-    var brk = (x.break_start&&x.break_end) ? x.break_start+'–'+x.break_end
+    var brk = x.break_detail ? (x.break_detail + (x.break_count>1?` (${Math.round(x.break_mins)}m)`:''))
             : (x.break_mins>0 ? Math.round(x.break_mins)+'m' : '—');
     var ut = parseFloat(x.undertime_hours||0), ot = parseFloat(x.ot_hours||0);
     totUt += ut;
@@ -960,7 +960,7 @@ async function printPayslip(){
 
   const days=(br.days||[]).map(x=>`<tr>
     <td>${x.work_date}${x.is_holiday?' *':''}</td><td>${x.clock_in||'-'}</td>
-    <td>${(x.break_start&&x.break_end)?x.break_start+'-'+x.break_end:'-'}</td>
+    <td>${x.break_detail?esc(x.break_detail)+(x.break_count>1?' ('+Math.round(x.break_mins)+'m)':''):'-'}</td>
     <td>${x.clock_out||'-'}</td>
     <td class="r">${parseFloat(x.regular_hours||0).toFixed(2)}</td>
     <td class="r">${parseFloat(x.ot_hours||0)>0?parseFloat(x.ot_hours).toFixed(2):'-'}</td>
