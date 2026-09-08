@@ -1,0 +1,7 @@
+{
+  "apiUrl": "https://yanigardencafe.com/api/pos",
+  "stationKey": "PASTE_THE_SAME_VALUE_AS_PRINT_STATION_KEY_IN_VERCEL",
+  "station": "counter-pc",
+  "shareName": "XP58",
+  "pollMs": 3000
+}
