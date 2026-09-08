@@ -54,6 +54,28 @@ export async function routeAdmin(action, body, auth, req, res) {
       deductions: Array.isArray(deds.data)?deds.data:[]});
   }
 
+  if (action === 'hrIssuePayslip') {
+    const authI = await checkAuth(['OWNER','ADMIN']);
+    if (!authI.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
+    const TENANT_HR = '11111111-1111-4111-8111-111111111111';
+    if (!body.cutoffId || !body.staffId) return res.status(400).json({ok:false,error:'cutoffId + staffId required'});
+    const dr = await supaFetch(SUPABASE_URL+'/rest/v1/hr_payroll_details?cutoff_id=eq.'+body.cutoffId+
+      '&staff_id=eq.'+body.staffId+'&select=id,gross_pay,total_deductions,net_pay&limit=1');
+    const det = Array.isArray(dr.data) ? dr.data[0] : null;
+    if (!det) return res.status(400).json({ok:false,error:'No computed payroll for this staff in this cut-off'});
+    const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_payslips',
+      {method:'POST',headers:{Prefer:'return=representation'},
+       body:JSON.stringify({tenant_id:TENANT_HR, cutoff_id:body.cutoffId, staff_id:body.staffId,
+         payroll_detail_id:det.id, gross_pay:det.gross_pay, total_deductions:det.total_deductions,
+         net_pay:det.net_pay, payment_method: body.method || 'CASH',
+         payment_status:'ISSUED', approval_date:new Date().toISOString()})});
+    if (!r.ok) return res.status(500).json({ok:false,error:'Could not record payslip'});
+    await hrAudit({ action:'PAYSLIP_ISSUED', module:'PAYROLL', recordId:body.staffId,
+      next:{cutoff:body.cutoffId, net:det.net_pay},
+      actorCode: authI.userId || body.userId, role: authI.role, req });
+    return res.status(200).json({ok:true, payslip: Array.isArray(r.data)?r.data[0]:null});
+  }
+
   if (action === 'hrPayrollDaily') {
     const authB = await checkAuth(['OWNER','ADMIN','MANAGER']);
     if (!authB.ok) return res.status(403).json({ok:false,error:'Unauthorized'});

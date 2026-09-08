@@ -919,7 +919,110 @@ async function renderPayrollSection(s, tc){
         <tbody>${dedRows}</tbody>
       </table>
       <button onclick="addDeductionDialog()" style="margin-top:10px;font-size:.78rem;font-weight:700;background:#fff;color:#1f3d2b;border:1.5px solid #d8ddd5;border-radius:8px;padding:8px 14px;cursor:pointer">+ Add deduction</button>
+      ${mine?`<button onclick="printPayslip()" style="margin-top:10px;margin-left:8px;font-size:.78rem;font-weight:700;background:#1f3d2b;color:#fff;border:none;border-radius:8px;padding:9px 16px;cursor:pointer">🧾 Print payslip</button>`:''}
     </div>`;
+}
+
+
+// ── PAYSLIP ────────────────────────────────────────────────────────────────
+// Opens a printable payslip the staff member keeps. Shows the full working —
+// every day, the rate, and each deduction itemised — because a payslip the
+// employee cannot verify is worth nothing in a dispute.
+async function printPayslip(){
+  const s=_hrSelected; if(!s||!_hrCutoffId) return;
+  const [pr, br] = await Promise.all([
+    api('hrGetPayroll',{userId:currentUser?.userId,cutoffId:_hrCutoffId}),
+    api('hrPayrollDaily',{userId:currentUser?.userId,cutoffId:_hrCutoffId,staffId:s.id}),
+  ]);
+  const row=(pr.rows||[]).find(r=>r.staff_id===s.id);
+  if(!row){ showToast('Compute payroll first','error'); return; }
+  const deds=(pr.deductions||[]).filter(d=>d.staff_id===s.id);
+  const cut=_hrCutoffs.find(c=>c.id===_hrCutoffId)||{};
+  const P=v=>'PHP '+parseFloat(v||0).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+  const days=(br.days||[]).map(x=>`<tr>
+    <td>${x.work_date}${x.is_holiday?' *':''}</td><td>${x.clock_in||'-'}</td>
+    <td>${(x.break_start&&x.break_end)?x.break_start+'-'+x.break_end:'-'}</td>
+    <td>${x.clock_out||'-'}</td>
+    <td class="r">${parseFloat(x.regular_hours||0).toFixed(2)}</td>
+    <td class="r">${parseFloat(x.ot_hours||0).toFixed(2)}</td>
+    <td class="r">${P(x.day_pay)}</td></tr>`).join('');
+
+  const dedRows=deds.length?deds.map(d=>`<tr>
+    <td>${d.deduction_date||'-'}</td><td>${esc(d.details||d.reason||d.deduction_type)}</td>
+    <td class="r">${P(d.amount)}</td><td class="r">${P(d.amount_deducted!=null?d.amount_deducted:d.amount)}</td>
+    <td class="r">${d.balance_after!=null?P(d.balance_after):'-'}</td></tr>`).join('')
+    : '<tr><td colspan="5">No deductions</td></tr>';
+
+  const hol=(br.days||[]).some(x=>x.is_holiday);
+  const w=window.open('','_blank','width=820,height=1000');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Payslip — ${esc(s.full_name)}</title>
+  <style>
+    *{box-sizing:border-box}
+    body{font:12px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;color:#111;margin:26px;max-width:760px}
+    h1{font-size:17px;margin:0 0 2px} .sub{color:#666;font-size:11px;margin-bottom:16px}
+    .box{border:1px solid #ccc;border-radius:6px;padding:10px 12px;margin-bottom:12px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 18px;font-size:11.5px}
+    .lbl{color:#666}
+    table{width:100%;border-collapse:collapse;font-size:11px;margin-top:4px}
+    th{text-align:left;background:#f3f4f6;padding:4px 6px;border-bottom:1px solid #ddd;font-size:10px;letter-spacing:.03em}
+    td{padding:4px 6px;border-bottom:1px solid #f0f0f0}
+    .r{text-align:right}
+    tfoot td{font-weight:700;border-top:2px solid #999}
+    .net{display:flex;justify-content:space-between;align-items:center;background:#f0f5f1;border:1px solid #cbd9cf;border-radius:6px;padding:12px 14px;margin-top:12px}
+    .net b{font-size:20px}
+    .sec{font-weight:700;font-size:12px;margin:16px 0 2px}
+    .sign{margin-top:34px;display:grid;grid-template-columns:1fr 1fr;gap:36px;font-size:11px}
+    .line{border-top:1px solid #333;margin-top:34px;padding-top:3px;color:#666}
+    .note{font-size:10px;color:#666;margin-top:14px;line-height:1.6}
+    @media print{body{margin:12mm} button{display:none}}
+  </style></head><body>
+  <h1>YANI GARDEN CAFE</h1>
+  <div class="sub">Amadeo, Cavite &nbsp;·&nbsp; PAYSLIP</div>
+
+  <div class="box"><div class="grid">
+    <div><span class="lbl">Employee:</span> <b>${esc(s.full_name)}</b></div>
+    <div><span class="lbl">Employee no:</span> ${esc(s.staff_code||'-')}</div>
+    <div><span class="lbl">Position:</span> ${esc(s.role||'-')}</div>
+    <div><span class="lbl">Employment:</span> ${esc(s.employment_type||'-')}</div>
+    <div><span class="lbl">Pay period:</span> <b>${cut.start_date} to ${cut.end_date}</b></div>
+    <div><span class="lbl">Pay date:</span> ${cut.pay_date||'-'}</div>
+    <div><span class="lbl">Basis:</span> ${esc(row.pay_basis||'-')} @ ${P(row.daily_rate)}/day</div>
+    <div><span class="lbl">Hourly rate:</span> ${P(row.hourly_rate)} (${parseFloat(s.standard_hours_per_day||8)} hrs/day)</div>
+  </div></div>
+
+  <div class="sec">Attendance detail</div>
+  <table><thead><tr><th>DATE</th><th>IN</th><th>BREAK</th><th>OUT</th><th class="r">HRS</th><th class="r">OT</th><th class="r">DAY PAY</th></tr></thead>
+  <tbody>${days}</tbody>
+  <tfoot><tr><td colspan="4">${(br.days||[]).length} day(s)</td>
+    <td class="r">${parseFloat(row.approved_regular_hours||0).toFixed(2)}</td>
+    <td class="r">${parseFloat(row.approved_ot_hours||0).toFixed(2)}</td>
+    <td class="r">${P(row.gross_pay)}</td></tr></tfoot></table>
+
+  <div class="sec">Deductions</div>
+  <table><thead><tr><th>DATE</th><th>DETAILS</th><th class="r">TOTAL</th><th class="r">DEDUCTED</th><th class="r">BALANCE</th></tr></thead>
+  <tbody>${dedRows}</tbody>
+  <tfoot><tr><td colspan="3">Total deductions</td><td class="r">${P(row.total_deductions)}</td><td></td></tr></tfoot></table>
+
+  <div class="net"><span>NET PAY</span><b>${P(row.net_pay)}</b></div>
+
+  <div class="note">
+    Gross = regular hours x hourly rate${parseFloat(row.approved_ot_hours||0)>0?' + overtime at 1.25x':''}.
+    Hourly rate = daily rate / ${parseFloat(s.standard_hours_per_day||8)} hours. Unpaid meal breaks are excluded from paid hours.
+    ${hol?'<br>* Dates marked with an asterisk fall on a declared holiday. No holiday premium has been applied to this payslip.':''}
+    <br>Government contributions (SSS, PhilHealth, Pag-IBIG) are not included in this computation.
+    <br>Please review and raise any discrepancy with management within 5 days of receipt.
+  </div>
+
+  <div class="sign">
+    <div><div class="line">Prepared by</div></div>
+    <div><div class="line">Received by — ${esc(s.full_name)}</div></div>
+  </div>
+
+  <button onclick="window.print()" style="margin-top:20px;padding:9px 18px;font-weight:700;cursor:pointer">Print</button>
+  </body></html>`);
+  w.document.close();
+  api('hrIssuePayslip',{userId:currentUser?.userId,staffId:s.id,cutoffId:_hrCutoffId});
 }
 
 async function recomputePayroll(){
