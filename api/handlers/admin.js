@@ -15,6 +15,70 @@ export async function routeAdmin(action, body, auth, req, res) {
   const { checkAuth, checkAdminAuth, jwtUser } = auth;
 
   // ── getHRStaff ──────────────────────────────────────────────────────────
+  // ── PAYROLL ────────────────────────────────────────────────────────────
+  if (action === 'hrListCutoffs') {
+    const authC = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    if (!authC.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
+    const TENANT_HR = '11111111-1111-4111-8111-111111111111';
+    const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_payroll_cut_offs?tenant_id=eq.'+TENANT_HR+
+      '&select=id,cutoff_name,start_date,end_date,pay_date,payroll_status&order=start_date.desc');
+    return res.status(200).json({ok:r.ok, cutoffs:Array.isArray(r.data)?r.data:[]});
+  }
+
+  if (action === 'hrComputePayroll') {
+    const authP = await checkAuth(['OWNER','ADMIN']);
+    if (!authP.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
+    if (!body.cutoffId) return res.status(400).json({ok:false,error:'cutoffId required'});
+    const r = await supaFetch(SUPABASE_URL+'/rest/v1/rpc/hr_compute_payroll',
+      {method:'POST',body:JSON.stringify({p_cutoff_id:body.cutoffId, p_actor: body.userId||null})});
+    if (!r.ok) return res.status(500).json({ok:false,error:'Payroll computation failed'});
+    await hrAudit({ action:'PAYROLL_COMPUTED', module:'PAYROLL', recordId:body.cutoffId,
+      next:{rows:Array.isArray(r.data)?r.data.length:0},
+      actorCode: authP.userId || body.userId, role: authP.role, req });
+    return res.status(200).json({ok:true, rows:r.data||[]});
+  }
+
+  if (action === 'hrGetPayroll') {
+    const authG = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    if (!authG.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
+    if (!body.cutoffId) return res.status(400).json({ok:false,error:'cutoffId required'});
+    const TENANT_HR = '11111111-1111-4111-8111-111111111111';
+    const [rows, deds] = await Promise.all([
+      supaFetch(SUPABASE_URL+'/rest/v1/hr_payroll_details?cutoff_id=eq.'+body.cutoffId+
+        '&select=*,hr_staff_master(staff_code,full_name,role)&order=created_at.asc'),
+      supaFetch(SUPABASE_URL+'/rest/v1/hr_deductions?cutoff_id=eq.'+body.cutoffId+
+        '&select=*&order=deduction_date.asc'),
+    ]);
+    return res.status(200).json({ok:true,
+      rows: Array.isArray(rows.data)?rows.data:[],
+      deductions: Array.isArray(deds.data)?deds.data:[]});
+  }
+
+  if (action === 'hrAddDeduction') {
+    const authD = await checkAuth(['OWNER','ADMIN']);
+    if (!authD.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
+    const TENANT_HR = '11111111-1111-4111-8111-111111111111';
+    const det = String(body.details||'').trim();
+    if (!body.staffId || !body.cutoffId) return res.status(400).json({ok:false,error:'staffId + cutoffId required'});
+    if (det.length < 3) return res.status(400).json({ok:false,error:'Details are required'});
+    const amt = parseFloat(body.amount)||0;
+    const ded = parseFloat(body.amountDeducted)|| amt;
+    if (!(amt > 0)) return res.status(400).json({ok:false,error:'Amount must be greater than zero'});
+    const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_deductions',
+      {method:'POST',headers:{Prefer:'return=representation'},
+       body:JSON.stringify({tenant_id:TENANT_HR, staff_id:body.staffId, cutoff_id:body.cutoffId,
+         deduction_type: String(body.type||'OTHER').toUpperCase().substring(0,40),
+         deduction_date: body.date || new Date().toISOString().slice(0,10),
+         details: det.substring(0,300), amount: amt, amount_deducted: ded,
+         balance_after: Math.round((amt - ded)*100)/100,
+         status:'APPROVED', reason: det.substring(0,300)})});
+    if (!r.ok) return res.status(500).json({ok:false,error:'Could not save deduction'});
+    await hrAudit({ action:'DEDUCTION_ADDED', module:'PAYROLL', recordId:body.staffId,
+      next:{type:body.type, amount:amt, deducted:ded}, reason:det,
+      actorCode: authD.userId || body.userId, role: authD.role, req });
+    return res.status(200).json({ok:true});
+  }
+
   if (action === 'getHRStaff') {
     try {
       const TENANT_HR = '11111111-1111-4111-8111-111111111111';

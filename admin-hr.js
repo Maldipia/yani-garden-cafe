@@ -805,7 +805,116 @@ function renderScheduleTab(s) {
 }
 
 // ── PAYROLL TAB ───────────────────────────────────────────────────────────
+// Payroll cutoff selector + computed detail for the selected staff member.
+let _hrCutoffs=[], _hrCutoffId=null;
+
 async function loadPayrollTab(s,tc) {
+  const cs = await api('hrListCutoffs', {userId:currentUser?.userId});
+  _hrCutoffs = cs.cutoffs||[];
+  if(!_hrCutoffId || !_hrCutoffs.some(c=>c.id===_hrCutoffId)) _hrCutoffId = _hrCutoffs[0]?.id || null;
+  tc.innerHTML = '<div class="hr-section"><div class="hr-empty-sm">Loading payroll…</div></div>';
+  await renderPayrollSection(s, tc);
+}
+
+async function renderPayrollSection(s, tc){
+  if(!_hrCutoffs.length){
+    tc.innerHTML = '<div class="hr-section"><div class="hr-section-title">🧮 Payroll</div>'
+      + '<div class="hr-empty-sm">No payroll cut-offs exist yet.</div></div>';
+    return;
+  }
+  const pr = _hrCutoffId ? await api('hrGetPayroll',{userId:currentUser?.userId,cutoffId:_hrCutoffId}) : {rows:[],deductions:[]};
+  const cut = _hrCutoffs.find(c=>c.id===_hrCutoffId)||{};
+  const mine = (pr.rows||[]).find(r=>r.staff_id===s.id);
+  const myDeds = (pr.deductions||[]).filter(d=>d.staff_id===s.id);
+
+  const opts = _hrCutoffs.map(c=>`<option value="${c.id}"${c.id===_hrCutoffId?' selected':''}>`
+    + `${esc(c.cutoff_name)} · ${c.payroll_status}</option>`).join('');
+
+  const money = v => hrPeso(parseFloat(v||0));
+  const dedRows = myDeds.length ? myDeds.map(d=>`<tr>
+      <td style="padding:6px 8px">${esc(d.deduction_date||'—')}</td>
+      <td style="padding:6px 8px">${esc(d.details||d.reason||d.deduction_type||'—')}</td>
+      <td style="padding:6px 8px;text-align:right">${money(d.amount)}</td>
+      <td style="padding:6px 8px;text-align:right;font-weight:700">${money(d.amount_deducted!=null?d.amount_deducted:d.amount)}</td>
+      <td style="padding:6px 8px;text-align:right;color:#6b7280">${d.balance_after!=null?money(d.balance_after):'—'}</td>
+    </tr>`).join('')
+    : '<tr><td colspan="5" style="padding:10px;color:#9ca3af;font-size:.75rem">No deductions in this cut-off</td></tr>';
+
+  tc.innerHTML = `
+    <div class="hr-section">
+      <div class="hr-section-title">🧮 Payroll</div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+        <select id="cutoffSel" onchange="_hrCutoffId=this.value;loadHRTab(_hrSelected,'payroll')"
+          style="flex:1;min-width:220px;font-size:.82rem;padding:8px;border:1.5px solid #d8ddd5;border-radius:8px">${opts}</select>
+        <button onclick="recomputePayroll()" style="font-size:.78rem;font-weight:700;background:#1f3d2b;color:#fff;border:none;border-radius:8px;padding:9px 14px;cursor:pointer">↻ Recompute</button>
+      </div>
+      <div style="font-size:.7rem;color:#6b7280;margin-bottom:10px">
+        ${esc(cut.start_date||'')} → ${esc(cut.end_date||'')} · pay date ${esc(cut.pay_date||'—')}
+      </div>
+      ${mine ? `
+      <div class="hr-grid-2">
+        <div class="hr-pay-card"><div class="hr-pay-label">GROSS PAY</div>
+          <div class="hr-pay-amount">${money(mine.gross_pay)}</div>
+          <div class="hr-pay-sub">${parseFloat(mine.approved_regular_hours||0)} reg hrs · ${parseFloat(mine.approved_ot_hours||0)} OT hrs @ ${money(mine.hourly_rate)}/hr</div></div>
+        <div class="hr-pay-card"><div class="hr-pay-label">NET PAY</div>
+          <div class="hr-pay-amount" style="color:#15803d">${money(mine.net_pay)}</div>
+          <div class="hr-pay-sub">after ${money(mine.total_deductions)} deductions</div></div>
+      </div>
+      <div style="font-size:.66rem;color:#9ca3af;margin:6px 0 14px">${esc(mine.notes||'')}</div>
+      ` : '<div class="hr-empty-sm">Not computed for this cut-off yet — press Recompute.</div>'}
+
+      <div class="hr-section-title" style="margin-top:8px">💸 Deductions</div>
+      <table style="width:100%;border-collapse:collapse;font-size:.76rem">
+        <thead><tr style="background:var(--mist-light,#f1f5f9);text-align:left">
+          <th style="padding:6px 8px">DATE</th><th style="padding:6px 8px">DETAILS</th>
+          <th style="padding:6px 8px;text-align:right">AMOUNT</th>
+          <th style="padding:6px 8px;text-align:right">DEDUCTED</th>
+          <th style="padding:6px 8px;text-align:right">BALANCE</th>
+        </tr></thead>
+        <tbody>${dedRows}</tbody>
+      </table>
+      <button onclick="addDeductionDialog()" style="margin-top:10px;font-size:.78rem;font-weight:700;background:#fff;color:#1f3d2b;border:1.5px solid #d8ddd5;border-radius:8px;padding:8px 14px;cursor:pointer">+ Add deduction</button>
+    </div>`;
+}
+
+async function recomputePayroll(){
+  if(!_hrCutoffId) return;
+  showToast('Computing payroll…','info');
+  const r = await api('hrComputePayroll',{userId:currentUser?.userId,cutoffId:_hrCutoffId});
+  if(!r.ok){ showToast(r.error||'Computation failed','error'); return; }
+  showToast('Payroll computed for '+(r.rows?.length||0)+' staff ✅','success');
+  await loadHRTab(_hrSelected,'payroll');
+}
+
+function addDeductionDialog(){
+  const s=_hrSelected; if(!s||!_hrCutoffId) return;
+  hrModal('Add deduction', `
+    <div class="hr-edit-row"><label class="hr-edit-label">Date</label>
+      <input class="hr-edit-input" id="dedDate" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
+    <div class="hr-edit-row"><label class="hr-edit-label">Type</label>
+      <select class="hr-edit-input" id="dedType">
+        <option>CASH_ADVANCE</option><option>UNIFORM</option><option>LOAN</option>
+        <option>CASH_SHORTAGE</option><option>OTHER</option></select></div>
+    <div class="hr-edit-row"><label class="hr-edit-label">Details (required)</label>
+      <input class="hr-edit-input" id="dedDetails" type="text" placeholder="e.g. Cash advance for transport"></div>
+    <div class="hr-edit-row"><label class="hr-edit-label">Full amount</label>
+      <input class="hr-edit-input" id="dedAmount" type="number" placeholder="2000"></div>
+    <div class="hr-edit-row"><label class="hr-edit-label">Deduct this cut-off</label>
+      <input class="hr-edit-input" id="dedTake" type="number" placeholder="500"></div>
+  `, async function(){
+    const det=(document.getElementById('dedDetails').value||'').trim();
+    if(det.length<3){ showToast('Details are required','error'); return false; }
+    const r=await api('hrAddDeduction',{userId:currentUser?.userId,staffId:s.id,cutoffId:_hrCutoffId,
+      date:document.getElementById('dedDate').value, type:document.getElementById('dedType').value,
+      details:det, amount:document.getElementById('dedAmount').value,
+      amountDeducted:document.getElementById('dedTake').value});
+    if(!r.ok){ showToast(r.error||'Failed','error'); return false; }
+    showToast('Deduction added ✅','success');
+    await loadHRTab(_hrSelected,'payroll');
+  });
+}
+
+async function loadPayrollTabLegacy(s,tc) {
   const [h13, hols] = await Promise.all([
     api('hrCompute13thMonth', {userId:currentUser?.userId, year:new Date().getFullYear()}),
     api('hrGetHolidays', {userId:currentUser?.userId, year:new Date().getFullYear()})
