@@ -956,129 +956,168 @@ async function printPayslip(){
   if(!row){ showToast('Compute payroll first','error'); return; }
   const deds=(pr.deductions||[]).filter(d=>d.staff_id===s.id);
   const cut=_hrCutoffs.find(c=>c.id===_hrCutoffId)||{};
-  const P=v=>'PHP '+parseFloat(v||0).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const days=br.days||[];
+  const N=v=>parseFloat(v||0);
+  const P=v=>N(v).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const stdH=N(s.standard_hours_per_day)||8;
+  const totUt=days.reduce((a,x)=>a+N(x.undertime_hours),0);
+  const totBrk=days.reduce((a,x)=>a+N(x.break_mins),0);
+  const holDays=days.filter(x=>x.is_holiday);
 
-  const days=(br.days||[]).map(x=>`<tr>
-    <td>${x.work_date}${x.is_holiday?' *':''}</td><td>${x.clock_in||'-'}</td>
-    <td>${x.break_detail?esc(x.break_detail)+(x.break_count>1?' ('+Math.round(x.break_mins)+'m)':''):'-'}</td>
-    <td>${x.clock_out||'-'}</td>
-    <td class="r">${parseFloat(x.regular_hours||0).toFixed(2)}</td>
-    <td class="r">${parseFloat(x.ot_hours||0)>0?parseFloat(x.ot_hours).toFixed(2):'-'}</td>
-    <td class="r"${parseFloat(x.undertime_hours||0)>0?' style="color:#b45309;font-weight:700"':''}>${parseFloat(x.undertime_hours||0)>0?parseFloat(x.undertime_hours).toFixed(2):'-'}</td>
+  const earn=[
+    ['Basic pay', `${N(row.approved_regular_hours).toFixed(2)} hrs \u00d7 ${P(row.hourly_rate)}`, row.regular_pay],
+    ['Overtime',  N(row.approved_ot_hours)>0?`${N(row.approved_ot_hours).toFixed(2)} hrs \u00d7 1.25`:'', row.overtime_pay],
+    ['Holiday premium','', row.holiday_pay],
+    ['Rest day premium','', row.rest_day_pay],
+    ['Night differential','', row.night_diff_pay],
+    ['Allowances','', row.allowances],
+    ['Incentives','', row.incentives],
+    ['Tips / service charge','RA 11360 share', row.tips_share],
+  ].filter(r=>N(r[2])>0);
+
+  const govt=N(row.government_deduction);
+  const dedLines=[];
+  if(govt>0) dedLines.push(['Government contributions','SSS / PhilHealth / Pag-IBIG',govt]);
+  deds.forEach(d=>dedLines.push([
+    (d.deduction_type||'OTHER').replace(/_/g,' '),
+    (d.details||d.reason||'')+(d.balance_after!=null?` \u00b7 balance ${P(d.balance_after)}`:''),
+    d.amount_deducted!=null?d.amount_deducted:d.amount]));
+
+  const eRows=earn.map(r=>`<tr><td>${esc(r[0])}<span class="m">${esc(r[1])}</span></td><td class="r">${P(r[2])}</td></tr>`).join('')
+    || '<tr><td colspan="2" class="m">None</td></tr>';
+  const dRows=dedLines.length?dedLines.map(r=>`<tr><td>${esc(r[0])}<span class="m">${esc(r[1])}</span></td><td class="r">${P(r[2])}</td></tr>`).join('')
+    : '<tr><td colspan="2" class="m">None</td></tr>';
+
+  const dayRows=days.map(x=>`<tr${x.is_holiday?' class="hol"':''}>
+    <td>${x.work_date.slice(5)}${x.is_holiday?' <b>H</b>':''}</td>
+    <td>${x.clock_in||'-'}</td><td>${esc(x.break_detail||'-')}</td><td>${x.clock_out||'-'}</td>
+    <td class="r">${N(x.regular_hours).toFixed(2)}</td>
+    <td class="r">${N(x.ot_hours)>0?N(x.ot_hours).toFixed(2):'-'}</td>
+    <td class="r ut">${N(x.undertime_hours)>0?N(x.undertime_hours).toFixed(2):'-'}</td>
     <td class="r">${P(x.day_pay)}</td></tr>`).join('');
-  const totUt=(br.days||[]).reduce((a,x)=>a+parseFloat(x.undertime_hours||0),0);
-  const stdH=parseFloat(s.standard_hours_per_day||8);
 
-  const dedRows=deds.length?deds.map(d=>`<tr>
-    <td>${d.deduction_date||'-'}</td><td>${esc(d.details||d.reason||d.deduction_type)}</td>
-    <td class="r">${P(d.amount)}</td><td class="r">${P(d.amount_deducted!=null?d.amount_deducted:d.amount)}</td>
-    <td class="r">${d.balance_after!=null?P(d.balance_after):'-'}</td></tr>`).join('')
-    : '<tr><td colspan="5">No deductions</td></tr>';
+  const ref='PS-'+(cut.end_date||'').replace(/-/g,'')+'-'+(s.staff_code||'').replace(/[^A-Z0-9]/gi,'');
 
-  const hol=(br.days||[]).some(x=>x.is_holiday);
-  const w=window.open('','_blank','width=820,height=1000');
-  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Payslip — ${esc(s.full_name)}</title>
-  <style>
-    *{box-sizing:border-box}
-    body{font:12px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;color:#111;margin:26px;max-width:760px}
-    h1{font-size:17px;margin:0 0 2px} .sub{color:#666;font-size:11px;margin-bottom:16px}
-    .box{border:1px solid #ccc;border-radius:6px;padding:10px 12px;margin-bottom:12px}
-    .grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 18px;font-size:11.5px}
-    .lbl{color:#666}
-    table{width:100%;border-collapse:collapse;font-size:11px;margin-top:4px}
-    th{text-align:left;background:#f3f4f6;padding:4px 6px;border-bottom:1px solid #ddd;font-size:10px;letter-spacing:.03em}
-    td{padding:4px 6px;border-bottom:1px solid #f0f0f0}
-    .r{text-align:right}
-    tfoot td{font-weight:700;border-top:2px solid #999}
-    .net{display:flex;justify-content:space-between;align-items:center;background:#f0f5f1;border:1px solid #cbd9cf;border-radius:6px;padding:12px 14px;margin-top:12px}
-    .net b{font-size:20px}
-    .sec{font-weight:700;font-size:12px;margin:16px 0 2px}
-    .sign{margin-top:34px;display:grid;grid-template-columns:1fr 1fr;gap:36px;font-size:11px}
-    .line{border-top:1px solid #333;margin-top:34px;padding-top:3px;color:#666}
-    .note{font-size:10px;color:#666;margin-top:14px;line-height:1.6}
-    @media print{body{margin:12mm} button{display:none}}
+  const w=window.open('','_blank','width=900,height=1100');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${ref}</title><style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font:11.5px/1.45 "Helvetica Neue",Arial,sans-serif;color:#1a1a1a;background:#fff;padding:30px;max-width:800px;margin:0 auto}
+  .top{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2.5px solid #1f3d2b;padding-bottom:12px}
+  .co{font-size:19px;font-weight:800;letter-spacing:-.3px;color:#1f3d2b}
+  .coa{font-size:10px;color:#666;margin-top:2px}
+  .doc{text-align:right}
+  .doc h2{font-size:15px;letter-spacing:2.5px;color:#1f3d2b;font-weight:700}
+  .doc .ref{font-size:9.5px;color:#777;margin-top:3px;font-family:ui-monospace,Menlo,monospace}
+  .meta{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid #dcdcdc;border-radius:4px;margin:14px 0;overflow:hidden}
+  .meta>div{padding:9px 12px}
+  .meta>div:first-child{border-right:1px solid #dcdcdc;background:#fafafa}
+  .fld{display:flex;justify-content:space-between;padding:2.5px 0;font-size:11px}
+  .fld span:first-child{color:#777}
+  .fld span:last-child{font-weight:600;text-align:right}
+  .strip{display:grid;grid-template-columns:repeat(5,1fr);border:1px solid #dcdcdc;border-radius:4px;margin-bottom:14px;overflow:hidden}
+  .strip>div{padding:8px 6px;text-align:center;border-right:1px solid #eee}
+  .strip>div:last-child{border-right:none}
+  .strip .k{font-size:8.5px;letter-spacing:.7px;color:#888;text-transform:uppercase}
+  .strip .v{font-size:15px;font-weight:700;margin-top:2px}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .card{border:1px solid #dcdcdc;border-radius:4px;overflow:hidden}
+  .card h3{font-size:9.5px;letter-spacing:1.2px;text-transform:uppercase;padding:7px 11px;background:#f4f6f4;color:#1f3d2b;border-bottom:1px solid #dcdcdc}
+  .card table{width:100%;border-collapse:collapse}
+  .card td{padding:6px 11px;border-bottom:1px solid #f2f2f2;vertical-align:top}
+  .card tr:last-child td{border-bottom:none}
+  .m{display:block;font-size:9.5px;color:#888;margin-top:1px}
+  .r{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .sub{display:flex;justify-content:space-between;padding:8px 11px;background:#fafafa;border-top:1.5px solid #ddd;font-weight:700;font-size:11.5px}
+  .net{display:flex;justify-content:space-between;align-items:center;background:#1f3d2b;color:#fff;border-radius:4px;padding:14px 18px;margin-top:14px}
+  .net .l{font-size:11px;letter-spacing:2px;text-transform:uppercase;opacity:.85}
+  .net .v{font-size:25px;font-weight:800;font-variant-numeric:tabular-nums}
+  h4{font-size:9.5px;letter-spacing:1.2px;text-transform:uppercase;color:#1f3d2b;margin:16px 0 5px}
+  .att{width:100%;border-collapse:collapse;font-size:10px}
+  .att th{background:#f4f6f4;text-align:left;padding:5px 7px;font-size:8.5px;letter-spacing:.5px;color:#666;border-bottom:1px solid #dcdcdc}
+  .att td{padding:4px 7px;border-bottom:1px solid #f4f4f4}
+  .att tfoot td{font-weight:700;border-top:1.5px solid #bbb;background:#fafafa}
+  .att .hol{background:#fffaf3}
+  .att .ut{color:#b45309}
+  .note{font-size:9.5px;color:#666;line-height:1.6;margin-top:12px;padding:9px 11px;background:#fafafa;border-left:2.5px solid #d4d4d4;border-radius:0 3px 3px 0}
+  .sig{display:grid;grid-template-columns:1fr 1fr;gap:50px;margin-top:32px}
+  .sig .line{border-top:1px solid #333;padding-top:4px;font-size:9.5px;color:#666}
+  .foot{margin-top:22px;padding-top:8px;border-top:1px solid #eee;font-size:8.5px;color:#999;display:flex;justify-content:space-between}
+  @media print{body{padding:12mm;max-width:none} .noprint{display:none} .att{page-break-inside:auto}}
   </style></head><body>
-  <h1>YANI GARDEN CAFE</h1>
-  <div class="sub">Amadeo, Cavite &nbsp;·&nbsp; PAYSLIP</div>
 
-  <div class="box"><div class="grid">
-    <div><span class="lbl">Employee:</span> <b>${esc(s.full_name)}</b></div>
-    <div><span class="lbl">Employee no:</span> ${esc(s.staff_code||'-')}</div>
-    <div><span class="lbl">Position:</span> ${esc(s.role||'-')}</div>
-    <div><span class="lbl">Employment:</span> ${esc(s.employment_type||'-')}</div>
-    <div><span class="lbl">Pay period:</span> <b>${cut.start_date} to ${cut.end_date}</b></div>
-    <div><span class="lbl">Pay date:</span> ${cut.pay_date||'-'}</div>
-    <div><span class="lbl">Basis:</span> ${esc(row.pay_basis||'-')} @ ${P(row.daily_rate)}/day</div>
-    <div><span class="lbl">Hourly rate:</span> ${P(row.hourly_rate)} (${parseFloat(s.standard_hours_per_day||8)} hrs/day)</div>
-  </div></div>
+  <div class="top">
+    <div><div class="co">YANI GARDEN CAFE</div><div class="coa">Amadeo, Cavite, Philippines</div></div>
+    <div class="doc"><h2>PAYSLIP</h2><div class="ref">${ref}</div></div>
+  </div>
 
-  <div class="sec">Attendance detail</div>
-  <table><thead><tr><th>DATE</th><th>IN</th><th>BREAK</th><th>OUT</th><th class="r">HRS</th><th class="r">OT</th><th class="r">UT</th><th class="r">DAY PAY</th></tr></thead>
-  <tbody>${days}</tbody>
-  <tfoot><tr><td colspan="4">${(br.days||[]).length} day(s)</td>
-    <td class="r">${parseFloat(row.approved_regular_hours||0).toFixed(2)}</td>
-    <td class="r">${parseFloat(row.approved_ot_hours||0).toFixed(2)}</td>
-    <td class="r">${totUt>0?totUt.toFixed(2):'-'}</td>
-    <td class="r">${P(row.gross_pay)}</td></tr></tfoot></table>
-  ${totUt>0?`<div style="margin-top:6px;font-size:11px;background:#fffbeb;border:1px solid #fde68a;border-radius:5px;padding:7px 9px">
-    <b>Undertime: ${totUt.toFixed(2)} hours</b> — paid hours fell short of the ${stdH}-hour standard day.
-    Meal breaks are unpaid and are not counted as work hours.</div>`:''}
+  <div class="meta">
+    <div>
+      <div class="fld"><span>Employee</span><span>${esc(s.full_name||'')}</span></div>
+      <div class="fld"><span>Employee no.</span><span>${esc(s.staff_code||'-')}</span></div>
+      <div class="fld"><span>Position</span><span>${esc((s.role||'-').replace(/_/g,' '))}</span></div>
+      <div class="fld"><span>Employment</span><span>${esc(row.employment_type||'-')}</span></div>
+    </div>
+    <div>
+      <div class="fld"><span>Pay period</span><span>${cut.start_date} to ${cut.end_date}</span></div>
+      <div class="fld"><span>Pay date</span><span>${cut.pay_date||'-'}</span></div>
+      <div class="fld"><span>Pay basis</span><span>${esc(row.pay_basis||'-')} \u00b7 ${P(row.daily_rate)}/day</span></div>
+      <div class="fld"><span>Hourly rate</span><span>${P(row.hourly_rate)} (${stdH} hrs/day)</span></div>
+    </div>
+  </div>
 
-  <div class="sec">Deductions</div>
-  <table><thead><tr><th>DATE</th><th>DETAILS</th><th class="r">TOTAL</th><th class="r">DEDUCTED</th><th class="r">BALANCE</th></tr></thead>
-  <tbody>${dedRows}</tbody>
-  <tfoot><tr><td colspan="3">Total deductions</td><td class="r">${P(row.total_deductions)}</td><td></td></tr></tfoot></table>
+  <div class="strip">
+    <div><div class="k">Days</div><div class="v">${days.length}</div></div>
+    <div><div class="k">Regular hrs</div><div class="v">${N(row.approved_regular_hours).toFixed(2)}</div></div>
+    <div><div class="k">Overtime</div><div class="v" style="color:#1d4ed8">${N(row.approved_ot_hours).toFixed(2)}</div></div>
+    <div><div class="k">Undertime</div><div class="v" style="color:${totUt>0?'#b45309':'#1a1a1a'}">${totUt.toFixed(2)}</div></div>
+    <div><div class="k">Unpaid breaks</div><div class="v">${(totBrk/60).toFixed(1)}h</div></div>
+  </div>
 
-  <div class="net"><span>NET PAY</span><b>${P(row.net_pay)}</b></div>
+  <div class="cols">
+    <div class="card"><h3>Earnings</h3><table>${eRows}</table>
+      <div class="sub"><span>Gross pay</span><span>${P(row.gross_pay)}</span></div></div>
+    <div class="card"><h3>Deductions</h3><table>${dRows}</table>
+      <div class="sub"><span>Total deductions</span><span>${P(row.total_deductions)}</span></div></div>
+  </div>
+
+  <div class="net"><span class="l">Net pay</span><span class="v">PHP ${P(row.net_pay)}</span></div>
+
+  <h4>Attendance detail</h4>
+  <table class="att">
+    <thead><tr><th>DATE</th><th>IN</th><th>BREAKS</th><th>OUT</th>
+      <th class="r">REG</th><th class="r">OT</th><th class="r">UT</th><th class="r">DAY PAY</th></tr></thead>
+    <tbody>${dayRows}</tbody>
+    <tfoot><tr><td colspan="4">${days.length} day(s)</td>
+      <td class="r">${N(row.approved_regular_hours).toFixed(2)}</td>
+      <td class="r">${N(row.approved_ot_hours).toFixed(2)}</td>
+      <td class="r">${totUt>0?totUt.toFixed(2):'-'}</td>
+      <td class="r">${P(row.regular_pay+row.overtime_pay)}</td></tr></tfoot>
+  </table>
 
   <div class="note">
-    Gross = regular hours x hourly rate${parseFloat(row.approved_ot_hours||0)>0?' + overtime at 1.25x':''}.
-    Hourly rate = daily rate / ${stdH} hours. Meal breaks are unpaid and excluded from paid hours.
-    Undertime = ${stdH}-hour standard day minus actual paid hours. Overtime is paid at 1.25x beyond ${stdH} hours.
-    ${hol?'<br>* Dates marked with an asterisk fall on a declared holiday. No holiday premium has been applied to this payslip.':''}
-    <br>Government contributions (SSS, PhilHealth, Pag-IBIG) are not included in this computation.
-    <br>Please review and raise any discrepancy with management within 5 days of receipt.
+    <b>How this was computed.</b> Hourly rate = daily rate \u00f7 ${stdH} hours. Basic pay = regular hours \u00d7 hourly rate.
+    Overtime is paid at 1.25\u00d7 beyond ${stdH} hours in a day. Meal and rest breaks are unpaid and excluded from paid hours.
+    Undertime is the shortfall against the ${stdH}-hour standard day.
+    ${holDays.length?`<br><b>H</b> marks a declared holiday (${holDays.map(x=>esc(x.holiday_name||x.work_date)).join(', ')}).${N(row.holiday_pay)>0?'':' No holiday premium has been applied.'}`:''}
+    ${N(row.night_diff_pay)>0?'':'<br>Night differential has not been applied to this period.'}
+    ${govt>0?'':'<br>Government contributions (SSS, PhilHealth, Pag-IBIG) are not included in this computation.'}
+    <br>Please review and raise any discrepancy with management within five (5) days of receipt.
   </div>
 
-  <div class="sign">
-    <div><div class="line">Prepared by</div></div>
-    <div><div class="line">Received by — ${esc(s.full_name)}</div></div>
+  <div class="sig">
+    <div><div class="line">Prepared by \u00b7 Date</div></div>
+    <div><div class="line">Received by \u00b7 ${esc(s.full_name||'')} \u00b7 Date</div></div>
   </div>
 
-  <button onclick="window.print()" style="margin-top:20px;padding:9px 18px;font-weight:700;cursor:pointer">Print</button>
+  <div class="foot"><span>${ref} \u00b7 Confidential</span>
+    <span>Generated ${new Date().toLocaleString('en-PH')}</span></div>
+
+  <div class="noprint" style="margin-top:22px;text-align:center">
+    <button onclick="window.print()" style="padding:10px 26px;font-size:12px;font-weight:700;background:#1f3d2b;color:#fff;border:none;border-radius:5px;cursor:pointer">Print / Save as PDF</button>
+  </div>
   </body></html>`);
   w.document.close();
   api('hrIssuePayslip',{userId:currentUser?.userId,staffId:s.id,cutoffId:_hrCutoffId});
-}
-
-
-// Manual payroll components. Entered by HR only when applicable — tips and
-// service-charge share, rest day and holiday premium, night differential,
-// allowances, and government contributions. A recompute preserves these.
-function manualPayDialog(){
-  const s=_hrSelected; if(!s||!_hrCutoffId) return;
-  const m=_hrPayRow||{};
-  const f=(id,label,val,hint)=>`<div class="hr-edit-row"><label class="hr-edit-label">${label}</label>
-    <input class="hr-edit-input" id="${id}" type="number" step="0.01" value="${val!=null?parseFloat(val):''}" placeholder="0.00">
-    ${hint?`<div style="font-size:.62rem;color:#8a7a6a;margin-top:2px">${hint}</div>`:''}</div>`;
-  hrModal('Manual pay components', `
-    <div style="font-size:.68rem;color:#6b7280;margin-bottom:8px">Leave blank or 0 when not applicable. These survive a recompute.</div>
-    ${f('mpTips','Tips / service charge share', m.tips_share, 'RA 11360 — service charge distributed to staff')}
-    ${f('mpHol','Holiday premium', m.holiday_pay, 'Extra pay for work on a declared holiday')}
-    ${f('mpRest','Rest day premium', m.rest_day_pay)}
-    ${f('mpNight','Night differential', m.night_diff_pay, '+10% for hours between 10pm and 6am')}
-    ${f('mpAllow','Allowances', m.allowances)}
-    ${f('mpInc','Incentives', m.incentives)}
-    ${f('mpGov','Government deductions', m.government_deduction, 'SSS + PhilHealth + Pag-IBIG employee share')}
-  `, async function(){
-    const v=id=>document.getElementById(id).value;
-    const r=await api('hrSavePayrollManual',{userId:currentUser?.userId,staffId:s.id,cutoffId:_hrCutoffId,
-      tipsShare:v('mpTips'), holidayPay:v('mpHol'), restDayPay:v('mpRest'), nightDiffPay:v('mpNight'),
-      allowances:v('mpAllow'), incentives:v('mpInc'), governmentDeduction:v('mpGov')});
-    if(!r.ok){ showToast(r.error||'Failed','error'); return false; }
-    showToast('Saved and recomputed ✅','success');
-    await loadHRTab(_hrSelected,'payroll');
-  });
 }
 
 async function recomputePayroll(){
