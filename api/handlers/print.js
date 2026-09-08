@@ -29,9 +29,21 @@ async function rpc(fn, args) {
   });
 }
 
-function stationOk(body) {
-  const expected = process.env.PRINT_STATION_KEY;
-  if (!expected) return false;              // unset = station disabled, fail closed
+let _keyCache = { value: null, ts: 0 };
+const KEY_TTL = 60 * 1000;
+
+async function getStationKey() {
+  if (process.env.PRINT_STATION_KEY) return process.env.PRINT_STATION_KEY;
+  if (_keyCache.value && Date.now() - _keyCache.ts < KEY_TTL) return _keyCache.value;
+  const r = await supaFetch(`${SUPABASE_URL}/rest/v1/print_config?select=value&key=eq.station_key`);
+  const v = r.ok && Array.isArray(r.data) && r.data[0] ? r.data[0].value : null;
+  if (v) _keyCache = { value: v, ts: Date.now() };
+  return v;
+}
+
+async function stationOk(body) {
+  const expected = await getStationKey();
+  if (!expected) return false;              // no key configured = station disabled, fail closed
   const given = String(body.stationKey || '');
   if (given.length !== expected.length) return false;
   let diff = 0;
@@ -45,7 +57,7 @@ export async function routePrint(action, body, auth, req, res) {
 
   // ══ STATION SURFACE ═══════════════════════════════════════════════════
   if (isStation) {
-    if (!stationOk(body)) return res.status(403).json({ ok: false, error: 'Invalid station key' });
+    if (!(await stationOk(body))) return res.status(403).json({ ok: false, error: 'Invalid station key' });
     const station = str(body.station, 60) || 'station';
 
     if (action === 'printPing') {
