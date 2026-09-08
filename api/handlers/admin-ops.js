@@ -6,6 +6,7 @@ import { getCategoryName, getCategoryId, CATEGORY_ID_TO_NAME } from '../lib/cate
 import { isNonEmptyString, isValidOrderId, isValidItemCode } from '../lib/validation.js';
 import { SUPABASE_URL, BUSINESS_NAME, SERVICE_CHARGE_RATE, SUPABASE_KEY, FROM_EMAIL, RESEND_KEY } from '../lib/config.js';
 import { signToken, verifyToken, getJwtSecret } from '../lib/auth.js';
+import { hrAudit } from '../lib/hr-audit.js';
 import { uploadToGoogleDrive } from '../lib/drive.js';
 import { sendReceiptEmail, buildReceiptHTML } from '../lib/receipt.js';
 import bcrypt from 'bcryptjs';
@@ -1810,6 +1811,11 @@ export async function routeAdminOps(action, body, auth, req, res) {
          notes:'['+who+'] '+reason.substring(0,400),
          approval_status:'PENDING'})
       });
+    if (r.ok) {
+      await hrAudit({ action:'ATTENDANCE_MANUAL_ENTRY', module:'ATTENDANCE',
+        recordId: staffId, next:{event_type, log_date, event_time},
+        reason, actorCode: who, role: authT.role, req });
+    }
     return res.status(200).json({ok:r.ok});
   }
 

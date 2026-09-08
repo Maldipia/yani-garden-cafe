@@ -6,6 +6,7 @@ import { getCategoryName, getCategoryId, CATEGORY_ID_TO_NAME } from '../lib/cate
 import { isNonEmptyString, isValidOrderId, isValidItemCode } from '../lib/validation.js';
 import { SUPABASE_URL, BUSINESS_NAME, SERVICE_CHARGE_RATE, SUPABASE_KEY, FROM_EMAIL, RESEND_KEY } from '../lib/config.js';
 import { signToken, verifyToken, getJwtSecret } from '../lib/auth.js';
+import { hrAudit } from '../lib/hr-audit.js';
 import { uploadToGoogleDrive } from '../lib/drive.js';
 import { sendReceiptEmail, buildReceiptHTML } from '../lib/receipt.js';
 import bcrypt from 'bcryptjs';
@@ -54,11 +55,38 @@ export async function routeAdmin(action, body, auth, req, res) {
     ];
     const masterPatch = { updated_at: new Date().toISOString() };
     masterAllowed.forEach(function(k){ if (body[k] !== undefined) masterPatch[k] = body[k]; });
+
+    // Capture the BEFORE image so the audit trail holds previous -> new,
+    // limited to the fields actually being changed.
+    let beforeVals = null;
+    try {
+      const changing = Object.keys(masterPatch).filter(k => k !== 'updated_at');
+      if (changing.length) {
+        const rb = await supaFetch(SUPABASE_URL + '/rest/v1/hr_staff_master?id=eq.' + hrStaffId +
+          '&select=' + encodeURIComponent(changing.join(',')));
+        beforeVals = Array.isArray(rb.data) ? rb.data[0] : null;
+      }
+    } catch(_) {}
+
     const rMaster = await supaFetch(
       SUPABASE_URL + '/rest/v1/hr_staff_master?id=eq.' + hrStaffId,
       { method:'PATCH', body:JSON.stringify(masterPatch) }
     );
     if (!rMaster.ok) return res.status(500).json({ ok:false, error:'Staff update failed' });
+
+    {
+      const changed = { ...masterPatch }; delete changed.updated_at;
+      if (Object.keys(changed).length) {
+        const statusChanged = beforeVals && changed.employment_status &&
+          beforeVals.employment_status !== changed.employment_status;
+        await hrAudit({
+          action: statusChanged ? 'EMPLOYEE_STATUS_CHANGED' : 'EMPLOYEE_UPDATED',
+          module:'EMPLOYEE', recordId: hrStaffId,
+          previous: beforeVals, next: changed,
+          reason: body.reason || null,
+          actorCode: authHR.userId, role: authHR.role, req });
+      }
+    }
     // ── hr_employee_profile (government numbers) ─────────────────────────────
     if (body._sss !== undefined || body._ph !== undefined || body._pig !== undefined || body._tin !== undefined) {
       const profilePatch = { updated_at: new Date().toISOString() };
@@ -351,6 +379,8 @@ export async function routeAdmin(action, body, auth, req, res) {
       {method:'POST',body:JSON.stringify({p_staff_id:staffId,p_pin:String(pin)})}
     );
     if (!r.ok) return res.status(500).json({ok:false,error:'Failed to set attendance PIN'});
+    await hrAudit({ action:'ATTENDANCE_PIN_SET', module:'SECURITY', recordId:staffId,
+      reason: body.reason || null, actorCode: authSP.userId, role: authSP.role, req });
     return res.status(200).json({ok:true});
   }
 
@@ -369,6 +399,8 @@ export async function routeAdmin(action, body, auth, req, res) {
       {method:'POST',body:JSON.stringify({p_staff_id:staffId,p_pin:String(pin)})}
     );
     if (!r.ok) return res.status(500).json({ok:false,error:'Failed to set portal PIN'});
+    await hrAudit({ action:'PORTAL_PIN_SET', module:'SECURITY', recordId:staffId,
+      reason: body.reason || null, actorCode: authSPP.userId, role: authSPP.role, req });
     return res.status(200).json({ok:true});
   }
 
@@ -386,6 +418,10 @@ export async function routeAdmin(action, body, auth, req, res) {
     );
     if (!r.ok) return res.status(500).json({ok:false,error:'Failed to rotate QR token'});
     const newToken = Array.isArray(r.data) ? r.data[0] : r.data;
+    // The token itself is a credential — record that it rotated, never its value.
+    await hrAudit({ action:'QR_TOKEN_ROTATED', module:'SECURITY', recordId:staffId,
+      reason: body.reason || 'QR regenerated — previous code invalidated',
+      actorCode: authRQ.userId, role: authRQ.role, req });
     return res.status(200).json({ok:true, qrToken:newToken});
   }
 
