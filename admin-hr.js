@@ -835,7 +835,7 @@ async function renderPayrollSection(s, tc){
     + `${esc(c.cutoff_name)} · ${c.payroll_status}</option>`).join('');
 
   const money = v => hrPeso(parseFloat(v||0));
-  let totHrs=0, totOt=0, totPay=0, totUt=0;
+  let totHrs=0, totOt=0, totPay=0, totUt=0, totNd=0, totNdPay=0;
   const dayRows = (br.days||[]).length ? (br.days||[]).map(function(x){
     totHrs += parseFloat(x.regular_hours||0);
     totOt  += parseFloat(x.ot_hours||0);
@@ -843,7 +843,8 @@ async function renderPayrollSection(s, tc){
     var brk = x.break_detail ? (x.break_detail + (x.break_count>1?` (${Math.round(x.break_mins)}m)`:''))
             : (x.break_mins>0 ? Math.round(x.break_mins)+'m' : '—');
     var ut = parseFloat(x.undertime_hours||0), ot = parseFloat(x.ot_hours||0);
-    totUt += ut;
+    var nd = parseFloat(x.night_hours||0);
+    totUt += ut; totNd += nd; totNdPay += parseFloat(x.night_diff_suggested||0);
     // only holidays get a row tint — tinting every undertime row made the
     // whole table amber and unreadable
     var rowBg = x.is_holiday ? '#fff7ed' : '';
@@ -855,11 +856,12 @@ async function renderPayrollSection(s, tc){
       <td style="padding:5px 7px;text-align:right">${parseFloat(x.regular_hours||0).toFixed(2)}</td>
       <td style="padding:5px 7px;text-align:right${ot>0?';color:#1d4ed8;font-weight:700':''}">${ot>0?ot.toFixed(2):'—'}</td>
       <td style="padding:5px 7px;text-align:right${ut>0?';color:#b45309;font-weight:700':''}">${ut>0?ut.toFixed(2):'—'}</td>
+      <td style="padding:5px 7px;text-align:right${nd>0?';color:#6d28d9;font-weight:700':''}" title="${nd>0?'Worked 10:00 PM–6:00 AM · suggested '+hrPeso(parseFloat(x.night_diff_suggested||0)):''}">${nd>0?nd.toFixed(2):'—'}</td>
       <td style="padding:5px 7px;text-align:right;color:#6b7280">${hrPeso(parseFloat(x.hourly_rate||0))}</td>
       <td style="padding:5px 7px;text-align:right;font-weight:700">${hrPeso(parseFloat(x.day_pay||0))}</td>
       <td style="padding:5px 7px;font-size:.6rem;color:#6b7280">${esc(x.sources||'—')}</td>
     </tr>`;
-  }).join('') : '<tr><td colspan="10" style="padding:10px;color:#9ca3af;font-size:.75rem">No attendance in this cut-off</td></tr>';
+  }).join('') : '<tr><td colspan="11" style="padding:10px;color:#9ca3af;font-size:.75rem">No attendance in this cut-off</td></tr>';
 
   const dedRows = myDeds.length ? myDeds.map(d=>`<tr>
       <td style="padding:6px 8px">${esc(d.deduction_date||'—')}</td>
@@ -912,6 +914,7 @@ async function renderPayrollSection(s, tc){
           <th style="padding:5px 7px;text-align:right">HRS</th>
           <th style="padding:5px 7px;text-align:right">OT</th>
           <th style="padding:5px 7px;text-align:right">UT</th>
+          <th style="padding:5px 7px;text-align:right">ND</th>
           <th style="padding:5px 7px;text-align:right">RATE</th>
           <th style="padding:5px 7px;text-align:right">DAY PAY</th>
           <th style="padding:5px 7px">SRC</th>
@@ -922,6 +925,7 @@ async function renderPayrollSection(s, tc){
           <td style="padding:7px;text-align:right">${totHrs.toFixed(2)}</td>
           <td style="padding:7px;text-align:right${'' }">${totOt.toFixed(2)}</td>
           <td style="padding:7px;text-align:right;color:#b45309">${totUt.toFixed(2)}</td>
+          <td style="padding:7px;text-align:right;color:#6d28d9">${totNd>0?totNd.toFixed(2):'—'}</td>
           <td></td>
           <td style="padding:7px;text-align:right">${money(totPay)}</td>
           <td></td></tr></tfoot>
@@ -949,6 +953,14 @@ async function renderPayrollSection(s, tc){
         </div>
         <button onclick="decideOvertime(true)" style="font-size:.74rem;font-weight:700;background:#1d4ed8;color:#fff;border:none;border-radius:7px;padding:7px 13px;cursor:pointer">Approve overtime</button>
         <button onclick="decideOvertime(false)" style="font-size:.74rem;font-weight:700;background:#fff;color:#b91c1c;border:1.5px solid #fecaca;border-radius:7px;padding:7px 13px;margin-left:6px;cursor:pointer">Reject</button>
+      </div>`:''}
+      ${(totNd>0 && parseFloat((mine||{}).night_diff_pay||0)===0) ? `
+      <div style="background:#f5f3ff;border:1.5px solid #ddd6fe;border-radius:8px;padding:10px 12px;margin-bottom:12px">
+        <div style="font-size:.78rem;font-weight:700;color:#6d28d9">🌙 ${totNd.toFixed(2)} hrs worked between 10:00 PM and 6:00 AM</div>
+        <div style="font-size:.68rem;color:#475569;margin-top:3px">
+          Night differential is +10% of the hourly rate for these hours — suggested <b>${money(totNdPay)}</b>.
+          Enter it under Tips / premiums / gov't to include it in pay.
+        </div>
       </div>`:''}
       ${mine?`<button onclick="manualPayDialog()" style="margin-top:10px;margin-left:8px;font-size:.78rem;font-weight:700;background:#fff;color:#1f3d2b;border:1.5px solid #d8ddd5;border-radius:8px;padding:8px 14px;cursor:pointer">✎ Tips / premiums / gov't</button>`:''}
       ${mine?`<button onclick="printPayslip()" style="margin-top:10px;margin-left:8px;font-size:.78rem;font-weight:700;background:#1f3d2b;color:#fff;border:none;border-radius:8px;padding:9px 16px;cursor:pointer">🧾 Print payslip</button>`:''}
@@ -1008,7 +1020,10 @@ async function printPayslip(){
     <td class="r">${N(x.regular_hours).toFixed(2)}</td>
     <td class="r">${N(x.ot_hours)>0?N(x.ot_hours).toFixed(2):'-'}</td>
     <td class="r ut">${N(x.undertime_hours)>0?N(x.undertime_hours).toFixed(2):'-'}</td>
+    <td class="r nd">${N(x.night_hours)>0?N(x.night_hours).toFixed(2):'-'}</td>
     <td class="r">${P(x.day_pay)}</td></tr>`).join('');
+  const totNd=days.reduce((a,x)=>a+N(x.night_hours),0);
+  const totNdPay=days.reduce((a,x)=>a+N(x.night_diff_suggested),0);
 
   const ref='PS-'+(cut.end_date||'').replace(/-/g,'')+'-'+(s.staff_code||'').replace(/[^A-Z0-9]/gi,'');
 
@@ -1052,6 +1067,7 @@ async function printPayslip(){
   .att tfoot td{font-weight:700;border-top:1.5px solid #bbb;background:#fafafa}
   .att .hol{background:#fffaf3}
   .att .ut{color:#b45309}
+  .att .nd{color:#6d28d9}
   .note{font-size:9.5px;color:#666;line-height:1.6;margin-top:12px;padding:9px 11px;background:#fafafa;border-left:2.5px solid #d4d4d4;border-radius:0 3px 3px 0}
   .sig{display:grid;grid-template-columns:1fr 1fr;gap:50px;margin-top:32px}
   .sig .line{border-top:1px solid #333;padding-top:4px;font-size:9.5px;color:#666}
@@ -1099,12 +1115,13 @@ async function printPayslip(){
   <h4>Attendance detail</h4>
   <table class="att">
     <thead><tr><th>DATE</th><th>IN</th><th>BREAKS</th><th>OUT</th>
-      <th class="r">REG</th><th class="r">OT</th><th class="r">UT</th><th class="r">DAY PAY</th></tr></thead>
+      <th class="r">REG</th><th class="r">OT</th><th class="r">UT</th><th class="r">ND</th><th class="r">DAY PAY</th></tr></thead>
     <tbody>${dayRows}</tbody>
     <tfoot><tr><td colspan="4">${days.length} day(s)</td>
       <td class="r">${N(row.approved_regular_hours).toFixed(2)}</td>
       <td class="r">${N(row.approved_ot_hours).toFixed(2)}</td>
       <td class="r">${totUt>0?totUt.toFixed(2):'-'}</td>
+      <td class="r">${totNd>0?totNd.toFixed(2):'-'}</td>
       <td class="r">${P(row.regular_pay+row.overtime_pay)}</td></tr></tfoot>
   </table>
 
@@ -1113,7 +1130,11 @@ async function printPayslip(){
     Overtime is paid at 1.25\u00d7 beyond ${stdH} hours in a day. Meal and rest breaks are unpaid and excluded from paid hours.
     Undertime is the shortfall against the ${stdH}-hour standard day.
     ${holDays.length?`<br><b>H</b> marks a declared holiday (${holDays.map(x=>esc(x.holiday_name||x.work_date)).join(', ')}).${N(row.holiday_pay)>0?'':' No holiday premium has been applied.'}`:''}
-    ${N(row.night_diff_pay)>0?'':'<br>Night differential has not been applied to this period.'}
+    ${totNd>0
+      ? (N(row.night_diff_pay)>0
+          ? `<br><b>ND</b> = hours worked between 10:00 PM and 6:00 AM (${totNd.toFixed(2)} hrs this period), paid at +10% of the hourly rate.`
+          : `<br><b>ND</b> = ${totNd.toFixed(2)} hrs worked between 10:00 PM and 6:00 AM. Night differential of ${P(totNdPay)} has NOT been applied to this payslip.`)
+      : '<br>No hours were worked between 10:00 PM and 6:00 AM this period.'}
     ${govt>0?'':'<br>Government contributions (SSS, PhilHealth, Pag-IBIG) are not included in this computation.'}
     <br>Please review and raise any discrepancy with management within five (5) days of receipt.
   </div>
