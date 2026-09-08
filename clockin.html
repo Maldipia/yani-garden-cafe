@@ -239,7 +239,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+<script src="/jsqr.min.js?v=1"></script>
+<script>
+// The QR decoder is served from our own origin, not a CDN. The previous cdnjs
+// URL was a 404, so jsQR was never defined and every scan threw ReferenceError.
+// Self-hosting also means scanning keeps working when the internet is down.
+window.__qrReady = (typeof jsQR === 'function');
+</script>
 <script>
 const API = '/api/pos';
 let _staff = null, _pin = '', _stream = null, _scanTimer = null;
@@ -319,6 +325,11 @@ async function startScan(){
   }
 }
 function scanLoop(){
+  if(typeof jsQR!=='function'){
+    stopScan();
+    showErr('camErr','QR decoder failed to load. Use "Enter code instead".');
+    return;
+  }
   var v=document.getElementById('videoEl'),c=document.getElementById('snapCanvas');
   if(!v||!v.videoWidth){_scanTimer=setTimeout(scanLoop,120);return;}
   c.width=v.videoWidth;c.height=v.videoHeight;
