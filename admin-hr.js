@@ -1093,14 +1093,20 @@ function hf(label,value){return`<div class="hr-field"><div class="hr-field-label
 function hrRowBadges(s){
   var out=[];
   if(s.employment_status==='ACTIVE'){
-    if(!s.has_qr)  out.push(['No QR','#fef3c7','#b45309']);
-    if(!s.has_pin) out.push(['No PIN','#fef3c7','#b45309']);
-    if(s.clock_state==='IN')    out.push(['In','#dcfce7','#15803d']);
-    if(s.clock_state==='BREAK') out.push(['Break','#ffedd5','#c2410c']);
+    // A QR always exists — the generator falls back to encoding the staff code,
+    // and lookup accepts that. What matters is whether it is a ROTATABLE token:
+    // a staff-code QR cannot be invalidated if someone photographs it.
+    if(!s.has_qr)  out.push(['Legacy QR','#fef3c7','#b45309','QR encodes the staff code and cannot be invalidated. Regenerate to get a rotatable token.']);
+    // PIN is only needed for manual code entry and the employee portal —
+    // scanning on the kiosk works without one.
+    if(!s.has_pin) out.push(['No PIN','#f1f5f9','#64748b','No attendance PIN. Scanning still works; typing the staff code does not.']);
+    if(s.clock_state==='IN')    out.push(['In','#dcfce7','#15803d','Clocked in']);
+    if(s.clock_state==='BREAK') out.push(['Break','#ffedd5','#c2410c','On break']);
   }
   if(!out.length) return '';
   return ' ' + out.map(function(b){
-    return '<span style="font-size:.58rem;font-weight:700;padding:1px 6px;border-radius:20px;'
-      + 'background:'+b[1]+';color:'+b[2]+';margin-left:4px">'+b[0]+'</span>';
+    return '<span title="'+b[3]+'" style="font-size:.58rem;font-weight:700;padding:1px 6px;'
+      + 'border-radius:20px;background:'+b[1]+';color:'+b[2]+';margin-left:4px;white-space:nowrap">'+b[0]+'</span>';
   }).join('');
 }
+
