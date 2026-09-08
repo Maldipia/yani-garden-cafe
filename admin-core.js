@@ -357,6 +357,13 @@ async function login() {
     var data = await resp.json();
 
     if (data.ok && data.userId) {
+      // TIMEKEEPER is a clock-in-only account. It never loads the admin panel —
+      // it goes straight to the clock kiosk and nothing else is reachable.
+      if (data.role === 'TIMEKEEPER') {
+        try { localStorage.removeItem(POS_SESSION_KEY); } catch(_) {}
+        window.location.replace('/clockin.html');
+        return;
+      }
       // Successful login
       currentUser.userId    = data.userId;
       currentUser.username  = data.username;

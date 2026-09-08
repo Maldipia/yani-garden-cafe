@@ -276,6 +276,11 @@ async function login() {
     var data = await resp.json();
 
     if (data.ok && data.userId) {
+      if (data.role === 'TIMEKEEPER') {
+        try { localStorage.removeItem(POS_SESSION_KEY); } catch(_) {}
+        window.location.replace('/clockin.html');
+        return;
+      }
       // Successful login
       currentUser.userId    = data.userId;
       currentUser.username  = data.username;
