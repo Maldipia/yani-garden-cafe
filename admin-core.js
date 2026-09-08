@@ -369,7 +369,16 @@ async function login() {
       // TIMEKEEPER is a clock-in-only account. It never loads the admin panel —
       // it goes straight to the clock kiosk and nothing else is reachable.
       if (data.role === 'TIMEKEEPER') {
-        try { localStorage.removeItem(POS_SESSION_KEY); } catch(_) {}
+        // The HR session becomes the kiosk's authority: it lets the clock page
+        // open, and lets a scanned QR clock someone in without a PIN. Stored
+        // under its own key so it can never be mistaken for an admin session.
+        try {
+          localStorage.removeItem(POS_SESSION_KEY);
+          localStorage.setItem('yani_kiosk', JSON.stringify({
+            token: data.token || null,
+            expiresAt: Date.now() + (data.expiresIn || 28800) * 1000,
+          }));
+        } catch(_) {}
         window.location.replace('/clockin.html');
         return;
       }

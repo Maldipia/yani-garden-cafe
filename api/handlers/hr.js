@@ -1,6 +1,7 @@
 // api/handlers/hr.js — HR clock-in, employee portal, public HR actions
 import { supaFetch } from '../lib/db.js';
 import { SUPABASE_URL } from '../lib/config.js';
+import { verifyToken } from '../lib/auth.js';
 
 const TENANT_HR = '11111111-1111-4111-8111-111111111111';
 
@@ -136,13 +137,19 @@ export async function routeHR(action, body, auth, req, res) {
   if (action === 'hrClockEvent') {
     const {staffCode, eventType, pin} = body;
     if (!staffCode||!eventType) return res.status(400).json({ok:false,error:'staffCode + eventType required'});
-    // A PIN is ALWAYS required. Previously this block was `if (pin)`, so omitting
-    // the field skipped verification entirely and let anyone clock in any staff
-    // member with no credentials at all.
-    if (!pin || !String(pin).trim()) {
+    // Authorisation: EITHER the staff member's own PIN, OR a signed-in kiosk.
+    // The kiosk token is the TIMEKEEPER (HR) session, so a PIN-less scan only
+    // works on a device that an owner deliberately signed in as HR. Without
+    // one of the two, this is refused — never open like it used to be.
+    let kioskOk = false;
+    if (body.kioskToken) {
+      const k = await verifyToken(String(body.kioskToken));
+      kioskOk = !!(k && k.role === 'TIMEKEEPER');
+    }
+    if (!kioskOk && (!pin || !String(pin).trim())) {
       return res.status(200).json({ok:false,error:'PIN required'});
     }
-    {
+    if (!kioskOk) {
       const vr = await supaFetch(
         SUPABASE_URL+'/rest/v1/rpc/hr_verify_pin',
         {method:'POST',body:JSON.stringify({p_tenant:TENANT_HR,p_staff_code:staffCode.toUpperCase(),p_pin:pin})}
