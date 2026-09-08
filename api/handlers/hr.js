@@ -230,9 +230,10 @@ export async function routeHR(action, body, auth, req, res) {
     // Record HOW this event happened. Previously device and source were
     // hardcoded, so every row read 'MANUAL / WEB_PORTAL' even for a QR scan.
     const rawSrc = String(body.source || '').toUpperCase();
-    const SOURCES = ['QR_SCAN','KIOSK_PIN','STAFF_PIN','MANUAL'];
-    let source = SOURCES.includes(rawSrc) ? rawSrc : (kioskOk ? 'KIOSK_PIN' : 'STAFF_PIN');
-    if (source === 'QR_SCAN' && !kioskOk) source = 'STAFF_PIN'; // only a kiosk can claim a scan
+    const SOURCES = ['QR','KIOSK','PIN','MANUAL'];   // matches the DB check constraint
+    let source = SOURCES.includes(rawSrc) ? rawSrc : (kioskOk ? 'KIOSK' : 'PIN');
+    if (source === 'QR' && !kioskOk) source = 'PIN';   // only a kiosk can claim a scan
+    if (source === 'MANUAL') source = kioskOk ? 'KIOSK' : 'PIN'; // MANUAL is admin-only
     const device = kioskOk ? 'KIOSK' : 'WEB_PORTAL';
 
     const cr = await supaFetch(

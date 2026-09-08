@@ -555,7 +555,7 @@ async function loadClockTab(s,tc) {
               <span>${l.event_time?new Date(l.event_time).toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'}):'—'}</span>
               <span><span class="hr-badge-sm" style="background:${bg};color:#1a1a1a">${esc(l.event_type||'').replace(/_/g,' ')}</span></span>
               <span style="font-size:.63rem;font-weight:700;padding:2px 7px;border-radius:20px;${
-  (l.attendance_source==='QR_SCAN') ? 'background:#dcfce7;color:#15803d' :
+  (l.attendance_source==='QR') ? 'background:#dcfce7;color:#15803d' :
   (l.attendance_source==='MANUAL')  ? 'background:#fef3c7;color:#b45309' :
                                       'background:#e0e7ff;color:#4338ca'}">${
   esc(l.attendance_source||'MANUAL')}</span>${
