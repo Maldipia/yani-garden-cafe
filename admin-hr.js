@@ -554,7 +554,12 @@ async function loadClockTab(s,tc) {
               <span class="hr-td-date">${hrDate(l.log_date)}</span>
               <span>${l.event_time?new Date(l.event_time).toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'}):'—'}</span>
               <span><span class="hr-badge-sm" style="background:${bg};color:#1a1a1a">${esc(l.event_type||'').replace(/_/g,' ')}</span></span>
-              <span style="font-size:.7rem;color:#5a4a3a">${esc(l.attendance_source||'MANUAL')}</span>
+              <span style="font-size:.63rem;font-weight:700;padding:2px 7px;border-radius:20px;${
+  (l.attendance_source==='QR_SCAN') ? 'background:#dcfce7;color:#15803d' :
+  (l.attendance_source==='MANUAL')  ? 'background:#fef3c7;color:#b45309' :
+                                      'background:#e0e7ff;color:#4338ca'}">${
+  esc(l.attendance_source||'MANUAL')}</span>${
+  l.notes?`<div style="font-size:.62rem;color:#8a7a6a;margin-top:2px">${esc(l.notes)}</div>`:''}
             </div>`;
           }).join('')}
         </div>`
@@ -577,20 +582,21 @@ function openManualClockModal(staffId) {
       <div class="hr-edit-row"><label class="hr-edit-label">Date *</label><input class="hr-edit-input" id="clkDate" type="date" value="${now.toISOString().split('T')[0]}"></div>
       <div class="hr-edit-row"><label class="hr-edit-label">Time *</label><input class="hr-edit-input" id="clkTime" type="time" value="${now.toTimeString().slice(0,5)}"></div>
     </div>
-    <div class="hr-edit-row"><label class="hr-edit-label">Notes</label>
-      <input class="hr-edit-input" id="clkNotes" type="text" placeholder="Optional note">
+    <div class="hr-edit-row"><label class="hr-edit-label">Reason (required)</label>
+      <input class="hr-edit-input" id="clkNotes" type="text" placeholder="e.g. forgot to clock out, kiosk offline">
     </div>
   `,async function(){
     const date=document.getElementById('clkDate').value;
     const time=document.getElementById('clkTime').value;
     if(!date||!time){showToast('Date and time required','error');return false;}
+    const reason=(document.getElementById('clkNotes').value||'').trim();
+    if(reason.length<3){showToast('A reason is required for manual entries','error');return false;}
     const eventTime=new Date(date+'T'+time).toISOString();
     // Insert directly
     const r=await api('addHRTimeLog',{userId:currentUser?.userId,staffId,
       event_type:document.getElementById('clkEvent').value,
       log_date:date,event_time:eventTime,
-      attendance_source:'MANUAL',
-      notes:document.getElementById('clkNotes').value||null
+      notes:reason
     });
     showToast('Clock entry saved ✅','success');
     if(_hrSelected?.id===staffId) await loadHRTab(_hrSelected,'clock');

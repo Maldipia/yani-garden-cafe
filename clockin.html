@@ -248,7 +248,7 @@ window.__qrReady = (typeof jsQR === 'function');
 </script>
 <script>
 const API = '/api/pos';
-let _staff = null, _pin = '', _stream = null, _scanTimer = null;
+let _staff = null, _pin = '', _stream = null, _scanTimer = null, _via = null;
 
 // ── Kiosk authorisation ───────────────────────────────────────────────────
 // This page is only usable on a device signed in as the HR account. That
@@ -360,7 +360,7 @@ async function autoClockInAfterScan(){
   if(!st.ok || st.state!=='OUT'){ await loadClockStateAndShow(); return; }
   var r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({action:'hrClockEvent',staffCode:_staff.staff_code,
-      eventType:'CLOCK_IN',kioskToken:kioskToken()})})
+      eventType:'CLOCK_IN',kioskToken:kioskToken(),source:'QR_SCAN'})})
     .then(function(r){return r.json();}).catch(function(){return {ok:false,error:'Network error'};});
   if(!r.ok){ await loadClockStateAndShow(); showErr('evErr',r.error||'Could not clock in'); return; }
   var icon=document.getElementById('doneIcon');
@@ -394,7 +394,7 @@ async function loadBoard(){
 }
 function escapeHtml(x){return String(x==null?'':x).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
 function kioskSignOut(){ try{localStorage.removeItem('yani_kiosk');}catch(_){} window.location.replace('/admin.html'); }
-function goHome(){ stopScan();_staff=null;_pin='';updateDots();showStep('s0');loadBoard(); }
+function goHome(){ stopScan();_staff=null;_pin='';_via=null;updateDots();showStep('s0');loadBoard(); }
 
 async function lookupByQr(token){
   if(!token||!token.trim()){goManual();showErr('codeErr','QR not recognized. Enter your code instead.');return;}
@@ -415,7 +415,7 @@ async function lookupStaff(code){
 }
 
 function applyStaffResult(staff, skipPin){
-  _staff=staff;_pin='';updateDots();
+  _staff=staff;_pin='';_via='CODE';updateDots();
   // Remember this staff code on device
   try{localStorage.setItem('yani_last_staff',_staff.staff_code);}catch(e){}
   var bg=ROLE_BG[_staff.role]||ROLE_BG.STAFF;
@@ -495,7 +495,7 @@ async function loadClockStateAndShow(){
 async function clockEvent(type){
   document.getElementById('evErr').style.display='none';
   var r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({action:'hrClockEvent',staffCode:_staff.staff_code,eventType:type,pin:_pin||undefined,kioskToken:kioskToken()})}).then(function(r){return r.json();}).catch(function(){return {ok:false,error:'Network error'};});
+    body:JSON.stringify({action:'hrClockEvent',staffCode:_staff.staff_code,eventType:type,pin:_pin||undefined,kioskToken:kioskToken(),source:(_via==='QR'?'QR_SCAN':'STAFF_PIN')})}).then(function(r){return r.json();}).catch(function(){return {ok:false,error:'Network error'};});
   if(!r.ok){showErr('evErr','Error: '+(r.error||'Failed. Try again.'));return;}
   var color=EV_COLOR[type]||'#4ade80';
   var icon=document.getElementById('doneIcon');

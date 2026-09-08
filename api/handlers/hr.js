@@ -227,12 +227,19 @@ export async function routeHR(action, body, auth, req, res) {
     if (staffRow.employment_status !== 'ACTIVE') {
       return res.status(200).json({ok:false,error:'Account inactive'});
     }
-    // Fire clock event via SECURITY DEFINER function
+    // Record HOW this event happened. Previously device and source were
+    // hardcoded, so every row read 'MANUAL / WEB_PORTAL' even for a QR scan.
+    const rawSrc = String(body.source || '').toUpperCase();
+    const SOURCES = ['QR_SCAN','KIOSK_PIN','STAFF_PIN','MANUAL'];
+    let source = SOURCES.includes(rawSrc) ? rawSrc : (kioskOk ? 'KIOSK_PIN' : 'STAFF_PIN');
+    if (source === 'QR_SCAN' && !kioskOk) source = 'STAFF_PIN'; // only a kiosk can claim a scan
+    const device = kioskOk ? 'KIOSK' : 'WEB_PORTAL';
+
     const cr = await supaFetch(
       SUPABASE_URL+'/rest/v1/rpc/hr_clock_event',
       {method:'POST',body:JSON.stringify({
         p_tenant:TENANT_HR, p_staff_id:staffId, p_event_type:eventType,
-        p_device:'WEB_PORTAL', p_location_ip:req.headers['x-forwarded-for']||''
+        p_device:device, p_location_ip:req.headers['x-forwarded-for']||''
       })}
     );
     if (!cr.ok) return res.status(200).json({ok:false,error:'Clock event failed: '+cr.status});
@@ -242,6 +249,11 @@ export async function routeHR(action, body, auth, req, res) {
     // by the function but still come back as HTTP 200 with ok:false inside the payload).
     // Must unwrap and surface that inner result, or the client shows a false success screen.
     const inner = Array.isArray(cr.data) ? cr.data[0] : null;
+    if (inner && inner.ok && inner.event_id) {
+      // fire-and-forget: the clock event itself already succeeded
+      supaFetch(SUPABASE_URL+'/rest/v1/hr_time_logs?id=eq.'+inner.event_id,
+        {method:'PATCH', body:JSON.stringify({attendance_source: source})}).catch(()=>{});
+    }
     if (!inner || inner.ok !== true) {
       return res.status(200).json({ok:false, error: inner?.message || 'Clock event rejected'});
     }
