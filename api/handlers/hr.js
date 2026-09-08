@@ -240,7 +240,8 @@ export async function routeHR(action, body, auth, req, res) {
       SUPABASE_URL+'/rest/v1/rpc/hr_clock_event',
       {method:'POST',body:JSON.stringify({
         p_tenant:TENANT_HR, p_staff_id:staffId, p_event_type:eventType,
-        p_device:device, p_location_ip:req.headers['x-forwarded-for']||''
+        p_device:device, p_location_ip:req.headers['x-forwarded-for']||'',
+        p_source:source
       })}
     );
     if (!cr.ok) return res.status(200).json({ok:false,error:'Clock event failed: '+cr.status});
@@ -250,15 +251,6 @@ export async function routeHR(action, body, auth, req, res) {
     // by the function but still come back as HTTP 200 with ok:false inside the payload).
     // Must unwrap and surface that inner result, or the client shows a false success screen.
     const inner = Array.isArray(cr.data) ? cr.data[0] : null;
-    if (inner && inner.ok && inner.event_id) {
-      // MUST be awaited: on Vercel the function is torn down the moment the
-      // response is sent, so a fire-and-forget PATCH silently never runs.
-      try {
-        await supaFetch(SUPABASE_URL+'/rest/v1/hr_time_logs?id=eq.'+inner.event_id,
-          {method:'PATCH', body:JSON.stringify({attendance_source: source,
-            notes: body.build ? ('build '+String(body.build).substring(0,12)) : null})});
-      } catch(_) { /* the clock event itself already succeeded — don't fail it */ }
-    }
     if (!inner || inner.ok !== true) {
       return res.status(200).json({ok:false, error: inner?.message || 'Clock event rejected'});
     }
