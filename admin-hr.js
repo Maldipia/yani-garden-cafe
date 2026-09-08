@@ -822,7 +822,10 @@ async function renderPayrollSection(s, tc){
       + '<div class="hr-empty-sm">No payroll cut-offs exist yet.</div></div>';
     return;
   }
-  const pr = _hrCutoffId ? await api('hrGetPayroll',{userId:currentUser?.userId,cutoffId:_hrCutoffId}) : {rows:[],deductions:[]};
+  const [pr, br] = await Promise.all([
+    _hrCutoffId ? api('hrGetPayroll',{userId:currentUser?.userId,cutoffId:_hrCutoffId}) : Promise.resolve({rows:[],deductions:[]}),
+    _hrCutoffId ? api('hrPayrollDaily',{userId:currentUser?.userId,cutoffId:_hrCutoffId,staffId:s.id}) : Promise.resolve({days:[]}),
+  ]);
   const cut = _hrCutoffs.find(c=>c.id===_hrCutoffId)||{};
   const mine = (pr.rows||[]).find(r=>r.staff_id===s.id);
   const myDeds = (pr.deductions||[]).filter(d=>d.staff_id===s.id);
@@ -831,6 +834,26 @@ async function renderPayrollSection(s, tc){
     + `${esc(c.cutoff_name)} · ${c.payroll_status}</option>`).join('');
 
   const money = v => hrPeso(parseFloat(v||0));
+  let totHrs=0, totOt=0, totPay=0;
+  const dayRows = (br.days||[]).length ? (br.days||[]).map(function(x){
+    totHrs += parseFloat(x.regular_hours||0);
+    totOt  += parseFloat(x.ot_hours||0);
+    totPay += parseFloat(x.day_pay||0);
+    var brk = (x.break_start&&x.break_end) ? x.break_start+'–'+x.break_end
+            : (x.break_mins>0 ? Math.round(x.break_mins)+'m' : '—');
+    return `<tr${x.is_holiday?' style="background:#fff7ed"':''}>
+      <td style="padding:5px 7px">${esc(x.work_date)}${x.is_holiday?` <span title="${esc(x.holiday_name||'')}" style="font-size:.58rem;font-weight:700;background:#ffedd5;color:#c2410c;padding:1px 5px;border-radius:20px">HOL</span>`:''}</td>
+      <td style="padding:5px 7px">${esc(x.clock_in||'—')}</td>
+      <td style="padding:5px 7px">${esc(brk)}</td>
+      <td style="padding:5px 7px">${esc(x.clock_out||'—')}</td>
+      <td style="padding:5px 7px;text-align:right">${parseFloat(x.regular_hours||0).toFixed(2)}</td>
+      <td style="padding:5px 7px;text-align:right">${parseFloat(x.ot_hours||0).toFixed(2)}</td>
+      <td style="padding:5px 7px;text-align:right;color:#6b7280">${hrPeso(parseFloat(x.hourly_rate||0))}</td>
+      <td style="padding:5px 7px;text-align:right;font-weight:700">${hrPeso(parseFloat(x.day_pay||0))}</td>
+      <td style="padding:5px 7px;font-size:.6rem;color:#6b7280">${esc(x.sources||'—')}</td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="9" style="padding:10px;color:#9ca3af;font-size:.75rem">No attendance in this cut-off</td></tr>';
+
   const dedRows = myDeds.length ? myDeds.map(d=>`<tr>
       <td style="padding:6px 8px">${esc(d.deduction_date||'—')}</td>
       <td style="padding:6px 8px">${esc(d.details||d.reason||d.deduction_type||'—')}</td>
@@ -863,7 +886,29 @@ async function renderPayrollSection(s, tc){
       <div style="font-size:.66rem;color:#9ca3af;margin:6px 0 14px">${esc(mine.notes||'')}</div>
       ` : '<div class="hr-empty-sm">Not computed for this cut-off yet — press Recompute.</div>'}
 
-      <div class="hr-section-title" style="margin-top:8px">💸 Deductions</div>
+      <div class="hr-section-title" style="margin-top:14px">📅 Daily breakdown — how this was computed</div>
+      <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:.72rem;white-space:nowrap">
+        <thead><tr style="background:var(--mist-light,#f1f5f9);text-align:left">
+          <th style="padding:5px 7px">DATE</th><th style="padding:5px 7px">IN</th>
+          <th style="padding:5px 7px">BREAK</th><th style="padding:5px 7px">OUT</th>
+          <th style="padding:5px 7px;text-align:right">HRS</th>
+          <th style="padding:5px 7px;text-align:right">OT</th>
+          <th style="padding:5px 7px;text-align:right">RATE</th>
+          <th style="padding:5px 7px;text-align:right">DAY PAY</th>
+          <th style="padding:5px 7px">SRC</th>
+        </tr></thead>
+        <tbody>${dayRows}</tbody>
+        <tfoot><tr style="border-top:2px solid #d8ddd5;font-weight:700">
+          <td colspan="4" style="padding:7px">${(br.days||[]).length} day(s)</td>
+          <td style="padding:7px;text-align:right">${totHrs.toFixed(2)}</td>
+          <td style="padding:7px;text-align:right">${totOt.toFixed(2)}</td>
+          <td></td>
+          <td style="padding:7px;text-align:right">${money(totPay)}</td>
+          <td></td></tr></tfoot>
+      </table></div>
+
+      <div class="hr-section-title" style="margin-top:14px">💸 Deductions</div>
       <table style="width:100%;border-collapse:collapse;font-size:.76rem">
         <thead><tr style="background:var(--mist-light,#f1f5f9);text-align:left">
           <th style="padding:6px 8px">DATE</th><th style="padding:6px 8px">DETAILS</th>

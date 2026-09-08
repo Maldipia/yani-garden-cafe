@@ -54,6 +54,16 @@ export async function routeAdmin(action, body, auth, req, res) {
       deductions: Array.isArray(deds.data)?deds.data:[]});
   }
 
+  if (action === 'hrPayrollDaily') {
+    const authB = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    if (!authB.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
+    if (!body.cutoffId || !body.staffId) return res.status(400).json({ok:false,error:'cutoffId + staffId required'});
+    const r = await supaFetch(SUPABASE_URL+'/rest/v1/rpc/hr_payroll_daily',
+      {method:'POST',body:JSON.stringify({p_cutoff_id:body.cutoffId,p_staff_id:body.staffId})});
+    if (!r.ok) return res.status(500).json({ok:false,error:'Breakdown failed'});
+    return res.status(200).json({ok:true, days: Array.isArray(r.data)?r.data:[]});
+  }
+
   if (action === 'hrAddDeduction') {
     const authD = await checkAuth(['OWNER','ADMIN']);
     if (!authD.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
