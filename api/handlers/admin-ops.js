@@ -32,107 +32,7 @@ export async function routeAdminOps(action, body, auth, req, res) {
   const { checkAuth, checkAdminAuth, jwtUser } = auth;
 
   // ── getHRStaff ──────────────────────────────────────────────────────────
-  if (action === 'getHRStaff') {
-    try {
-      const TENANT_HR = '11111111-1111-4111-8111-111111111111';
-      const rHR = await supaFetch(
-        SUPABASE_URL + '/rest/v1/hr_staff_master?tenant_id=eq.' + TENANT_HR +
-        '&select=id,staff_code,full_name,nickname,role,employment_type,employment_status,pay_basis,daily_rate,hourly_rate,standard_hours_per_day,overtime_allowed,mobile,email,date_of_birth,date_hired,department,payout_method,payout_details&order=full_name.asc'
-      );
-      if (!rHR.ok) return res.status(500).json({ ok:false, error:'Supabase HR error: ' + rHR.status });
-      return res.status(200).json({ ok:true, staff: Array.isArray(rHR.data) ? rHR.data : [] });
-    } catch(hrErr) {
-      return res.status(500).json({ ok:false, error:'HR fetch error: ' + hrErr.message });
-    }
-  }
-  if (action === 'updateHRStaff') {
-    const authHR = await checkAuth(['OWNER','ADMIN']);
-    if (!authHR.ok) return res.status(403).json({ ok:false, error:'Unauthorized' });
-    const hrStaffId = body.staffId;
-    if (!hrStaffId) return res.status(400).json({ ok:false, error:'staffId required' });
-    const hrAllowed = ['employment_status','full_name','role','daily_rate','hourly_rate','pay_basis','mobile','email','notes','overtime_allowed','department'];
-    const hrPatch = { updated_at: new Date().toISOString() };
-    hrAllowed.forEach(function(k){ if (body[k] !== undefined) hrPatch[k] = body[k]; });
-    const rHR2 = await supaFetch(
-      SUPABASE_URL + '/rest/v1/hr_staff_master?id=eq.' + hrStaffId,
-      { method:'PATCH', body:JSON.stringify(hrPatch) }
-    );
-    if (!rHR2.ok) return res.status(500).json({ ok:false, error:'HR update failed' });
-    return res.status(200).json({ ok:true });
-  }
-  if (action === 'updateHRStaff') {
-    const authHR = await checkAdminAuth ? checkAdminAuth() : await checkAuth(['OWNER','ADMIN']);
-    if (!authHR.ok) return res.status(403).json({ ok:false, error:'Unauthorized' });
-    const hrStaffId = body.staffId;
-    if (!hrStaffId) return res.status(400).json({ ok:false, error:'staffId required' });
-    const hrAllowed = ['employment_status','full_name','role','daily_rate','hourly_rate','pay_basis','mobile','email','notes','overtime_allowed','department'];
-    const hrPatch = { updated_at: new Date().toISOString() };
-    hrAllowed.forEach(function(k){ if (body[k] !== undefined) hrPatch[k] = body[k]; });
-    const rHR2 = await supaFetch(
-      SUPABASE_URL + '/rest/v1/hr_staff_master?id=eq.' + hrStaffId,
-      { method:'PATCH', body:JSON.stringify(hrPatch) }
-    );
-    if (!rHR2.ok) return res.status(500).json({ ok:false, error:'HR update failed' });
-    return res.status(200).json({ ok:true });
-  }
 
-    if (action === 'changePin') {
-      // REQUIRES VALID JWT — no legacy body.userId fallback allowed for PIN changes
-      if (!jwtUser) {
-        return res.status(403).json({ ok: false, error: 'A valid login token is required to change PINs' });
-      }
-      const authCP = await checkAuth(['OWNER','ADMIN','CASHIER','KITCHEN']);
-      if (!authCP.ok) return res.status(403).json({ ok: false, error: authCP.error });
-
-      // Requires OWNER or ADMIN to change any PIN
-      // OR the user themselves (must provide currentPin to verify identity)
-      const targetUserId = String(body.targetUserId || '').trim();
-      const newPin       = String(body.newPin || '').trim();
-      const currentPin   = String(body.currentPin || '').trim();
-
-      if (!targetUserId) return res.status(400).json({ ok: false, error: 'targetUserId is required' });
-      if (!newPin || newPin.length < 4) return res.status(400).json({ ok: false, error: 'New PIN must be at least 4 digits' });
-      if (!/^\d{4,8}$/.test(newPin)) return res.status(400).json({ ok: false, error: 'PIN must be 4-8 digits only' });
-
-      // Fetch the target user
-      const targetR = await supaFetch(
-        `${SUPABASE_URL}/rest/v1/staff_users?user_id=eq.${encodeURIComponent(targetUserId)}&active=eq.true&select=user_id,pin_hash,role`
-      );
-      if (!targetR.ok || !targetR.data?.length) {
-        return res.status(404).json({ ok: false, error: 'User not found' });
-      }
-      const targetUser = targetR.data[0];
-
-      // Auth check: use jwtUser directly (guaranteed valid JWT from check above)
-      // NEVER use body.userId for role lookup — that was the original exploit
-      const requesterId = jwtUser.userId;         // from validated JWT — cannot be spoofed
-      const requesterRole = jwtUser.role;         // from validated JWT — cannot be spoofed
-      let authorized = false;
-
-      if (requesterRole === 'OWNER' || requesterRole === 'ADMIN') {
-        // Only OWNER/ADMIN (verified via JWT) can change any PIN without currentPin
-        authorized = true;
-      } else if (currentPin) {
-        // Non-admin changing their own PIN — must provide current PIN AND target must be themselves
-        if (targetUserId !== requesterId) {
-          return res.status(403).json({ ok: false, error: 'You can only change your own PIN' });
-        }
-        authorized = await bcrypt.compare(currentPin, targetUser.pin_hash);
-        if (!authorized) return res.status(403).json({ ok: false, error: 'Current PIN is incorrect' });
-      }
-
-      if (!authorized) return res.status(403).json({ ok: false, error: 'Unauthorized to change this PIN' });
-
-      // Hash new PIN and save
-      const newHash = await bcrypt.hash(newPin, 12);
-      const upd = await supa('PATCH', 'staff_users',
-        { pin_hash: newHash, failed_attempts: 0, locked_until: null },
-        { user_id: `eq.${targetUserId}` }
-      );
-      if (!upd.ok) return res.status(500).json({ ok: false, error: 'Failed to update PIN' });
-
-      return res.status(200).json({ ok: true, message: 'PIN updated successfully' });
-    }
 
     // ── verifyUserPin ──────────────────────────────────────────────────────
     if (action === 'testDriveUpload') {
@@ -162,82 +62,6 @@ export async function routeAdminOps(action, body, auth, req, res) {
       return res.status(200).json({ ok: !!driveUrl, driveUrl, driveError, saEmail, saSet });
     }
 
-    if (action === 'verifyUserPin') {
-      const pin = String(body.pin || '').trim();
-      if (!pin || pin.length < 4) return res.status(400).json({ ok: false, error: 'PIN is required' });
-
-      // ── Rate-limit check + staff fetch run in PARALLEL (saves ~600ms) ─────
-      const loginIp = (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim();
-      const loginKey = `pin_brute:${loginIp}`;
-
-      const [rlResult, r] = await Promise.all([
-        fetch(`${SUPABASE_URL}/rest/v1/rpc/upsert_rate_limit`,
-          { method:'POST', headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json'},
-            body: JSON.stringify({ p_key: loginKey, p_window: 300, p_limit: 10 }) }
-        ).then(async res2 => { try { return await res2.json(); } catch { return true; } }).catch(() => true),
-        supaFetch(`${SUPABASE_URL}/rest/v1/staff_users?active=eq.true&select=user_id,username,display_name,role,pin_hash,failed_attempts,locked_until`)
-      ]);
-
-      if (rlResult === false) {
-        return res.status(429).json({ ok:false, error:'Too many failed attempts. Try again in 5 minutes.' });
-      }
-      if (!r.ok || !r.data) return res.status(500).json({ ok: false, error: 'Auth service error' });
-
-      // Find matching user — try each active staff member
-      let matchedUser = null;
-      for (const candidate of r.data) {
-        if (!candidate.pin_hash) continue;
-        try {
-          const match = await bcrypt.compare(pin, candidate.pin_hash);
-          if (match) { matchedUser = candidate; break; }
-        } catch { continue; } // malformed hash — skip
-      }
-
-      if (!matchedUser) {
-        // Rate already tracked per IP above
-        return res.status(200).json({ ok: false, error: 'Invalid PIN' });
-      }
-
-      // Check if account is locked
-      if (matchedUser.locked_until && new Date(matchedUser.locked_until) > new Date()) {
-        return res.status(200).json({ ok: false, error: 'Account locked. Try again in 15 minutes.' });
-      }
-
-      // Issue JWT token immediately — don't block on DB writes
-      let token = null;
-      try { token = await signToken(matchedUser.user_id, matchedUser.role, matchedUser.display_name); }
-      catch (_) { /* non-fatal */ }
-
-      // Fire-and-forget post-login writes — PARALLEL, not awaited
-      // User gets their response immediately; DB updates happen in background
-      Promise.all([
-        fetch(`${SUPABASE_URL}/rest/v1/rpc/upsert_rate_limit`,
-          { method:'POST', headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json'},
-            body: JSON.stringify({ p_key: loginKey, p_window: 1, p_limit: 9999 }) }
-        ).catch(() => {}),
-        supa('PATCH', 'staff_users', {
-          last_login:      new Date().toISOString(),
-          failed_attempts: 0,
-          locked_until:    null,
-        }, { user_id: `eq.${matchedUser.user_id}` }).catch(() => {})
-      ]).catch(() => {});
-
-      return res.status(200).json({
-        ok: true,
-        userId:      matchedUser.user_id,
-        username:    matchedUser.username,
-        displayName: matchedUser.display_name,
-        role:        matchedUser.role,
-        token,                          // ← new: JWT for secure auth
-        expiresIn:   8 * 60 * 60,       // 8 hours in seconds
-        user: {
-          userId:      matchedUser.user_id,
-          username:    matchedUser.username,
-          displayName: matchedUser.display_name,
-          role:        matchedUser.role,
-        },
-      });
-    }
 
     // ══════════════════════════════════════════════════════════════════════
     // ONLINE ORDER ACTIONS (pass-through to Supabase)
@@ -390,14 +214,6 @@ export async function routeAdminOps(action, body, auth, req, res) {
     }
 
     // ── getTables ──────────────────────────────────────────────────────────
-    if (action === 'getTables') {
-      const authR = await checkAuth();
-      if (!authR.ok) return res.status(403).json({ ok: false, error: authR.error });
-      const r = await supaFetch(
-        `${SUPABASE_URL}/rest/v1/cafe_tables?order=table_number.asc&select=table_number,qr_token,table_name,capacity`
-      );
-      return res.status(200).json({ ok: true, tables: r.data || [] });
-    }
 
     // ── updateTable ────────────────────────────────────────────────────────
     if (action === 'updateTable') {
@@ -775,62 +591,10 @@ export async function routeAdminOps(action, body, auth, req, res) {
     }
 
     // ── getCustomers ───────────────────────────────────────────────────────
-    if (action === 'getCustomers') {
-      const auth = await checkAuth(['ADMIN','OWNER']);
-      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
-      const limit = Math.min(parseInt(body.limit) || 100, 500);
-      const search = body.search ? body.search.trim() : '';
-      let url = `${SUPABASE_URL}/rest/v1/customers?order=last_visit.desc.nullsfirst&limit=${limit}&select=*`;
-      if (search) url += `&or=(name.ilike.*${encodeURIComponent(search)}*,phone.ilike.*${encodeURIComponent(search)}*)`;
-      const r = await supaFetch(url);
-      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to fetch customers' });
-      return res.status(200).json({ ok: true, customers: r.data || [] });
-    }
 
     // ── getCustomer ────────────────────────────────────────────────────────
-    if (action === 'getCustomer') {
-      const auth = await checkAuth(['ADMIN','OWNER','CASHIER']);
-      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
-      const { id, phone } = body;
-      let url;
-      if (id) url = `${SUPABASE_URL}/rest/v1/customers?id=eq.${encodeURIComponent(id)}&select=*&limit=1`;
-      else if (phone) url = `${SUPABASE_URL}/rest/v1/customers?phone=eq.${encodeURIComponent(phone)}&select=*&limit=1`;
-      else return res.status(400).json({ ok: false, error: 'id or phone required' });
-      const r = await supaFetch(url);
-      if (!r.ok || !r.data.length) return res.status(404).json({ ok: false, error: 'Customer not found' });
-      // Get order history
-      const ordR = await supaFetch(
-        `${SUPABASE_URL}/rest/v1/dine_in_orders?customer_id=eq.${r.data[0].id}&order=created_at.desc&limit=20&select=order_id,created_at,total,status,discount_type`
-      );
-      return res.status(200).json({ ok: true, customer: r.data[0], orders: ordR.data || [] });
-    }
 
     // ── upsertCustomer ─────────────────────────────────────────────────────
-    if (action === 'upsertCustomer') {
-      const auth = await checkAuth(['ADMIN','OWNER','CASHIER']);
-      if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
-      const { name, phone, email, notes } = body;
-      if (!name) return res.status(400).json({ ok: false, error: 'name required' });
-      // Check if customer exists by phone
-      let existing = null;
-      if (phone) {
-        const ex = await supaFetch(`${SUPABASE_URL}/rest/v1/customers?phone=eq.${encodeURIComponent(phone)}&select=id&limit=1`);
-        if (ex.ok && ex.data.length) existing = ex.data[0];
-      }
-      if (existing) {
-        // Update
-        const upd = { name, updated_at: new Date().toISOString() };
-        if (email !== undefined) upd.email = email;
-        if (notes !== undefined) upd.notes = notes;
-        await supaFetch(`${SUPABASE_URL}/rest/v1/customers?id=eq.${existing.id}`, { method: 'PATCH', body: JSON.stringify(upd) });
-        return res.status(200).json({ ok: true, id: existing.id, action: 'updated' });
-      }
-      // Create
-      const payload = { name, phone: phone||null, email: email||null, notes: notes||null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
-      const r = await supaFetch(`${SUPABASE_URL}/rest/v1/customers`, { method: 'POST', body: JSON.stringify(payload), headers: { 'Prefer': 'return=representation' } });
-      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to create customer' });
-      return res.status(200).json({ ok: true, id: r.data[0]?.id, action: 'created' });
-    }
 
     // ── updateCustomerStats ────────────────────────────────────────────────
     if (action === 'updateCustomerStats') {
@@ -1056,13 +820,6 @@ export async function routeAdminOps(action, body, auth, req, res) {
     }
 
     // ── getTableStatus ─────────────────────────────────────────────────────
-    if (action === 'getTableStatus') {
-      const r = await supaFetch(
-        `${SUPABASE_URL}/rest/v1/cafe_tables?select=id,table_number,table_name,capacity,qr_token,status&order=table_number.asc`
-      );
-      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to fetch tables' });
-      return res.status(200).json({ ok: true, tables: r.data || [] });
-    }
 
     // ── setTableStatus ─────────────────────────────────────────────────────
     if (action === 'setTableStatus') {
@@ -1689,220 +1446,15 @@ export async function routeAdminOps(action, body, auth, req, res) {
   // ── HR Loan/Doc/Incident/Performance/Leave/Clock APIs ───────────────────
   const TENANT_HR = '11111111-1111-4111-8111-111111111111';
 
-  if (action === 'getHRLoans') {
-    const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_staff_loans?staff_id=eq.'+body.staffId+'&tenant_id=eq.'+TENANT_HR+'&order=created_at.desc');
-    return res.status(200).json({ ok:true, loans: r.data||[] });
-  }
-  if (action === 'addHRLoan') {
-    const authL = await checkAuth(['OWNER','ADMIN','MANAGER']);
-    if (!authL.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
-    const {staffId,principal,notes,start_date,monthly_amortization} = body;
-    const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_staff_loans',
-      {method:'POST',headers:{Prefer:'return=representation'},
-       body:JSON.stringify({tenant_id:TENANT_HR,staff_id:staffId,principal:parseFloat(principal),balance_remaining:parseFloat(principal),monthly_amortization:monthly_amortization?parseFloat(monthly_amortization):null,start_date:start_date||null,notes:notes||null,status:'ACTIVE'})});
-    return res.status(200).json({ok:r.ok,loan:Array.isArray(r.data)?r.data[0]:r.data});
-  }
-  if (action === 'updateHRLoan') {
-    const authL = await checkAuth(['OWNER','ADMIN','MANAGER']);
-    if (!authL.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
-    const p={};['status','balance_remaining','notes','monthly_amortization'].forEach(k=>{if(body[k]!==undefined)p[k]=body[k];});
-    const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_staff_loans?id=eq.'+body.loanId,{method:'PATCH',body:JSON.stringify(p)});
-    return res.status(200).json({ok:r.ok});
-  }
-  if (action === 'getHRDocuments') {
-    const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_staff_documents?staff_id=eq.'+body.staffId+'&tenant_id=eq.'+TENANT_HR+'&order=created_at.desc');
-    return res.status(200).json({ok:true,documents:r.data||[]});
-  }
-  if (action === 'addHRDocument') {
-    const authD = await checkAuth(['OWNER','ADMIN','MANAGER']);
-    if (!authD.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
-    const {staffId,document_type,notes,expiry_date,file_link} = body;
-    const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_staff_documents',
-      {method:'POST',headers:{Prefer:'return=representation'},
-       body:JSON.stringify({tenant_id:TENANT_HR,staff_id:staffId,document_type,notes:notes||null,expiry_date:expiry_date||null,file_link:file_link||null,verification_status:'PENDING'})});
-    return res.status(200).json({ok:r.ok,document:Array.isArray(r.data)?r.data[0]:r.data});
-  }
-  if (action === 'getHRIncidents') {
-    const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_staff_incidents?staff_id=eq.'+body.staffId+'&tenant_id=eq.'+TENANT_HR+'&order=incident_date.desc');
-    return res.status(200).json({ok:true,incidents:r.data||[]});
-  }
-  if (action === 'addHRIncident') {
-    const authI = await checkAuth(['OWNER','ADMIN','MANAGER']);
-    if (!authI.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
-    const {staffId,incident_type,incident_date,description,action_taken} = body;
-    const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_staff_incidents',
-      {method:'POST',headers:{Prefer:'return=representation'},
-       body:JSON.stringify({tenant_id:TENANT_HR,staff_id:staffId,incident_type,incident_date:incident_date||new Date().toISOString().split('T')[0],description:description||null,action_taken:action_taken||null,status:'OPEN'})});
-    return res.status(200).json({ok:r.ok,incident:Array.isArray(r.data)?r.data[0]:r.data});
-  }
-  if (action === 'getHRPerformance') {
-    const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_performance?staff_id=eq.'+body.staffId+'&tenant_id=eq.'+TENANT_HR+'&order=record_date.desc');
-    return res.status(200).json({ok:true,records:r.data||[]});
-  }
-  if (action === 'addHRPerformance') {
-    const authP = await checkAuth(['OWNER','ADMIN','MANAGER']);
-    if (!authP.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
-    const {staffId,record_type,title,description,record_date,rating} = body;
-    const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_performance',
-      {method:'POST',headers:{Prefer:'return=representation'},
-       body:JSON.stringify({tenant_id:TENANT_HR,staff_id:staffId,record_type,title,description:description||null,record_date:record_date||new Date().toISOString().split('T')[0],rating:rating||null,status:'ACTIVE'})});
-    return res.status(200).json({ok:r.ok,record:Array.isArray(r.data)?r.data[0]:r.data});
-  }
-  if (action === 'getHRLeave') {
-    const [reqs,bals] = await Promise.all([
-      supaFetch(SUPABASE_URL+'/rest/v1/hr_leave_requests?staff_id=eq.'+body.staffId+'&tenant_id=eq.'+TENANT_HR+'&order=requested_at.desc&limit=20'),
-      supaFetch(SUPABASE_URL+'/rest/v1/hr_leave_balances?staff_id=eq.'+body.staffId+'&tenant_id=eq.'+TENANT_HR)
-    ]);
-    return res.status(200).json({ok:true,requests:reqs.data||[],balances:bals.data||[]});
-  }
-  if (action === 'getHRTimeLogs') {
-    const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_time_logs?staff_id=eq.'+body.staffId+'&tenant_id=eq.'+TENANT_HR+'&order=event_time.desc&limit='+(body.limit||20));
-    return res.status(200).json({ok:true,logs:r.data||[]});
-  }
 
-  if (action === 'addHRStaff') {
-    const authS = await checkAuth(['OWNER','ADMIN','MANAGER']);
-    if (!authS.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
-    const {full_name,role,daily_rate,mobile} = body;
-    if (!full_name) return res.status(400).json({ok:false,error:'full_name required'});
-    const TENANT_HR2 = '11111111-1111-4111-8111-111111111111';
-    // Get next staff code
-    const existing = await supaFetch(SUPABASE_URL+'/rest/v1/hr_staff_master?tenant_id=eq.'+TENANT_HR2+'&select=staff_code&order=created_at.desc&limit=1');
-    const lastCode = existing.data?.[0]?.staff_code || 'USR_000';
-    const nextNum = parseInt(lastCode.replace('USR_','')) + 1;
-    const staff_code = 'USR_' + String(nextNum).padStart(3,'0');
-    const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_staff_master',
-      {method:'POST',headers:{Prefer:'return=representation'},
-       body:JSON.stringify({tenant_id:TENANT_HR2,staff_code,full_name,
-         role:role||'STAFF',employment_type:'REGULAR',employment_status:'ACTIVE',
-         pay_basis:'DAILY',daily_rate:daily_rate?parseFloat(daily_rate):null,
-         mobile:mobile||null,date_hired:new Date().toISOString().split('T')[0]})
-      });
-    return res.status(200).json({ok:r.ok,staff:Array.isArray(r.data)?r.data[0]:r.data});
-  }
-  if (action === 'addHRLeaveRequest') {
-    const TENANT_HR2 = '11111111-1111-4111-8111-111111111111';
-    const {staffId,leave_type,start_date,end_date,number_of_days,reason} = body;
-    const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_leave_requests',
-      {method:'POST',headers:{Prefer:'return=representation'},
-       body:JSON.stringify({tenant_id:TENANT_HR2,staff_id:staffId,leave_type,
-         start_date,end_date,number_of_days:parseFloat(number_of_days),
-         reason:reason||null,status:'PENDING',is_paid:false})
-      });
-    return res.status(200).json({ok:r.ok});
-  }
-  if (action === 'addHRTimeLog') {
-    const authT = await checkAuth(['OWNER','ADMIN','MANAGER']);
-    if (!authT.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
-    const TENANT_HR2 = '11111111-1111-4111-8111-111111111111';
-    const {staffId,event_type,log_date,event_time,notes} = body;
-    // A manual entry alters someone's paid hours, so it must say WHY and WHO.
-    const reason = String(notes||'').trim();
-    if (reason.length < 3) {
-      return res.status(400).json({ok:false,error:'A reason is required for manual entries'});
-    }
-    const who = authT.userId || body.userId || 'UNKNOWN';
-    const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_time_logs',
-      {method:'POST',headers:{Prefer:'return=representation'},
-       body:JSON.stringify({tenant_id:TENANT_HR2,staff_id:staffId,
-         event_type,log_date,event_time,
-         attendance_source:'MANUAL',           // always MANUAL — never spoofable as a scan
-         device:'ADMIN_PANEL',
-         notes:'['+who+'] '+reason.substring(0,400),
-         approval_status:'PENDING'})
-      });
-    if (r.ok) {
-      await hrAudit({ action:'ATTENDANCE_MANUAL_ENTRY', module:'ATTENDANCE',
-        recordId: staffId, next:{event_type, log_date, event_time},
-        reason, actorCode: who, role: authT.role, req });
-    }
-    return res.status(200).json({ok:r.ok});
-  }
 
   // ── hrLookupStaff — for clock-in page ────────────────────────────────────
-  if (action === 'hrLookupStaff') {
-    const TENANT_HR = '11111111-1111-4111-8111-111111111111';
-    const sc = String(body.staffCode||'').trim().toUpperCase();
-    if (!sc) return res.status(400).json({ok:false,error:'staffCode required'});
-    const r = await supaFetch(
-      SUPABASE_URL+'/rest/v1/hr_staff_master?staff_code=eq.'+encodeURIComponent(sc)+
-      '&tenant_id=eq.'+TENANT_HR+'&select=id,staff_code,full_name,role,employment_status,daily_rate&limit=1'
-    );
-    const staff = Array.isArray(r.data) ? r.data[0] : null;
-    if (!staff) return res.status(200).json({ok:false,error:'Staff not found'});
-    if (staff.employment_status !== 'ACTIVE') return res.status(200).json({ok:false,error:'Account inactive'});
-    return res.status(200).json({ok:true,staff});
-  }
 
   // ── hrVerifyPin — for clock-in PIN check ──────────────────────────────────
-  if (action === 'hrVerifyPin') {
-    const TENANT_HR = '11111111-1111-4111-8111-111111111111';
-    const sc = String(body.staffCode||'').trim().toUpperCase();
-    const pin = String(body.pin||'').trim();
-    if (!sc||!pin) return res.status(400).json({ok:false,error:'staffCode + pin required'});
-    const r = await supaFetch(
-      SUPABASE_URL+'/rest/v1/rpc/hr_verify_pin',
-      {method:'POST',body:JSON.stringify({p_tenant:TENANT_HR,p_staff_code:sc,p_pin:pin})}
-    );
-    const ok = r.data === true;
-    return res.status(200).json({ok});
-  }
 
   // ── hrClockEvent — for clock-in page ──────────────────────────────────────
-  if (action === 'hrClockEvent') {
-    const TENANT_HR = '11111111-1111-4111-8111-111111111111';
-    const {staffCode, eventType, pin} = body;
-    if (!staffCode||!eventType) return res.status(400).json({ok:false,error:'staffCode + eventType required'});
-    // Verify PIN first (re-verify for security)
-    if (pin) {
-      const vr = await supaFetch(
-        SUPABASE_URL+'/rest/v1/rpc/hr_verify_pin',
-        {method:'POST',body:JSON.stringify({p_tenant:TENANT_HR,p_staff_code:staffCode.toUpperCase(),p_pin:pin})}
-      );
-      if (vr.data !== true) return res.status(403).json({ok:false,error:'Invalid PIN'});
-    }
-    // Get staff ID
-    const sr = await supaFetch(
-      SUPABASE_URL+'/rest/v1/hr_staff_master?staff_code=eq.'+staffCode.toUpperCase()+'&tenant_id=eq.'+TENANT_HR+'&select=id&limit=1'
-    );
-    const staffId = sr.data?.[0]?.id;
-    if (!staffId) return res.status(404).json({ok:false,error:'Staff not found'});
-    // Fire clock event
-    const cr = await supaFetch(
-      SUPABASE_URL+'/rest/v1/rpc/hr_clock_event',
-      {method:'POST',body:JSON.stringify({
-        p_tenant:TENANT_HR,p_staff_id:staffId,p_event_type:eventType,
-        p_device:'WEB_PORTAL',p_location_ip:req.headers['x-forwarded-for']||''
-      })}
-    );
-    return res.status(200).json({ok:cr.ok,event:cr.data});
-  }
 
   // ── hrEmployeeLogin — for employee portal ─────────────────────────────────
-  if (action === 'hrEmployeeLogin') {
-    const TENANT_HR = '11111111-1111-4111-8111-111111111111';
-    const {staffCode, pin} = body;
-    if (!staffCode||!pin) return res.status(400).json({ok:false,error:'staffCode + pin required'});
-    const vr = await supaFetch(
-      SUPABASE_URL+'/rest/v1/rpc/hr_verify_pin',
-      {method:'POST',body:JSON.stringify({p_tenant:TENANT_HR,p_staff_code:staffCode.toUpperCase(),p_pin:pin})}
-    );
-    if (vr.data !== true) return res.status(200).json({ok:false,error:'Incorrect staff code or PIN'});
-    const sr = await supaFetch(
-      SUPABASE_URL+'/rest/v1/hr_staff_master?staff_code=eq.'+staffCode.toUpperCase()+
-      '&tenant_id=eq.'+TENANT_HR+'&select=id,staff_code,full_name,role,employment_type,employment_status,daily_rate,hourly_rate,pay_basis,mobile,email,date_hired,payout_method&limit=1'
-    );
-    const staff = sr.data?.[0];
-    if (!staff) return res.status(200).json({ok:false,error:'Staff not found'});
-    if (staff.employment_status !== 'ACTIVE') return res.status(200).json({ok:false,error:'Account inactive'});
-    // Create session token
-    const token = 'EP_'+Date.now()+'_'+Math.random().toString(36).slice(2,10).toUpperCase();
-    await supaFetch(
-      SUPABASE_URL+'/rest/v1/hr_portal_sessions',
-      {method:'POST',body:JSON.stringify({token,tenant_id:TENANT_HR,staff_id:staff.id,staff_code:staff.staff_code})}
-    );
-    return res.status(200).json({ok:true,staff,token});
-  }
 
   // ── hrCompute13thMonth ────────────────────────────────────────────────────
   if (action === 'hrCompute13thMonth') {
@@ -1932,16 +1484,6 @@ export async function routeAdminOps(action, body, auth, req, res) {
   }
 
   // ── hrGetHolidays ─────────────────────────────────────────────────────────
-  if (action === 'hrGetHolidays') {
-    const TENANT_HR = '11111111-1111-4111-8111-111111111111';
-    const year = body.year || new Date().getFullYear();
-    const r = await supaFetch(
-      SUPABASE_URL+'/rest/v1/hr_holiday_calendar?tenant_id=eq.'+TENANT_HR+
-      '&holiday_date=gte.'+year+'-01-01&holiday_date=lte.'+year+'-12-31'+
-      '&is_active=eq.true&order=holiday_date.asc'
-    );
-    return res.status(200).json({ok:true,holidays:r.data||[]});
-  }
 
 
   return false;
