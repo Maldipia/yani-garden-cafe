@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>YANI Station — Order Entry</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font:15px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;background:#f6f7f4;color:#26312b}
+header{background:#1f3d2b;color:#fff;padding:10px 16px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:5}
+header h1{font-size:1rem;font-weight:700;letter-spacing:.02em}
+#net{margin-left:auto;font-size:.78rem;font-weight:700;padding:4px 10px;border-radius:20px;background:#5c7a68}
+#net.on{background:#2e7d52}#net.off{background:#b45309}
+.wrap{display:grid;grid-template-columns:1fr 340px;gap:14px;padding:14px;align-items:start}
+.card{background:#fff;border:1px solid #e2e5df;border-radius:10px;padding:12px}
+.cats{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.cats button{font:600 .78rem sans-serif;border:1.5px solid #d8ddd5;background:#fff;color:#5c6b61;border-radius:18px;padding:5px 12px;cursor:pointer}
+.cats button.sel{background:#1f3d2b;color:#fff;border-color:#1f3d2b}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.item{border:1px solid #e2e5df;border-radius:8px;padding:9px;cursor:pointer;background:#fff;text-align:left}
+.item:hover{border-color:#1f3d2b}
+.item b{display:block;font-size:.82rem;font-weight:600;margin-bottom:3px}
+.item span{font-size:.78rem;color:#7d8a82}
+label{display:block;font-size:.74rem;font-weight:700;color:#5c6b61;margin:8px 0 3px}
+input,select,textarea{width:100%;font:inherit;font-size:.85rem;padding:7px;border:1.5px solid #d8ddd5;border-radius:7px;background:#fff}
+.line{display:flex;gap:8px;align-items:flex-start;padding:7px 0;border-bottom:1px solid #f0f2ee}
+.line div:first-child{flex:1}
+.line b{font-size:.82rem;font-weight:600}
+.line small{color:#7d8a82;font-size:.74rem}
+.qty{display:flex;align-items:center;gap:5px}
+.qty button{width:24px;height:24px;border:1.5px solid #d8ddd5;background:#fff;border-radius:6px;cursor:pointer;font-weight:700}
+.tot{display:flex;justify-content:space-between;font-size:.85rem;padding:3px 0}
+.tot.big{font-size:1rem;font-weight:700;border-top:1.5px solid #e2e5df;margin-top:6px;padding-top:8px}
+.go{width:100%;margin-top:10px;background:#1f3d2b;color:#fff;border:none;border-radius:8px;padding:12px;font-size:.95rem;font-weight:700;cursor:pointer}
+.go:disabled{background:#b8c2ba;cursor:not-allowed}
+#msg{margin-top:8px;font-size:.82rem;font-weight:600;text-align:center}
+dialog{border:none;border-radius:12px;padding:16px;min-width:280px;box-shadow:0 10px 40px rgba(0,0,0,.2)}
+dialog h3{font-size:.95rem;margin-bottom:10px}
+.opt{display:block;width:100%;text-align:left;border:1.5px solid #d8ddd5;background:#fff;border-radius:8px;padding:9px;margin-bottom:6px;cursor:pointer;font:inherit;font-size:.85rem}
+.opt.sel{border-color:#1f3d2b;background:#f0f5f1;font-weight:700}
+</style></head><body>
+<header><h1>YANI STATION</h1><span style="font-size:.78rem;opacity:.75">offline order entry</span><span id="net">…</span></header>
+<div class="wrap">
+  <div class="card">
+    <div class="cats" id="cats"></div>
+    <div class="grid" id="grid"></div>
+  </div>
+  <div class="card">
+    <label>Table</label><input id="tbl" value="1">
+    <label>Customer name</label><input id="cust" placeholder="Guest">
+    <label>Type</label><select id="type"><option>DINE-IN</option><option>TAKE-OUT</option></select>
+    <label>Notes</label><textarea id="notes" rows="2" placeholder="Special request"></textarea>
+    <div id="cart" style="margin-top:10px"></div>
+    <div id="totals"></div>
+    <button class="go" id="go" disabled>Place order &amp; print</button>
+    <div id="msg"></div>
+  </div>
+</div>
+<dialog id="dlg"><h3 id="dlgTitle"></h3><div id="dlgBody"></div>
+  <button class="go" id="dlgOk" style="margin-top:4px">Add to cart</button></dialog>
+<script>
+let MENU=[],cart=[],cat='ALL',pick=null,sel={};
+const $=(id)=>document.getElementById(id);
+const peso=(n)=>'\u20b1'+(Math.round(n*100)/100).toLocaleString('en-PH',{minimumFractionDigits:2});
+
+async function boot(){
+  const m=await (await fetch('/api/menu')).json();
+  MENU=(m.items||[]).filter(i=>i.is_active!==false);
+  const cats=['ALL',...new Set(MENU.map(i=>(i.category||'OTHER').toUpperCase()))];
+  $('cats').innerHTML=cats.map(c=>`<button data-c="${c}" class="${c===cat?'sel':''}">${c}</button>`).join('');
+  $('cats').onclick=e=>{if(!e.target.dataset.c)return;cat=e.target.dataset.c;boot();};
+  render();status();
+}
+function render(){
+  const list=MENU.filter(i=>cat==='ALL'||(i.category||'OTHER').toUpperCase()===cat);
+  $('grid').innerHTML=list.map((i,ix)=>`<button class="item" data-i="${MENU.indexOf(i)}"><b>${esc(i.name)}</b><span>${peso(i.price||0)}</span></button>`).join('')
+    ||'<p style="color:#7d8a82;font-size:.85rem">No items cached yet — connect once to download the menu.</p>';
+  $('grid').onclick=e=>{const b=e.target.closest('.item');if(b)choose(MENU[+b.dataset.i]);};
+}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+function choose(item){
+  pick=item;sel={size:null,sugar:null};
+  const sizes=item.sizes||item.size_options||null;
+  const sweet=item.sweetness||item.sugar_options||null;
+  let h='';
+  if(sizes&&sizes.length){h+='<label>Size</label>'+sizes.map(s=>`<button class="opt" data-k="size" data-v="${esc(s.name||s)}" data-p="${s.price||item.price||0}">${esc(s.name||s)} — ${peso(s.price||item.price||0)}</button>`).join('');}
+  if(sweet&&sweet.length){h+='<label>Sugar</label>'+sweet.map(s=>`<button class="opt" data-k="sugar" data-v="${esc(s.name||s)}">${esc(s.name||s)}</button>`).join('');}
+  h+='<label>Item note</label><input id="inote" placeholder="e.g. extra hot">';
+  $('dlgTitle').textContent=item.name;$('dlgBody').innerHTML=h;
+  $('dlgBody').onclick=e=>{const b=e.target.closest('.opt');if(!b)return;
+    $('dlgBody').querySelectorAll(`[data-k="${b.dataset.k}"]`).forEach(x=>x.classList.remove('sel'));
+    b.classList.add('sel');sel[b.dataset.k]=b.dataset.v;if(b.dataset.p)sel.price=+b.dataset.p;};
+  $('dlg').showModal();
+}
+$('dlgOk').onclick=()=>{
+  const note=($('inote')||{}).value||'';
+  cart.push({item_code:pick.item_code,name:pick.name,category:(pick.category||'OTHER').toUpperCase(),
+    price:sel.price||pick.price||0,qty:1,size:sel.size,sugar:sel.sugar,note:note.trim()});
+  $('dlg').close();drawCart();
+};
+function drawCart(){
+  $('cart').innerHTML=cart.map((c,i)=>`<div class="line"><div><b>${esc(c.name)}</b><br><small>${[c.size,c.sugar].filter(Boolean).join(' | ')||''}${c.note?' · '+esc(c.note):''}</small></div>
+    <div class="qty"><button data-a="-" data-i="${i}">−</button><span>${c.qty}</span><button data-a="+" data-i="${i}">+</button><button data-a="x" data-i="${i}">×</button></div></div>`).join('')
+    ||'<p style="color:#7d8a82;font-size:.82rem">Cart empty</p>';
+  $('cart').onclick=e=>{const b=e.target.closest('button');if(!b)return;const i=+b.dataset.i;
+    if(b.dataset.a==='+')cart[i].qty++;else if(b.dataset.a==='-'){if(--cart[i].qty<1)cart.splice(i,1);}else cart.splice(i,1);
+    drawCart();};
+  const sub=cart.reduce((s,c)=>s+c.price*c.qty,0);
+  const sc=$('type').value==='DINE-IN'?sub*0.10:0;
+  $('totals').innerHTML=`<div class="tot"><span>Subtotal</span><b>${peso(sub)}</b></div>
+    <div class="tot"><span>Service charge</span><b>${peso(sc)}</b></div>
+    <div class="tot big"><span>Total</span><span>${peso(sub+sc)}</span></div>`;
+  $('go').disabled=!cart.length;
+}
+$('type').onchange=drawCart;
+$('go').onclick=async()=>{
+  $('go').disabled=true;$('msg').textContent='Printing…';
+  const sub=cart.reduce((s,c)=>s+c.price*c.qty,0);
+  const sc=$('type').value==='DINE-IN'?sub*0.10:0;
+  try{
+    const r=await (await fetch('/api/order',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({tableNo:$('tbl').value,customerName:$('cust').value,orderType:$('type').value,
+        notes:$('notes').value,items:cart,subtotal:sub,serviceCharge:sc,total:sub+sc})})).json();
+    if(!r.ok)throw new Error(r.error);
+    $('msg').style.color='#2e7d52';
+    $('msg').textContent=`${r.orderId} — ${r.labels} label${r.labels===1?'':'s'} printed`;
+    cart=[];$('notes').value='';$('cust').value='';drawCart();status();
+  }catch(e){$('msg').style.color='#b45309';$('msg').textContent='Failed: '+e.message;}
+  $('go').disabled=!cart.length;
+};
+async function status(){
+  try{const s=await (await fetch('/api/status')).json();
+    $('net').className=s.online?'on':'off';
+    $('net').textContent=(s.online?'ONLINE':'OFFLINE')+(s.pending?` · ${s.pending} queued`:'');
+  }catch{}
+}
+setInterval(status,5000);boot();drawCart();
+</script></body></html>

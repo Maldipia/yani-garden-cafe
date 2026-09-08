@@ -52,3 +52,41 @@ Task Scheduler > Create Task
 - If the internet drops the agent keeps retrying and prints when it returns.
 - The station key can only claim and complete print jobs. It cannot read
   orders, customers, payroll or anything else.
+
+---
+
+# Offline order entry (yani-station.js)
+
+`yani-station.js` replaces `yani-print-station.js` — it prints labels AND takes
+orders when the internet is down. Run one or the other, not both.
+
+    node yani-station.js
+
+Then open **http://localhost:3000** on the counter PC.
+
+## What happens when the internet drops
+
+| | Online | Offline |
+|---|---|---|
+| Customer QR ordering | works | **stops** — staff take orders at the counter |
+| Staff order entry (localhost:3000) | works | **works** |
+| Drink labels | print | **print** |
+| Menu | refreshed every 30 min | served from local cache |
+| Orders | sent to cloud immediately | queued on disk, synced when back |
+
+Offline orders get IDs like `YANI-OFF-0001` so they can never collide with
+cloud order numbers. The header badge shows ONLINE / OFFLINE and how many
+orders are still queued.
+
+## Files it creates
+
+    data/menu.json      cached menu (survives reboots)
+    data/orders.json    every local order, with a synced flag
+    data/counter.json   the offline order sequence
+
+Nothing is deleted after syncing — `orders.json` is your paper trail.
+
+## Before an outage
+
+Open the page once while online so the menu cache is populated. An empty
+cache means an empty order screen.
