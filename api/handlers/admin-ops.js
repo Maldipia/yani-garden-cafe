@@ -1801,7 +1801,7 @@ export async function routeAdminOps(action, body, auth, req, res) {
     if (reason.length < 3) {
       return res.status(400).json({ok:false,error:'A reason is required for manual entries'});
     }
-    const who = authT.userId || 'UNKNOWN';
+    const who = authT.userId || body.userId || 'UNKNOWN';
     const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_time_logs',
       {method:'POST',headers:{Prefer:'return=representation'},
        body:JSON.stringify({tenant_id:TENANT_HR2,staff_id:staffId,

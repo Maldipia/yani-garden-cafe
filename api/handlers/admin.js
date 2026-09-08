@@ -84,7 +84,7 @@ export async function routeAdmin(action, body, auth, req, res) {
           module:'EMPLOYEE', recordId: hrStaffId,
           previous: beforeVals, next: changed,
           reason: body.reason || null,
-          actorCode: authHR.userId, role: authHR.role, req });
+          actorCode: authHR.userId || body.userId, role: authHR.role, req });
       }
     }
     // ── hr_employee_profile (government numbers) ─────────────────────────────
@@ -227,7 +227,7 @@ export async function routeAdmin(action, body, auth, req, res) {
     if (reason.length < 3) {
       return res.status(400).json({ok:false,error:'A reason is required for manual entries'});
     }
-    const who = authT.userId || 'UNKNOWN';
+    const who = authT.userId || body.userId || 'UNKNOWN';
     const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_time_logs',
       {method:'POST',headers:{Prefer:'return=representation'},
        body:JSON.stringify({tenant_id:TENANT_HR2,staff_id:staffId,
@@ -393,7 +393,7 @@ export async function routeAdmin(action, body, auth, req, res) {
     );
     if (!r.ok) return res.status(500).json({ok:false,error:'Failed to set attendance PIN'});
     await hrAudit({ action:'ATTENDANCE_PIN_SET', module:'SECURITY', recordId:staffId,
-      reason: body.reason || null, actorCode: authSP.userId, role: authSP.role, req });
+      reason: body.reason || null, actorCode: authSP.userId || body.userId, role: authSP.role, req });
     return res.status(200).json({ok:true});
   }
 
@@ -413,7 +413,7 @@ export async function routeAdmin(action, body, auth, req, res) {
     );
     if (!r.ok) return res.status(500).json({ok:false,error:'Failed to set portal PIN'});
     await hrAudit({ action:'PORTAL_PIN_SET', module:'SECURITY', recordId:staffId,
-      reason: body.reason || null, actorCode: authSPP.userId, role: authSPP.role, req });
+      reason: body.reason || null, actorCode: authSPP.userId || body.userId, role: authSPP.role, req });
     return res.status(200).json({ok:true});
   }
 
@@ -434,7 +434,7 @@ export async function routeAdmin(action, body, auth, req, res) {
     // The token itself is a credential — record that it rotated, never its value.
     await hrAudit({ action:'QR_TOKEN_ROTATED', module:'SECURITY', recordId:staffId,
       reason: body.reason || 'QR regenerated — previous code invalidated',
-      actorCode: authRQ.userId, role: authRQ.role, req });
+      actorCode: authRQ.userId || body.userId, role: authRQ.role, req });
     return res.status(200).json({ok:true, qrToken:newToken});
   }
 
