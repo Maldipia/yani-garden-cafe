@@ -285,12 +285,22 @@ async function startScan(){
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){goManual();return;}
   showStep('s2');
   try {
-    var constraints = {video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:1280}}};
-    try{_stream=await navigator.mediaDevices.getUserMedia(constraints);}
-    catch(e1){
-      try{_stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});}
-      catch(e2){_stream=await navigator.mediaDevices.getUserMedia({video:true});}
+    // Safari is fussy: it rejects square/oversized ideal constraints on some
+    // devices with OverconstrainedError, and has no 'environment' camera on a
+    // Mac at all. Try progressively simpler requests, ending at bare video:true
+    // which every browser with a camera accepts.
+    var attempts = [
+      {video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}}},
+      {video:{facingMode:'environment'}},
+      {video:{width:{ideal:1280}}},
+      {video:true}
+    ];
+    var lastErr = null;
+    for (var i=0;i<attempts.length;i++){
+      try { _stream = await navigator.mediaDevices.getUserMedia(attempts[i]); lastErr=null; break; }
+      catch(err){ lastErr = err; }
     }
+    if (!_stream) throw (lastErr || new Error('No camera stream'));
     var v=document.getElementById('videoEl');
     v.srcObject=_stream;
     await v.play();
@@ -299,10 +309,13 @@ async function startScan(){
     stopScan();
     var info=document.getElementById('camInfo');if(info)info.style.display='block';
     var msg='Camera not available.';
-    if(e.name==='NotAllowedError')msg='Camera permission denied. Allow camera in browser settings.';
+    if(e.name==='NotAllowedError')msg='Camera permission denied. Allow camera in Safari > Settings for this website.';
     else if(e.name==='NotFoundError')msg='No camera found on this device.';
-    else if(e.name==='NotReadableError')msg='Camera busy. Close other apps.';
-    showErr('camErr',msg);
+    else if(e.name==='NotReadableError')msg='Camera busy. Close other apps using the camera.';
+    else if(e.name==='OverconstrainedError')msg='Camera does not support the requested mode.';
+    else if(!navigator.mediaDevices)msg='This browser blocks camera access on non-secure pages.';
+    // Surface the real error name — a generic message makes this undiagnosable.
+    showErr('camErr', msg+' ['+(e.name||'Error')+(e.message?': '+String(e.message).slice(0,60):'')+']');
   }
 }
 function scanLoop(){
