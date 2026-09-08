@@ -136,8 +136,13 @@ export async function routeHR(action, body, auth, req, res) {
   if (action === 'hrClockEvent') {
     const {staffCode, eventType, pin} = body;
     if (!staffCode||!eventType) return res.status(400).json({ok:false,error:'staffCode + eventType required'});
-    // Verify PIN
-    if (pin) {
+    // A PIN is ALWAYS required. Previously this block was `if (pin)`, so omitting
+    // the field skipped verification entirely and let anyone clock in any staff
+    // member with no credentials at all.
+    if (!pin || !String(pin).trim()) {
+      return res.status(200).json({ok:false,error:'PIN required'});
+    }
+    {
       const vr = await supaFetch(
         SUPABASE_URL+'/rest/v1/rpc/hr_verify_pin',
         {method:'POST',body:JSON.stringify({p_tenant:TENANT_HR,p_staff_code:staffCode.toUpperCase(),p_pin:pin})}
@@ -149,10 +154,16 @@ export async function routeHR(action, body, auth, req, res) {
     // Get staff ID
     const sr = await supaFetch(
       SUPABASE_URL+'/rest/v1/hr_staff_master?staff_code=eq.'+staffCode.toUpperCase()+
-      '&tenant_id=eq.'+TENANT_HR+'&select=id&limit=1'
+      '&tenant_id=eq.'+TENANT_HR+'&select=id,employment_status&limit=1'
     );
-    const staffId = sr.data?.[0]?.id;
+    const staffRow = sr.data?.[0];
+    const staffId = staffRow?.id;
     if (!staffId) return res.status(200).json({ok:false,error:'Staff not found'});
+    // hrLookupStaff blocks inactive accounts, but the API does not require that call
+    // first — a suspended staff member with a live PIN could clock in directly.
+    if (staffRow.employment_status !== 'ACTIVE') {
+      return res.status(200).json({ok:false,error:'Account inactive'});
+    }
     // Fire clock event via SECURITY DEFINER function
     const cr = await supaFetch(
       SUPABASE_URL+'/rest/v1/rpc/hr_clock_event',
