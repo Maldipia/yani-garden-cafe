@@ -1,6 +1,8 @@
-node_modules/
+*.key
+*.log
+.DS_Store
 .env
 .env.local
 .vercel
-*.log
-.DS_Store
+node_modules/
+print-station/config.json

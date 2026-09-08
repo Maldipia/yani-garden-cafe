@@ -1,6 +1,6 @@
 {
   "apiUrl": "https://yanigardencafe.com/api/pos",
-  "stationKey": "pc3uUXOn6lYAwFg-PNrlEVYbdTT0cubE",
+  "stationKey": "ASK_PIA_FOR_THE_STATION_KEY",
   "station": "counter-pc",
   "shareName": "XP58",
   "pollMs": 3000
