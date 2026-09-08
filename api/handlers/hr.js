@@ -250,9 +250,12 @@ export async function routeHR(action, body, auth, req, res) {
     // Must unwrap and surface that inner result, or the client shows a false success screen.
     const inner = Array.isArray(cr.data) ? cr.data[0] : null;
     if (inner && inner.ok && inner.event_id) {
-      // fire-and-forget: the clock event itself already succeeded
-      supaFetch(SUPABASE_URL+'/rest/v1/hr_time_logs?id=eq.'+inner.event_id,
-        {method:'PATCH', body:JSON.stringify({attendance_source: source})}).catch(()=>{});
+      // MUST be awaited: on Vercel the function is torn down the moment the
+      // response is sent, so a fire-and-forget PATCH silently never runs.
+      try {
+        await supaFetch(SUPABASE_URL+'/rest/v1/hr_time_logs?id=eq.'+inner.event_id,
+          {method:'PATCH', body:JSON.stringify({attendance_source: source})});
+      } catch(_) { /* the clock event itself already succeeded — don't fail it */ }
     }
     if (!inner || inner.ok !== true) {
       return res.status(200).json({ok:false, error: inner?.message || 'Clock event rejected'});
