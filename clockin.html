@@ -349,53 +349,6 @@ function lookupCode(){var v=document.getElementById('codeInput');if(v)lookupStaf
 // QR scans send the rotatable qr_token (not uppercased — it's lowercase hex).
 // Backend falls back to matching it as a plain staff_code for any
 // already-printed QR codes that still encode the old format.
-// After a scan we know WHO. The signed-in kiosk is the authority, so a staff
-// member who is currently clocked out is clocked straight in — no PIN, no taps.
-// Anyone already clocked in falls through to the normal screen, because an
-// accidental scan must never clock someone OUT and cost them their hours.
-async function autoClockInAfterScan(){
-  var st=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({action:'hrGetClockStatus',staffCode:_staff.staff_code})})
-    .then(function(r){return r.json();}).catch(function(){return {ok:false};});
-  if(!st.ok || st.state!=='OUT'){ await loadClockStateAndShow(); return; }
-  var r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({action:'hrClockEvent',staffCode:_staff.staff_code,
-      eventType:'CLOCK_IN',kioskToken:kioskToken(),source:'QR'})})
-    .then(function(r){return r.json();}).catch(function(){return {ok:false,error:'Network error'};});
-  if(!r.ok){ await loadClockStateAndShow(); showErr('evErr',r.error||'Could not clock in'); return; }
-  var icon=document.getElementById('doneIcon');
-  if(icon) icon.textContent=EV_ICON.CLOCK_IN;
-  var t=document.getElementById('doneTitle'); if(t) t.textContent=EV_LABEL.CLOCK_IN;
-  var n=document.getElementById('doneName'); if(n) n.textContent=_staff.full_name||'';
-  showStep('s6');
-  setTimeout(goHome,3500);
-}
-
-// ── HR home board ─────────────────────────────────────────────────────────
-async function loadBoard(){
-  var r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({action:'hrKioskBoard',kioskToken:kioskToken()})})
-    .then(function(x){return x.json();}).catch(function(){return {ok:false};});
-  if(!r.ok){ document.getElementById('kbList').innerHTML='<div class="kb-warn" style="text-align:center;padding:12px">Could not load board</div>'; return; }
-  document.getElementById('kbDate').textContent=new Date().toLocaleDateString('en-PH',{weekday:'long',day:'numeric',month:'long'});
-  document.getElementById('kbIn').textContent=r.counts.in;
-  document.getElementById('kbBreak').textContent=r.counts.onBreak;
-  document.getElementById('kbOut').textContent=r.counts.out;
-  var LBL={IN:'IN',BREAK:'BREAK',OUT:'OUT'};
-  document.getElementById('kbList').innerHTML=r.board.map(function(b){
-    var initial=(b.name||'?').trim().charAt(0).toUpperCase();
-    var t=b.lastEventTime?new Date(b.lastEventTime).toLocaleTimeString('en-PH',{hour:'numeric',minute:'2-digit'}):'—';
-    return '<div class="kb-row"><div class="kb-av">'+initial+'</div>'
-      +'<div class="kb-nm"><b>'+escapeHtml(b.name)+'</b><span>'+escapeHtml(b.role||'')
-      +(b.hasQr?'':' · <span class="kb-warn">no QR</span>')+' · '+t+'</span></div>'
-      +'<div class="kb-hrs">'+(b.hoursToday>0?b.hoursToday.toFixed(2)+'h':'')+'</div>'
-      +'<div class="kb-pill kb-'+b.state+'">'+LBL[b.state]+'</div></div>';
-  }).join('')||'<div class="kb-warn" style="text-align:center;padding:12px">No active staff</div>';
-}
-function escapeHtml(x){return String(x==null?'':x).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
-function kioskSignOut(){ try{localStorage.removeItem('yani_kiosk');}catch(_){} window.location.replace('/admin.html'); }
-function goHome(){ stopScan();_staff=null;_pin='';_via=null;updateDots();showStep('s0');loadBoard(); }
-
 async function lookupByQr(token){
   if(!token||!token.trim()){goManual();showErr('codeErr','QR not recognized. Enter your code instead.');return;}
   var r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},
@@ -415,7 +368,10 @@ async function lookupStaff(code){
 }
 
 function applyStaffResult(staff, skipPin){
-  _staff=staff;_pin='';_via='CODE';updateDots();
+  // skipPin is only passed by the QR path, so it doubles as the signal for how
+  // the staff member was identified. Hardcoding 'CODE' here made every scan
+  // record as PIN.
+  _staff=staff;_pin='';_via=skipPin?'QR':'CODE';updateDots();
   // Remember this staff code on device
   try{localStorage.setItem('yani_last_staff',_staff.staff_code);}catch(e){}
   var bg=ROLE_BG[_staff.role]||ROLE_BG.STAFF;
