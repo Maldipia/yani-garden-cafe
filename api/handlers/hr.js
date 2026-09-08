@@ -241,7 +241,7 @@ export async function routeHR(action, body, auth, req, res) {
       {method:'POST',body:JSON.stringify({
         p_tenant:TENANT_HR, p_staff_id:staffId, p_event_type:eventType,
         p_device:device, p_location_ip:req.headers['x-forwarded-for']||'',
-        p_source:source
+        p_source:source, p_build: body.build ? String(body.build).substring(0,12) : null
       })}
     );
     if (!cr.ok) return res.status(200).json({ok:false,error:'Clock event failed: '+cr.status});
