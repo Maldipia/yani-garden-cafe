@@ -883,6 +883,11 @@ async function renderPayrollSection(s, tc){
       <div style="font-size:.7rem;color:#6b7280;margin-bottom:10px">
         ${esc(cut.start_date||'')} → ${esc(cut.end_date||'')} · pay date ${esc(cut.pay_date||'—')}
       </div>
+      ${(_hrSelected||{}).art82_exempt?`<div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:8px;padding:9px 12px;margin-bottom:12px;font-size:.7rem;color:#475569">
+        <b>Art. 82 exempt</b> — managerial employee or field personnel. Not entitled to overtime,
+        night differential, holiday pay or service incentive leave. Hours are still recorded.
+      </div>`:''}
+      ${(totNd>0 && !(_hrSelected||{}).art82_exempt)?'':''}
       ${mine ? `
       <div class="hr-grid-2">
         <div class="hr-pay-card"><div class="hr-pay-label">GROSS PAY</div>
@@ -942,7 +947,7 @@ async function renderPayrollSection(s, tc){
         <tbody>${dedRows}</tbody>
       </table>
       <button onclick="addDeductionDialog()" style="margin-top:10px;font-size:.78rem;font-weight:700;background:#fff;color:#1f3d2b;border:1.5px solid #d8ddd5;border-radius:8px;padding:8px 14px;cursor:pointer">+ Add deduction</button>
-      ${(mine && parseFloat(mine.actual_ot_hours||0) > parseFloat(mine.approved_ot_hours||0)) ? `
+      ${(mine && !(_hrSelected||{}).art82_exempt && parseFloat(mine.actual_ot_hours||0) > parseFloat(mine.approved_ot_hours||0)) ? `
       <div style="background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:8px;padding:10px 12px;margin-bottom:12px">
         <div style="font-size:.78rem;font-weight:700;color:#1d4ed8">
           ⏱ ${(parseFloat(mine.actual_ot_hours)-parseFloat(mine.approved_ot_hours||0)).toFixed(2)} hrs of overtime worked but not approved
@@ -954,7 +959,7 @@ async function renderPayrollSection(s, tc){
         <button onclick="decideOvertime(true)" style="font-size:.74rem;font-weight:700;background:#1d4ed8;color:#fff;border:none;border-radius:7px;padding:7px 13px;cursor:pointer">Approve overtime</button>
         <button onclick="decideOvertime(false)" style="font-size:.74rem;font-weight:700;background:#fff;color:#b91c1c;border:1.5px solid #fecaca;border-radius:7px;padding:7px 13px;margin-left:6px;cursor:pointer">Reject</button>
       </div>`:''}
-      ${(totNd>0 && parseFloat((mine||{}).night_diff_pay||0)===0) ? `
+      ${(totNd>0 && !(_hrSelected||{}).art82_exempt && parseFloat((mine||{}).night_diff_pay||0)===0) ? `
       <div style="background:#f5f3ff;border:1.5px solid #ddd6fe;border-radius:8px;padding:10px 12px;margin-bottom:12px">
         <div style="font-size:.78rem;font-weight:700;color:#6d28d9">🌙 ${totNd.toFixed(2)} hrs worked between 10:00 PM and 6:00 AM</div>
         <div style="font-size:.68rem;color:#475569;margin-top:3px">
@@ -1130,6 +1135,8 @@ async function printPayslip(){
     Overtime is paid at 1.25\u00d7 beyond ${stdH} hours in a day. Meal and rest breaks are unpaid and excluded from paid hours.
     Undertime is the shortfall against the ${stdH}-hour standard day.
     ${holDays.length?`<br><b>H</b> marks a declared holiday (${holDays.map(x=>esc(x.holiday_name||x.work_date)).join(', ')}).${N(row.holiday_pay)>0?'':' No holiday premium has been applied.'}`:''}
+    ${s.art82_exempt?'<br><b>Art. 82.</b> This employee is a managerial employee or field personnel and is not covered by the hours-of-work provisions — overtime, night differential, holiday pay and service incentive leave do not apply.':''}
+    ${(!s.art82_exempt && holDays.length && N(row.holiday_pay)===0)?'<br>This establishment is a retail/service establishment regularly employing fewer than ten (10) workers and is exempt from regular holiday pay under Art. 94(a).':''}
     ${totNd>0
       ? (N(row.night_diff_pay)>0
           ? `<br><b>ND</b> = hours worked between 10:00 PM and 6:00 AM (${totNd.toFixed(2)} hrs this period), paid at +10% of the hourly rate.`
@@ -1501,6 +1508,7 @@ function hrRowBadges(s){
     // PIN is only needed for manual code entry and the employee portal —
     // scanning on the kiosk works without one.
     if(!s.has_pin) out.push(['No PIN','#f1f5f9','#64748b','No attendance PIN. Scanning still works; typing the staff code does not.']);
+    if(s.art82_exempt) out.push(['Art.82','#f1f5f9','#475569','Managerial / field personnel — no OT, night differential, holiday pay or SIL entitlement']);
     if(s.clock_state==='IN')    out.push(['In','#dcfce7','#15803d','Clocked in']);
     if(s.clock_state==='BREAK') out.push(['Break','#ffedd5','#c2410c','On break']);
   }

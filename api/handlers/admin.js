@@ -174,7 +174,7 @@ export async function routeAdmin(action, body, auth, req, res) {
       const TENANT_HR = '11111111-1111-4111-8111-111111111111';
       const rHR = await supaFetch(
         SUPABASE_URL + '/rest/v1/hr_staff_master?tenant_id=eq.' + TENANT_HR +
-        '&select=id,staff_code,full_name,nickname,role,employment_type,employment_status,pay_basis,daily_rate,hourly_rate,standard_hours_per_day,overtime_allowed,mobile,email,date_of_birth,date_hired,department,payout_method,payout_details,gender,civil_status,notes,qr_token&order=full_name.asc'
+        '&select=id,staff_code,full_name,nickname,role,employment_type,employment_status,pay_basis,daily_rate,hourly_rate,standard_hours_per_day,overtime_allowed,mobile,email,date_of_birth,date_hired,department,payout_method,payout_details,gender,civil_status,notes,qr_token,art82_exempt&order=full_name.asc'
       );
       if (!rHR.ok) return res.status(500).json({ ok:false, error:'Supabase HR error: ' + rHR.status });
       const staffRows = Array.isArray(rHR.data) ? rHR.data : [];
