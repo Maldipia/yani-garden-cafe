@@ -99,6 +99,8 @@ export async function routeHR(action, body, auth, req, res) {
   // Worked-hours summary for the broken-time / phone-surrender model.
   // Sums all logged-in intervals; regular ≤ standard (8h), overtime beyond.
   if (action === 'hrGetDailyHours') {
+    const authDH = await checkAuth(['OWNER']);
+    if (!authDH.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     const { staffCode, date } = body;
     if (!staffCode) return res.status(400).json({ok:false,error:'staffCode required'});
     // Resolve staff id

@@ -54,6 +54,7 @@ const ITEM_TYPES = ['RAW_MATERIAL','PURCHASED_READY','PREP','PRODUCED','PORTIONA
 const ADJ_TYPES  = ['waste','adjust','transfer','count','return'];
 
 export async function routeInventory(action, body, auth, req, res) {
+  const { checkAuth } = auth;
   if (!INV_ACTIONS.has(action)) return false;
   const { checkAdminAuth } = auth;
 
@@ -73,6 +74,8 @@ export async function routeInventory(action, body, auth, req, res) {
   }
 
   if (action === 'invSetConfig') {
+    const auth_invSetConfig = await checkAuth(['OWNER','ADMIN']);
+    if (!auth_invSetConfig.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     if (!isOwner) return res.status(403).json({ ok: false, error: 'OWNER only' });
     const key = str(body.key, 60);
     const value = str(body.value, 200);
@@ -103,6 +106,8 @@ export async function routeInventory(action, body, auth, req, res) {
   }
 
   if (action === 'invGetRefData') {
+    const auth_invGetRefData = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    if (!auth_invGetRefData.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     const [u, l, s] = await Promise.all([
       supaFetch(`${SUPABASE_URL}/rest/v1/inv_units?is_active=eq.true&select=*&order=unit_type.asc,name.asc`),
       supaFetch(`${SUPABASE_URL}/rest/v1/inv_locations?is_active=eq.true&select=*&order=name.asc`),
@@ -127,6 +132,8 @@ export async function routeInventory(action, body, auth, req, res) {
   }
 
   if (action === 'invSaveItem') {
+    const auth_invSaveItem = await checkAuth(['OWNER','ADMIN']);
+    if (!auth_invSaveItem.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     const id = int(body.id);
     const name = str(body.name, 200);
     const itemType = body.itemType;
@@ -158,6 +165,8 @@ export async function routeInventory(action, body, auth, req, res) {
   }
 
   if (action === 'invArchiveItem') {
+    const auth_invArchiveItem = await checkAuth(['OWNER','ADMIN']);
+    if (!auth_invArchiveItem.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     if (!isOwner) return res.status(403).json({ ok: false, error: 'OWNER only' });
     const id = int(body.id);
     if (!id) return bad(res, 'id required');
@@ -179,6 +188,8 @@ export async function routeInventory(action, body, auth, req, res) {
   }
 
   if (action === 'invSaveRecipe') {
+    const auth_invSaveRecipe = await checkAuth(['OWNER','ADMIN']);
+    if (!auth_invSaveRecipe.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     const id = int(body.id);
     const itemId = int(body.itemId);
     const name = str(body.name, 200);
@@ -240,6 +251,8 @@ export async function routeInventory(action, body, auth, req, res) {
 
   // ══ STOCK ═════════════════════════════════════════════════════════════
   if (action === 'invReceiveStock') {
+    const auth_invReceiveStock = await checkAuth(['OWNER','ADMIN']);
+    if (!auth_invReceiveStock.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     const itemId = int(body.itemId), qty = num(body.qty), unitId = int(body.unitId);
     if (!itemId) return bad(res, 'itemId required');
     if (!(qty > 0)) return bad(res, 'qty must be > 0');
@@ -266,6 +279,8 @@ export async function routeInventory(action, body, auth, req, res) {
   }
 
   if (action === 'invListStockUnits') {
+    const auth_invListStockUnits = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    if (!auth_invListStockUnits.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     let url = `${SUPABASE_URL}/rest/v1/inv_stock_units?select=*,inv_items(item_code,name,item_type),` +
               `inv_units(name),inv_locations(name)`;
     if (int(body.itemId))    url += `&item_id=eq.${int(body.itemId)}`;
@@ -279,6 +294,8 @@ export async function routeInventory(action, body, auth, req, res) {
   }
 
   if (action === 'invStockUnitHistory') {
+    const auth_invStockUnitHistory = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    if (!auth_invStockUnitHistory.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     const id = int(body.stockUnitId);
     if (!id) return bad(res, 'stockUnitId required');
     const r = await supaFetch(
@@ -298,6 +315,8 @@ export async function routeInventory(action, body, auth, req, res) {
   }
 
   if (action === 'invAdjustStock') {
+    const auth_invAdjustStock = await checkAuth(['OWNER','ADMIN']);
+    if (!auth_invAdjustStock.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     const id = int(body.stockUnitId), type = body.adjustType;
     const qtyChange = num(body.qtyChange);
     if (!id) return bad(res, 'stockUnitId required');
@@ -312,6 +331,8 @@ export async function routeInventory(action, body, auth, req, res) {
   }
 
   if (action === 'invConsumeOverride') {
+    const auth_invConsumeOverride = await checkAuth(['OWNER','ADMIN']);
+    if (!auth_invConsumeOverride.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     const id = int(body.stockUnitId);
     if (!id) return bad(res, 'stockUnitId required');
     if (!(num(body.qty) > 0)) return bad(res, 'qty must be > 0');
@@ -328,6 +349,8 @@ export async function routeInventory(action, body, auth, req, res) {
 
   // ══ PRODUCTION ════════════════════════════════════════════════════════
   if (action === 'invProduce') {
+    const auth_invProduce = await checkAuth(['OWNER','ADMIN']);
+    if (!auth_invProduce.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     const recipeId = int(body.recipeId);
     const qty = num(body.qty) || 1;
     if (!recipeId) return bad(res, 'recipeId required');
@@ -356,6 +379,8 @@ export async function routeInventory(action, body, auth, req, res) {
 
   // ══ PORTIONING ════════════════════════════════════════════════════════
   if (action === 'invPortion') {
+    const auth_invPortion = await checkAuth(['OWNER','ADMIN']);
+    if (!auth_invPortion.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     const id = int(body.stockUnitId), portions = num(body.portions);
     if (!id) return bad(res, 'stockUnitId required');
     if (!(portions > 0)) return bad(res, 'portions must be > 0');
@@ -378,6 +403,8 @@ export async function routeInventory(action, body, auth, req, res) {
 
   // ══ SALE BRIDGE ═══════════════════════════════════════════════════════
   if (action === 'invConsumeOrder') {
+    const auth_invConsumeOrder = await checkAuth(['OWNER','ADMIN']);
+    if (!auth_invConsumeOrder.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     const orderId = str(body.orderId, 60);
     if (!orderId) return bad(res, 'orderId required');
     const r = await rpc('inv_consume_order', {
@@ -395,6 +422,8 @@ export async function routeInventory(action, body, auth, req, res) {
   }
 
   if (action === 'invSaveMenuMap') {
+    const auth_invSaveMenuMap = await checkAuth(['OWNER','ADMIN']);
+    if (!auth_invSaveMenuMap.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     const menuItemCode = str(body.menuItemCode, 60);
     const invItemId = int(body.invItemId);
     const sellForm = ['WHOLE','PORTION'].includes(body.sellForm) ? body.sellForm : 'WHOLE';
@@ -417,6 +446,8 @@ export async function routeInventory(action, body, auth, req, res) {
   // A purchase creates: (1) immutable inv_purchases line rows, (2) ONE financial
   // business_expenses summary row. It NEVER creates inventory stock.
   if (action === 'invSavePurchase') {
+    const auth_invSavePurchase = await checkAuth(['OWNER','ADMIN']);
+    if (!auth_invSavePurchase.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     const lines = Array.isArray(body.lines) ? body.lines : [];
     if (!lines.length) return bad(res, 'at least one purchase line required');
     for (const ln of lines) {
@@ -474,6 +505,8 @@ export async function routeInventory(action, body, auth, req, res) {
   }
 
   if (action === 'invGetPurchase') {
+    const auth_invGetPurchase = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    if (!auth_invGetPurchase.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     const group = str(body.purchaseGroup, 60);
     if (!group) return bad(res, 'purchaseGroup required');
     const lr = await supaFetch(`${SUPABASE_URL}/rest/v1/inv_purchases?purchase_group=eq.${encodeURIComponent(group)}&select=*&order=id.asc`);
@@ -505,6 +538,8 @@ export async function routeInventory(action, body, auth, req, res) {
 
   // ══ REPORTS ═══════════════════════════════════════════════════════════
   if (action === 'invDashboard') {
+    const auth_invDashboard = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    if (!auth_invDashboard.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     const [items, units, low, exp, tx] = await Promise.all([
       supaFetch(`${SUPABASE_URL}/rest/v1/inv_items?is_active=eq.true&select=id,item_type`),
       supaFetch(`${SUPABASE_URL}/rest/v1/inv_stock_units?quantity_remaining=gt.0&select=item_id,quantity_remaining,unit_cost,expiry_date`),
@@ -527,6 +562,8 @@ export async function routeInventory(action, body, auth, req, res) {
   }
 
   if (action === 'invLowStock') {
+    const auth_invLowStock = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    if (!auth_invLowStock.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     const r = await supaFetch(
       `${SUPABASE_URL}/rest/v1/inv_v_consumption_queue?select=*&order=quantity_remaining.asc&limit=${Math.min(int(body.limit) || 50, 200)}`
     );
@@ -546,6 +583,8 @@ export async function routeInventory(action, body, auth, req, res) {
   }
 
   if (action === 'invTransactions') {
+    const auth_invTransactions = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    if (!auth_invTransactions.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     let url = `${SUPABASE_URL}/rest/v1/inv_stock_transactions?select=*,inv_stock_units(stock_unit_code,item_id)`;
     if (body.transactionType) url += `&transaction_type=eq.${q(body.transactionType)}`;
     if (body.dateFrom)        url += `&performed_at=gte.${q(body.dateFrom)}`;
