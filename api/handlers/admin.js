@@ -170,6 +170,11 @@ export async function routeAdmin(action, body, auth, req, res) {
   }
 
   if (action === 'getHRStaff') {
+    // SECURITY: this returns the full staff master — rates, mobile numbers,
+    // dates of birth, payout details and the clock-in QR tokens. It was
+    // reachable with no credentials at all.
+    const authGS = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    if (!authGS.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     try {
       const TENANT_HR = '11111111-1111-4111-8111-111111111111';
       const rHR = await supaFetch(
