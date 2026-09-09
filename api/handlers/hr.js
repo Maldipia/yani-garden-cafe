@@ -95,6 +95,21 @@ export async function routeHR(action, body, auth, req, res) {
     return res.status(200).json({ok:true, state, lastEvent:lastType, lastEventTime:last?.event_time||null});
   }
 
+  // ── hrDailySummary — per-day worked hours for the Clock-in tab ──────────
+  // The tab listed raw events and never showed how long anyone worked.
+  if (action === 'hrDailySummary') {
+    const authDS = await checkAuth(['OWNER']);
+    if (!authDS.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
+    if (!body.staffId) return res.status(400).json({ok:false,error:'staffId required'});
+    const today = new Date(Date.now() + 8*3600*1000).toISOString().slice(0,10);
+    const days  = Math.min(parseInt(body.days) || 14, 60);
+    const from  = new Date(Date.now() + 8*3600*1000 - days*86400000).toISOString().slice(0,10);
+    const r = await supaFetch(SUPABASE_URL+'/rest/v1/rpc/hr_daily_summary',
+      {method:'POST',body:JSON.stringify({p_staff_id:body.staffId,p_from:from,p_to:today})});
+    if (!r.ok) return res.status(500).json({ok:false,error:'Could not build the summary'});
+    return res.status(200).json({ok:true, from, to:today, days: Array.isArray(r.data)?r.data:[]});
+  }
+
   // ── hrGetDailyHours ─────────────────────────────────────────────────────
   // Worked-hours summary for the broken-time / phone-surrender model.
   // Sums all logged-in intervals; regular ≤ standard (8h), overtime beyond.

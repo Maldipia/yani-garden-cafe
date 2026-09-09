@@ -547,16 +547,69 @@ function openFileLeaveModal(staffId) {
 }
 
 // ── CLOCK-IN TAB ───────────────────────────────────────────────────────────
+
+// Worked hours per day. The events list alone never answered the only question
+// that matters — how long did this person actually work — so a 10-hour day
+// looked identical to a 2-hour one.
+function _hrWorkedHoursTable(days){
+  if(!days.length) return '<div class="hr-empty-sm">No attendance in the last 14 days.</div>';
+  const n=v=>parseFloat(v||0);
+  let tw=0, tot=0, tut=0, tbr=0;
+  const rows=days.slice().reverse().map(function(d){
+    tw+=n(d.worked_hours); tot+=n(d.ot_hours); tut+=n(d.undertime_hours); tbr+=n(d.break_mins);
+    const open = d.is_open;
+    return `<tr style="border-bottom:1px solid var(--mist-light,#eef1ec)${open?';background:#f0fdf4':''}">
+      <td style="padding:7px 9px;white-space:nowrap;font-weight:600">${esc(d.work_date)}</td>
+      <td style="padding:7px 9px;white-space:nowrap">${esc(d.first_in||'—')}</td>
+      <td style="padding:7px 9px;white-space:nowrap;font-size:.68rem;color:#6b7280">${
+        d.break_detail ? esc(d.break_detail)+' ('+Math.round(n(d.break_mins))+'m)' : '—'}</td>
+      <td style="padding:7px 9px;white-space:nowrap">${
+        open ? '<span style="color:#15803d;font-weight:700">still in</span>' : esc(d.last_out||'—')}</td>
+      <td style="padding:7px 9px;text-align:right;font-weight:800;font-size:.82rem">${n(d.worked_hours).toFixed(2)}</td>
+      <td style="padding:7px 9px;text-align:right${n(d.ot_hours)>0?';color:#1d4ed8;font-weight:700':';color:#9ca3af'}">${
+        n(d.ot_hours)>0?n(d.ot_hours).toFixed(2):'—'}</td>
+      <td style="padding:7px 9px;text-align:right${n(d.undertime_hours)>0?';color:#b45309;font-weight:700':';color:#9ca3af'}">${
+        n(d.undertime_hours)>0?n(d.undertime_hours).toFixed(2):'—'}</td>
+      <td style="padding:7px 9px;font-size:.62rem;color:#9ca3af">${esc(d.sources||'')}</td>
+    </tr>`;
+  }).join('');
+  return `<div style="overflow-x:auto;border:1px solid var(--mist,#e2e5df);border-radius:8px">
+    <table style="width:100%;border-collapse:collapse;font-size:.74rem;white-space:nowrap">
+      <thead><tr style="background:var(--mist-light,#f1f5f9);text-align:left">
+        <th style="padding:6px 9px">DATE</th><th style="padding:6px 9px">IN</th>
+        <th style="padding:6px 9px">BREAKS</th><th style="padding:6px 9px">OUT</th>
+        <th style="padding:6px 9px;text-align:right">WORKED</th>
+        <th style="padding:6px 9px;text-align:right">OT</th>
+        <th style="padding:6px 9px;text-align:right">UT</th>
+        <th style="padding:6px 9px">SRC</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr style="border-top:2px solid #d8ddd5;font-weight:800;background:#fafbfa">
+        <td colspan="3" style="padding:8px 9px">${days.length} day(s) · ${Math.round(tbr)}m break</td>
+        <td style="padding:8px 9px;text-align:right;font-size:.62rem;color:#6b7280">total</td>
+        <td style="padding:8px 9px;text-align:right;font-size:.85rem">${tw.toFixed(2)}</td>
+        <td style="padding:8px 9px;text-align:right;color:#1d4ed8">${tot>0?tot.toFixed(2):'—'}</td>
+        <td style="padding:8px 9px;text-align:right;color:#b45309">${tut>0?tut.toFixed(2):'—'}</td>
+        <td></td></tr></tfoot>
+    </table></div>`;
+}
+
 async function loadClockTab(s,tc) {
-  const r=await api('getHRTimeLogs',{userId:currentUser?.userId,staffId:s.id,limit:14});
+  const [r, sum] = await Promise.all([
+    api('getHRTimeLogs',{userId:currentUser?.userId,staffId:s.id,limit:14}),
+    api('hrDailySummary',{userId:currentUser?.userId,staffId:s.id,days:14}),
+  ]);
   const logs=r.logs||[];
+  const days=(sum && sum.days)||[];
   const EVENT_COLOR={CLOCK_IN:'#dcfce7',CLOCK_OUT:'#fee2e2',BREAK_START:'#fef9c3',BREAK_END:'#fef3c7',BROKEN_TIME_START:'#e0f2fe',BROKEN_TIME_END:'#dbeafe'};
   tc.innerHTML=`
     <div class="hr-section">
       <div class="hr-section-hdr">
-        <div class="hr-section-title">⏱ Recent Clock Events</div>
+        <div class="hr-section-title">⏱ Worked Hours</div>
         <button class="hr-action-btn hr-btn-primary" onclick="openManualClockModal('${s.id}')">+ Manual Entry</button>
       </div>
+      ${_hrWorkedHoursTable(days)}
+      <div class="hr-section-title" style="margin-top:18px">🕐 Clock Events</div>
       ${logs.length===0
         ?'<div class="hr-empty-sm">No clock-in records yet. Staff must clock in via the employee portal or manual entry.</div>'
         :`<div class="hr-list-table">
