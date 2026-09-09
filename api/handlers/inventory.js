@@ -502,6 +502,7 @@ export async function routeInventory(action, body, auth, req, res) {
     const ref = str(body.referenceNo, 100);
     const pay = str(body.paymentMethod, 60);
     const pdate = body.purchaseDate || new Date().toISOString().split('T')[0];
+    const entrySource = body.entrySource === 'SCANNED' ? 'SCANNED' : 'MANUAL';
     let grand = 0;
     const rows = lines.map(ln => {
       const qty = num(ln.quantity);
@@ -533,6 +534,7 @@ export async function routeInventory(action, body, auth, req, res) {
         amount: grand, category, paid_via: pay, reference_no: ref,
         store: supplierName || store, purchase_group: group,
         added_by: actor, added_by_role: (isOwner ? 'OWNER' : 'ADMIN'), is_paid: true,
+        entry_source: entrySource,
       });
     } catch (_) {}
     return res.status(200).json({ ok: true, purchase_group: group, lines: lines.length, total: grand });

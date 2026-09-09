@@ -50,7 +50,7 @@ function _expRecords(){
   var groups={}, order=[];
   (_bizExpenses||[]).forEach(function(e){
     var key = e.purchase_group || e.expense_group_id || ('_solo_'+e.id);
-    if(!groups[key]){ groups[key]={key:key, pgroup:e.purchase_group||null, lines:[], supplier:e.store, date:e.expense_date, category:e.category, paid:e.paid_via, ref:e.reference_no, notes:e.notes, desc:e.description}; order.push(key); }
+    if(!groups[key]){ groups[key]={key:key, pgroup:e.purchase_group||null, lines:[], supplier:e.store, date:e.expense_date, category:e.category, paid:e.paid_via, ref:e.reference_no, notes:e.notes, desc:e.description, source:e.entry_source||null}; order.push(key); }
     groups[key].lines.push(e);
   });
   return order.map(function(k){ var g=groups[k];
@@ -147,8 +147,8 @@ function _expRenderTable(){
   var h='<div style="background:#fff;border:1px solid var(--mist);border-radius:12px;overflow:auto;max-height:calc(100vh - 300px)">';
   h+='<table style="width:100%;border-collapse:collapse;font-size:.76rem;min-width:1000px">';
   h+='<thead><tr style="background:var(--forest-deep)">';
-  ['Date','Supplier / Store','Description','Qty','Unit Price','Category','Amount','Inventory','Status'].forEach(function(c,i){
-    h+='<th style="position:sticky;top:0;z-index:2;background:var(--forest-deep);text-align:'+(i===6?'right':'left')+';padding:9px 12px;color:#fff;font-weight:700;font-size:.64rem;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap">'+c+'</th>'; });
+  ['Date','Source','Supplier / Store','Description','Qty','Unit Price','Category','Amount','Inventory','Status'].forEach(function(c,i){
+    h+='<th style="position:sticky;top:0;z-index:2;background:var(--forest-deep);text-align:'+(i===7?'right':'left')+';padding:9px 12px;color:#fff;font-weight:700;font-size:.64rem;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap">'+c+'</th>'; });
   h+='</tr></thead><tbody>';
   recs.forEach(function(g,idx){
     var bg=idx%2?'var(--mist-light)':'#fff';
@@ -185,6 +185,7 @@ function _expRenderTable(){
     var status = !g.isPurchase ? '<span style="font-size:.62rem;font-weight:700;color:var(--timber);background:var(--mist-light);padding:2px 8px;border-radius:5px">N/A</span>' : _expStatusBadge(g.recStatus);
     h+='<tr onclick="_expOpenDetail(\''+g.key+'\')" title="'+(_miss.length?'Missing: '+_miss.join(', '):'')+'" style="cursor:pointer;background:'+bg+';border-left:3px solid '+(_miss.length?EXP_AMBER:'transparent')+';border-top:1px solid var(--mist-light)" onmouseover="this.style.background=\'#eef5f0\'" onmouseout="this.style.background=\''+bg+'\'">'
       +'<td style="padding:9px 12px;color:var(--forest-deep);font-weight:600;white-space:nowrap">'+_expDate(g.date)+'</td>'
+      +'<td style="padding:9px 12px;white-space:nowrap">'+_expSourceBadge(g.source)+'</td>'
       +'<td style="padding:9px 12px;color:var(--forest-deep);white-space:nowrap">'+(g.supplier?escH(g.supplier):_expDash(true))+'</td>'
       +'<td style="padding:9px 12px;color:var(--forest-deep)">'+desc+badge+'</td>'
       +'<td style="padding:9px 12px;font-size:.74rem;white-space:nowrap">'+qtyCell+'</td>'
@@ -224,6 +225,16 @@ function _expStatusBadge(st){
   var c=m[st]||m.NOT_RECEIVED;
   return '<span style="font-size:.62rem;font-weight:700;color:'+c.fg+';background:'+c.bg+';padding:2px 8px;border-radius:5px">'+c.t+'</span>';
 }
+
+// How the record was created. NULL means it predates this column — shown as a
+// neutral dash rather than claiming it was typed, which we cannot know.
+function _expSourceBadge(src){
+  if(src==='SCANNED') return '<span title="Read from a receipt photo by AI — figures should have been reviewed before saving" style="font-size:.6rem;font-weight:700;padding:2px 7px;border-radius:20px;background:#ede9fe;color:#6d28d9">📷 Scanned</span>';
+  if(src==='MANUAL')  return '<span title="Typed in by hand" style="font-size:.6rem;font-weight:700;padding:2px 7px;border-radius:20px;background:#f1f5f9;color:#475569">✎ Manual</span>';
+  if(src==='IMPORTED')return '<span title="Imported from a file or another system" style="font-size:.6rem;font-weight:700;padding:2px 7px;border-radius:20px;background:#e0f2fe;color:#0369a1">↧ Imported</span>';
+  return '<span title="Recorded before entry source was tracked" style="color:#cbd5e1">—</span>';
+}
+
 function _expDate(d){ if(!d) return '—'; try{ var x=new Date(d); return MONTHS[x.getMonth()]+' '+x.getDate(); }catch(e){ return String(d).substring(0,10);} }
 
 // ── DETAIL DRAWERS ──────────────────────────────────────────────────────────
@@ -335,6 +346,7 @@ function _expDateFull(d){ if(!d)return '—'; try{ var x=new Date(d); return MON
 function _expFmt(n){ var x=parseFloat(n); if(isNaN(x))return n; return x%1===0?String(x):x.toFixed(2).replace(/\.?0+$/,''); }
 
 // ── RECORD FORM (Purchase / General Expense toggle) ─────────────────────────
+var _expFromScan=false;
 var _expRecMode='purchase';
 function _expModal(inner){
   var m=document.createElement('div'); m.id='expModal';
@@ -386,7 +398,9 @@ function _expSel(id,opts,onch){ return '<select id="'+id+'"'+(onch?' onchange="'
 
 function _expVal(id){ var e=document.getElementById(id); return e ? String(e.value||'').trim() : ''; }
 function _expPaidOpts(isPaid){ return '<option value="PAID"'+(isPaid!==false?' selected':'')+'>Paid</option><option value="UNPAID"'+(isPaid===false?' selected':'')+'>Unpaid / Due</option>'; }
-function _expOpenRecord(){ _expRecMode='purchase'; _expLines=[{}]; _expModal(_expRecordShell()); _expRenderLines(); }
+function _expOpenRecord(){
+  _expFromScan = false;   /* typed by hand unless a scan sets it */
+  _expRecMode='purchase'; _expLines=[{}]; _expModal(_expRecordShell()); _expRenderLines(); }
 function _expRecordShell(){
   var tab=function(m,label){ var on=_expRecMode===m; return '<button onclick="_expSetMode(\''+m+'\')" style="flex:1;padding:8px;font-size:.8rem;font-weight:700;border:none;cursor:pointer;border-radius:8px;'+(on?'background:var(--forest);color:#fff':'background:var(--mist-light);color:var(--timber)')+'">'+label+'</button>'; };
   return '<div style="display:flex;gap:6px;margin-bottom:14px">'+tab('purchase','Purchase')+tab('general','General Expense')+'</div>'
@@ -480,6 +494,7 @@ async function _expSavePurchase(){
       return { itemId:match?match.id:null, itemName:name, quantity:parseFloat(l.qty), purchaseUnitId:l.unitId?+l.unitId:null, purchaseUnit:uObj?uObj.name:'', unitPrice:parseFloat(l.unitPrice),
         baseUnitId:norm.baseUnitId, baseUnit:norm.baseUnit, baseQuantity:norm.baseQuantity };
     }) };
+  payload.entrySource = _expFromScan ? 'SCANNED' : 'MANUAL';
   var r=await api('invSavePurchase', payload);
   // The server refuses a purchase that looks already recorded. Ask rather than
   // silently creating a second copy — this receipt was saved three times.
@@ -534,7 +549,8 @@ async function _expSaveGeneral(){
   if(!title){ showToast('Enter a title','error'); return; }
   if(!(amt>0)){ showToast('Enter amount','error'); return; }
   var r=await api('addBusinessExpense',{ description:title, amount:amt, category:cat, paidVia:pay, referenceNo:ref, notes:notes, expenseDate:date,
-    store:store, qty:qty, unit:unit, unitPrice:up, sizePerUnit:sz, isPaid:paid });
+    store:store, qty:qty, unit:unit, unitPrice:up, sizePerUnit:sz, isPaid:paid,
+    entrySource: _expFromScan ? 'SCANNED' : 'MANUAL' });
   if(r&&r.ok){ showToast('Expense saved ✅'); _expCloseModal(); await initExpenses(); }
   else showToast('Failed: '+((r&&r.error)||'Unknown'),'error');
 }
@@ -733,6 +749,7 @@ function _expScanReceipt(){
 function _expUnitIdByName(n){ if(!n) return ''; var u=_expUnits.filter(function(x){return x.name.toLowerCase()===String(n).toLowerCase();})[0]; return u?u.id:''; }
 function _expSetSelect(id,val){ var s=document.getElementById(id); if(!s||val==null)return; var v=String(val).toLowerCase(); for(var i=0;i<s.options.length;i++){ if(s.options[i].value.toLowerCase()===v||s.options[i].text.toLowerCase()===v){ s.selectedIndex=i; return; } } }
 function _expOpenFromScan(d){
+  _expFromScan = true;
   var isPurchase = (d.kind!=='expense') && Array.isArray(d.lines) && d.lines.length>0;
   if(isPurchase){
     _expRecMode='purchase';

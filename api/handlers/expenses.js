@@ -64,6 +64,7 @@ export async function routeExpenses(action, body, auth, req, res) {
       notes: notes ? String(notes).trim().substring(0,500) : null,
       expense_date: expenseDate || new Date().toISOString().split('T')[0],
       is_paid: isPaid !== false,
+      entry_source: body.entrySource === 'SCANNED' ? 'SCANNED' : 'MANUAL',
       qty: qty ? String(qty).trim().substring(0,100) : null,
       store: store ? String(store).trim().substring(0,120) : null,
       unit: unit ? String(unit).trim().substring(0,40) : null,
