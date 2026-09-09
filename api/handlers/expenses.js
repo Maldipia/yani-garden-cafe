@@ -247,10 +247,13 @@ export async function routeExpenses(action, body, auth, req, res) {
     // a useful error.
     // Google retires model names; 2.5-flash and 2.0-flash both now return 404
     // pointing at gemini-3.6-flash. -latest is kept as a moving fallback.
-    const MODELS = ['gemini-3.6-flash', 'gemini-flash-latest', 'gemini-3.6'];
-    const PER_CALL_MS = 12000;
+    // gemini-3.6 (no suffix) is not a generateContent model — dropped.
+    // Vision inference on a receipt regularly needs more than 12s, which is why
+    // both valid models were being aborted before they could answer.
+    const MODELS = ['gemini-3.6-flash', 'gemini-flash-latest'];
+    const PER_CALL_MS = 24000;            // function limit is 60s (vercel.json)
     const started = Date.now();
-    const BUDGET_MS = 40000;              // leave headroom under the function limit
+    const BUDGET_MS = 50000;              // leave headroom to return a response
     const diag = [];
 
     for (const model of MODELS) {
