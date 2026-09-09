@@ -83,7 +83,10 @@ function renderExpensesView(){
     document.head.appendChild(stEl); }
   var recs=_expRecords();
   var totalExp=recs.reduce(function(s,g){return s+g.total;},0);
-  var purchTot=recs.filter(function(g){return g.isPurchase;}).reduce(function(s,g){return s+g.total;},0);
+  // A utility bill entered with line items (e.g. a Lazada purchase categorised
+  // as Utilities) was counted in BOTH cards, so Purchases equalled the grand
+  // total and the two cards did not add up.
+  var purchTot=recs.filter(function(g){return g.isPurchase && !_expIsUtil(g.category);}).reduce(function(s,g){return s+g.total;},0);
   var utilTot=recs.filter(function(g){return _expIsUtil(g.category);}).reduce(function(s,g){return s+g.total;},0);
   var period=MONTHS[_bizMonth-1]+' '+_bizYear;
 
@@ -147,8 +150,8 @@ function _expRenderTable(){
   var h='<div style="background:#fff;border:1px solid var(--mist);border-radius:12px;overflow:auto;max-height:calc(100vh - 300px)">';
   h+='<table style="width:100%;border-collapse:collapse;font-size:.76rem;min-width:1000px">';
   h+='<thead><tr style="background:var(--forest-deep)">';
-  ['Date','Source','Supplier / Store','Description','Qty','Unit Price','Category','Amount','Inventory','Status'].forEach(function(c,i){
-    h+='<th style="position:sticky;top:0;z-index:2;background:var(--forest-deep);text-align:'+(i===7?'right':'left')+';padding:9px 12px;color:#fff;font-weight:700;font-size:.64rem;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap">'+c+'</th>'; });
+  ['Date','Supplier / Store','Description','Qty','Unit Price','Category','Amount','Status','Source'].forEach(function(c,i){
+    h+='<th style="position:sticky;top:0;z-index:2;background:var(--forest-deep);text-align:'+(i===6?'right':'left')+';padding:9px 12px;color:#fff;font-weight:700;font-size:.64rem;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap">'+c+'</th>'; });
   h+='</tr></thead><tbody>';
   recs.forEach(function(g,idx){
     var bg=idx%2?'var(--mist-light)':'#fff';
@@ -166,7 +169,7 @@ function _expRenderTable(){
     var _pack=_expPackCount(_l0.description);
     var _perPc=(_pack && _up!=null && _packUnits.indexOf((_u||'').toLowerCase())>-1) ? Math.round((_up/_pack)*100)/100 : null;
     var _totalPcs=(_pack && _q) ? _expFmt(parseFloat(_l0.qty)*_pack) : null;
-    var qtyCell = _multi ? '<span style="color:var(--timber)">'+((g.lineCount||g.lines.length)+' lines')+'</span>'
+    var qtyCell = _multi ? '<span style="color:var(--timber)">'+(function(n){return n+' line'+(n===1?'':'s');})(g.lineCount||g.lines.length)+'</span>'
       : (_q ? '<span style="font-weight:600;color:var(--forest-deep)">'+_q+(_u?' '+escH(_u):'')+'</span>'+(_totalPcs?'<div style="font-size:.64rem;color:var(--timber)">'+_totalPcs+' pcs</div>':'') : _expDash(true));
     var upCell = _multi ? '<span style="color:var(--timber)">—</span>'
       : (_up!=null ? '<span style="color:var(--forest-deep)">'+peso(_up)+(_u?' <span style="color:var(--timber)">/ '+escH(_u)+'</span>':'')+'</span>'+(_perPc!=null?'<div style="font-size:.64rem;color:var(--gold);font-weight:700">'+peso(_perPc)+' / pc</div>':'') : _expDash(true));
@@ -185,15 +188,14 @@ function _expRenderTable(){
     var status = !g.isPurchase ? '<span style="font-size:.62rem;font-weight:700;color:var(--timber);background:var(--mist-light);padding:2px 8px;border-radius:5px">N/A</span>' : _expStatusBadge(g.recStatus);
     h+='<tr onclick="_expOpenDetail(\''+g.key+'\')" title="'+(_miss.length?'Missing: '+_miss.join(', '):'')+'" style="cursor:pointer;background:'+bg+';border-left:3px solid '+(_miss.length?EXP_AMBER:'transparent')+';border-top:1px solid var(--mist-light)" onmouseover="this.style.background=\'#eef5f0\'" onmouseout="this.style.background=\''+bg+'\'">'
       +'<td style="padding:9px 12px;color:var(--forest-deep);font-weight:600;white-space:nowrap">'+_expDate(g.date)+'</td>'
-      +'<td style="padding:9px 12px;white-space:nowrap">'+_expSourceBadge(g.source)+'</td>'
       +'<td style="padding:9px 12px;color:var(--forest-deep);white-space:nowrap">'+(g.supplier?escH(g.supplier):_expDash(true))+'</td>'
       +'<td style="padding:9px 12px;color:var(--forest-deep)">'+desc+badge+'</td>'
       +'<td style="padding:9px 12px;font-size:.74rem;white-space:nowrap">'+qtyCell+'</td>'
       +'<td style="padding:9px 12px;font-size:.74rem;white-space:nowrap">'+upCell+'</td>'
       +'<td style="padding:9px 12px;color:var(--timber);white-space:nowrap">'+escH(g.category||'—')+'</td>'
       +'<td style="padding:9px 12px;text-align:right;font-weight:700;color:#dc2626;white-space:nowrap">'+peso(g.total)+'</td>'
-      +'<td style="padding:9px 12px;font-size:.72rem;white-space:nowrap">'+inv+'</td>'
-      +'<td style="padding:9px 12px;white-space:nowrap">'+status+'</td></tr>';
+      +'<td style="padding:9px 12px;white-space:nowrap">'+status+'</td>'
+      +'<td style="padding:9px 12px;white-space:nowrap">'+_expSourceBadge(g.source)+'</td></tr>';
   });
   h+='</tbody></table></div>';
   var _incomplete=recs.filter(function(x){return _expMissing(x).length;}).length;
