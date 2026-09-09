@@ -554,43 +554,51 @@ function openFileLeaveModal(staffId) {
 function _hrWorkedHoursTable(days){
   if(!days.length) return '<div class="hr-empty-sm">No attendance in the last 14 days.</div>';
   const n=v=>parseFloat(v||0);
+  const hm=v=>{ const x=n(v); if(!x) return null;
+    const h=Math.floor(x), m=Math.round((x-h)*60);
+    return (h?h+'h ':'')+(m?m+'m':(h?'':'0m')); };
   let tw=0, tot=0, tut=0, tbr=0;
   const rows=days.slice().reverse().map(function(d){
     tw+=n(d.worked_hours); tot+=n(d.ot_hours); tut+=n(d.undertime_hours); tbr+=n(d.break_mins);
-    const open = d.is_open;
+    const open=d.is_open;
+    const dt=new Date(d.work_date+'T00:00:00');
+    const nice=dt.toLocaleDateString('en-PH',{weekday:'short',month:'short',day:'numeric'});
     return `<tr style="border-bottom:1px solid var(--mist-light,#eef1ec)${open?';background:#f0fdf4':''}">
-      <td style="padding:7px 9px;white-space:nowrap;font-weight:600">${esc(d.work_date)}</td>
-      <td style="padding:7px 9px;white-space:nowrap">${esc(d.first_in||'—')}</td>
-      <td style="padding:7px 9px;white-space:nowrap;font-size:.68rem;color:#6b7280">${
-        d.break_detail ? esc(d.break_detail)+' ('+Math.round(n(d.break_mins))+'m)' : '—'}</td>
-      <td style="padding:7px 9px;white-space:nowrap">${
-        open ? '<span style="color:#15803d;font-weight:700">still in</span>' : esc(d.last_out||'—')}</td>
-      <td style="padding:7px 9px;text-align:right;font-weight:800;font-size:.82rem">${n(d.worked_hours).toFixed(2)}</td>
-      <td style="padding:7px 9px;text-align:right${n(d.ot_hours)>0?';color:#1d4ed8;font-weight:700':';color:#9ca3af'}">${
-        n(d.ot_hours)>0?n(d.ot_hours).toFixed(2):'—'}</td>
-      <td style="padding:7px 9px;text-align:right${n(d.undertime_hours)>0?';color:#b45309;font-weight:700':';color:#9ca3af'}">${
-        n(d.undertime_hours)>0?n(d.undertime_hours).toFixed(2):'—'}</td>
-      <td style="padding:7px 9px;font-size:.62rem;color:#9ca3af">${esc(d.sources||'')}</td>
+      <td style="padding:9px 10px;white-space:nowrap;font-weight:600">${esc(nice)}</td>
+      <td style="padding:9px 10px;white-space:nowrap">${esc(d.first_in||'—')}</td>
+      <td style="padding:9px 10px;white-space:nowrap">${
+        open?'<span style="color:#15803d;font-weight:700">still in</span>':esc(d.last_out||'—')}</td>
+      <td style="padding:9px 10px;text-align:right;white-space:nowrap">
+        <span style="font-weight:800;font-size:.86rem">${d.worked_hm||hm(d.worked_hours)||'0m'}</span>
+        <span style="display:block;font-size:.6rem;color:#9ca3af">${n(d.worked_hours).toFixed(2)} hrs</span></td>
+      <td style="padding:9px 10px;text-align:right;white-space:nowrap${n(d.ot_hours)>0?';color:#1d4ed8;font-weight:700':';color:#cbd5e1'}">${
+        n(d.ot_hours)>0?(d.ot_hm||hm(d.ot_hours)):'—'}</td>
+      <td style="padding:9px 10px;text-align:right;white-space:nowrap${n(d.undertime_hours)>0?';color:#b45309;font-weight:700':';color:#cbd5e1'}">${
+        n(d.undertime_hours)>0?(d.undertime_hm||hm(d.undertime_hours)):'—'}</td>
+      <td style="padding:9px 10px;font-size:.68rem;color:#6b7280;white-space:nowrap">${
+        d.break_detail?esc(d.break_detail)+' <b>('+Math.round(n(d.break_mins))+'m)</b>':'—'}</td>
     </tr>`;
   }).join('');
+  const many = days.length > 1;
   return `<div style="overflow-x:auto;border:1px solid var(--mist,#e2e5df);border-radius:8px">
-    <table style="width:100%;border-collapse:collapse;font-size:.74rem;white-space:nowrap">
-      <thead><tr style="background:var(--mist-light,#f1f5f9);text-align:left">
-        <th style="padding:6px 9px">DATE</th><th style="padding:6px 9px">IN</th>
-        <th style="padding:6px 9px">BREAKS</th><th style="padding:6px 9px">OUT</th>
-        <th style="padding:6px 9px;text-align:right">WORKED</th>
-        <th style="padding:6px 9px;text-align:right">OT</th>
-        <th style="padding:6px 9px;text-align:right">UT</th>
-        <th style="padding:6px 9px">SRC</th>
+    <table style="width:100%;border-collapse:collapse;font-size:.76rem;white-space:nowrap">
+      <thead><tr style="background:var(--mist-light,#f1f5f9);text-align:left;color:#475569">
+        <th style="padding:7px 10px">DAY</th>
+        <th style="padding:7px 10px">CLOCK IN</th>
+        <th style="padding:7px 10px">CLOCK OUT</th>
+        <th style="padding:7px 10px;text-align:right">WORKED</th>
+        <th style="padding:7px 10px;text-align:right" title="Beyond the standard day">OVERTIME</th>
+        <th style="padding:7px 10px;text-align:right" title="Short of the standard day">SHORT</th>
+        <th style="padding:7px 10px">BREAKS (unpaid)</th>
       </tr></thead>
       <tbody>${rows}</tbody>
-      <tfoot><tr style="border-top:2px solid #d8ddd5;font-weight:800;background:#fafbfa">
-        <td colspan="3" style="padding:8px 9px">${days.length} day(s) · ${Math.round(tbr)}m break</td>
-        <td style="padding:8px 9px;text-align:right;font-size:.62rem;color:#6b7280">total</td>
-        <td style="padding:8px 9px;text-align:right;font-size:.85rem">${tw.toFixed(2)}</td>
-        <td style="padding:8px 9px;text-align:right;color:#1d4ed8">${tot>0?tot.toFixed(2):'—'}</td>
-        <td style="padding:8px 9px;text-align:right;color:#b45309">${tut>0?tut.toFixed(2):'—'}</td>
-        <td></td></tr></tfoot>
+      ${many?`<tfoot><tr style="border-top:2px solid #d8ddd5;font-weight:800;background:#fafbfa">
+        <td colspan="3" style="padding:9px 10px">${days.length} days</td>
+        <td style="padding:9px 10px;text-align:right">${hm(tw)||'0m'}</td>
+        <td style="padding:9px 10px;text-align:right;color:#1d4ed8">${tot>0?hm(tot):'—'}</td>
+        <td style="padding:9px 10px;text-align:right;color:#b45309">${tut>0?hm(tut):'—'}</td>
+        <td style="padding:9px 10px;color:#6b7280">${Math.round(tbr)}m total</td>
+      </tr></tfoot>`:''}
     </table></div>`;
 }
 
@@ -609,7 +617,9 @@ async function loadClockTab(s,tc) {
         <button class="hr-action-btn hr-btn-primary" onclick="openManualClockModal('${s.id}')">+ Manual Entry</button>
       </div>
       ${_hrWorkedHoursTable(days)}
-      <div class="hr-section-title" style="margin-top:18px">🕐 Clock Events</div>
+      <details style="margin-top:16px">
+        <summary style="cursor:pointer;font-size:.75rem;font-weight:700;color:var(--forest-deep,#1f3d2b);padding:4px 0">
+          🕐 Show every clock event (${logs.length})</summary>
       ${logs.length===0
         ?'<div class="hr-empty-sm">No clock-in records yet. Staff must clock in via the employee portal or manual entry.</div>'
         :`<div class="hr-list-table">
@@ -629,6 +639,7 @@ async function loadClockTab(s,tc) {
           }).join('')}
         </div>`
       }
+      </details>
     </div>`;
 }
 

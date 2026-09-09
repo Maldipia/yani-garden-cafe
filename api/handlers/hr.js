@@ -110,7 +110,23 @@ export async function routeHR(action, body, auth, req, res) {
     const r = await supaFetch(SUPABASE_URL+'/rest/v1/rpc/hr_daily_summary',
       {method:'POST',body:JSON.stringify({p_staff_id:body.staffId,p_from:from,p_to:today})});
     if (!r.ok) return res.status(500).json({ok:false,error:'Could not build the summary'});
-    return res.status(200).json({ok:true, from, to:today, days: Array.isArray(r.data)?r.data:[]});
+    const days2 = (Array.isArray(r.data) ? r.data : []).map(d => {
+      // 10.19 decimal hours is 10h 11m, not 10h 19m — the single easiest
+      // number on this screen to misread. Send both: hm for people, decimal
+      // for payroll.
+      const hm = v => {
+        const n = parseFloat(v || 0);
+        if (!n) return null;
+        const h = Math.floor(n), m = Math.round((n - h) * 60);
+        return (h ? h + 'h ' : '') + (m ? m + 'm' : (h ? '' : '0m'));
+      };
+      return { ...d,
+        worked_hm:    hm(d.worked_hours),
+        ot_hm:        hm(d.ot_hours),
+        undertime_hm: hm(d.undertime_hours),
+        break_hm:     hm((parseFloat(d.break_mins) || 0) / 60) };
+    });
+    return res.status(200).json({ok:true, from, to:today, days: days2});
   }
 
   // ── hrGetDailyHours ─────────────────────────────────────────────────────
