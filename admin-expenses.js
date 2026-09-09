@@ -150,7 +150,7 @@ function _expRenderTable(){
   var h='<div style="background:#fff;border:1px solid var(--mist);border-radius:12px;overflow:auto;max-height:calc(100vh - 300px)">';
   h+='<table style="width:100%;border-collapse:collapse;font-size:.76rem;min-width:1000px">';
   h+='<thead><tr style="background:var(--forest-deep)">';
-  ['Date','Supplier / Store','Description','Qty','Unit Price','Category','Amount','Status','Source'].forEach(function(c,i){
+  ['Date','Supplier / Store','Description','Ref / OR No.','Unit Price','Category','Amount','Status','Source'].forEach(function(c,i){
     h+='<th style="position:sticky;top:0;z-index:2;background:var(--forest-deep);text-align:'+(i===6?'right':'left')+';padding:9px 12px;color:#fff;font-weight:700;font-size:.64rem;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap">'+c+'</th>'; });
   h+='</tr></thead><tbody>';
   recs.forEach(function(g,idx){
@@ -185,12 +185,17 @@ function _expRenderTable(){
       : (g.recStatus==='RECEIVED' ? '<span style="color:#15803d">received</span>'
         : g.recStatus==='PARTIAL' ? '<span style="color:#b45309">partial</span>'
         : '<span style="color:var(--timber)">not received</span>');
+    // The reference number is how a row is matched back to a paper receipt
+    // months later. Missing is flagged, not silently blank.
+    var refCell = g.ref
+      ? '<span title="Reference / OR number" style="font-family:ui-monospace,Menlo,monospace;font-size:.72rem;color:var(--forest-deep)">'+escH(g.ref)+'</span>'
+      : '<span title="No reference recorded — cannot be traced to a receipt" style="color:'+EXP_AMBER+';font-size:.68rem">no ref</span>';
     var status = !g.isPurchase ? '<span style="font-size:.62rem;font-weight:700;color:var(--timber);background:var(--mist-light);padding:2px 8px;border-radius:5px">N/A</span>' : _expStatusBadge(g.recStatus);
     h+='<tr onclick="_expOpenDetail(\''+g.key+'\')" title="'+(_miss.length?'Missing: '+_miss.join(', '):'')+'" style="cursor:pointer;background:'+bg+';border-left:3px solid '+(_miss.length?EXP_AMBER:'transparent')+';border-top:1px solid var(--mist-light)" onmouseover="this.style.background=\'#eef5f0\'" onmouseout="this.style.background=\''+bg+'\'">'
       +'<td style="padding:9px 12px;color:var(--forest-deep);font-weight:600;white-space:nowrap">'+_expDate(g.date)+'</td>'
       +'<td style="padding:9px 12px;color:var(--forest-deep);white-space:nowrap">'+(g.supplier?escH(g.supplier):_expDash(true))+'</td>'
       +'<td style="padding:9px 12px;color:var(--forest-deep)">'+desc+badge+'</td>'
-      +'<td style="padding:9px 12px;font-size:.74rem;white-space:nowrap">'+qtyCell+'</td>'
+      +'<td style="padding:9px 12px;white-space:nowrap">'+refCell+'</td>'
       +'<td style="padding:9px 12px;font-size:.74rem;white-space:nowrap">'+upCell+'</td>'
       +'<td style="padding:9px 12px;color:var(--timber);white-space:nowrap">'+escH(g.category||'—')+'</td>'
       +'<td style="padding:9px 12px;text-align:right;font-weight:700;color:#dc2626;white-space:nowrap">'+peso(g.total)+'</td>'
@@ -208,6 +213,9 @@ function _expRenderTable(){
 function _expMissing(g){
   var l=g.lines[0]||{}, miss=[];
   if(!(g.supplier||l.store)) miss.push('supplier');
+  // Without a reference the record cannot be matched to its paper receipt,
+  // which is the whole point of keeping it.
+  if(!g.ref) miss.push('reference');
   if(!g.isPurchase){
     if(l.qty==null||l.qty==='')                 miss.push('qty');
     if(!l.unit)                                  miss.push('unit');
