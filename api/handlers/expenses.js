@@ -278,7 +278,7 @@ export async function routeExpenses(action, body, auth, req, res) {
     // Vision inference on a receipt regularly needs more than 12s, which is why
     // both valid models were being aborted before they could answer.
     const MODELS = ['gemini-flash-latest', 'gemini-3.6-flash'];
-    const PER_CALL_MS = 22000;            // function limit is 60s (vercel.json)
+    const PER_CALL_MS = 14000;            // function limit is 60s (vercel.json)
     const started = Date.now();
     const BUDGET_MS = 46000;              // must leave room for a full call + response
     const diag = [];
