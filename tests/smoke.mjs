@@ -206,6 +206,81 @@ async function pages() {
   }
 }
 
+
+// ── 6. PAGE INTEGRITY ──────────────────────────────────────────────────────
+// A page can return 200 and still be broken: deleting a "dead" helper removed
+// loadBoard, goHome, kioskSignOut and escapeHtml from the kiosk, so the board
+// showed 0 clocked in while the API was returning correct data. HTTP 200 said
+// nothing. These checks verify that every function a page CALLS is DEFINED.
+async function pageIntegrity() {
+  section('Page scripts: every called function is defined');
+  const pages = {
+    'clockin.html':   ['loadBoard','goHome','kioskSignOut','lookupByQr','applyStaffResult'],
+    'admin.html':     [],
+    'kitchen.html':   [],
+    'index.html':     [],
+  };
+  for (const [page, mustDefine] of Object.entries(pages)) {
+    let html;
+    try { html = await (await fetch(`${BASE}/${page}?cb=${Date.now()}`)).text(); }
+    catch (e) { check(`${page} fetch`, false, e.message); continue; }
+
+    // inline scripts must parse
+    let parsed = true, err = '';
+    const blocks = [...html.matchAll(/<script(?![^>]*src)[^>]*>([\s\S]*?)<\/script>/g)];
+    for (const b of blocks) {
+      try { new Function(b[1]); } catch (e) { parsed = false; err = e.message.slice(0, 70); break; }
+    }
+    check(`${page} inline JS parses`, parsed, err);
+
+    for (const fn of mustDefine) {
+      const defined = new RegExp(`function\\s+${fn}\\s*\\(|${fn}\\s*=\\s*(async\\s*)?function|${fn}\\s*=\\s*\\(`).test(html);
+      const called  = new RegExp(`[^a-zA-Z_]${fn}\\s*\\(`).test(html);
+      check(`${page}: ${fn} defined`, defined || !called,
+            called ? 'called but never defined' : 'not referenced');
+    }
+  }
+
+  section('Admin modules load and parse');
+  const admin = await (await fetch(`${BASE}/admin.html?cb=${Date.now()}`)).text();
+  const srcs = [...admin.matchAll(/<script src="(\/[a-zA-Z0-9_\-]+\.js[^"]*)"/g)].map(m => m[1]);
+  check('admin.html lists modules', srcs.length > 10, `${srcs.length} found`);
+  for (const src of srcs) {
+    const r = await fetch(`${BASE}${src}`);
+    if (r.status !== 200) { check(`${src} → 200`, false, `got ${r.status}`); continue; }
+    const js = await r.text();
+    let ok = true, why = '';
+    try { new Function(js); } catch (e) { ok = false; why = e.message.slice(0, 70); }
+    check(`${src.split('?')[0]} parses`, ok, why);
+  }
+}
+
+// ── 7. EXPENSES & SCAN PIPELINE ────────────────────────────────────────────
+async function expensesPipeline() {
+  section('Receipt scan pipeline');
+  const models = await call({ action:'aiListModels', userId: OWNER });
+  check('AI key valid, models listed', models.ok === true && models.count > 0,
+        models.error || 'no models');
+  if (models.ok) {
+    check('configured model is available',
+          (models.models || []).includes('gemini-3.1-flash-lite'),
+          'gemini-3.1-flash-lite missing from this key');
+  }
+
+  section('Oversized upload is refused with a clear message');
+  const big = 'A'.repeat(3.7 * 1024 * 1024);
+  const tooBig = await call({ action:'scanReceipt', userId: OWNER, imageBase64: big, mimeType:'image/jpeg' });
+  check('oversized image rejected', tooBig.ok === false && /too large/i.test(tooBig.error || ''),
+        (tooBig.error || '').slice(0, 60));
+
+  section('Duplicate purchases are blocked');
+  const dup = await call({ action:'invSavePurchase', userId: OWNER,
+    store:'S&R Membership Shopping', supplierName:'S&R Membership Shopping',
+    referenceNo:'01037658', purchaseDate:'2026-09-09',
+    lines:[{ itemName:'dup probe', quantity:1, unitPrice:14077.12 }] });
+  check('same reference + total refused', dup.duplicate === true, JSON.stringify(dup).slice(0, 70));
+}
+
 // ── run ────────────────────────────────────────────────────────────────────
 const t0 = Date.now();
 console.log(`\nYANI POS regression suite → ${BASE}`);
@@ -214,6 +289,8 @@ await authorisation();
 await ownerAccess();
 await payrollMath();
 await pages();
+await pageIntegrity();
+await expensesPipeline();
 
 console.log(`\n${'─'.repeat(58)}`);
 console.log(`  passed ${pass}   failed ${fail}   (${((Date.now() - t0) / 1000).toFixed(1)}s)`);
