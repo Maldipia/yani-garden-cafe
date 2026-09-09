@@ -327,6 +327,19 @@ export async function routeExpenses(action, body, auth, req, res) {
         const txt = gj?.candidates?.[0]?.content?.parts?.[0]?.text;
         if (!txt) { diag.push(`${model}: empty response`); continue; }
         let data; try { data = JSON.parse(txt); } catch(_) { diag.push(`${model}: unparseable JSON`); continue; }
+        // Record the outcome so a failed or empty scan is diagnosable later.
+        // Previously nothing logged scan attempts at all, so 'the scan gave me
+        // nothing' could not be distinguished from 'the scan was never made'.
+        try {
+          await supa('POST','ai_scan_log',{
+            action:'scanReceipt', model, ok:true,
+            duration_ms: Date.now() - started,
+            supplier: data?.supplier || null,
+            line_count: Array.isArray(data?.lines) ? data.lines.length : 0,
+            grand_total: data?.grand_total ?? null,
+            user_id: a.userId || null,
+          });
+        } catch(_) {}
         return res.status(200).json({ ok:true, extracted: data, model });
       } catch (e) {
         clearTimeout(timer);
@@ -335,6 +348,14 @@ export async function routeExpenses(action, body, auth, req, res) {
     }
     // Surface WHY, so a bad key or a retired model name is diagnosable instead
     // of being reported as a generic failure.
+    try {
+      await supa('POST','ai_scan_log',{
+        action:'scanReceipt', model:null, ok:false,
+        duration_ms: Date.now() - started,
+        error: diag.join(' | ').slice(0,300),
+        user_id: a.userId || null,
+      });
+    } catch(_) {}
     return res.status(502).json({ ok:false,
       error:'Could not read the receipt — enter it manually.',
       detail: diag.join(' | ').slice(0, 400) });
