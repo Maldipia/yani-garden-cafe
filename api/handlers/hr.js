@@ -6,6 +6,9 @@ import { verifyToken } from '../lib/auth.js';
 const TENANT_HR = '11111111-1111-4111-8111-111111111111';
 
 export async function routeHR(action, body, auth, req, res) {
+  const { checkAuth } = auth;   // routeHR never destructured this; any handler
+                                // calling checkAuth threw a ReferenceError and
+                                // surfaced only as 'Internal server error'.
 
   // ── hrLookupStaff ──────────────────────────────────────────────────────
   // Accepts EITHER staffCode (manual entry) OR qrToken (QR scan). The QR
