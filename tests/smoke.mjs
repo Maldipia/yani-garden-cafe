@@ -304,6 +304,28 @@ async function staffReadiness() {
   check('all active staff have a QR token', noQr.length === 0, noQr.join(', '));
 }
 
+
+// ── 9. VIEW ISOLATION ──────────────────────────────────────────────────────
+// Every view that can be SHOWN must also be HIDDEN when navigating away.
+// hrView was shown but never hidden, so staff records stayed rendered under
+// the Order Queue and every other section.
+async function viewIsolation() {
+  section('Admin views are hidden on navigation');
+  const js = await (await fetch(`${BASE}/admin-core.js?cb=${Date.now()}`)).text();
+  const i = js.indexOf('// Hide all views first');
+  check('hide-all block present', i > 0);
+  if (i < 0) return;
+  const block = js.slice(i, i + 5000);
+
+  const hidden = new Set([...block.matchAll(/(\w+View)\.style\.display\s*=\s*'none'/g)].map(m => m[1]));
+  const shownIds = new Set([...js.matchAll(/getElementById\('(\w+View)'\)[^\n]*display\s*=\s*'(?:flex|block|grid)'/g)].map(m => m[1]));
+
+  // real element ids only — local aliases resolve to an id we already cover
+  const gaps = [...shownIds].filter(v => !hidden.has(v));
+  check('every shown view is also hidden', gaps.length === 0, gaps.join(', '));
+  check('hrView is hidden on navigation', hidden.has('hrView'), 'missing from the hide block');
+}
+
 // ── run ────────────────────────────────────────────────────────────────────
 const t0 = Date.now();
 console.log(`\nYANI POS regression suite → ${BASE}`);
@@ -315,6 +337,7 @@ await pages();
 await pageIntegrity();
 await expensesPipeline();
 await staffReadiness();
+await viewIsolation();
 
 console.log(`\n${'─'.repeat(58)}`);
 console.log(`  passed ${pass}   failed ${fail}   (${((Date.now() - t0) / 1000).toFixed(1)}s)`);

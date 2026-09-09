@@ -1118,6 +1118,13 @@ function setFilter(f) {
   var expensesView = document.getElementById('expensesView');
   if (expensesView) expensesView.style.display = 'none';
 
+  // hrView was shown but never hidden, so once HR was opened it stayed
+  // rendered under every other section — staff records visible on the Order
+  // Queue, Expenses and everywhere else. It is the only view that was missing
+  // from this block.
+  var hrView = document.getElementById('hrView');
+  if (hrView) hrView.style.display = 'none';
+
   var sheetsView = document.getElementById('sheetsView');
   if (sheetsView) sheetsView.style.display = 'none';
 
