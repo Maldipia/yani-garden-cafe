@@ -7,6 +7,25 @@
 // helper duplicated these hues here and was never called — removed rather than
 // left to drift out of sync with the stylesheet.
 
+
+// Undo an accidental "Payment Received". Requires a reason, keeps the original
+// method on the record, and writes PAYMENT_REVERTED to the order audit log —
+// an unexplained un-payment is exactly what cash-variance disputes turn on.
+async function revertPaymentPrompt(orderId){
+  var reason = prompt('Mark ' + orderId + ' as NOT paid.\n\nWhy? (required — this is recorded)');
+  if (reason === null) return;
+  if (!reason.trim() || reason.trim().length < 3) {
+    showToast('A reason is required', 'error'); return;
+  }
+  var r = await api('revertPayment', { orderId: orderId, reason: reason.trim() });
+  if (r && r.ok) {
+    showToast('Payment reverted — order is awaiting payment again ✅');
+    if (typeof loadOrders === 'function') await loadOrders();
+  } else {
+    showToast((r && r.error) || 'Could not revert', 'error');
+  }
+}
+
 // ── ORDER SLA / OVERDUE ALERTS ──────────────────────────────────────────────
 // Prep times live inside item names e.g. "Latte (20 mins to prep)". An order's
 // prep window = the slowest item's explicit time, or a default when none state
@@ -332,6 +351,13 @@ function renderOrders() {
         + '<div class="oc-payment verified">' + splitLabel + ' · Paid ✅</div>';
       if (canSetPayment) {
         html += '<button class="oc-pm-change" onclick="openPaymentModal(\'' + esc(o.orderId) + '\')">Change</button>';
+        // Marking paid is one tap; undoing it needs to be possible too. Shown
+        // only when the order is actually marked paid.
+        if (String(o.paymentStatus||'').toUpperCase() === 'VERIFIED') {
+          html += '<button class="oc-pm-change" style="border-color:#fecaca;color:#b91c1c" '
+                + 'title="Undo — mark this order as NOT paid" '
+                + 'onclick="revertPaymentPrompt(\'' + esc(o.orderId) + '\')">↩ Not paid</button>';
+        }
       }
       html += '</div>';
       if (o.paymentNotes) {

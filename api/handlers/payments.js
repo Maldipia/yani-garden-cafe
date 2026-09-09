@@ -75,6 +75,56 @@ export async function routePayments(action, body, auth, req, res) {
       return res.status(200).json({ ok: true, orderId, method, payStatus, held });
     }
 
+    // ── revertPayment ────────────────────────────────────────────────────
+    // Marking an order paid is one tap and was irreversible: setPaymentMethod
+    // always writes VERIFIED and nothing could undo it. A mis-tap left an
+    // unpaid order recorded as collected, which is a cash-variance problem.
+    //
+    // OWNER/ADMIN only, on purpose. A cashier who can silently un-pay an order
+    // can take the cash — this is the same control point as a void.
+    if (action === 'revertPayment') {
+      const authRP = await checkAuth(['OWNER','ADMIN']);
+      if (!authRP.ok) return res.status(403).json({ ok:false, error: authRP.error });
+
+      const orderId = String(body.orderId || '').trim();
+      const reason  = String(body.reason  || '').trim().slice(0, 300);
+      if (!orderId) return res.status(400).json({ ok:false, error:'orderId required' });
+      if (!isValidOrderId(orderId)) return res.status(400).json({ ok:false, error:'Invalid orderId' });
+      if (reason.length < 3) return res.status(400).json({ ok:false, error:'A reason is required to revert a payment' });
+
+      const before = await supaFetch(`${SUPABASE_URL}/rest/v1/dine_in_orders`
+        + `?order_id=eq.${encodeURIComponent(orderId)}`
+        + `&select=payment_status,payment_method,payment_notes,total&limit=1`);
+      const prev = Array.isArray(before.data) ? before.data[0] : null;
+      if (!prev) return res.status(404).json({ ok:false, error:'Order not found' });
+      if (prev.payment_status !== 'VERIFIED')
+        return res.status(400).json({ ok:false,
+          error:`This order is not marked paid (currently ${prev.payment_status || 'unset'}).` });
+
+      const who = authRP.userId || body.userId || 'UNKNOWN';
+      const stamp = new Date().toISOString();
+      const r = await supa('PATCH', 'dine_in_orders', {
+        payment_status: 'AWAITING_PAYMENT',
+        payment_notes: (prev.payment_notes ? prev.payment_notes + ' | ' : '')
+          + `Payment reverted ${stamp} by ${who}: ${reason} (was ${prev.payment_method || 'unset'}/VERIFIED)`,
+        updated_at: stamp,
+      }, { order_id: `eq.${encodeURIComponent(orderId)}` });
+      if (!r.ok) return res.status(500).json({ ok:false, error:'Could not revert the payment' });
+
+      // The original method is deliberately KEPT, so the trail shows what was
+      // claimed before the revert rather than erasing it.
+      try {
+        await auditLog({ orderId, action: 'PAYMENT_REVERTED',
+          actor: { userId: who },
+          oldValue: `${prev.payment_method || 'unset'}/VERIFIED`,
+          newValue: 'AWAITING_PAYMENT',
+          details: { reason, total: prev.total, previousMethod: prev.payment_method } });
+      } catch(_) {}
+
+      return res.status(200).json({ ok:true, orderId,
+        previousMethod: prev.payment_method, status:'AWAITING_PAYMENT' });
+    }
+
     if (action === 'setPaymentMethod') {
       const authP = await checkAuth(['OWNER','ADMIN','CASHIER']);
       if (!authP.ok) return res.status(403).json({ ok: false, error: authP.error });
