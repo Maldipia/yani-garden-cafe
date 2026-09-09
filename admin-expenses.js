@@ -481,6 +481,16 @@ async function _expSavePurchase(){
         baseUnitId:norm.baseUnitId, baseUnit:norm.baseUnit, baseQuantity:norm.baseQuantity };
     }) };
   var r=await api('invSavePurchase', payload);
+  // The server refuses a purchase that looks already recorded. Ask rather than
+  // silently creating a second copy — this receipt was saved three times.
+  if(r && r.duplicate){
+    var again = confirm((r.error||'This purchase looks already recorded.')
+      + '\n\n' + (r.hint||'')
+      + '\n\nSave it again anyway?');
+    if(!again){ _expCloseModal(); await initExpenses(); return; }
+    payload.confirmDuplicate = true;
+    r = await api('invSavePurchase', payload);
+  }
   if(r&&r.ok){ showToast('Purchase recorded ('+r.lines+' item'+(r.lines>1?'s':'')+') ✅'); _expCloseModal(); await initExpenses(); }
   else showToast('Failed: '+((r&&r.error)||'Unknown'),'error');
 }

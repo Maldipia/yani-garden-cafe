@@ -106,6 +106,7 @@ export async function routeExpenses(action, body, auth, req, res) {
     if (!Array.isArray(lines) || !lines.length) return res.status(400).json({ ok:false, error:'At least one line item required' });
     const groupId = 'grp_' + Date.now() + '_' + Math.random().toString(36).slice(2,8);
     const date = expenseDate || new Date().toISOString().split('T')[0];
+
     const rows = [];
     for (const ln of lines) {
       const desc = String(ln.description||'').trim();

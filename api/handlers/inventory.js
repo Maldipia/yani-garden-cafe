@@ -457,6 +457,46 @@ export async function routeInventory(action, body, auth, req, res) {
     }
     const group = 'PUR-' + Date.now();
     const supplierName = str(body.supplierName, 150);
+
+    // ── Duplicate guard ────────────────────────────────────────────────────
+    // A save that looks like it did nothing gets pressed again: one S&R receipt
+    // was recorded three times for exactly that reason. If a purchase with the
+    // same reference number and the same total already exists, refuse and
+    // explain. The client resends with confirmDuplicate:true when the second
+    // receipt is genuinely separate.
+    if (!body.confirmDuplicate) {
+      try {
+        const refChk = str(body.referenceNo, 100);
+        const dateChk = body.purchaseDate || new Date().toISOString().split('T')[0];
+        const storeChk = str(body.store, 150) || supplierName;
+        const totalChk = Math.round(lines.reduce(
+          (t, l) => t + (num(l.quantity) || 0) * (num(l.unitPrice) || 0), 0) * 100) / 100;
+
+        let q = `${SUPABASE_URL}/rest/v1/business_expenses?is_void=eq.false`
+              + `&select=amount,purchase_group,id,reference_no,store,expense_date`;
+        if (refChk) q += `&reference_no=eq.${encodeURIComponent(refChk)}`;
+        else q += `&expense_date=eq.${dateChk}&store=eq.${encodeURIComponent(storeChk)}`;
+
+        const dr = await supaFetch(q);
+        const rowsFound = Array.isArray(dr.data) ? dr.data : [];
+        if (rowsFound.length) {
+          const byGroup = {};
+          rowsFound.forEach(r => {
+            const g = r.purchase_group || r.id;
+            byGroup[g] = (byGroup[g] || 0) + (parseFloat(r.amount) || 0);
+          });
+          const hit = Object.entries(byGroup)
+            .find(([, v]) => Math.abs(Math.round(v * 100) / 100 - totalChk) < 0.01);
+          if (hit) {
+            return res.status(409).json({ ok:false, duplicate:true,
+              error: refChk
+                ? `Receipt ${refChk} for ₱${totalChk.toFixed(2)} is already recorded.`
+                : `A ${storeChk} purchase of ₱${totalChk.toFixed(2)} on ${dateChk} is already recorded.`,
+              hint: 'Save again only if this is a genuinely separate receipt.' });
+          }
+        }
+      } catch(_) { /* a failed check must never block a legitimate save */ }
+    }
     const store = str(body.store, 150);
     const category = str(body.category, 60) || 'Stocks & Groceries';
     const ref = str(body.referenceNo, 100);
