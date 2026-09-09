@@ -629,17 +629,53 @@ async function _expVoid(key){
   else showToast('Failed to void','error');
 }
 
+
+// Downscale a data-URL image in the browser and return base64 JPEG (no prefix).
+// Keeps the long edge at maxPx, which is ample for reading a receipt while
+// keeping the request far below the 4.5MB platform limit.
+function _expShrinkImage(dataUrl, maxPx, quality){
+  return new Promise(function(resolve, reject){
+    var img=new Image();
+    img.onload=function(){
+      try{
+        var w=img.width, h=img.height;
+        var scale=Math.min(1, maxPx/Math.max(w,h));
+        var cw=Math.round(w*scale), ch=Math.round(h*scale);
+        var c=document.createElement('canvas'); c.width=cw; c.height=ch;
+        c.getContext('2d').drawImage(img,0,0,cw,ch);
+        var out=c.toDataURL('image/jpeg', quality||0.72);
+        resolve(out.split(',')[1]);
+      }catch(e){ reject(e); }
+    };
+    img.onerror=function(){ reject(new Error('decode failed')); };
+    img.src=dataUrl;
+  });
+}
+
 // ── SCAN RECEIPT (upload photo → Gemini reads → pre-fills the form) ─────────
 function _expScanReceipt(){
   if(!_expIsOwner() && !(currentUser && currentUser.role==='ADMIN')){ showToast('ADMIN/OWNER only','error'); return; }
   var inp=document.createElement('input'); inp.type='file'; inp.accept='image/*';
   inp.onchange=function(){
     var f=inp.files && inp.files[0]; if(!f) return;
-    if(f.size > 8*1024*1024){ showToast('Image too large (max 8MB) — retake smaller','error'); return; }
     var reader=new FileReader();
     reader.onload=async function(){
-      var res=String(reader.result||''); var b64=res.split(',')[1]; var mime=f.type||'image/jpeg';
+      var res=String(reader.result||'');
+      var mime='image/jpeg';
+      // A phone photo is 4-8MB, and base64 inflates it by a third. The platform
+      // rejects any request body over 4.5MB with FUNCTION_PAYLOAD_TOO_LARGE
+      // BEFORE the server runs — so the scan silently did nothing and nothing
+      // was logged. Downscale in the browser so the upload is always small.
+      var b64;
+      try {
+        b64 = await _expShrinkImage(res, 1600, 0.72);
+      } catch(_) {
+        b64 = res.split(',')[1];
+      }
       if(!b64){ showToast('Could not read the image','error'); return; }
+      if(b64.length > 3.2*1024*1024){
+        showToast('Photo is too large even after resizing — retake it closer','error'); return;
+      }
       showToast('📷 Reading receipt…');
       try{
         var r=await api('scanReceipt',{ imageBase64:b64, mimeType:mime });

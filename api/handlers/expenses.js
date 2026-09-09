@@ -246,7 +246,14 @@ export async function routeExpenses(action, body, auth, req, res) {
   if (action === 'scanReceipt') {
     const a = await checkAdminAuth();
     if (!a.ok) return res.status(403).json({ ok:false, error:a.error });
-    let key = process.env.GEMINI_API_KEY;
+
+    // Guard the size here too: an oversized body is rejected by the platform
+    // before this function runs, so the client must shrink the image — but if
+    // one slips through, say so plainly rather than failing mysteriously.
+    if (typeof body.imageBase64 === 'string' && body.imageBase64.length > 3.6 * 1024 * 1024) {
+      return res.status(413).json({ ok:false,
+        error:'Photo is too large. Retake it closer to the receipt, or crop it before scanning.' });
+    }    let key = process.env.GEMINI_API_KEY;
     if (!key) {
       try {
         const cf = await supaFetch(`${SUPABASE_URL}/rest/v1/secure_config?key=eq.GEMINI_API_KEY&select=value`);
