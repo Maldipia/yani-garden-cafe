@@ -279,11 +279,15 @@ export async function routeExpenses(action, body, auth, req, res) {
     const imageBase64 = String(body.imageBase64 || '');
     const mimeType = String(body.mimeType || 'image/jpeg');
     if (!imageBase64) return res.status(400).json({ ok:false, error:'image required' });
+    const todayPH = new Date(Date.now() + 8*3600*1000).toISOString().slice(0,10);
     const prompt = 'You are reading a Philippine business receipt/bill for a cafe. Return ONLY JSON (no markdown) with this exact schema:\n'
       + '{"kind":"purchase|expense","supplier":"","date":"YYYY-MM-DD","reference_no":"","payment_method":"","category":"",\n'
       + ' "lines":[{"item":"","qty":0,"unit":"pc|kg|g|L|ml|case|pk|box|btl","unit_price":0,"total":0}],"grand_total":0}\n'
       + 'Rules: kind="expense" for utility bills (water/electric/internet/rent/repair) with lines=[]; kind="purchase" for itemized goods. '
-      + 'Use the actual TRANSACTION date (not any accreditation/permit date). category must be one of: '
+      + 'Use the actual TRANSACTION date (not any accreditation/permit date, BIR permit number, or membership expiry). '
+      + 'TODAY IS ' + todayPH + ' in the Philippines. The transaction date is almost always within the last few days. '
+      + 'If the year is unclear or unreadable, use the current year. Never return a date more than 60 days in the future, '
+      + 'and treat any date more than 2 years old as a misread — re-check the receipt. category must be one of: '
       + 'Stocks & Groceries, Utilities, Electricity, Water, Internet / Cable, Gas / Fuel, Rent, Equipment Repair, Packaging, Cleaning / Supplies, Office / Admin, Marketing, Transport / Delivery, Other. '
       + 'unit_price is per single unit; total is the line amount. Numbers only for numeric fields.';
     const gBody = {
@@ -349,6 +353,17 @@ export async function routeExpenses(action, body, auth, req, res) {
         const txt = gj?.candidates?.[0]?.content?.parts?.[0]?.text;
         if (!txt) { diag.push(`${model}: empty response`); continue; }
         let data; try { data = JSON.parse(txt); } catch(_) { diag.push(`${model}: unparseable JSON`); continue; }
+        // A misread year files the expense into a month the list never shows,
+        // so the record looks like it vanished. Flag it rather than trusting it.
+        if (data && typeof data.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(data.date)) {
+          const d = new Date(data.date + 'T00:00:00Z');
+          const now = new Date(todayPH + 'T00:00:00Z');
+          const daysOff = (now - d) / 86400000;
+          if (daysOff > 730 || daysOff < -60) {
+            data.date_suspect = data.date;
+            data.date = todayPH;            // fall back to today; user can correct
+          }
+        }
         // Record the outcome so a failed or empty scan is diagnosable later.
         // Previously nothing logged scan attempts at all, so 'the scan gave me
         // nothing' could not be distinguished from 'the scan was never made'.

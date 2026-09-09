@@ -734,7 +734,8 @@ function _expOpenFromScan(d){
       S('epSup',d.supplier); S('epDate',d.date); S('epRef',d.reference_no);
       _expSetSelect('epPay',d.payment_method); _expSetSelect('epCat',d.category);
       _expRenderLines();
-      showToast('✅ Receipt read — review each line & Save');
+      if(d.date_suspect) showToast('⚠️ Date on the receipt read as '+d.date_suspect+' — set to today, please check','error');
+      else showToast('✅ Receipt read — review each line & Save');
     },50);
   } else {
     _expRecMode='general';
@@ -744,7 +745,8 @@ function _expOpenFromScan(d){
       S('geTitle',d.description||d.supplier||d.reference_no||'Bill'); S('geStore',d.supplier);
       S('geAmt',d.grand_total); S('geDate',d.date); S('geRef',d.reference_no);
       _expSetSelect('geCat',d.category);
-      showToast('✅ Bill read — review & Save');
+      if(d.date_suspect) showToast('⚠️ Date read as '+d.date_suspect+' — set to today, please check','error');
+      else showToast('✅ Bill read — review & Save');
     },50);
   }
 }
