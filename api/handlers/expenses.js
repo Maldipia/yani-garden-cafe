@@ -215,6 +215,21 @@ export async function routeExpenses(action, body, auth, req, res) {
     return res.status(200).json({ ok:true, voided:true, purchase_group: pg||null });
   }
 
+  // ── logScanFailure — records a failure that happened inside the browser ──
+  if (action === 'logScanFailure') {
+    const a = await checkAdminAuth();
+    if (!a.ok) return res.status(403).json({ ok:false, error:a.error });
+    try {
+      await supa('POST','ai_scan_log',{
+        action:'scanReceipt-client', model:null, ok:false,
+        error: String(body.reason||'').slice(0,300)
+             + ' | file ' + String(body.fileType||'?') + ' ' + (body.fileSizeKb ?? '?') + 'KB',
+        user_id: a.userId || null,
+      });
+    } catch(_) {}
+    return res.status(200).json({ ok:true });
+  }
+
   // ── aiListModels (diagnostic: what can this key actually call?) ──────────
   // Model names get retired without notice and the failure looks identical to
   // an outage. This asks Google directly instead of guessing.

@@ -633,22 +633,47 @@ async function _expVoid(key){
 // Downscale a data-URL image in the browser and return base64 JPEG (no prefix).
 // Keeps the long edge at maxPx, which is ample for reading a receipt while
 // keeping the request far below the 4.5MB platform limit.
+
+// Report a client-side scan failure so it lands in ai_scan_log. Without this a
+// failure inside the browser leaves no trace anywhere and looks like "nothing
+// happened" — which is exactly what happened with oversized photos.
+function _expLogScanClient(reason, file){
+  try{
+    api('logScanFailure', {
+      reason: String(reason).slice(0,200),
+      fileType: (file && file.type) || 'unknown',
+      fileSizeKb: file ? Math.round(file.size/1024) : null
+    });
+  }catch(_){}
+}
+
 function _expShrinkImage(dataUrl, maxPx, quality){
   return new Promise(function(resolve, reject){
     var img=new Image();
     img.onload=function(){
       try{
-        var w=img.width, h=img.height;
+        var w=img.naturalWidth||img.width, h=img.naturalHeight||img.height;
+        if(!w||!h){ reject(new Error('image decoded to 0x0')); return; }
         var scale=Math.min(1, maxPx/Math.max(w,h));
-        var cw=Math.round(w*scale), ch=Math.round(h*scale);
+        var cw=Math.max(1,Math.round(w*scale)), ch=Math.max(1,Math.round(h*scale));
         var c=document.createElement('canvas'); c.width=cw; c.height=ch;
-        c.getContext('2d').drawImage(img,0,0,cw,ch);
-        var out=c.toDataURL('image/jpeg', quality||0.72);
-        resolve(out.split(',')[1]);
+        var ctx=c.getContext('2d');
+        ctx.fillStyle='#fff'; ctx.fillRect(0,0,cw,ch);   // HEIC/PNG alpha → white
+        ctx.drawImage(img,0,0,cw,ch);
+        // step the quality down until the payload is comfortably under the limit
+        var q=quality||0.72, out='';
+        for(var i=0;i<5;i++){
+          out=c.toDataURL('image/jpeg', q);
+          if(out.length < 2.2*1024*1024) break;
+          q=Math.max(0.35, q-0.12);
+        }
+        var b64=out.split(',')[1]||'';
+        if(b64.length < 500){ reject(new Error('canvas produced an empty image')); return; }
+        resolve(b64);
       }catch(e){ reject(e); }
     };
-    img.onerror=function(){ reject(new Error('decode failed')); };
-    img.src=dataUrl;
+    img.onerror=function(){ reject(new Error('browser could not decode this image')); };
+    try { img.src=dataUrl; } catch(e){ reject(e); }
   });
 }
 
@@ -666,15 +691,23 @@ function _expScanReceipt(){
       // rejects any request body over 4.5MB with FUNCTION_PAYLOAD_TOO_LARGE
       // BEFORE the server runs — so the scan silently did nothing and nothing
       // was logged. Downscale in the browser so the upload is always small.
-      var b64;
+      var b64=null, shrinkErr=null;
       try {
         b64 = await _expShrinkImage(res, 1600, 0.72);
-      } catch(_) {
-        b64 = res.split(',')[1];
+      } catch(e) {
+        shrinkErr = (e && e.message) || 'resize failed';
+        b64 = res.split(',')[1] || null;          // last resort: send as-is
       }
-      if(!b64){ showToast('Could not read the image','error'); return; }
+      if(!b64){
+        _expLogScanClient('no image data: '+(shrinkErr||'reader gave nothing'), f);
+        showToast('Could not read that image — try a JPEG or PNG','error'); return;
+      }
       if(b64.length > 3.2*1024*1024){
-        showToast('Photo is too large even after resizing — retake it closer','error'); return;
+        // Would be rejected by the platform before reaching the server, which
+        // is what made this fail invisibly. Report it rather than dropping it.
+        _expLogScanClient('too large after resize: '+Math.round(b64.length/1048576)+'MB'
+                          +(shrinkErr?(' ('+shrinkErr+')'):''), f);
+        showToast('Photo too large — retake it closer to the receipt','error'); return;
       }
       showToast('📷 Reading receipt…');
       try{
