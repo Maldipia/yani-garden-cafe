@@ -277,7 +277,11 @@ export async function routeExpenses(action, body, auth, req, res) {
     // gemini-3.6 (no suffix) is not a generateContent model — dropped.
     // Vision inference on a receipt regularly needs more than 12s, which is why
     // both valid models were being aborted before they could answer.
-    const MODELS = ['gemini-flash-latest', 'gemini-3.6-flash'];
+    // Verified present for this key via aiListModels. LITE variants answer
+    // fastest, which matters inside a 60s function — the full flash models
+    // repeatedly exceeded 22s on receipt vision.
+    const MODELS = ['gemini-3.1-flash-lite', 'gemini-3.5-flash-lite',
+                    'gemini-flash-lite-latest', 'gemini-flash-latest'];
     const PER_CALL_MS = 14000;            // function limit is 60s (vercel.json)
     const started = Date.now();
     const BUDGET_MS = 46000;              // must leave room for a full call + response
