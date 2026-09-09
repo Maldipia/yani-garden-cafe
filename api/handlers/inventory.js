@@ -579,6 +579,28 @@ export async function routeInventory(action, body, auth, req, res) {
   }
 
   // ══ REPORTS ═══════════════════════════════════════════════════════════
+  // ── Theoretical usage & variance ────────────────────────────────────────
+  if (action === 'invTheoreticalUsage' || action === 'invVariance') {
+    const authV = await checkAuth(['OWNER','ADMIN','MANAGER']);
+    if (!authV.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
+    const today = new Date(Date.now() + 8*3600*1000).toISOString().slice(0,10);
+    const from = /^\d{4}-\d{2}-\d{2}$/.test(body.from||'') ? body.from : today.slice(0,8)+'01';
+    const to   = /^\d{4}-\d{2}-\d{2}$/.test(body.to||'')   ? body.to   : today;
+    const fn = action === 'invVariance' ? 'inv_variance' : 'inv_theoretical_usage';
+    const r = await supaFetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`,
+      {method:'POST', body: JSON.stringify({ p_from: from, p_to: to })});
+    if (!r.ok) return boom(res, 'Could not build the report');
+    const rows = Array.isArray(r.data) ? r.data : [];
+    // Say plainly when there is no stock data, rather than presenting a
+    // 100% variance that reads like theft.
+    const stockDataPresent = rows.some(x => x.has_actual === true);
+    return res.status(200).json({ ok:true, from, to, rows,
+      stockDataPresent: action === 'invVariance' ? stockDataPresent : undefined,
+      note: (action === 'invVariance' && !stockDataPresent)
+        ? 'No stock movement recorded for this period — enter opening stock counts to enable variance.'
+        : undefined });
+  }
+
   if (action === 'invDashboard') {
     const auth_invDashboard = await checkAuth(['OWNER','ADMIN','MANAGER']);
     if (!auth_invDashboard.ok) return res.status(403).json({ok:false,error:'Unauthorized'});

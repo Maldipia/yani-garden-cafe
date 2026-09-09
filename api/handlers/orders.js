@@ -607,6 +607,35 @@ export async function routeOrders(action, body, auth, req, res) {
           error: 'Collect the cash first, then mark it received before completing.' });
       }
 
+      // ── Cancelling a PAID order needs a refund decision ───────────────────
+      // 30 historical orders are VERIFIED-and-CANCELLED worth PHP 9,505.10,
+      // with no record of whether the money was returned or kept. Each is
+      // indefensible if BIR asks. Cancelling a paid order now requires the
+      // caller to say which it is.
+      if (newStatus === 'CANCELLED' && prevPayStat === 'VERIFIED') {
+        const disposition = String(body.paymentDisposition || '').toUpperCase();
+        const VALID_DISP = ['REFUNDED', 'RETAINED'];
+        if (!VALID_DISP.includes(disposition)) {
+          return res.status(409).json({ ok:false, needsPaymentDecision:true,
+            error: 'This order is already paid. Say what happens to the money before cancelling.',
+            options: [
+              { value:'REFUNDED', label:'Refunded to the customer' },
+              { value:'RETAINED', label:'Payment kept (e.g. goods already consumed)' },
+            ] });
+        }
+        if (!cancelReason || cancelReason.length < 3) {
+          return res.status(400).json({ ok:false,
+            error:'A cancellation reason is required when the order is already paid.' });
+        }
+        try {
+          await auditLog({ orderId, action: 'PAID_ORDER_CANCELLED',
+            actor: { userId },
+            oldValue: `${prevStatus}/VERIFIED`,
+            newValue: `CANCELLED/${disposition}`,
+            details: { disposition, reason: cancelReason } });
+        } catch(_) {}
+      }
+
       // ── YANI Card balance guard ───────────────────────────────────────────
       // Block completing a YANI_CARD order if the card can't cover the charge.
       // (Previously the charge was attempted AFTER completion and a failure was

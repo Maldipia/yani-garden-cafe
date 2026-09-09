@@ -705,6 +705,23 @@ async function updateStatus(orderId, newStatus) {
     );
     if (!reason) return; // user dismissed
     var result = await api('updateOrderStatus', { orderId:orderId, status:newStatus, cancelReason:reason, userId: currentUser && currentUser.userId });
+    // The order is already paid — the server will not cancel it until we say
+    // whether the money went back to the customer or was kept.
+    if (result && result.needsPaymentDecision) {
+      var choice = prompt(
+        'This order is already PAID.\n\n'
+        + 'What happened to the money?\n'
+        + '  1 = Refunded to the customer\n'
+        + '  2 = Payment kept (goods already consumed)\n\n'
+        + 'Enter 1 or 2:');
+      if (choice === null) { showToast('Cancellation stopped — nothing changed'); return; }
+      var disp = String(choice).trim() === '1' ? 'REFUNDED'
+               : String(choice).trim() === '2' ? 'RETAINED' : null;
+      if (!disp) { showToast('Enter 1 or 2 — order not cancelled', 'error'); return; }
+      result = await api('updateOrderStatus', { orderId:orderId, status:newStatus,
+        cancelReason:reason, paymentDisposition:disp,
+        userId: currentUser && currentUser.userId });
+    }
     if (result.ok) {
       _statusOverrides[orderId] = { status: newStatus, ts: Date.now() };
       allOrders.forEach(function(o) { if (o.orderId === orderId) { o.status = newStatus; o.cancelReason = reason; } });
