@@ -251,19 +251,25 @@ export async function routeExpenses(action, body, auth, req, res) {
     // Vision inference on a receipt regularly needs more than 12s, which is why
     // both valid models were being aborted before they could answer.
     const MODELS = ['gemini-3.6-flash', 'gemini-flash-latest'];
-    const PER_CALL_MS = 24000;            // function limit is 60s (vercel.json)
+    const PER_CALL_MS = 15000;            // function limit is 60s (vercel.json)
     const started = Date.now();
-    const BUDGET_MS = 50000;              // leave headroom to return a response
+    const BUDGET_MS = 45000;              // must leave room for a full call + response
     const diag = [];
 
     // 503/429 from Google is transient overload, so each model gets one retry
     // with a short backoff before moving on.
+    // Interleaved: try each model once, then retry each. A model that is busy
+    // now may be free in two seconds, and the alternate model may answer first.
     const attempts = [];
-    for (const m of MODELS) { attempts.push([m, 0]); attempts.push([m, 1]); }
+    for (const m of MODELS) attempts.push([m, 0]);
+    for (const m of MODELS) attempts.push([m, 1]);
 
     for (const [model, retry] of attempts) {
-      if (Date.now() - started > BUDGET_MS) { diag.push('budget exhausted'); break; }
-      if (retry) await new Promise(r => setTimeout(r, 1500));
+      // Budget must account for the call ABOUT to run, not just elapsed time —
+      // checking only elapsed allowed a 24s call to start at 40s and blow the
+      // 60s function limit, which is exactly what happened in testing.
+      if (Date.now() - started + PER_CALL_MS > BUDGET_MS) { diag.push('budget exhausted'); break; }
+      if (retry) await new Promise(r => setTimeout(r, 1200));
       const ac = new AbortController();
       const timer = setTimeout(() => ac.abort(), PER_CALL_MS);
       try {
