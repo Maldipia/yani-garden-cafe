@@ -2,15 +2,10 @@
 // RENDER ORDERS
 // ══════════════════════════════════════════════════════════
 
-// ── Category color dot for order items ───────────────────
-function _itemCatColor(category) {
-  var cat = (category || '').toUpperCase();
-  if (cat === 'ICE AND ICE BLENDED') return '#3b82f6';
-  if (cat === 'HOT')   return '#ef4444';
-  if (cat === 'MEALS') return '#f97316';
-  if (cat === 'BEANS') return '#92400e';
-  return null;
-}
+// Category markers are styled by CSS class (.cat-dot-*) in admin.html so that
+// shape and colour stay together in one place. An earlier _itemCatColor()
+// helper duplicated these hues here and was never called — removed rather than
+// left to drift out of sync with the stylesheet.
 
 // ── ORDER SLA / OVERDUE ALERTS ──────────────────────────────────────────────
 // Prep times live inside item names e.g. "Latte (20 mins to prep)". An order's
@@ -270,7 +265,16 @@ function renderOrders() {
           if (c==='BEANS') return 'cat-dot cat-dot-beans';
           return '';
         })(it.category);
-        var catDotHtml = catDotClass ? '<span class="' + catDotClass + '"></span>' : '';
+        var catDotLabel = (function(cat){
+          var c=(cat||'').toUpperCase();
+          if(c==='ICE AND ICE BLENDED') return 'Cold drink';
+          if(c==='HOT')   return 'Hot drink';
+          if(c==='MEALS') return 'Meal';
+          if(c==='BEANS') return 'Beans';
+          return '';
+        })(it.category);
+        var catDotHtml = catDotClass
+          ? '<span class="' + catDotClass + '" title="' + catDotLabel + '"></span>' : '';
 
         var kBox = '<span class="oc-kbox" onclick="event.stopPropagation();adminTogglePrep(this,\'' + esc(o.orderId) + '\',' + (it.id||0) + ',' + (it.prepared ? 1 : 0) + ')" title="' + (it.prepared ? 'Kitchen: cooked — tap to undo' : 'Kitchen: mark cooked') + '" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;cursor:pointer;user-select:none;flex-shrink:0;border-radius:5px;font-size:.7rem;font-weight:800;background:' + (it.prepared ? '#F59E0B' : '#F3F4F6') + ';color:' + (it.prepared ? '#fff' : '#9CA3AF') + ';border:1.5px solid ' + (it.prepared ? '#F59E0B' : '#E5E7EB') + ';margin-right:3px">' + (it.prepared ? '✓' : 'K') + '</span>';
         var sBox = '<span class="oc-sbox" onclick="event.stopPropagation();adminToggleServed(this,\'' + esc(o.orderId) + '\',' + (it.id||0) + ',' + (it.served ? 1 : 0) + ')" title="' + (it.served ? 'Server: delivered — tap to undo' : 'Server: mark delivered') + '" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;cursor:pointer;user-select:none;flex-shrink:0;border-radius:5px;font-size:.7rem;font-weight:800;background:' + (it.served ? '#059669' : '#F3F4F6') + ';color:' + (it.served ? '#fff' : '#9CA3AF') + ';border:1.5px solid ' + (it.served ? '#059669' : '#E5E7EB') + ';margin-right:8px">' + (it.served ? '✓' : 'S') + '</span>';

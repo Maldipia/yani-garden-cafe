@@ -286,11 +286,19 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 
 /* Category color borders on order items */
 /* Category color dot — applied to a span inside oc-item-name */
-.cat-dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:5px; vertical-align:middle; flex-shrink:0 }
-.cat-dot-ice   { background:#3b82f6 }
-.cat-dot-hot   { background:#ef4444 }
-.cat-dot-meal  { background:#f97316 }
-.cat-dot-beans { background:#92400e }
+/* Category markers. Colour ALONE was not enough: red (hot) against orange
+   (meals) is hard to separate at 9px and indistinguishable to anyone with
+   red-green colour blindness, which is roughly 1 in 12 men. Each category now
+   differs in SHAPE as well as hue, so the marker still reads correctly in
+   greyscale or on a sun-washed counter screen. */
+.cat-dot { display:inline-block; width:10px; height:10px; margin-right:5px;
+           vertical-align:middle; flex-shrink:0 }
+.cat-dot-ice   { background:#2563eb; border-radius:50% }                 /* blue circle  — cold drinks */
+.cat-dot-hot   { background:#dc2626; border-radius:50%;
+                 box-shadow:inset 0 0 0 2px #fff; }                      /* red ring     — hot drinks  */
+.cat-dot-meal  { background:#7c3aed; border-radius:2px }                 /* violet square— meals       */
+.cat-dot-beans { background:#78350f; border-radius:2px;
+                 transform:rotate(45deg) }                               /* brown diamond— beans       */
 
 .oc-total {
   padding:10px 16px; font-size:.82rem; font-weight:700; text-align:right;
@@ -1471,6 +1479,16 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
   </div>
 
   <div class="filter-bar" id="filterBar"></div>
+  <!-- Marker legend: without it the shapes are decoration. Kept small and
+       inline so it costs no vertical space on the counter screen. -->
+  <div id="catLegend" style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;
+       padding:6px 14px;font-size:.66rem;color:var(--timber,#6b5b4d)">
+    <span style="font-weight:700;letter-spacing:.4px">KEY</span>
+    <span><span class="cat-dot cat-dot-hot"></span>Hot drink</span>
+    <span><span class="cat-dot cat-dot-ice"></span>Cold drink</span>
+    <span><span class="cat-dot cat-dot-meal"></span>Meal</span>
+    <span><span class="cat-dot cat-dot-beans"></span>Beans</span>
+  </div>
   <div class="order-grid" id="orderGrid"></div>
 
   <!-- Payments Management View -->
@@ -2323,7 +2341,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 
 <script src="/admin-core.js?v=49"></script>
 
-  <script src="/admin-orders.js?v=40"></script>
+  <script src="/admin-orders.js?v=41"></script>
 <script src="/admin-payments.js?v=26"></script>
 <script src="/admin-hr.js?v=25"></script>
   <script src="/admin-menu.js?v=27"></script>
