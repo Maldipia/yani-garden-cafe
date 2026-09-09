@@ -256,8 +256,14 @@ export async function routeExpenses(action, body, auth, req, res) {
     const BUDGET_MS = 50000;              // leave headroom to return a response
     const diag = [];
 
-    for (const model of MODELS) {
+    // 503/429 from Google is transient overload, so each model gets one retry
+    // with a short backoff before moving on.
+    const attempts = [];
+    for (const m of MODELS) { attempts.push([m, 0]); attempts.push([m, 1]); }
+
+    for (const [model, retry] of attempts) {
       if (Date.now() - started > BUDGET_MS) { diag.push('budget exhausted'); break; }
+      if (retry) await new Promise(r => setTimeout(r, 1500));
       const ac = new AbortController();
       const timer = setTimeout(() => ac.abort(), PER_CALL_MS);
       try {
@@ -265,11 +271,19 @@ export async function routeExpenses(action, body, auth, req, res) {
           { method:'POST', headers:{'Content-Type':'application/json'},
             body: JSON.stringify(gBody), signal: ac.signal });
         clearTimeout(timer);
-        if (gr.status === 503 || gr.status === 429) { diag.push(`${model}:${gr.status} busy`); continue; }
+        if (gr.status === 503 || gr.status === 429) {
+          diag.push(`${model}:${gr.status} busy${retry ? ' (retry)' : ''}`);
+          continue;                       // transient — the retry pass will try again
+        }
         if (!gr.ok) {
           let detail = '';
           try { const e = await gr.json(); detail = e?.error?.message?.slice(0,120) || ''; } catch(_) {}
           diag.push(`${model}:${gr.status} ${detail}`);
+          if (gr.status === 404 || gr.status === 400 || gr.status === 403) {
+            // permanent for this model — skip its retry slot too
+            const idx = attempts.findIndex(([m, r]) => m === model && r === 1);
+            if (idx >= 0) attempts.splice(idx, 1);
+          }
           continue;
         }
         const gj = await gr.json();
