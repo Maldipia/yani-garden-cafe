@@ -5,7 +5,7 @@ import { SUPABASE_URL }            from '../lib/config.js';
 const EXPENSE_ACTIONS = new Set([
   'addShiftExpense','getShiftExpenses',
   'addBusinessExpense','getBusinessExpenses','deleteBusinessExpense',
-  'updateExpense','voidExpense','scanReceipt','aiListModels',
+  'updateExpense','voidExpense','scanReceipt','aiListModels','logScanFailure',
   'saveExpensePurchase','markExpenseReceived'
 ]);
 
