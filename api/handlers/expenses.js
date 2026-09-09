@@ -250,10 +250,10 @@ export async function routeExpenses(action, body, auth, req, res) {
     // gemini-3.6 (no suffix) is not a generateContent model — dropped.
     // Vision inference on a receipt regularly needs more than 12s, which is why
     // both valid models were being aborted before they could answer.
-    const MODELS = ['gemini-3.6-flash', 'gemini-flash-latest'];
-    const PER_CALL_MS = 15000;            // function limit is 60s (vercel.json)
+    const MODELS = ['gemini-flash-latest', 'gemini-3.6-flash'];
+    const PER_CALL_MS = 22000;            // function limit is 60s (vercel.json)
     const started = Date.now();
-    const BUDGET_MS = 45000;              // must leave room for a full call + response
+    const BUDGET_MS = 46000;              // must leave room for a full call + response
     const diag = [];
 
     // 503/429 from Google is transient overload, so each model gets one retry
@@ -299,7 +299,7 @@ export async function routeExpenses(action, body, auth, req, res) {
         return res.status(200).json({ ok:true, extracted: data, model });
       } catch (e) {
         clearTimeout(timer);
-        diag.push(`${model}: ${e.name === 'AbortError' ? 'timed out after 12s' : (e.message||'failed').slice(0,80)}`);
+        diag.push(`${model}: ${e.name === 'AbortError' ? ('timed out after ' + (PER_CALL_MS/1000) + 's') : (e.message||'failed').slice(0,80)}`);
       }
     }
     // Surface WHY, so a bad key or a retired model name is diagnosable instead
