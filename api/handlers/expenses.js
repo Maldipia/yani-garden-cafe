@@ -5,7 +5,7 @@ import { SUPABASE_URL }            from '../lib/config.js';
 const EXPENSE_ACTIONS = new Set([
   'addShiftExpense','getShiftExpenses',
   'addBusinessExpense','getBusinessExpenses','deleteBusinessExpense',
-  'updateExpense','voidExpense','scanReceipt',
+  'updateExpense','voidExpense','scanReceipt','aiListModels',
   'saveExpensePurchase','markExpenseReceived'
 ]);
 
@@ -213,6 +213,33 @@ export async function routeExpenses(action, body, auth, req, res) {
     if (!r.ok) return res.status(500).json({ ok:false, error:'Failed to void' });
     if (pg) { try { await supa('PATCH','inv_purchases', { is_void:true, voided_at:now }, { purchase_group:`eq.${pg}` }); } catch(_){} }
     return res.status(200).json({ ok:true, voided:true, purchase_group: pg||null });
+  }
+
+  // ── aiListModels (diagnostic: what can this key actually call?) ──────────
+  // Model names get retired without notice and the failure looks identical to
+  // an outage. This asks Google directly instead of guessing.
+  if (action === 'aiListModels') {
+    const a = await checkAdminAuth();
+    if (!a.ok) return res.status(403).json({ ok:false, error:a.error });
+    let key = process.env.GEMINI_API_KEY;
+    if (!key) {
+      try {
+        const cf = await supaFetch(`${SUPABASE_URL}/rest/v1/secure_config?key=eq.GEMINI_API_KEY&select=value`);
+        if (cf.ok && cf.data && cf.data[0]) key = cf.data[0].value;
+      } catch(_) {}
+    }
+    if (!key) return res.status(500).json({ ok:false, error:'GEMINI_API_KEY missing' });
+    try {
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}&pageSize=100`);
+      const j = await r.json();
+      if (!r.ok) return res.status(200).json({ ok:false, status:r.status, error: j?.error?.message?.slice(0,200) });
+      const models = (j.models||[])
+        .filter(m => (m.supportedGenerationMethods||[]).includes('generateContent'))
+        .map(m => m.name.replace('models/',''));
+      return res.status(200).json({ ok:true, count: models.length, models });
+    } catch (e) {
+      return res.status(200).json({ ok:false, error: String(e.message).slice(0,200) });
+    }
   }
 
   // ── scanReceipt (AI reads a receipt photo → structured data for the form) ──
