@@ -245,7 +245,9 @@ export async function routeExpenses(action, body, auth, req, res) {
     // with no timeout, so one slow upstream response blew the whole serverless
     // function limit and the user saw FUNCTION_INVOCATION_TIMEOUT rather than
     // a useful error.
-    const MODELS = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.0-flash'];
+    // Google retires model names; 2.5-flash and 2.0-flash both now return 404
+    // pointing at gemini-3.6-flash. -latest is kept as a moving fallback.
+    const MODELS = ['gemini-3.6-flash', 'gemini-flash-latest', 'gemini-3.6'];
     const PER_CALL_MS = 12000;
     const started = Date.now();
     const BUDGET_MS = 40000;              // leave headroom under the function limit
