@@ -94,7 +94,7 @@ export async function routePayments(action, body, auth, req, res) {
 
       const before = await supaFetch(`${SUPABASE_URL}/rest/v1/dine_in_orders`
         + `?order_id=eq.${encodeURIComponent(orderId)}`
-        + `&select=payment_status,payment_method,payment_notes,total&limit=1`);
+        + `&select=payment_status,payment_method,payment_notes,total,status&limit=1`);
       const prev = Array.isArray(before.data) ? before.data[0] : null;
       if (!prev) return res.status(404).json({ ok:false, error:'Order not found' });
       if (prev.payment_status !== 'VERIFIED')
@@ -103,12 +103,24 @@ export async function routePayments(action, body, auth, req, res) {
 
       const who = authRP.userId || body.userId || 'UNKNOWN';
       const stamp = new Date().toISOString();
-      const r = await supa('PATCH', 'dine_in_orders', {
+      // An order marked COMPLETED on payment must come back to the active
+      // board when that payment is undone — otherwise it sits finished and
+      // unpaid, visible to nobody, and the money is never collected.
+      const patch = {
         payment_status: 'AWAITING_PAYMENT',
         payment_notes: (prev.payment_notes ? prev.payment_notes + ' | ' : '')
           + `Payment reverted ${stamp} by ${who}: ${reason} (was ${prev.payment_method || 'unset'}/VERIFIED)`,
         updated_at: stamp,
-      }, { order_id: `eq.${encodeURIComponent(orderId)}` });
+      };
+      let statusChanged = null;
+      if (prev.status === 'COMPLETED') {
+        // READY, not NEW: the food was already made and served. Sending it back
+        // to NEW would put it on the kitchen queue to be cooked a second time.
+        patch.status = 'READY';
+        statusChanged = { from: 'COMPLETED', to: 'READY' };
+      }
+      const r = await supa('PATCH', 'dine_in_orders', patch,
+        { order_id: `eq.${encodeURIComponent(orderId)}` });
       if (!r.ok) return res.status(500).json({ ok:false, error:'Could not revert the payment' });
 
       // The original method is deliberately KEPT, so the trail shows what was
@@ -118,11 +130,13 @@ export async function routePayments(action, body, auth, req, res) {
           actor: { userId: who },
           oldValue: `${prev.payment_method || 'unset'}/VERIFIED`,
           newValue: 'AWAITING_PAYMENT',
-          details: { reason, total: prev.total, previousMethod: prev.payment_method } });
+          details: { reason, total: prev.total, previousMethod: prev.payment_method,
+                     statusChanged } });
       } catch(_) {}
 
       return res.status(200).json({ ok:true, orderId,
-        previousMethod: prev.payment_method, status:'AWAITING_PAYMENT' });
+        previousMethod: prev.payment_method, status:'AWAITING_PAYMENT',
+        orderStatus: patch.status || prev.status, reopened: !!statusChanged });
     }
 
     if (action === 'setPaymentMethod') {

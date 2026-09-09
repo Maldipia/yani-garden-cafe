@@ -19,7 +19,9 @@ async function revertPaymentPrompt(orderId){
   }
   var r = await api('revertPayment', { orderId: orderId, reason: reason.trim() });
   if (r && r.ok) {
-    showToast('Payment reverted — order is awaiting payment again ✅');
+    showToast(r.reopened
+      ? 'Payment reverted — order moved back to READY, awaiting payment ✅'
+      : 'Payment reverted — order is awaiting payment again ✅', 2600);
     if (typeof loadOrders === 'function') await loadOrders();
   } else {
     showToast((r && r.error) || 'Could not revert', 'error');
