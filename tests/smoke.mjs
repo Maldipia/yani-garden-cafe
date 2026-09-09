@@ -17,14 +17,23 @@ const OWNER = process.env.OWNER_ID || 'USR_001';
 let pass = 0, fail = 0;
 const failures = [];
 
-async function call(payload) {
+// The API rate-limits, and running the suite repeatedly trips it. A 'Too many
+// requests' reply is the limiter working correctly, not a broken endpoint —
+// reporting it as a failure would train us to ignore red output. Back off and
+// retry instead.
+async function call(payload, attempt = 0) {
   try {
     const r = await fetch(API, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    return await r.json();
+    const d = await r.json();
+    if (attempt < 3 && d && typeof d.error === 'string' && /too many requests/i.test(d.error)) {
+      await new Promise(res => setTimeout(res, 1500 * (attempt + 1)));
+      return call(payload, attempt + 1);
+    }
+    return d;
   } catch (e) {
     return { ok: false, error: 'network: ' + e.message };
   }
@@ -281,6 +290,20 @@ async function expensesPipeline() {
   check('same reference + total refused', dup.duplicate === true, JSON.stringify(dup).slice(0, 70));
 }
 
+
+// ── 8. STAFF READINESS ─────────────────────────────────────────────────────
+// Every active employee must be able to clock in. Someone added without a QR
+// token silently cannot, and nobody notices until their shift.
+async function staffReadiness() {
+  section('Every active staff member can clock in');
+  const d = await call({ action:'getHRStaff', userId: OWNER });
+  if (!d.ok) { check('staff list readable', false, d.error); return; }
+  const active = (d.staff || []).filter(s => s.employment_status === 'ACTIVE');
+  check('active staff found', active.length > 0, `${active.length}`);
+  const noQr = active.filter(s => !s.has_qr).map(s => s.full_name);
+  check('all active staff have a QR token', noQr.length === 0, noQr.join(', '));
+}
+
 // ── run ────────────────────────────────────────────────────────────────────
 const t0 = Date.now();
 console.log(`\nYANI POS regression suite → ${BASE}`);
@@ -291,6 +314,7 @@ await payrollMath();
 await pages();
 await pageIntegrity();
 await expensesPipeline();
+await staffReadiness();
 
 console.log(`\n${'─'.repeat(58)}`);
 console.log(`  passed ${pass}   failed ${fail}   (${((Date.now() - t0) / 1000).toFixed(1)}s)`);

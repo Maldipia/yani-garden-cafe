@@ -399,7 +399,20 @@ export async function routeAdmin(action, body, auth, req, res) {
          pay_basis:'DAILY',daily_rate:daily_rate?parseFloat(daily_rate):null,
          mobile:mobile||null,date_hired:new Date().toISOString().split('T')[0]})
       });
-    return res.status(200).json({ok:r.ok,staff:Array.isArray(r.data)?r.data[0]:r.data});
+    // Every active employee must be able to clock in by scan, so a QR token is
+    // issued at creation rather than as a separate step someone has to remember.
+    // Marcelo Mayo was added without one and could not clock in at all.
+    const created = Array.isArray(r.data) ? r.data[0] : r.data;
+    if (r.ok && created && created.id) {
+      try {
+        await supaFetch(SUPABASE_URL+'/rest/v1/rpc/hr_rotate_qr_token',
+          {method:'POST',body:JSON.stringify({p_staff_id:created.id})});
+        await hrAudit({ action:'QR_TOKEN_ROTATED', module:'SECURITY', recordId:created.id,
+          reason:'Issued automatically on staff creation',
+          actorCode: authS.userId || body.userId, role: authS.role, req });
+      } catch(_) { /* the staff record is created either way */ }
+    }
+    return res.status(200).json({ok:r.ok,staff:created});
   }
   if (action === 'addHRLeaveRequest') {
     const authLr = await checkAuth(['OWNER']);
