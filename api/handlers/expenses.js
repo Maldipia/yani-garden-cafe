@@ -241,20 +241,47 @@ export async function routeExpenses(action, body, auth, req, res) {
       contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mimeType, data: imageBase64 } }] }],
       generationConfig: { temperature: 0, responseMimeType: 'application/json' },
     };
-    const MODELS = ['gemini-3.1-flash-lite', 'gemini-3.5-flash', 'gemini-flash-latest'];
+    // Each attempt is bounded. Previously three vision calls ran back to back
+    // with no timeout, so one slow upstream response blew the whole serverless
+    // function limit and the user saw FUNCTION_INVOCATION_TIMEOUT rather than
+    // a useful error.
+    const MODELS = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.0-flash'];
+    const PER_CALL_MS = 12000;
+    const started = Date.now();
+    const BUDGET_MS = 40000;              // leave headroom under the function limit
+    const diag = [];
+
     for (const model of MODELS) {
+      if (Date.now() - started > BUDGET_MS) { diag.push('budget exhausted'); break; }
+      const ac = new AbortController();
+      const timer = setTimeout(() => ac.abort(), PER_CALL_MS);
       try {
         const gr = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
-          { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(gBody) });
-        if (gr.status === 503 || gr.status === 429) continue;  // busy → next model
+          { method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify(gBody), signal: ac.signal });
+        clearTimeout(timer);
+        if (gr.status === 503 || gr.status === 429) { diag.push(`${model}:${gr.status} busy`); continue; }
+        if (!gr.ok) {
+          let detail = '';
+          try { const e = await gr.json(); detail = e?.error?.message?.slice(0,120) || ''; } catch(_) {}
+          diag.push(`${model}:${gr.status} ${detail}`);
+          continue;
+        }
         const gj = await gr.json();
-        const txt = gj && gj.candidates && gj.candidates[0] && gj.candidates[0].content && gj.candidates[0].content.parts && gj.candidates[0].content.parts[0] && gj.candidates[0].content.parts[0].text;
-        if (!txt) continue;
-        let data; try { data = JSON.parse(txt); } catch(_) { continue; }
+        const txt = gj?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!txt) { diag.push(`${model}: empty response`); continue; }
+        let data; try { data = JSON.parse(txt); } catch(_) { diag.push(`${model}: unparseable JSON`); continue; }
         return res.status(200).json({ ok:true, extracted: data, model });
-      } catch(_) { /* try next model */ }
+      } catch (e) {
+        clearTimeout(timer);
+        diag.push(`${model}: ${e.name === 'AbortError' ? 'timed out after 12s' : (e.message||'failed').slice(0,80)}`);
+      }
     }
-    return res.status(502).json({ ok:false, error:'Could not read the receipt (AI busy or image unclear) — try again or enter it manually.' });
+    // Surface WHY, so a bad key or a retired model name is diagnosable instead
+    // of being reported as a generic failure.
+    return res.status(502).json({ ok:false,
+      error:'Could not read the receipt — enter it manually.',
+      detail: diag.join(' | ').slice(0, 400) });
   }
 
   return false;
