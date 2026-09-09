@@ -7,6 +7,8 @@ import { supaFetch, supa } from '../lib/db.js';
 import { SUPABASE_URL }    from '../lib/config.js';
 
 const INV_ACTIONS = new Set([
+  // reporting
+  'invTheoreticalUsage','invVariance',
   // meta
   'invGetConfig','invSetConfig','invGetRefData','invSettingAudit',
   // items
