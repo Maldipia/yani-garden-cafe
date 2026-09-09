@@ -99,7 +99,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <img src="https://hnynvclpvfxzlfjphefj.supabase.co/storage/v1/object/public/card-assets/fathers-day-logo.png" onerror="this.style.display='none'" alt="YANI">
   <h1>YANI Garden Cafe</h1>
   <p>Employee Time Tracker</p>
-  <p id="buildStamp" style="font-size:.6rem;opacity:.35;margin-top:2px">build k13</p>
+  <p id="buildStamp" style="font-size:.6rem;opacity:.35;margin-top:2px">build k14</p>
 </div>
 
 <div class="card">
@@ -406,7 +406,7 @@ function applyStaffResult(staff, skipPin){
   document.getElementById('pinRole').textContent=(_staff.role||'').replace(/_/g,' ')+' · '+_staff.staff_code;
   if(skipPin){
     // Trusted QR scan — no PIN. _pin stays '' so no PIN is sent to the server.
-    loadClockStateAndShow();
+    autoActOnScan();
   } else {
     showStep('s4');
   }
@@ -433,6 +433,36 @@ function phTimeStr(iso){
   if(!iso) return '';
   try{ return new Date(iso).toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit',hour12:true,timeZone:'Asia/Manila'}); }
   catch(e){ return ''; }
+}
+
+
+// ── AUTO-ACTION ON SCAN ────────────────────────────────────────────────────
+// A scan should do the obvious thing rather than make someone hunt for a
+// button. Only UNAMBIGUOUS transitions fire automatically:
+//
+//   OUT      -> CLOCK_IN    starting the shift is the only thing it can mean
+//   ON_BREAK -> BREAK_END   they came back; ending the break is the only option
+//   IN       -> ask         could be a break or the end of the shift
+//
+// CLOCK_OUT is deliberately NEVER automatic. Ending someone's shift by mistake
+// costs them paid hours and is the one action that is painful to undo.
+async function autoActOnScan(){
+  var st = await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({action:'hrGetClockStatus',staffCode:_staff.staff_code})})
+    .then(function(r){return r.json();}).catch(function(){return {ok:false};});
+
+  if(!st.ok){ loadClockStateAndShow(); return; }
+
+  var auto = st.state==='OUT'      ? 'CLOCK_IN'
+           : st.state==='ON_BREAK' ? 'BREAK_END'
+           : null;
+
+  if(!auto){ loadClockStateAndShow(); return; }   // IN, or anything unexpected
+
+  // clockEvent() owns the success screen, countdown and reset — reuse it so
+  // the scanned path and the tapped path cannot drift apart.
+  showStep('s5');
+  await clockEvent(auto);
 }
 
 async function loadClockStateAndShow(){
@@ -476,7 +506,7 @@ async function loadClockStateAndShow(){
 async function clockEvent(type){
   document.getElementById('evErr').style.display='none';
   var r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({action:'hrClockEvent',staffCode:_staff.staff_code,eventType:type,pin:_pin||undefined,kioskToken:kioskToken(),source:(_via==='QR'?'QR':'PIN'),build:'k13'})}).then(function(r){return r.json();}).catch(function(){return {ok:false,error:'Network error'};});
+    body:JSON.stringify({action:'hrClockEvent',staffCode:_staff.staff_code,eventType:type,pin:_pin||undefined,kioskToken:kioskToken(),source:(_via==='QR'?'QR':'PIN'),build:'k14'})}).then(function(r){return r.json();}).catch(function(){return {ok:false,error:'Network error'};});
   if(!r.ok){showErr('evErr','Error: '+(r.error||'Failed. Try again.'));return;}
   var color=EV_COLOR[type]||'#4ade80';
   var icon=document.getElementById('doneIcon');
