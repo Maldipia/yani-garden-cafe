@@ -14,6 +14,8 @@
   "type": "module",
   "scripts": {
     "guard": "node scripts/check-actions.mjs",
-    "test": "node tests/smoke.mjs"
+    "test": "node tests/smoke.mjs",
+    "guard:registration": "node scripts/check-registration.mjs",
+    "check": "node scripts/check-actions.mjs && node scripts/check-registration.mjs"
   }
 }

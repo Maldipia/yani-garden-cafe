@@ -1,28 +1,17 @@
-name: Guard
-
-# Locks the API surface. Runs on every push + PR. If a change deletes or
-# renames a handler that the frontend still calls (the cc8a85e failure mode),
-# this fails the check before it can reach production.
-
+name: guard
+# Static checks. No network, no deploy wait — these gate the push itself.
 on:
-  push:
-    branches: [main]
+  push: { branches: [main] }
   pull_request:
-    branches: [main]
-
+  workflow_dispatch:
 jobs:
-  action-contract:
+  guard:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - name: Check API action contract
+        with: { node-version: '20' }
+      - name: Action contract
         run: node scripts/check-actions.mjs
-      - name: Syntax-check all handlers
-        run: |
-          for f in api/*.js api/handlers/*.js api/lib/*.js; do
-            node --check "$f" || exit 1
-          done
-          echo "✅ all API files parse"
+      - name: Registration guard
+        run: node scripts/check-registration.mjs

@@ -6,6 +6,7 @@
 // ══════════════════════════════════════════════════════════════════════
 
 import { SUPABASE_URL, SUPABASE_KEY }   from './lib/config.js';
+import { supaFetch }                    from './lib/db.js';
 import { checkRateLimit, getRolePermissions } from './lib/cache.js';
 import { verifyToken, buildAuthCtx }    from './lib/auth.js';
 import { routeMenu }       from './handlers/menu.js';
@@ -96,6 +97,22 @@ export default async function handler(req, res) {
     }
   } catch (err) {
     console.error('POS handler error:', err);
+    // Persist it. console.error goes somewhere nobody reads, so an exception
+    // surfaced to the user only as "Internal server error" with no way to find
+    // out what actually broke — which cost hours tonight more than once.
+    try {
+      await supaFetch(`${SUPABASE_URL}/rest/v1/error_log`, {
+        method: 'POST',
+        body: JSON.stringify({
+          action:  typeof action === 'string' ? action.slice(0, 80) : null,
+          message: String(err && err.message || err).slice(0, 500),
+          stack:   String(err && err.stack || '').slice(0, 2000),
+          user_id: String((body && body.userId) || '').slice(0, 40) || null,
+          ip:      String(req.headers['x-forwarded-for'] || '').slice(0, 60) || null,
+          path:    String(req.url || '').slice(0, 200),
+        }),
+      });
+    } catch (_) { /* logging must never mask the original failure */ }
     return res.status(500).json({ ok: false, error: 'Internal server error' });
   }
 }
