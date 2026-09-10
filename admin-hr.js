@@ -178,8 +178,29 @@ function selectHRStaff(id) {
   _hrActiveTab='profile';
   renderHRStaffList();
   renderHRDetail(_hrSelected);
+  // On a phone the two-column layout does not fit: the list was capped at
+  // 240px so only two staff showed, then an empty 'Select a staff member'
+  // panel filled the rest of the screen. Show ONE pane at a time instead.
+  _hrSyncMobilePane();
   const dc=document.getElementById('hrDetailCol');
-  if(dc&&window.innerWidth<768) dc.scrollIntoView({behavior:'smooth'});
+  if(dc&&window.innerWidth<768) dc.scrollTop=0;
+}
+
+// Toggle which pane is visible on narrow screens. Desktop is unaffected —
+// the class only has meaning inside the mobile media query.
+function _hrSyncMobilePane(){
+  const wrap=document.querySelector('.hr-wrap');
+  if(wrap) wrap.classList.toggle('has-selection', !!_hrSelected);
+}
+
+// Back to the list from a staff profile on mobile.
+function hrBackToList(){
+  _hrSelected=null;
+  renderHRStaffList();
+  renderHRDetail(null);
+  _hrSyncMobilePane();
+  const lc=document.querySelector('.hr-list-col');
+  if(lc) lc.scrollTop=0;
 }
 
 // ── Detail panel ───────────────────────────────────────────────────────────
@@ -189,6 +210,7 @@ function renderHRDetail(s) {
   const rs=HR_ROLE_STYLE[s.role]||HR_ROLE_STYLE.STAFF;
   const age=s.date_of_birth?Math.floor((Date.now()-new Date(s.date_of_birth))/31557600000):'';
   el.innerHTML=`
+    <button class="hr-back-btn" onclick="hrBackToList()">← All staff</button>
     <div class="hr-detail-hdr" style="border-top:3px solid ${rs.bg}">
       <div class="hr-detail-avatar" style="background:${rs.bg};color:${rs.fg}">${(s.full_name||'?').charAt(0).toUpperCase()}</div>
       <div class="hr-detail-hdr-info">

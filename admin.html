@@ -585,6 +585,20 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
   #orderGrid .order-card { min-width:100%; max-width:100% }
   .stats-bar { margin:12px }
   .stat-value { font-size:1.2rem }
+
+  /* The header ran off the right edge on a phone — Logout was cut in half and
+     the PIN button crowded the role pill. Let it wrap instead of overflowing. */
+  .topbar { flex-wrap:wrap; gap:8px; padding:10px 12px; }
+  .topbar .brand-title, .topbar h1 { font-size:1rem }
+  .topbar button, .topbar .pin-btn, .topbar .logout-btn { padding:6px 10px; font-size:.75rem }
+
+  /* Horizontal rows already scroll; make that discoverable rather than
+     looking like content is simply missing. */
+  .quick-links { padding:0 12px 12px; scroll-snap-type:x proximity; }
+  .quick-link { scroll-snap-align:start; flex-shrink:0 }
+
+  /* The category key wrapped into an awkward second line mid-word. */
+  #catLegend { gap:8px 12px; padding:6px 12px; }
 }
 
 /* ── Platform Badge on Order Cards ── */
@@ -2343,7 +2357,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 
   <script src="/admin-orders.js?v=44"></script>
 <script src="/admin-payments.js?v=26"></script>
-<script src="/admin-hr.js?v=27"></script>
+<script src="/admin-hr.js?v=28"></script>
   <script src="/admin-menu.js?v=27"></script>
 <script src="/admin-online.js?v=36"></script>
 <script src="/admin-tables.js?v=20"></script>
@@ -2474,9 +2488,25 @@ select.hr-edit-input{cursor:pointer}
 .hr-loading{text-align:center;padding:30px;font-size:.82rem;color:#6b7280}
 .hr-error{color:#dc2626;padding:16px;font-size:.82rem;background:#fef2f2;border-radius:8px}
 .hr-link-btn{background:none;border:none;color:#1a3a2a;cursor:pointer;font-size:.75rem;font-weight:700;padding:0;text-decoration:underline}
+/* The back button only exists on mobile, where one pane shows at a time. */
+.hr-back-btn{display:none}
+
 @media(max-width:700px){
   .hr-wrap{flex-direction:column}
-  .hr-list-col{width:100%;border-right:none;border-bottom:1px solid #e5e7eb;max-height:240px}
+  /* ONE PANE AT A TIME.
+     The list was capped at 240px, so a phone showed two staff and then an
+     empty 'Select a staff member' panel filling the rest of the screen.
+     Now the list gets the whole viewport until a name is tapped, and the
+     profile replaces it with a way back. */
+  .hr-list-col{width:100%;border-right:none;border-bottom:none;max-height:none;flex:1 1 auto}
+  .hr-wrap.has-selection .hr-list-col{display:none}
+  .hr-wrap:not(.has-selection) .hr-detail-col{display:none}
+  .hr-back-btn{
+    display:block;width:100%;text-align:left;
+    background:var(--mist-light,#f1f5f9);border:none;border-bottom:1px solid #e5e7eb;
+    padding:12px 14px;font-size:.85rem;font-weight:700;color:var(--forest-deep,#1f3d2b);
+    cursor:pointer;position:sticky;top:0;z-index:5;
+  }
   .hr-grid-2{grid-template-columns:1fr}
   .hr-leave-grid{grid-template-columns:1fr 1fr}
   .hr-week-grid{grid-template-columns:repeat(4,1fr)}
