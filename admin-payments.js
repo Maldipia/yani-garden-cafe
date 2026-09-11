@@ -3,6 +3,7 @@
 // ══════════════════════════════════════════════════════════
 
 async function loadPayments() {
+  loadReconciliation();   // fire and forget — never block the payments list
   var result = await api('listPayments', { userId: currentUser && currentUser.userId });
   if (result.ok) {
     allPayments = result.payments || [];
@@ -12,6 +13,52 @@ async function loadPayments() {
     renderPayCards();
     renderFilters(); // Update the count on the Payments tab
   }
+}
+
+
+// ── RECONCILIATION PANEL ───────────────────────────────────────────────────
+// Money in an ambiguous state: proof uploaded but never verified, orders served
+// but never marked paid, amounts that do not match, paid-then-cancelled with no
+// refund decision, payments pointing at deleted orders. All of it was invisible
+// until a manual audit found PHP 79,000 across five months.
+async function loadReconciliation(){
+  var el = document.getElementById('reconPanel');
+  if(!el) return;
+  var r = await api('posReconciliation', { userId: currentUser && currentUser.userId });
+  if(!r || !r.ok || !(r.rows||[]).length){
+    el.innerHTML = '<div style="padding:10px 12px;border:1px solid #bbf7d0;background:#f0fdf4;'
+      + 'border-radius:8px;font-size:.78rem;color:#15803d;font-weight:600">'
+      + '✅ Nothing unreconciled — every payment and order agrees.</div>';
+    return;
+  }
+  var peso = function(v){ return '₱' + parseFloat(v||0).toLocaleString('en-PH',
+    {minimumFractionDigits:2, maximumFractionDigits:2}); };
+  var rows = r.rows.map(function(x){
+    var high = x.severity === 'high';
+    return '<tr style="border-bottom:1px solid #f1f5f9">'
+      + '<td style="padding:7px 10px">'
+        + '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px;'
+        + 'background:' + (high ? '#dc2626' : '#f59e0b') + '"></span>'
+        + esc(x.issue) + '</td>'
+      + '<td style="padding:7px 10px;text-align:right;font-weight:700">' + x.cnt + '</td>'
+      + '<td style="padding:7px 10px;text-align:right;font-weight:800;color:'
+        + (high ? '#b91c1c' : '#b45309') + '">' + peso(x.pesos) + '</td></tr>';
+  }).join('');
+  el.innerHTML =
+    '<details style="border:1.5px solid #fecaca;background:#fef2f2;border-radius:8px">'
+    + '<summary style="cursor:pointer;padding:10px 12px;font-size:.8rem;font-weight:800;color:#b91c1c">'
+    +   '⚖️ ' + peso(r.totalPesos) + ' unreconciled across ' + r.rows.length + ' issue(s)'
+    +   '<span style="font-weight:500;color:#7f1d1d"> — tap for the breakdown</span></summary>'
+    + '<table style="width:100%;border-collapse:collapse;font-size:.76rem;background:#fff">'
+    +   '<thead><tr style="background:#f8fafc;text-align:left;color:#475569">'
+    +     '<th style="padding:6px 10px">ISSUE</th>'
+    +     '<th style="padding:6px 10px;text-align:right">COUNT</th>'
+    +     '<th style="padding:6px 10px;text-align:right">AMOUNT</th></tr></thead>'
+    +   '<tbody>' + rows + '</tbody></table>'
+    + '<div style="padding:8px 12px;font-size:.68rem;color:#7f1d1d">'
+    +   'Red = needs a decision about real money. Amber = worth checking. '
+    +   'Closing the cash session daily is what keeps this list short.</div>'
+    + '</details>';
 }
 
 function renderPayFilters() {

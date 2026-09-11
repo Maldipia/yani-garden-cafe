@@ -1507,6 +1507,9 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 
   <!-- Payments Management View -->
   <div id="paymentsView" style="display:none">
+    <!-- Reconciliation. These figures existed for five months and were only
+         found by a database audit; nothing in the app showed them. -->
+    <div id="reconPanel" style="margin:0 16px 12px"></div>
     <div class="pay-filters" id="payFilters"></div>
     <div class="order-grid" id="payGrid"></div>
   </div>
@@ -2356,7 +2359,7 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 <script src="/admin-core.js?v=50"></script>
 
   <script src="/admin-orders.js?v=44"></script>
-<script src="/admin-payments.js?v=26"></script>
+<script src="/admin-payments.js?v=27"></script>
 <script src="/admin-hr.js?v=28"></script>
   <script src="/admin-menu.js?v=27"></script>
 <script src="/admin-online.js?v=36"></script>

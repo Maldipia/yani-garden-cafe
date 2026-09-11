@@ -75,6 +75,29 @@ export async function routePayments(action, body, auth, req, res) {
       return res.status(200).json({ ok: true, orderId, method, payStatus, held });
     }
 
+    // ── posReconciliation ────────────────────────────────────────────────
+    // Five ways money goes ambiguous here. Every one was found by a manual
+    // database audit after five months of trading; none was visible in the
+    // app. Surfacing them is the difference between catching a problem the
+    // same day and discovering PHP 79,000 in limbo during an audit.
+    if (action === 'posReconciliation') {
+      const authRc = await checkAuth(['OWNER','ADMIN','MANAGER']);
+      if (!authRc.ok) return res.status(403).json({ ok:false, error: authRc.error });
+      const today = new Date(Date.now() + 8*3600*1000).toISOString().slice(0,10);
+      const from = /^\d{4}-\d{2}-\d{2}$/.test(body.from || '') ? body.from : '2020-01-01';
+      const to   = /^\d{4}-\d{2}-\d{2}$/.test(body.to   || '') ? body.to   : today;
+      const r = await supaFetch(`${SUPABASE_URL}/rest/v1/rpc/pos_reconciliation`,
+        { method:'POST', body: JSON.stringify({ p_from: from, p_to: to }) });
+      if (!r.ok) return res.status(500).json({ ok:false, error:'Could not build the reconciliation' });
+      const rows = (Array.isArray(r.data) ? r.data : []).filter(x => x.cnt > 0);
+      const totalPesos = rows.reduce((t, x) => t + parseFloat(x.pesos || 0), 0);
+      const highPesos  = rows.filter(x => x.severity === 'high')
+                             .reduce((t, x) => t + parseFloat(x.pesos || 0), 0);
+      return res.status(200).json({ ok:true, from, to, rows,
+        totalPesos: Math.round(totalPesos*100)/100,
+        highPesos:  Math.round(highPesos*100)/100 });
+    }
+
     // ── revertPayment ────────────────────────────────────────────────────
     // Marking an order paid is one tap and was irreversible: setPaymentMethod
     // always writes VERIFIED and nothing could undo it. A mis-tap left an
