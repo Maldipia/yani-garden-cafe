@@ -1353,6 +1353,45 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
 [style*="overflow-y:auto"] table thead th::after{
   content:"";position:absolute;left:0;right:0;bottom:0;height:1px;background:rgba(0,0,0,.10);
 }
+
+/* ── Purchase line editor ──────────────────────────────────────────────────
+   Desktop keeps the compact column layout. On a phone the fixed-width columns
+   overflowed, the header stopped lining up with the inputs, and a unit price
+   could easily be typed into the qty box — producing a 0.00 total. Below
+   560px each field carries its own label instead. */
+.exp-line-head, .exp-line{
+  display:grid; grid-template-columns:1fr 46px 52px 56px 62px 60px 20px; gap:4px;
+}
+.exp-line-head{ font-size:.54rem; color:var(--timber); font-weight:700;
+  text-transform:uppercase; letter-spacing:.3px; margin-bottom:3px }
+.exp-line{ margin-bottom:5px; align-items:center }
+.exp-f{ display:contents }                 /* label is transparent on desktop */
+.exp-f > span{ display:none }
+.exp-line input, .exp-line select{
+  width:100%; font-size:.74rem; padding:6px; border:1.5px solid var(--mist);
+  border-radius:6px; background:#fff;
+}
+.exp-line .exp-base{ background:#eef5ff; color:#1d4ed8; font-weight:700; font-size:.66rem }
+.exp-line .exp-total{ background:var(--mist-light); font-weight:700 }
+.exp-del{ background:none; border:none; color:#b91c1c; cursor:pointer; font-size:.85rem }
+
+@media (max-width:560px){
+  .exp-line-head{ display:none }           /* labels live on the fields now */
+  .exp-line{
+    grid-template-columns:1fr 1fr; gap:8px 10px;
+    border:1px solid var(--mist); border-radius:10px;
+    padding:10px 12px 12px; margin-bottom:10px; background:#fcfdfc;
+    position:relative;
+  }
+  .exp-f{ display:flex; flex-direction:column; gap:3px }
+  .exp-f > span{
+    display:block; font-size:.6rem; font-weight:700; letter-spacing:.3px;
+    text-transform:uppercase; color:var(--timber);
+  }
+  .exp-f:first-of-type{ grid-column:1 / -1 }        /* item name spans the row */
+  .exp-line input, .exp-line select{ font-size:16px; padding:9px }  /* 16px stops iOS zooming on focus */
+  .exp-del{ position:absolute; top:6px; right:8px; font-size:1rem; padding:2px 6px }
+}
 </style>
 <style id="menu-tag-styles">
 .menu-tag-row{background:#f0f7f0;border-radius:8px;padding:8px 12px}

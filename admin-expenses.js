@@ -443,17 +443,25 @@ function _expPurchaseForm(){
 function _expUnitOpts(sel){ return '<option value="">unit</option>'+_expUnits.map(function(u){return '<option value="'+u.id+'"'+(sel==u.id?' selected':'')+'>'+escH(u.name)+'</option>';}).join(''); }
 function _expRenderLines(){
   var box=document.getElementById('epLines'); if(!box) return;
-  var G='display:grid;grid-template-columns:1fr 42px 48px 50px 58px 56px 18px;gap:3px';
-  var h='<div style="'+G+';font-size:.54rem;color:var(--timber);font-weight:700;text-transform:uppercase;margin-bottom:2px"><span>Item</span><span>Qty</span><span>Unit</span><span>Unit ₱</span><span>₱/base</span><span>Total</span><span></span></div>';
+  // Was a 7-column grid with fixed widths. On a phone the columns overflowed,
+  // so the header row and the input row no longer lined up and it was easy to
+  // type a unit price into the qty box — which is why totals came out 0.00.
+  // Each field now carries its own label, shown only on narrow screens.
+  var f=function(label,inner){
+    return '<label class="exp-f"><span>'+label+'</span>'+inner+'</label>';
+  };
+  var h='<div class="exp-line-head"><span>Item</span><span>Qty</span><span>Unit</span>'
+      + '<span>Unit \u20b1</span><span>\u20b1/base</span><span>Total</span><span></span></div>';
   _expLines.forEach(function(l,i){
-    h+='<div style="'+G+';margin-bottom:4px;align-items:center">'
-      +'<input id="el_i_'+i+'" list="expItemList" value="'+(l.item!=null?escH(l.item):'')+'" placeholder="item" style="font-size:.72rem;padding:5px;border:1.5px solid var(--mist);border-radius:6px">'
-      +'<input id="el_q_'+i+'" type="number" step="0.001" value="'+(l.qty!=null?escH(l.qty):'')+'" oninput="_expLineCalc('+i+')" style="font-size:.72rem;padding:5px;border:1.5px solid var(--mist);border-radius:6px">'
-      +'<select id="el_u_'+i+'" onchange="_expLineCalc('+i+')" style="font-size:.66rem;padding:5px;border:1.5px solid var(--mist);border-radius:6px">'+_expUnitOpts(l.unitId)+'</select>'
-      +'<input id="el_p_'+i+'" type="number" step="0.01" value="'+(l.unitPrice!=null?escH(l.unitPrice):'')+'" oninput="_expLineCalc('+i+')" style="font-size:.72rem;padding:5px;border:1.5px solid var(--mist);border-radius:6px">'
-      +'<input id="el_n_'+i+'" readonly title="normalized cost per base unit" style="font-size:.66rem;padding:5px;border:1.5px solid var(--mist);border-radius:6px;background:#eef5ff;color:#1d4ed8;font-weight:700">'
-      +'<input id="el_t_'+i+'" type="number" step="0.01" value="'+(l.total!=null?escH(l.total):'')+'" readonly style="font-size:.72rem;padding:5px;border:1.5px solid var(--mist);border-radius:6px;background:var(--mist-light)">'
-      +'<button onclick="_expRemoveLine('+i+')" style="font-size:.8rem;background:none;border:none;color:#b91c1c;cursor:pointer">✕</button></div>';
+    h+='<div class="exp-line">'
+      +f('Item','<input id="el_i_'+i+'" list="expItemList" value="'+(l.item!=null?escH(l.item):'')+'" placeholder="item name">')
+      +f('Qty','<input id="el_q_'+i+'" type="number" inputmode="decimal" step="0.001" value="'+(l.qty!=null?escH(l.qty):'')+'" oninput="_expLineCalc('+i+')" placeholder="0">')
+      +f('Unit','<select id="el_u_'+i+'" onchange="_expLineCalc('+i+')">'+_expUnitOpts(l.unitId)+'</select>')
+      +f('Unit \u20b1','<input id="el_p_'+i+'" type="number" inputmode="decimal" step="0.01" value="'+(l.unitPrice!=null?escH(l.unitPrice):'')+'" oninput="_expLineCalc('+i+')" placeholder="0.00">')
+      +f('\u20b1/base','<input id="el_n_'+i+'" readonly title="normalized cost per base unit" class="exp-base">')
+      +f('Total','<input id="el_t_'+i+'" type="number" step="0.01" value="'+(l.total!=null?escH(l.total):'')+'" readonly class="exp-total">')
+      +'<button class="exp-del" onclick="_expRemoveLine('+i+')" title="Remove this item">\u2715</button>'
+      +'</div>';
   });
   box.innerHTML=h;
   _expLines.forEach(function(l,i){ _expLineCalc(i); });
