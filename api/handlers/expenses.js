@@ -362,8 +362,17 @@ export async function routeExpenses(action, body, auth, req, res) {
           const now = new Date(todayPH + 'T00:00:00Z');
           const daysOff = (now - d) / 86400000;
           if (daysOff > 730 || daysOff < -60) {
+            // Clearly wrong — substitute today and flag it.
             data.date_suspect = data.date;
-            data.date = todayPH;            // fall back to today; user can correct
+            data.date = todayPH;
+          } else if (Math.abs(daysOff) > 0.5) {
+            // Plausible but not today. A 3-day miss slipped through silently
+            // and filed a PHP 12,178 receipt under the wrong date, where it
+            // sorted below three days of other records and looked lost.
+            // Keep the scanned date — it may well be right — but say so.
+            data.date_differs = data.date;
+            data.date_today   = todayPH;
+            data.days_off     = Math.round(daysOff);
           }
         }
         // Record the outcome so a failed or empty scan is diagnosable later.

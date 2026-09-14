@@ -771,8 +771,15 @@ function _expOpenFromScan(d){
       S('epSup',d.supplier); S('epDate',d.date); S('epRef',d.reference_no);
       _expSetSelect('epPay',d.payment_method); _expSetSelect('epCat',d.category);
       _expRenderLines();
-      if(d.date_suspect) showToast('⚠️ Date on the receipt read as '+d.date_suspect+' — set to today, please check','error');
+      if(d.date_suspect) showToast('⚠️ Date read as '+d.date_suspect+' — set to today, please check','error');
+      else if(d.date_differs) showToast('📅 Receipt dated '+d.date_differs+' ('+Math.abs(d.days_off)+' day'+(Math.abs(d.days_off)===1?'':'s')+' ago) — correct it if that is wrong','error');
       else showToast('✅ Receipt read — review each line & Save');
+      // Make it visible on the form itself, not just a toast that disappears.
+      if(d.date_differs){
+        var de=document.getElementById('epDate');
+        if(de){ de.style.background='#fffbeb'; de.style.borderColor='#f59e0b';
+                de.title='Read from the receipt as '+d.date_differs+'. Today is '+d.date_today+'.'; }
+      }
     },50);
   } else {
     _expRecMode='general';
@@ -783,7 +790,13 @@ function _expOpenFromScan(d){
       S('geAmt',d.grand_total); S('geDate',d.date); S('geRef',d.reference_no);
       _expSetSelect('geCat',d.category);
       if(d.date_suspect) showToast('⚠️ Date read as '+d.date_suspect+' — set to today, please check','error');
+      else if(d.date_differs) showToast('📅 Bill dated '+d.date_differs+' ('+Math.abs(d.days_off)+' day'+(Math.abs(d.days_off)===1?'':'s')+' ago) — correct it if that is wrong','error');
       else showToast('✅ Bill read — review & Save');
+      if(d.date_differs){
+        var ge=document.getElementById('geDate');
+        if(ge){ ge.style.background='#fffbeb'; ge.style.borderColor='#f59e0b';
+                ge.title='Read from the receipt as '+d.date_differs+'. Today is '+d.date_today+'.'; }
+      }
     },50);
   }
 }
