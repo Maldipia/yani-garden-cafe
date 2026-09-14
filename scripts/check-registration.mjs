@@ -106,6 +106,23 @@ const missing = assets.filter(([, f]) => {
 if (missing.length) fail('admin.html references a script that does not exist', missing.map(m => m[1]).join(', '));
 else ok(`all ${assets.length} versioned admin scripts exist`);
 
+// ── 5. Version markers must be unique per file ────────────────────────────
+// Bumping ?v= by hand is error-prone: a sed that matches nothing fails
+// silently, and the page then requests a stale version string while the file
+// has changed. That happened three times in one session.
+const dupes = {};
+for (const [, file, ver] of assets) {
+  dupes[file] = dupes[file] || new Set();
+  dupes[file].add(ver);
+}
+const multi = Object.entries(dupes).filter(([, v]) => v.size > 1);
+if (multi.length) {
+  fail('admin.html references the same script at two different versions',
+       multi.map(([f, v]) => `${f}: ${[...v].join(', ')}`).join(' | '));
+} else {
+  ok('each script is referenced at exactly one version');
+}
+
 // ── result ────────────────────────────────────────────────────────────────
 if (failures.length) {
   console.log(`\n\x1b[31m✗ ${failures.length} registration problem(s)\x1b[0m\n`);
