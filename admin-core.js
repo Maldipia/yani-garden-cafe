@@ -756,6 +756,12 @@ function renderStats() {
     }).catch(function(){});
   }
 
+  // ── Online orders waiting ────────────────────────────────────────────────
+  // An online customer is not standing in front of anyone, so a forgotten
+  // order is invisible: five sat in PREPARING for 98 days. Check on every
+  // refresh and put it where it cannot be missed.
+  checkOnlineWaiting();
+
   // Count pending payments across all orders
   // Count orders with SUBMITTED payment (waiting for verification)
   var pendingPayments = allOrders.filter(function(o){ return o.paymentStatus === 'SUBMITTED' && !o.isTest }).length;
@@ -764,6 +770,32 @@ function renderStats() {
   document.getElementById('pendingCount').textContent = displayCount || '';
   if (!displayCount) document.getElementById('pendingCount').textContent = '0';
 }
+
+
+// Banner for online orders left open more than two hours.
+async function checkOnlineWaiting(){
+  try{
+    var r = await api('posReconciliation', { userId: currentUser && currentUser.userId });
+    var bar = document.getElementById('onlineWaitBar');
+    if(!bar){
+      bar = document.createElement('div');
+      bar.id = 'onlineWaitBar';
+      bar.style.cssText = 'display:none;position:sticky;top:0;z-index:120;padding:10px 14px;'
+        + 'background:#fef2f2;border-bottom:2px solid #fecaca;color:#b91c1c;'
+        + 'font-size:.82rem;font-weight:700;cursor:pointer';
+      bar.onclick = function(){ if(typeof switchView==='function') switchView('online'); };
+      document.body.insertBefore(bar, document.body.firstChild);
+    }
+    var n = (r && r.onlineWaiting) || 0;
+    if(!n){ bar.style.display='none'; return; }
+    var d = (r.onlineDetail || [])[0] || {};
+    bar.innerHTML = '🛵 ' + n + ' online order' + (n>1?'s':'') + ' waiting — oldest '
+      + (d.customer ? escHtmlSafe(d.customer) + ', ' : '')
+      + Math.round(d.hours_open || 0) + 'h. Tap to open.';
+    bar.style.display = 'block';
+  }catch(_){ /* never block the dashboard */ }
+}
+function escHtmlSafe(s){ var d=document.createElement('div'); d.textContent=s==null?'':s; return d.innerHTML; }
 
 // ══════════════════════════════════════════════════════════
 // FILTERS

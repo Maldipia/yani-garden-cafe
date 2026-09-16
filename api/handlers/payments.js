@@ -90,12 +90,17 @@ export async function routePayments(action, body, auth, req, res) {
         { method:'POST', body: JSON.stringify({ p_from: from, p_to: to }) });
       if (!r.ok) return res.status(500).json({ ok:false, error:'Could not build the reconciliation' });
       const rows = (Array.isArray(r.data) ? r.data : []).filter(x => x.cnt > 0);
+      // Online orders are the only category where a CUSTOMER is waiting, so
+      // they are surfaced separately rather than buried in a money total.
+      const online = rows.find(x => /Online orders/i.test(x.issue)) || null;
       const totalPesos = rows.reduce((t, x) => t + parseFloat(x.pesos || 0), 0);
       const highPesos  = rows.filter(x => x.severity === 'high')
                              .reduce((t, x) => t + parseFloat(x.pesos || 0), 0);
       return res.status(200).json({ ok:true, from, to, rows,
         totalPesos: Math.round(totalPesos*100)/100,
-        highPesos:  Math.round(highPesos*100)/100 });
+        highPesos:  Math.round(highPesos*100)/100,
+        onlineWaiting: online ? online.cnt : 0,
+        onlineDetail:  online ? online.detail : [] });
     }
 
     // ── revertPayment ────────────────────────────────────────────────────
