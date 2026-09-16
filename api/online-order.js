@@ -132,6 +132,11 @@ async function supabase(method, path, body = null, params = null) {
 // Verifies the request carries a valid staff userId (OWNER/ADMIN, active).
 // Mirrors the dine-in checkAuth mechanism so online admin actions can't be
 // called anonymously.
+// businessName was referenced in both SMS templates but never defined, so
+// every send threw 'businessName is not defined' and was swallowed into
+// smsNote. That is why sms_sent is false on all 29 historical orders.
+const BUSINESS_NAME = 'YANI Garden Cafe';
+
 const VALID_USER_ID_RE = /^USR_\d{3,6}$/;
 async function requireStaff(payload, allowedRoles = ['OWNER', 'ADMIN']) {
   const userId = String((payload && payload.userId) || '').trim();
@@ -517,6 +522,13 @@ export default async function handler(req, res) {
 
     // ── GET ALL ONLINE ORDERS (admin) ─────────────────────────
     if (action === 'getOnlineOrders') {
+      // SECURITY: this returned every online order — customer names, phone
+      // numbers, emails and delivery addresses — with no credentials at all.
+      // The other admin actions in this file already used requireStaff; this
+      // one was simply missed.
+      const authOO = await requireStaff(payload, ['OWNER','ADMIN','MANAGER','CASHIER','KITCHEN']);
+      if (!authOO.ok) return res.status(403).json({ ok:false, error: authOO.error });
+
       const { status, limit = 50 } = payload;
       
       const params = {
@@ -570,7 +582,7 @@ export default async function handler(req, res) {
           });
           if (orders?.length) {
             const order = orders[0];
-            const message = `Hi ${order.customer_name}! Your ${businessName || "cafe"} order (${orderRef}) is now READY for pickup. Thank you for ordering!`;
+            const message = `Hi ${order.customer_name}! Your ${BUSINESS_NAME} order (${orderRef}) is now READY for pickup. Thank you for ordering!`;
             const smsResult = await sendSMS(order.customer_phone, message);
             smsSent = smsResult.ok;
             smsNote = smsResult.ok ? `SMS sent to ${order.customer_phone}` : `SMS failed: ${smsResult.error}`;
@@ -650,7 +662,7 @@ export default async function handler(req, res) {
       }
       
       const order = orders[0];
-      const message = `Hi ${order.customer_name}! Your ${businessName || "cafe"} order (${orderRef}) is now READY for pickup. Thank you!`;
+      const message = `Hi ${order.customer_name}! Your ${BUSINESS_NAME} order (${orderRef}) is now READY for pickup. Thank you!`;
       
       const smsResult = await sendSMS(order.customer_phone, message);
       
