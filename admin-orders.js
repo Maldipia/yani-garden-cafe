@@ -505,6 +505,12 @@ function renderOrders() {
     if (canEdit && o.status !== 'COMPLETED' && o.status !== 'CANCELLED') {
       html += '<button class="oc-btn" style="background:var(--gold);color:#fff;margin-top:6px;width:100%" onclick="openEditOrder(\'' + o.orderId + '\')">✏️ Edit Order</button>';
     }
+    // Restore — OWNER only, on a cancelled or deleted order. Putting an order
+    // back used to require running SQL by hand.
+    if (currentUser.role === 'OWNER' && (o.status === 'CANCELLED' || o.isDeleted)) {
+      html += '<button class="oc-btn" style="background:#15803d;color:#fff;margin-top:6px;width:100%" '
+           +  'onclick="restoreOrder(\'' + o.orderId + '\')">\u21a9 Put this order back</button>';
+    }
     // Delete button (ADMIN/OWNER only, for completed/cancelled orders)
     var canDelete = (currentUser.role === 'OWNER' || currentUser.role === 'ADMIN');
     if (canDelete && (o.status === 'COMPLETED' || o.status === 'CANCELLED')) {
@@ -810,6 +816,31 @@ async function updateStatus(orderId, newStatus) {
 // ══════════════════════════════════════════════════════════
 // DELETE ORDER
 // ══════════════════════════════════════════════════════════
+
+// Owner-only undo for a cancelled or deleted order. Restores the status the
+// order held BEFORE it was cancelled — an order that was READY goes back to
+// READY, not into the kitchen queue as if it were new.
+async function restoreOrder(orderId){
+  var o = (allOrders || []).find(function(x){ return x.orderId === orderId; }) || {};
+  var what = o.isDeleted ? 'deleted' : 'cancelled';
+  var ok = await ygcConfirm('\u21a9 Put order back?',
+    orderId + ' \u2014 ' + (o.customerName || 'Guest') + ', \u20b1' + (o.total || 0)
+    + ' is currently ' + what + '.\n\nRestoring returns it to the board and to sales.',
+    'Put it back', 'Leave it');
+  if (!ok) return;
+
+  var reason = prompt('Why is this being restored? (optional, recorded)') || '';
+
+  var r = await api('restoreOrder', { orderId: orderId, reason: reason.trim(),
+                                      userId: currentUser && currentUser.userId });
+  if (r && r.ok) {
+    showToast('\u2705 ' + orderId + ' restored \u2014 now ' + r.status);
+    if (typeof loadOrders === 'function') await loadOrders();
+  } else {
+    showToast((r && r.error) || 'Could not restore', 'error');
+  }
+}
+
 async function deleteOrder(orderId) {
   // The dialog tells the user what deleting actually does. The old wording
   // ("cannot be undone") was both vague and untrue — a soft-deleted order can

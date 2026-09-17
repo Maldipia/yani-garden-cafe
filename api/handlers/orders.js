@@ -1073,6 +1073,71 @@ export async function routeOrders(action, body, auth, req, res) {
     }
 
     // ── deleteOrder ────────────────────────────────────────────────────────
+    // ── restoreOrder ──────────────────────────────────────────────────────
+    // Owner-only undo for a cancelled or deleted order. Until now putting an
+    // order back required me to run SQL — five orders were restored that way
+    // in one evening, which is not a workflow anyone should depend on.
+    //
+    // Restores to the status the order held BEFORE it was cancelled, read from
+    // the audit trail, rather than guessing NEW and dropping an order that was
+    // already READY back into the kitchen queue.
+    if (action === 'restoreOrder') {
+      const authRs = await checkAuth(['OWNER']);
+      if (!authRs.ok) return res.status(403).json({ ok:false, error: authRs.error });
+
+      const orderId = String(body.orderId || '').trim();
+      if (!isValidOrderId(orderId)) return res.status(400).json({ ok:false, error:'Invalid orderId' });
+
+      const curR = await supaFetch(`${SUPABASE_URL}/rest/v1/dine_in_orders`
+        + `?order_id=eq.${encodeURIComponent(orderId)}`
+        + `&select=status,is_deleted,payment_status,total,discounted_total,customer_name&limit=1`);
+      const oR = Array.isArray(curR.data) ? curR.data[0] : null;
+      if (!oR) return res.status(404).json({ ok:false, error:'Order not found' });
+
+      const wasCancelled = oR.status === 'CANCELLED';
+      const wasDeleted   = oR.is_deleted === true;
+      if (!wasCancelled && !wasDeleted) {
+        return res.status(400).json({ ok:false,
+          error:'That order is already active — nothing to restore.' });
+      }
+
+      // What was it before? Take the old_value of the most recent change INTO
+      // CANCELLED. Falls back to NEW only when the trail has nothing.
+      let prior = 'NEW';
+      if (wasCancelled) {
+        try {
+          const aR = await supaFetch(`${SUPABASE_URL}/rest/v1/order_audit_logs`
+            + `?order_id=eq.${encodeURIComponent(orderId)}`
+            + `&action=eq.STATUS_CHANGED&new_value=eq.CANCELLED`
+            + `&select=old_value,created_at&order=created_at.desc&limit=1`);
+          const prev = Array.isArray(aR.data) && aR.data[0] ? aR.data[0].old_value : null;
+          if (prev && prev !== 'CANCELLED') prior = prev;
+        } catch(_) {}
+      }
+
+      const stampR = new Date().toISOString();
+      const patchR = { updated_at: stampR };
+      if (wasCancelled) { patchR.status = prior; patchR.cancel_reason = null; }
+      if (wasDeleted)   { patchR.is_deleted = false; patchR.deleted_at = null; }
+
+      const rr = await supa('PATCH', 'dine_in_orders', patchR,
+        { order_id: `eq.${encodeURIComponent(orderId)}` });
+      if (!rr.ok) return res.status(500).json({ ok:false, error:'Could not restore the order' });
+
+      try {
+        await auditLog({ orderId, action: 'ORDER_RESTORED',
+          actor: { userId: authRs.userId || body.userId, role: authRs.role },
+          oldValue: wasDeleted ? 'deleted' : 'CANCELLED',
+          newValue: wasDeleted ? 'active' : prior,
+          details: { reason: String(body.reason || '').trim().slice(0,300) || null,
+                     amount: oR.discounted_total ?? oR.total,
+                     customer: oR.customer_name } });
+      } catch(_) {}
+
+      return res.status(200).json({ ok:true, orderId,
+        status: patchR.status || oR.status, restoredFrom: wasDeleted ? 'deleted' : 'cancelled' });
+    }
+
     if (action === 'deleteOrder') {
       const authDO = await checkAuth(['OWNER','ADMIN']);
       if (!authDO.ok) return res.status(403).json({ ok: false, error: authDO.error });
