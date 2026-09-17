@@ -140,15 +140,30 @@ a { color: var(--terra); text-decoration: none }
 /* ══════════════════════════════════════════════════════════
    CATEGORY TABS
    ══════════════════════════════════════════════════════════ */
+/* ── Category rail ────────────────────────────────────────────────────────
+   Was a horizontal strip above the grid: on a phone most categories sat off
+   screen and scrolled away as soon as the menu moved. Now a fixed vertical
+   rail beside the grid, so every category is reachable at any scroll position. */
+.menu-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  position: relative;
+  z-index: 1;
+}
 .cats {
   display: flex;
-  gap: 8px;
-  padding: 8px 16px 10px;
-  overflow-x: auto;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 6px 100px;
+  width: 74px;
+  flex-shrink: 0;
+  overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   position: sticky;
   top: 0;
+  max-height: 100vh;
   z-index: 90;
   background: var(--cream);
   box-shadow: 0 2px 6px rgba(0,0,0,.06);
@@ -156,21 +171,36 @@ a { color: var(--terra); text-decoration: none }
 .cats::-webkit-scrollbar { display: none }
 .cat-tab {
   flex-shrink: 0;
-  padding: 7px 16px;
-  border-radius: 20px;
-  font-size: .78rem;
-  font-weight: 600;
-  background: var(--white);
-  color: var(--coffee);
-  border: 1.5px solid var(--mist-light);
-  transition: all .2s;
-  letter-spacing: .3px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 9px 4px;
+  border-radius: 14px;
+  font-size: .56rem;
+  font-weight: 700;
+  line-height: 1.15;
+  text-align: center;
+  background: transparent;
+  color: var(--timber);
+  border: none;
+  transition: all .18s;
+  word-break: break-word;
 }
-.cat-tab.active {
+.cat-tab .cat-ico {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  background: var(--mist-light);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.15rem;
+  transition: all .18s;
+}
+.cat-tab.active { color: var(--forest-deep); }
+.cat-tab.active .cat-ico {
   background: var(--forest);
-  color: var(--white);
-  border-color: var(--forest);
+  box-shadow: 0 3px 10px rgba(31,61,43,.28);
 }
+.menu-grid { flex: 1; min-width: 0; }
 
 /* ══════════════════════════════════════════════════════════
    MENU GRID
@@ -217,6 +247,7 @@ a { color: var(--terra); text-decoration: none }
 }
 }
 .menu-img-wrap {
+  position: relative;
   width: 100%;
   aspect-ratio: 1;
   background: var(--mist-light);
@@ -241,7 +272,8 @@ a { color: var(--terra); text-decoration: none }
   font-size: 2rem;
   color: var(--mist);
 }
-.menu-info { padding: 10px 10px 12px }
+.menu-info {
+  padding-top: 14px; padding: 10px 10px 12px }
 .menu-name {
   font-family: var(--font-soul);
   font-size: .88rem;
@@ -261,11 +293,15 @@ a { color: var(--terra); text-decoration: none }
 }
 .menu-price-range { font-size: .68rem; color: var(--timber); font-weight: 500 }
 .menu-add-btn {
+  /* Anchored to the image, not the whole card, so it sits over the photo the
+     way the reference does and never drifts when a name wraps to two lines. */
   position: absolute;
-  bottom: 8px;
+  bottom: -17px;
   right: 8px;
-  width: 34px;
-  height: 34px;
+  width: 38px;
+  height: 38px;
+  border: 2.5px solid var(--white);
+  z-index: 3;
   border-radius: 50%;
   background: var(--forest);
   color: var(--white);
@@ -1237,10 +1273,12 @@ a { color: var(--terra); text-decoration: none }
   <button class="filter-chip" onclick="setContentFilter('nocaffeine')" id="cf-nocaffeine">💚 No Caffeine</button>
   <button class="filter-chip" onclick="setContentFilter('food')" id="cf-food">🍽️ Food</button>
 </div>
-<div class="cats" id="catTabs"></div>
-
-<!-- ═══════════════════ MENU GRID ═══════════════════ -->
-<div class="menu-grid" id="menuGrid"></div>
+<!-- Rail + grid side by side: categories stay on screen while the menu
+     scrolls, instead of a horizontal strip that scrolls out of reach. -->
+<div class="menu-layout">
+  <div class="cats" id="catTabs"></div>
+  <div class="menu-grid" id="menuGrid"></div>
+</div>
 
 <!-- ═══════════════════ EMPTY STATE ═══════════════════ -->
 <div id="emptyState" style="display:none;text-align:center;padding:60px 20px;position:relative;z-index:1">
@@ -1943,7 +1981,13 @@ function renderCategories() {
   var html = cats.map(function(c) {
     var active = c === state.activeCategory ? ' active' : '';
     var icon = c === 'ALL' ? '🍃' : getCategoryIcon(c);
-    return '<button class="cat-tab' + active + '" onclick="setCategory(\'' + esc(c) + '\')">' + icon + ' ' + esc(c) + '</button>';
+    // Icon in a circle above the label — the label stays readable in a 74px
+    // rail, and the active state reads from the filled circle at a glance.
+    var label = c === 'ALL' ? 'All' : esc(c);
+    return '<button class="cat-tab' + active + '" onclick="setCategory(\'' + esc(c) + '\')">'
+         +   '<span class="cat-ico">' + icon + '</span>'
+         +   '<span>' + label + '</span>'
+         + '</button>';
   }).join('');
 
   document.getElementById('catTabs').innerHTML = html;
@@ -1999,6 +2043,10 @@ function renderMenu() {
          availLbl +
          getContentTagBadge(item) +
          '<div class="menu-cat-stripe ' + getCategoryColorClass(item.category) + '"></div>' +
+         // the add button lives INSIDE the image wrap so it overhangs the photo
+         '<button class="menu-add-btn" onclick="addItem(\'' + item.code + '\')" aria-label="Add ' + esc(item.name) + '">' +
+           badge + '+' +
+         '</button>' +
        '</div>' +
        '<div class="menu-info">' +
          '<div class="menu-name">' + esc(item.name) + '</div>' +
@@ -2008,9 +2056,6 @@ function renderMenu() {
          '</div>' +
          (!item.available && item.availableLabel ? '<div style="font-size:.58rem;color:var(--timber);font-weight:600;margin-top:2px">' + esc(item.availableLabel) + '</div>' : '') +
        '</div>' +
-       '<button class="menu-add-btn" onclick="addItem(\'' + item.code + '\')" aria-label="Add ' + esc(item.name) + '">' +
-         badge + '+' +
-       '</button>' +
      '</div>';
   }).join('');
 }
