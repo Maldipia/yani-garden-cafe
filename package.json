@@ -16,6 +16,7 @@
     "guard": "node scripts/check-actions.mjs",
     "test": "node tests/smoke.mjs",
     "guard:registration": "node scripts/check-registration.mjs",
-    "check": "node scripts/check-actions.mjs && node scripts/check-registration.mjs"
+    "check": "node scripts/check-actions.mjs && node scripts/check-registration.mjs",
+    "test:render": "python3 tests/render-menu.py"
   }
 }

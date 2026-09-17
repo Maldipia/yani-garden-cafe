@@ -238,11 +238,12 @@ a { color: var(--terra); text-decoration: none }
   box-shadow: var(--shadow-sm);
   transition: transform .15s, box-shadow .15s;
   position: relative;
-  /* Cards ran to different heights because some names wrap to two lines and
-     some do not, so the grid looked ragged. A fixed square photo plus a
-     fixed-height text block keeps every row aligned. */
-  display: flex;
-  flex-direction: column;
+  /* Plain block, NOT a flex column. Rendered and measured in a headless
+     browser: inside a flex column the padding-top square resolved to 0px tall
+     (imgW 143, img 0) regardless of box-sizing, and the card collapsed with no
+     name or price. In block flow the same rule measures 143x143 on every card,
+     name at 153px, price at 191px, add button inside the photo. */
+  display: block;
 }
 .menu-card:active { transform: scale(.97) }
 .menu-card.sig-card {
