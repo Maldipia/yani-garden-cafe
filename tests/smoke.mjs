@@ -454,6 +454,48 @@ async function deleteGuard() {
   check('delete with a wrong PIN is refused', badPin.ok === false, (badPin.error||'').slice(0,50));
 }
 
+
+// ── 13. CUSTOMER MENU PAGE ─────────────────────────────────────────────────
+// The page customers actually use was never in this suite. I rewrote its
+// layout and shipped it with no automated check at all — a broken template
+// there stops every table from ordering.
+async function customerMenuPage() {
+  section('Customer ordering page');
+  const url = `${BASE}/index-customer.html?cb=${Date.now()}`;
+  let html = '';
+  try { html = await (await fetch(url)).text(); }
+  catch (e) { check('customer page loads', false, e.message); return; }
+  check('customer page loads', html.length > 10000, `${html.length} bytes`);
+
+  // every inline script must parse — a syntax error here is a blank menu
+  let parsed = true, why = '';
+  for (const m of html.matchAll(/<script(?![^>]*src)[^>]*>([\s\S]*?)<\/script>/g)) {
+    try { new Function(m[1]); } catch (e) { parsed = false; why = e.message.slice(0, 70); break; }
+  }
+  check('customer page JS parses', parsed, why);
+
+  // the containers the renderer writes into must exist
+  for (const id of ['menuGrid','catTabs','searchInput','emptyState']) {
+    check(`#${id} present`, html.includes(`id="${id}"`));
+  }
+  // and the functions those elements call inline
+  for (const fn of ['addItem','setCategory','filterMenu','renderMenu']) {
+    check(`${fn}() defined`, new RegExp(`function\\s+${fn}\\s*\\(`).test(html));
+  }
+  check('category rail markup present', html.includes('menu-layout') && html.includes('cat-ico'));
+
+  // the menu the page renders must actually come back
+  const menu = await call({ action:'getMenu' });
+  const items = menu.items || [];
+  check('public menu returns items', items.length > 0, `${items.length}`);
+  check('items carry a name and price',
+        items.every(i => i.name && (i.price != null || i.sizes || i.portions)));
+
+  // table QR entry point
+  const t = await fetch(`${BASE}/?table=1&token=b36e8426`);
+  check('table QR link resolves', t.status === 200, `HTTP ${t.status}`);
+}
+
 // ── run ────────────────────────────────────────────────────────────────────
 const t0 = Date.now();
 console.log(`\nYANI POS regression suite → ${BASE}`);
@@ -469,6 +511,7 @@ await viewIsolation();
 await onlineOrderEndpoint();
 await orderLookup();
 await deleteGuard();
+await customerMenuPage();
 
 console.log(`\n${'─'.repeat(58)}`);
 console.log(`  passed ${pass}   failed ${fail}   (${((Date.now() - t0) / 1000).toFixed(1)}s)`);
