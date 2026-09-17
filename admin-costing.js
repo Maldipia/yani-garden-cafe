@@ -812,17 +812,9 @@ async function renderHistoryTab() {
   }
 }
 
-async function restoreOrder(orderId) {
-  if (!confirm('Restore ' + orderId + ' back to the board?')) return;
-  var result = await api('restoreOrder', { orderId: orderId, userId: currentUser && currentUser.userId });
-  if (result.ok) {
-    showToast('✅ ' + orderId + ' restored', 'success');
-    await loadOrders();
-    renderHistoryTab();
-  } else {
-    showToast('❌ ' + (result.error || 'Failed'), 'error');
-  }
-}
+// restoreOrder is defined once, in admin-orders.js, which loads first.
+// A second copy here overrode it in the browser and silently dropped the
+// confirmation, the reason prompt and the cancelled-order handling.
 
 // ══════════════════════════════════════════════════════════
 var _auditLogsCache = [];

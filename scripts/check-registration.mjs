@@ -106,7 +106,47 @@ const missing = assets.filter(([, f]) => {
 if (missing.length) fail('admin.html references a script that does not exist', missing.map(m => m[1]).join(', '));
 else ok(`all ${assets.length} versioned admin scripts exist`);
 
-// ── 5. Version markers must be unique per file ────────────────────────────
+// ── 5. No duplicate handlers or client functions ──────────────────────────
+// Two restoreOrder handlers existed in orders.js; the first was incomplete and
+// shadowed the second, so the working one never ran. A duplicate client
+// function in admin-costing.js overrode the one in admin-orders.js the same
+// way. Both were invisible until behaviour was tested directly.
+for (const file of readdirSync(handlerDir).filter(f => f.endsWith('.js'))) {
+  const src = readFileSync(join(handlerDir, file), 'utf8');
+  const seen = {};
+  for (const m of src.matchAll(/if \(action === '([a-zA-Z_0-9]+)'/g)) {
+    seen[m[1]] = (seen[m[1]] || 0) + 1;
+  }
+  const dupes = Object.entries(seen).filter(([, n]) => n > 1).map(([a]) => a);
+  if (dupes.length) {
+    fail(`${file}: the same action is handled twice — the first one wins and shadows the rest`,
+         dupes.join(', '));
+  }
+}
+
+const clientFiles = readdirSync(ROOT).filter(f => /^admin.*\.js$/.test(f));
+const fnOwners = {};
+for (const f of clientFiles) {
+  const src = readFileSync(join(ROOT, f), 'utf8');
+  // TOP-LEVEL only. A nested function is scoped to its parent and shadows
+  // nothing; matching indented declarations reported fmt and cleanup as
+  // clashes when both were local, which is exactly the false alarm that
+  // teaches people to ignore a guard.
+  for (const m of src.matchAll(/^(?:async\s+)?function\s+([a-zA-Z_0-9]+)\s*\(/gm)) {
+    (fnOwners[m[1]] = fnOwners[m[1]] || []).push(f);
+  }
+}
+const clashes = Object.entries(fnOwners)
+  .filter(([, files]) => new Set(files).size > 1)
+  .map(([fn, files]) => `${fn} (${[...new Set(files)].join(' + ')})`);
+if (clashes.length) {
+  fail('the same function is defined in more than one admin script — the last loaded wins',
+       clashes.slice(0, 8).join(' | '));
+} else {
+  ok('no duplicate handlers or client function names');
+}
+
+// ── 6. Version markers must be unique per file ────────────────────────────
 // Bumping ?v= by hand is error-prone: a sed that matches nothing fails
 // silently, and the page then requests a stale version string while the file
 // has changed. That happened three times in one session.

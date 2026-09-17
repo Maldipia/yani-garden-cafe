@@ -1061,16 +1061,10 @@ export async function routeOrders(action, body, auth, req, res) {
     }
 
     // ── restoreOrder ──────────────────────────────────────────────────────
-    if (action === 'restoreOrder') {
-      const authRO = await checkAuth(['OWNER','ADMIN']);
-      if (!authRO.ok) return res.status(403).json({ ok: false, error: authRO.error });
-      const orderId = String(body.orderId || '').trim();
-      if (!orderId || !isValidOrderId(orderId)) return res.status(400).json({ ok: false, error: 'Invalid orderId' });
-      const r = await supa('PATCH', 'dine_in_orders', { is_deleted: false, updated_at: new Date().toISOString() }, { order_id: `eq.${orderId}` });
-      if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to restore order' });
-      auditLog({ orderId, action: 'ORDER_RESTORED', actor: { userId: body.userId, role: authRO.role } });
-      return res.status(200).json({ ok: true, orderId });
-    }
+    // NOTE: an earlier restoreOrder lived here. It only cleared is_deleted and
+    // ignored CANCELLED entirely, so it reported success on an order it had not
+    // changed — and being first in the file, it shadowed the fuller handler
+    // below. Removed; the one below handles both cases.
 
     // ── deleteOrder ────────────────────────────────────────────────────────
     // ── restoreOrder ──────────────────────────────────────────────────────
