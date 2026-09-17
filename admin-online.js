@@ -11,7 +11,7 @@ async function loadOnlineOrders() {
     var resp = await fetch('/api/online-order', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'getOnlineOrders', limit: 100 })
+      body: JSON.stringify({ action: 'getOnlineOrders', limit: 100, userId: currentUser && currentUser.userId })
     });
     var data = await resp.json();
     if (!data.ok) throw new Error(data.error || 'Failed to load');
@@ -850,7 +850,7 @@ async function loadSheetsData() {
     var resp = await fetch(API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'getOnlineOrders' })
+      body: JSON.stringify({ action: 'getOnlineOrders', userId: currentUser && currentUser.userId })
     });
     var data = await resp.json();
     sheetsOrdersData = (data.ok && data.orders) ? data.orders : [];

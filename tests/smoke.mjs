@@ -326,6 +326,38 @@ async function viewIsolation() {
   check('hrView is hidden on navigation', hidden.has('hrView'), 'missing from the hide block');
 }
 
+
+// ── 10. ONLINE ORDER ENDPOINT ──────────────────────────────────────────────
+// api/online-order.js is a SEPARATE endpoint with its own auth. The suite only
+// ever exercised /api/pos, so a leak there went unnoticed for months — and
+// then my fix for it broke the admin view, also unnoticed.
+async function onlineOrderEndpoint() {
+  const OO = `${BASE}/api/online-order`;
+  const callOO = async (payload) => {
+    try {
+      const r = await fetch(OO, { method:'POST',
+        headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+      return await r.json();
+    } catch (e) { return { ok:false, error:'network: ' + e.message }; }
+  };
+
+  section('Online order endpoint');
+  const menu = await callOO({ action:'getOnlineMenu' });
+  check('menu is public', menu.ok === true && (menu.items||[]).length > 0);
+
+  const anon = await callOO({ action:'getOnlineOrders' });
+  check('order list refuses anonymous', anon.ok === false,
+        'customer names, phones and addresses must not be public');
+
+  const staff = await callOO({ action:'getOnlineOrders', userId: OWNER });
+  check('order list works for staff', staff.ok === true, staff.error);
+
+  for (const a of ['updateOnlineOrderStatus','editOnlineOrder','sendReadySMS','verifyOnlinePayment']) {
+    const d = await callOO({ action:a });
+    check(`${a} refuses anonymous`, d.ok === false);
+  }
+}
+
 // ── run ────────────────────────────────────────────────────────────────────
 const t0 = Date.now();
 console.log(`\nYANI POS regression suite → ${BASE}`);
@@ -338,6 +370,7 @@ await pageIntegrity();
 await expensesPipeline();
 await staffReadiness();
 await viewIsolation();
+await onlineOrderEndpoint();
 
 console.log(`\n${'─'.repeat(58)}`);
 console.log(`  passed ${pass}   failed ${fail}   (${((Date.now() - t0) / 1000).toFixed(1)}s)`);
