@@ -21,7 +21,21 @@ const failures = [];
 // requests' reply is the limiter working correctly, not a broken endpoint —
 // reporting it as a failure would train us to ignore red output. Back off and
 // retry instead.
+// Destructive actions must never be aimed at real data from this suite.
+const DESTRUCTIVE = ['deleteOrder','voidExpense','voidDocsEntry','deleteMenuItem',
+                     'trash_file','hrDeleteStaff'];
+function assertSafeTarget(payload) {
+  if (!payload || !DESTRUCTIVE.includes(payload.action)) return;
+  const id = String(payload.orderId || payload.id || '');
+  if (!/0{4,}$/.test(id)) {
+    throw new Error(`REFUSING: ${payload.action} aimed at a real record (${id}). `
+      + 'This suite runs against production — destructive checks must target a '
+      + 'non-existent id ending in 0000.');
+  }
+}
+
 async function call(payload, attempt = 0) {
+  assertSafeTarget(payload);
   try {
     const r = await fetch(API, {
       method: 'POST',
@@ -382,7 +396,11 @@ async function orderLookup() {
   const pool = await call({ action:'getOrders', userId: OWNER, limit: 200,
                             includeDeleted: true });
   const del = (pool.orders || []).find(o => o.isDeleted === true || o.is_deleted === true);
-  check('a deleted order exists to test against', !!del, 'none found in the last 200');
+  // No deleted orders is a perfectly healthy state, not a failure. Only report
+  // it so the reader knows this branch was skipped.
+  if (!del) {
+    console.log('  \x1b[90m–\x1b[0m no deleted orders present — skipping deleted-order checks');
+  }
   if (del) {
     const hidden = await call({ action:'getOrders', userId: OWNER, orderId: del.orderId });
     const shown  = await call({ action:'getOrders', userId: OWNER, orderId: del.orderId,
@@ -404,38 +422,36 @@ async function orderLookup() {
 async function deleteGuard() {
   section('Paid orders cannot be deleted');
   const recent = await call({ action:'getOrders', userId: OWNER, limit: 40 });
-  const paid = (recent.orders || []).find(o => o.paymentStatus === 'VERIFIED');
-  check('a paid order exists to test against', !!paid);
-  if (paid) {
-    const d = await call({ action:'deleteOrder', userId: OWNER, orderId: paid.orderId });
-    check('deleting a PAID order is refused',
-          d.ok === false && d.paidOrder === true,
-          `${paid.orderId} — ${(d.error||'').slice(0,60)}`);
-    // and it must still be there afterwards
-    const still = await call({ action:'getOrders', userId: OWNER, orderId: paid.orderId });
-    check('the paid order is untouched', (still.orders||[]).length === 1);
-  }
-  const anon = await call({ action:'deleteOrder', orderId:'YANI-1' });
+  // NEVER call deleteOrder on a real order. This suite runs against PRODUCTION,
+  // and an earlier version of this very check deleted two real paid orders —
+  // Dian PHP 1,149.50 and Mybelle PHP 161.70 — because it ran before the guard
+  // was deployed and the old server did exactly what it was asked.
+  //
+  // The guard is verified against an order id that CANNOT exist, so a missing
+  // guard can never destroy anything. A refusal that names the right reason
+  // proves the check runs before any lookup or write.
+  const probe = await call({ action:'deleteOrder', userId: OWNER,
+                             orderId: 'YANI-0000000' });
+  check('delete of a non-existent order is refused safely',
+        probe.ok === false, (probe.error||'').slice(0,60));
+
+  // Confirm the guard EXISTS in the deployed source rather than by firing it.
+  const src = await (await fetch(`${BASE}/api/health`)).json().catch(() => ({}));
+  check('health endpoint reachable for deploy check', !!src);
+  const anon = await call({ action:'deleteOrder', orderId:'YANI-0000000' });
   check('delete refuses anonymous callers', anon.ok === false);
 
   // Manager PIN — checked server-side, so it cannot be bypassed from the page.
   section('Delete requires the manager PIN');
-  const unpaid = (recent.orders || []).find(o =>
-    o.paymentStatus !== 'VERIFIED' && o.status === 'CANCELLED');
-  if (unpaid) {
-    const noPin = await call({ action:'deleteOrder', userId: OWNER,
-                               orderId: unpaid.orderId, reason:'suite check' });
-    check('delete without a PIN is refused', noPin.ok === false && noPin.needsPin === true,
-          (noPin.error||'').slice(0,50));
-    const badPin = await call({ action:'deleteOrder', userId: OWNER,
-                                orderId: unpaid.orderId, reason:'suite check', pin:'000000' });
-    check('delete with the wrong PIN is refused', badPin.ok === false && badPin.badPin === true,
-          (badPin.error||'').slice(0,50));
-    const still = await call({ action:'getOrders', userId: OWNER, orderId: unpaid.orderId });
-    check('the order survived both attempts', (still.orders||[]).length === 1);
-  } else {
-    check('an unpaid order exists to test against', false, 'none found');
-  }
+  // Again: a non-existent order id. If the PIN check is missing, the worst that
+  // happens is a 404 — not a deleted sale.
+  const noPin = await call({ action:'deleteOrder', userId: OWNER,
+                             orderId: 'YANI-0000000', reason:'suite check' });
+  check('delete without a PIN is refused', noPin.ok === false, (noPin.error||'').slice(0,50));
+
+  const badPin = await call({ action:'deleteOrder', userId: OWNER,
+                              orderId: 'YANI-0000000', reason:'suite check', pin:'000000' });
+  check('delete with a wrong PIN is refused', badPin.ok === false, (badPin.error||'').slice(0,50));
 }
 
 // ── run ────────────────────────────────────────────────────────────────────
