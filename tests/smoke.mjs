@@ -484,9 +484,14 @@ async function customerMenuPage() {
   }
   check('category rail markup present', html.includes('menu-layout') && html.includes('cat-ico'));
   check('header is sticky', /\.header\s*\{[^}]*position:\s*sticky/.test(html));
+  // Compare against MARKUP, not a class name — '.menu-layout' appears in the
+  // stylesheet near the top of the file, so the previous index comparison was
+  // meaningless and failed on a page that was perfectly correct.
+  const hdrOpen = html.indexOf('<div class="header">');
+  const hdrClose = html.indexOf('<!-- ═══════════════════ CATEGORIES', hdrOpen);
+  const searchAt = html.indexOf('id="searchInput"');
   check('search sits inside the sticky header',
-        html.indexOf('id="searchInput"') > html.indexOf('class="header"') &&
-        html.indexOf('id="searchInput"') < html.indexOf('menu-layout'),
+        hdrOpen > 0 && searchAt > hdrOpen && (hdrClose < 0 || searchAt < hdrClose),
         'search must scroll with the header, not away from it');
   check('rail offset is measured, not hardcoded', html.includes('syncHeaderHeight'));
 
