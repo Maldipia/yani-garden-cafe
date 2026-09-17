@@ -64,7 +64,13 @@ async def main():
         # ── Detail page flow ─────────────────────────────────────────────
         await pg.evaluate("document.documentElement.style.scrollBehavior='auto'; window.scrollTo({top:600,behavior:'instant'})"); await pg.wait_for_timeout(300)
         y0 = await pg.evaluate("Math.round(window.scrollY)")
-        await pg.locator('.menu-card').nth(4).locator('.menu-img-wrap').tap(); await pg.wait_for_timeout(450)
+        # Tap by COORDINATES on a photo that is already in view. locator.tap()
+        # scrolls its target into view first, which moved the page to 0 and made
+        # a correct scroll-restore look broken.
+        pt = await pg.evaluate('''() => { const ws=[...document.querySelectorAll('.menu-img-wrap')];
+            const w = ws.find(e => { const r=e.getBoundingClientRect(); return r.top > 120 && r.bottom < innerHeight - 40; });
+            const r = w.getBoundingClientRect(); return { x: r.x + r.width/2, y: r.y + r.height/2 }; }''')
+        await pg.touchscreen.tap(pt['x'], pt['y']); await pg.wait_for_timeout(450)
         dd = await pg.evaluate('''() => { const v=document.getElementById('productDetail'), h=v.querySelector('.pd-hero').getBoundingClientRect();
             return { open: !v.hidden, heroSquare: Math.abs(h.width-h.height)<2, viewer: !document.getElementById('pvBackdrop').hidden,
                      name: !!document.getElementById('pdName').textContent, price: /₱/.test(document.getElementById('pdPrice').textContent),

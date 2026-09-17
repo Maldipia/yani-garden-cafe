@@ -521,8 +521,9 @@ async function customerMenuPage() {
   check('square frame overrides the global border-box',
         /box-sizing:\s*content-box/.test(wrapClean),
         'height:0 + padding-top needs content-box or the card collapses');
-  check('item names reserve two lines so prices align',
-        /min-height:\s*2\.[0-9]em/.test(strip((html.match(/\.menu-name \{[^}]*\}/) || [''])[0])));
+  // ('names reserve two lines' was retired: reserving space made a price sit
+  //  closer to the photo below than to its own name. The rendered suite now
+  //  checks the price hugs its name instead.)
 
   // the menu the page renders must actually come back
   const menu = await call({ action:'getMenu' });
