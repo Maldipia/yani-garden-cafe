@@ -273,35 +273,25 @@ a { color: var(--terra); text-decoration: none }
 }
 .menu-name {
   font-family: var(--font-soul);
-  font-size: .9rem;
-  font-weight: 600;
-  color: var(--coffee);
+  font-size: .9rem; font-weight: 600; color: var(--coffee);
   line-height: 1.25;
-  min-height: 2.5em;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
   cursor: pointer;
 }
 .menu-price {
-  font-size: .82rem;
-  font-weight: 700;
-  color: var(--terra);
+  margin-top: 2px;
+  font-size: .9rem; font-weight: 700; color: var(--terra);
 }
 .menu-price-range { font-size: .68rem; color: var(--timber); font-weight: 500 }
 .menu-add-btn {
-  /* small and beside the price — never over the photo */
-  position: static;
-  width: 28px; height: 28px;
-  border-radius: 50%;
-  background: var(--forest);
-  color: var(--white);
-  border: none;
-  font-size: 1.05rem; line-height: 1;
+  /* White circle on the photo's bottom-right corner, per the reference.
+     Fully inside the frame — the frame clips anything that overhangs. */
+  position: absolute; right: 8px; bottom: 8px; z-index: 3;
+  width: 34px; height: 34px; border-radius: 50%;
+  background: rgba(255,255,255,.96); color: var(--forest-deep);
+  border: none; box-shadow: 0 1px 4px rgba(0,0,0,.18);
+  font-size: 1.25rem; line-height: 1;
   display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0;
-  box-shadow: none;
 }
 .menu-add-btn:active { transform: scale(.9); background: var(--forest-light) }
 .menu-badge {
@@ -1253,24 +1243,16 @@ a { color: var(--terra); text-decoration: none }
 /* the product photo itself is tappable */
 .pd-img { cursor: pointer; }
 
-.menu-price-row {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 8px; margin-top: 3px;
-}
+.menu-price-row { /* retired: price is a plain line under the name */ }
 .menu-price { font-size: .9rem; font-weight: 700; color: var(--terra); }
 .menu-tag {
-  /* A fixed 14px line on EVERY card — text for best sellers, empty otherwise —
-     so a badge can never change a card's height or move its price. Inside the
-     name it was clamped to "…"; on the price row it wrapped and made the
-     card 8px taller. */
-  height: 14px; line-height: 14px; margin-top: 2px;
-  font-size: .6rem; font-weight: 700; color: #a3781e; letter-spacing: .2px;
-  white-space: nowrap; overflow: hidden;
+  margin-top: 2px;
+  font-size: .62rem; font-weight: 700; color: #a3781e; letter-spacing: .2px;
 }
 .menu-avail-note { font-size: .62rem; color: var(--timber); margin-top: 2px; }
 .menu-unavailable .menu-img-wrap { opacity: .45; }
 .menu-unavailable .menu-add-btn { opacity: .35; pointer-events: none; }
-.menu-grid { gap: 16px 12px; }
+.menu-grid { gap: 22px 12px; align-items: start; }
 
 /* ── Product detail ───────────────────────────────────────────────────────
    Big photo → name → description → options → price + quantity → add.
@@ -2157,24 +2139,26 @@ function renderMenu() {
     // Photo → name → price + small add. Nothing over the photo, no card box.
     // The photo and the name both open the detail page; only the small + is
     // the quick-add path.
+    // Photo (with the + on its corner) → name → price, tight. No reserved
+    // lines: the price sits under its own name, and the gap falls BEFORE the
+    // next photo. Levelling rows with reserved space made a price look like it
+    // belonged to the photo beneath it.
     return '<div class="menu-card' + unavail + '" data-code="' + esc(item.code) + '">' +
       '<div class="menu-img-wrap" onclick="openProductDetail(\'' + esc(item.code) + '\')">' +
         (imgUrl
           ? '<img class="menu-img" src="' + imgUrl + '" alt="" loading="lazy" onerror="this.style.display=\'none\'">'
           : '') +
         '<div class="menu-img-placeholder"></div>' +
+        '<button class="menu-add-btn" onclick="event.stopPropagation();addItem(\'' + esc(item.code) + '\')" aria-label="Add ' + esc(item.name) + '">' +
+          badge + '+' +
+        '</button>' +
       '</div>' +
       '<div class="menu-info">' +
         '<div class="menu-name" onclick="openProductDetail(\'' + esc(item.code) + '\')">' + esc(item.name) + '</div>' +
-        '<div class="menu-tag">' + (item.isSignature ? '★ Best seller' : '') + '</div>' +
+        '<div class="menu-price">' + priceStr + '</div>' +
+        (item.isSignature ? '<div class="menu-tag">★ Best seller</div>' : '') +
         (!item.available && item.availableLabel
           ? '<div class="menu-avail-note">' + esc(item.availableLabel) + '</div>' : '') +
-        '<div class="menu-price-row">' +
-          '<span class="menu-price">' + priceStr + '</span>' +
-          '<button class="menu-add-btn" onclick="event.stopPropagation();addItem(\'' + esc(item.code) + '\')" aria-label="Add ' + esc(item.name) + '">' +
-            badge + '+' +
-          '</button>' +
-        '</div>' +
       '</div>' +
     '</div>';
   }).join('');

@@ -38,9 +38,13 @@ async def main():
             const q = s => c.querySelector(s), r = e => e ? e.getBoundingClientRect() : null;
             const w = r(q('.menu-img-wrap')), n = r(q('.menu-name')), pr = r(q('.menu-price')),
                   bt = r(q('.menu-add-btn')), cd = r(c);
+            const below = (() => { const cards=[...document.querySelectorAll('.menu-card')]; const i=cards.indexOf(c);
+                const nx = cards[i+2]; return nx ? nx.querySelector('.menu-img-wrap').getBoundingClientRect().top : null; })();
             return { name: (q('.menu-name')||{}).textContent?.trim().slice(0,24),
                      cardH: cd.height, imgW: w?.width, imgH: w?.height,
                      nameTop: n ? n.top - cd.top : null, priceTop: pr ? pr.top - cd.top : null,
+                     nameToPrice: (n && pr) ? pr.top - n.bottom : 99,
+                     toNextPhoto: (pr && below !== null) ? below - pr.bottom : null,
                      nameVisible: n ? n.bottom <= cd.bottom + 1 && n.height > 0 : false,
                      priceVisible: pr ? pr.bottom <= cd.bottom + 1 : false,
                      btnInImg: bt && w ? (bt.top >= w.top - 1 && bt.bottom <= w.bottom + 1) : false };
@@ -49,11 +53,12 @@ async def main():
 
         # ── Grid structure: photo → name → price, nothing over the photo ──
         gs = await pg.evaluate('''() => [...document.querySelectorAll('.menu-card')].slice(0,8).map(c => ({
-            overlays: c.querySelectorAll('.menu-img-wrap *:not(img):not(.menu-img-placeholder)').length,
-            btnOverPhoto: c.querySelector('.menu-add-btn').getBoundingClientRect().top < c.querySelector('.menu-img-wrap').getBoundingClientRect().bottom,
+            overlays: c.querySelectorAll('.menu-img-wrap *:not(img):not(.menu-img-placeholder):not(.menu-add-btn)').length,
+            btnInsidePhoto: (()=>{ const b=c.querySelector('.menu-add-btn').getBoundingClientRect(), w=c.querySelector('.menu-img-wrap').getBoundingClientRect();
+                return b.top>=w.top-1 && b.bottom<=w.bottom+1 && b.left>=w.left-1 && b.right<=w.right+1; })(),
             cardBg: getComputedStyle(c).backgroundColor }))''')
         bad += ok('nothing is drawn over the grid photos') if all(x['overlays']==0 for x in gs) else fail('something overlays a grid photo')
-        bad += ok('add button sits beside the price, not on the photo') if not any(x['btnOverPhoto'] for x in gs) else fail('add button overlaps a photo')
+        bad += ok('add button sits on the photo corner, fully inside the frame') if all(x['btnInsidePhoto'] for x in gs) else fail('an add button is off the photo or clipped')
         bad += ok('no card box behind products') if all(x['cardBg'] in ('rgba(0, 0, 0, 0)','transparent') for x in gs) else fail('a card background is drawn')
 
         # ── Detail page flow ─────────────────────────────────────────────
@@ -103,21 +108,21 @@ async def main():
 
     print('\x1b[1mRendered customer menu (390px phone)\x1b[0m')
     for c in cards:
-        print(f"    {c['name'] or '?':26} card {c['cardH']:.0f}  img {c['imgW']:.0f}x{c['imgH']:.0f}"
-              f"  name@{c['nameTop']:.0f}  price@{c['priceTop']:.0f}"
-              f"  {'btn✓' if c['btnInImg'] else 'btn✗'}")
+        print(f"    {c['name'] or '?':26} img {c['imgW']:.0f}x{c['imgH']:.0f}  name→price {c['nameToPrice']:.0f}px"
+              f"  →next photo {('%.0fpx' % c['toNextPhoto']) if c['toNextPhoto'] is not None else '—'}")
 
     bad += ok('8 cards rendered') if len(cards) == 8 else fail(f'only {len(cards)} cards rendered')
     bad += ok('every photo frame is square') if all(abs(c['imgW'] - c['imgH']) <= 2 for c in cards) \
            else fail('a photo frame is not square')
     bad += ok('every photo frame is the same size') if max(c['imgH'] for c in cards) - min(c['imgH'] for c in cards) <= 4 \
            else fail('photo frames differ in height across cards')
-    bad += ok('every card is the same height') if max(c['cardH'] for c in cards) - min(c['cardH'] for c in cards) <= 4 \
-           else fail('cards differ in height')
-    bad += ok('names are level') if max(c['nameTop'] for c in cards) - min(c['nameTop'] for c in cards) <= 4 \
-           else fail('names sit at different heights')
-    bad += ok('prices are level') if max(c['priceTop'] for c in cards) - min(c['priceTop'] for c in cards) <= 4 \
-           else fail('prices sit at different heights')
+    # Rows are deliberately NOT level any more. What matters is that each price
+    # sits tight under its own name, and the gap before the NEXT photo is clearly
+    # larger — so a price can never read as belonging to the dish beneath it.
+    bad += ok('every price sits directly under its name (≤ 8px)') if all(c['nameToPrice'] <= 8 for c in cards) \
+           else fail('a price has drifted away from its name: ' + ', '.join(f"{c['name']}:{c['nameToPrice']:.0f}px" for c in cards if c['nameToPrice'] > 8))
+    bad += ok('gap before the next photo is at least 2x the name→price gap') if all(c['toNextPhoto'] is None or c['toNextPhoto'] >= max(16, 2*c['nameToPrice']) for c in cards) \
+           else fail('a price sits closer to the next photo than to its own name')
     bad += ok('every name and price is visible') if all(c['nameVisible'] and c['priceVisible'] for c in cards) \
            else fail('a name or price is clipped or missing')
     # (the 'add button inside the photo' check was retired: the spec now puts
