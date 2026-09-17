@@ -1051,6 +1051,37 @@ export async function routeOrders(action, body, auth, req, res) {
       if (!orderId) return res.status(400).json({ ok: false, error: 'orderId is required' });
       if (!isValidOrderId(orderId)) return res.status(400).json({ ok: false, error: 'Invalid orderId format' });
 
+      // A PAID order is not deletable. Three real sales — Jaconie PHP 1,237.50,
+      // Alvin PHP 185.90 and ZEY PHP 31.90 — were deleted by mistake and simply
+      // vanished: excluded from every sales total, invisible in search, with no
+      // trace anywhere in the UI. Nobody could have noticed.
+      //
+      // Cancelling exists for genuine voids and already forces a REFUNDED or
+      // RETAINED decision. Deletion is for mistakes and test rows, so it is
+      // restricted to orders where no money has been taken.
+      const cur = await supaFetch(`${SUPABASE_URL}/rest/v1/dine_in_orders`
+        + `?order_id=eq.${encodeURIComponent(orderId)}`
+        + `&select=payment_status,status,total,discounted_total,customer_name&limit=1`);
+      const ord = Array.isArray(cur.data) ? cur.data[0] : null;
+      if (!ord) return res.status(404).json({ ok:false, error:'Order not found' });
+
+      if (ord.payment_status === 'VERIFIED') {
+        return res.status(409).json({ ok:false, paidOrder:true,
+          error: 'This order is marked PAID and cannot be deleted. '
+               + 'Cancel it instead so the refund decision is recorded.',
+          orderId,
+          amount: ord.discounted_total ?? ord.total,
+          customer: ord.customer_name });
+      }
+
+      // Reason required on anything that reached the kitchen — a NEW order
+      // keyed by mistake is routine; a COMPLETED one is not.
+      const delReason = String(body.reason || '').trim().slice(0, 300);
+      if (['COMPLETED','READY','PREPARING'].includes(ord.status) && delReason.length < 3) {
+        return res.status(400).json({ ok:false, needsReason:true,
+          error: `This order is ${ord.status}. Give a reason for deleting it.` });
+      }
+
       // Soft delete — preserve order history for analytics/audit
       const r = await supa('PATCH', 'dine_in_orders',
         { is_deleted: true, deleted_at: new Date().toISOString() },
@@ -1059,7 +1090,16 @@ export async function routeOrders(action, body, auth, req, res) {
       if (!r.ok) return res.status(500).json({ ok: false, error: 'Failed to delete order' });
 
       logSync('dine_in_orders', orderId, 'DELETE');
-      auditLog({ orderId, action: 'ORDER_DELETED', actor: { userId: body.userId } });
+      // Record WHO. Every one of the ~250 historical ORDER_DELETED rows has a
+      // null actor, while status changes correctly logged ADMIN or OWNER — the
+      // most sensitive action was the one action nobody could be traced on.
+      auditLog({ orderId, action: 'ORDER_DELETED',
+        actor: { userId: authDO.userId || body.userId, role: authDO.role },
+        oldValue: `${ord.status}/${ord.payment_status || 'unpaid'}`,
+        newValue: 'deleted',
+        details: { reason: delReason || null,
+                   amount: ord.discounted_total ?? ord.total,
+                   customer: ord.customer_name } });
       return res.status(200).json({ ok: true, orderId });
     }
 

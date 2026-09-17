@@ -375,18 +375,48 @@ async function orderLookup() {
           one.error);
   }
 
-  // a deleted order must be findable ONLY when explicitly asked for
-  const hidden = await call({ action:'getOrders', userId: OWNER, orderId:'YANI-6077' });
-  const shown  = await call({ action:'getOrders', userId: OWNER, orderId:'YANI-6077',
-                              includeDeleted: true });
-  check('deleted order hidden by default', (hidden.orders||[]).length === 0);
-  check('deleted order findable with includeDeleted',
-        (shown.orders||[]).length === 1, 'explicit lookup must still find it');
-  if ((shown.orders||[]).length === 1) {
-    check('deleted order is flagged as deleted',
-          shown.orders[0].isDeleted === true || shown.orders[0].is_deleted === true,
-          'the UI relies on this flag to mark it');
+  // A deleted order must be findable ONLY when explicitly asked for.
+  // Pick one that is actually deleted right now — hardcoding an order id made
+  // this fail the moment that order was restored, which is a broken test, not
+  // a broken system.
+  const pool = await call({ action:'getOrders', userId: OWNER, limit: 200,
+                            includeDeleted: true });
+  const del = (pool.orders || []).find(o => o.isDeleted === true || o.is_deleted === true);
+  check('a deleted order exists to test against', !!del, 'none found in the last 200');
+  if (del) {
+    const hidden = await call({ action:'getOrders', userId: OWNER, orderId: del.orderId });
+    const shown  = await call({ action:'getOrders', userId: OWNER, orderId: del.orderId,
+                                includeDeleted: true });
+    check('deleted order hidden by default', (hidden.orders||[]).length === 0, del.orderId);
+    check('deleted order findable with includeDeleted', (shown.orders||[]).length === 1);
+    if ((shown.orders||[]).length === 1) {
+      check('deleted order is flagged as deleted',
+            shown.orders[0].isDeleted === true || shown.orders[0].is_deleted === true,
+            'the UI relies on this flag to mark it');
+    }
   }
+}
+
+
+// ── 12. DELETE GUARD ───────────────────────────────────────────────────────
+// Three real paid sales were deleted by mistake and vanished from every total
+// with no trace. Deletion of a paid order must now be refused outright.
+async function deleteGuard() {
+  section('Paid orders cannot be deleted');
+  const recent = await call({ action:'getOrders', userId: OWNER, limit: 40 });
+  const paid = (recent.orders || []).find(o => o.paymentStatus === 'VERIFIED');
+  check('a paid order exists to test against', !!paid);
+  if (paid) {
+    const d = await call({ action:'deleteOrder', userId: OWNER, orderId: paid.orderId });
+    check('deleting a PAID order is refused',
+          d.ok === false && d.paidOrder === true,
+          `${paid.orderId} — ${(d.error||'').slice(0,60)}`);
+    // and it must still be there afterwards
+    const still = await call({ action:'getOrders', userId: OWNER, orderId: paid.orderId });
+    check('the paid order is untouched', (still.orders||[]).length === 1);
+  }
+  const anon = await call({ action:'deleteOrder', orderId:'YANI-1' });
+  check('delete refuses anonymous callers', anon.ok === false);
 }
 
 // ── run ────────────────────────────────────────────────────────────────────
@@ -403,6 +433,7 @@ await staffReadiness();
 await viewIsolation();
 await onlineOrderEndpoint();
 await orderLookup();
+await deleteGuard();
 
 console.log(`\n${'─'.repeat(58)}`);
 console.log(`  passed ${pass}   failed ${fail}   (${((Date.now() - t0) / 1000).toFixed(1)}s)`);

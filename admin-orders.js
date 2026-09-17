@@ -794,15 +794,53 @@ async function updateStatus(orderId, newStatus) {
 // DELETE ORDER
 // ══════════════════════════════════════════════════════════
 async function deleteOrder(orderId) {
+  // The dialog tells the user what deleting actually does. The old wording
+  // ("cannot be undone") was both vague and untrue — a soft-deleted order can
+  // be restored, but only by someone querying the database directly, which is
+  // how three real sales stayed missing for days.
+  var o = (allOrders || []).find(function(x){ return x.orderId === orderId; }) || {};
+  var isPaid = String(o.paymentStatus || '').toUpperCase() === 'VERIFIED';
+
+  if (isPaid) {
+    await ygcConfirm('🚫 Cannot delete a paid order',
+      orderId + ' is marked PAID. Deleting it would remove it from every sales '
+      + 'total with no trace.\n\nUse ✕ Cancel instead — that records whether the '
+      + 'money was refunded or kept.',
+      'OK', null);
+    return;
+  }
+
   var confirmed = await ygcConfirm(
-    '⚠️ Delete Order',
-    'Permanently delete order ' + orderId + '? This cannot be undone.',
-    'Delete', 'Cancel'
+    '⚠️ Delete order ' + orderId + '?',
+    'This hides the order from the board, all sales totals and search.\n\n'
+    + 'Delete is for mistakes and test rows. For a real order the customer '
+    + 'walked away from, use ✕ Cancel so it stays in the record.',
+    'Delete', 'Keep it'
   );
   if (!confirmed) return;
-  
+
+  // Anything that reached the kitchen needs a reason, and the server enforces it.
+  var reason = '';
+  if (['COMPLETED','READY','PREPARING'].indexOf(o.status) !== -1) {
+    reason = prompt('Order ' + orderId + ' is ' + o.status
+      + '.\n\nWhy is it being deleted? (recorded with your name)');
+    if (reason === null) return;
+    if (!reason.trim() || reason.trim().length < 3) {
+      showToast('A reason is required — nothing deleted', 'error'); return;
+    }
+  }
+
   try {
-    var result = await api('deleteOrder', { orderId: orderId, userId: currentUser && currentUser.userId });
+    var result = await api('deleteOrder', { orderId: orderId, reason: reason.trim(),
+                                            userId: currentUser && currentUser.userId });
+    if (result && result.paidOrder) {
+      showToast(result.error, 'error');
+      return;
+    }
+    if (result && result.needsReason) {
+      showToast(result.error, 'error');
+      return;
+    }
     
     if (result.ok) {
       // Remove from local state
