@@ -2269,6 +2269,7 @@ if (document.readyState !== 'loading') syncHeaderHeight();
       sugar: item.hasSugar ? (SUGAR_LEVELS.find(function (g) { return g.default; }) || SUGAR_LEVELS[0]).id : null,
     };
     savedScroll = window.scrollY || document.documentElement.scrollTop || 0;
+    try { history.scrollRestoration = 'manual'; } catch (_) {}
 
     var url = getImgUrl(item);
     var img = $('pdImg');
@@ -2295,12 +2296,30 @@ if (document.readyState !== 'loading') syncHeaderHeight();
     history.pushState({ pd: code }, '');        // phone back button closes it too
   };
 
+  // Put the menu back exactly where it was. After adding, the grid is
+  // re-rendered and the page is briefly shorter than the saved position, so
+  // a single scrollTo() gets clamped to 0. Hold the page's height for a
+  // moment, then restore, and retry a few times as the grid settles.
+  function restoreScroll(y) {
+    var lock = document.getElementById('menuScrollLock') || document.createElement('div');
+    lock.id = 'menuScrollLock';
+    lock.style.cssText = 'height:' + (y + window.innerHeight) + 'px;pointer-events:none';
+    document.body.appendChild(lock);
+    var tries = 0;
+    (function again() {
+      window.scrollTo(0, y);
+      if (++tries < 6) setTimeout(again, tries < 3 ? 60 : 200);
+      else lock.remove();
+    })();
+  }
+
   window.closeProductDetail = function (fromPop) {
     var v = $('productDetail');
     if (v.hidden) return;
+    var y = savedScroll;
     v.hidden = true;
     document.body.style.overflow = '';
-    window.scrollTo(0, savedScroll);            // exactly where they were
+    restoreScroll(y);
     if (!fromPop && history.state && history.state.pd) history.back();
     st = null;
   };
@@ -2338,10 +2357,7 @@ if (document.readyState !== 'loading') syncHeaderHeight();
     // addToCart re-renders the grid, which resets the scroll to 0 — after
     // closeProductDetail had already restored it. Put it back once the
     // re-render has painted, and once more in case a late refresh follows.
-    var y = savedScroll;
     closeProductDetail();
-    requestAnimationFrame(function () { window.scrollTo(0, y);
-      setTimeout(function () { window.scrollTo(0, y); }, 120); });
   }
 
   // The hero photo opens the full-screen viewer (the viewer already listens
