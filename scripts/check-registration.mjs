@@ -146,7 +146,41 @@ if (clashes.length) {
   ok('no duplicate handlers or client function names');
 }
 
-// ── 6. Version markers must be unique per file ────────────────────────────
+// ── 6. Inline CSS must parse with no dropped rules ────────────────────────
+// A stray '}' had sat before .menu-img-wrap since April. Browsers silently
+// drop the rule that follows a parse error, so the photo frame never received
+// its size — and five successive fixes were written into a rule no browser
+// ever read. Brace counting cannot catch this (a stray '}' after a stray '{'
+// balances). Instead: the rule after every top-level '}' must begin with a
+// selector or at-rule, never another '}'.
+for (const page of ['index-customer.html','online-order.html','admin.html','clockin.html']) {
+  let html; try { html = readFileSync(join(ROOT, page), 'utf8'); } catch { continue; }
+  const blocks = [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map(m => m[1]);
+  const problems = [];
+  blocks.forEach((css, bi) => {
+    const clean = css.replace(/\/\*[\s\S]*?\*\//g, '');
+    // find '}' immediately followed (ignoring whitespace) by another '}' at depth 0
+    let depth = 0;
+    for (let i = 0; i < clean.length; i++) {
+      const ch = clean[i];
+      if (ch === '{') depth++;
+      else if (ch === '}') {
+        depth--;
+        if (depth < 0) {
+          const line = clean.slice(0, i).split('\n').length;
+          const ctx  = clean.slice(i + 1, i + 60).replace(/\s+/g, ' ').trim().slice(0, 40);
+          problems.push(`style block ${bi}, line ${line}: stray '}' — the next rule (${ctx}…) will be DROPPED by the browser`);
+          depth = 0;
+        }
+      }
+    }
+    if (depth > 0) problems.push(`style block ${bi}: ${depth} unclosed '{'`);
+  });
+  if (problems.length) fail(`${page}: CSS parse problem`, problems.slice(0, 3).join(' | '));
+}
+if (!failures.some(f => f.includes('CSS parse problem'))) ok('inline CSS parses with no dropped rules');
+
+// ── 7. Version markers must be unique per file ────────────────────────────
 // Bumping ?v= by hand is error-prone: a sed that matches nothing fails
 // silently, and the page then requests a stale version string while the file
 // has changed. That happened three times in one session.

@@ -18,7 +18,7 @@ import asyncio, sys, os
 from playwright.async_api import async_playwright
 
 BASE = os.environ.get('BASE', 'https://yanigardencafe.com')
-URL  = f'{BASE}/index-customer.html?table=13&token=37b3ddd3&cb=render'
+URL  = f'{BASE}/index-customer.html?table=13&token=37b3ddd3&cb=' + str(int(__import__('time').time()))
 
 def fail(msg): print(f'  \x1b[31m✗\x1b[0m {msg}'); return 1
 def ok(msg):   print(f'  \x1b[32m✓\x1b[0m {msg}'); return 0
