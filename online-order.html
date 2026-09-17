@@ -1378,8 +1378,9 @@ function renderPaymentPanel() {
   }
   var pick = document.getElementById('payMethodPicker');
   if (pick) {
-    var methods = [['GCASH','GCash'],['INSTAPAY','InstaPay'],['BDO','BDO'],
-                   ['BPI','BPI'],['UNIONBANK','UnionBank']];
+    // BPI and BDO retired — only the accounts actually in use are offered, so a
+    // customer cannot send to an account nobody is watching.
+    var methods = [['GCASH','GCash'],['UNIONBANK','UnionBank']];
     pick.innerHTML = '<div style="font-size:.74rem;color:#6b5b4d;margin-bottom:6px">'
       + 'Which account did you send to?</div><div class="pay-methods">'
       + methods.map(function(m){
@@ -1391,7 +1392,7 @@ function renderPaymentPanel() {
 
 function selectPayMethod(method) {
   selectedPayMethod = method;
-  ['GCASH','INSTAPAY','BDO','BPI','UNIONBANK'].forEach(function(m){
+  ['GCASH','UNIONBANK'].forEach(function(m){
     var btn = document.getElementById('pay_' + m);
     if (btn) btn.classList.toggle('active', m === method);
   });

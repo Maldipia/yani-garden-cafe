@@ -1415,12 +1415,9 @@ async function initTableTokens() {
   }
 }
 
-// ── PAYMENT QR CODES ────────────────────────────────────
-const PAYMENT_METHODS = [
-  { id:'gcash', name:'GCash', icon:'💚', acctName:(window.ACCOUNT_NAME||(window.ACCOUNT_NAME||'LEGERYN PIA')), acctNum:'', img:'/images/pay-gcash.jpg' },
-  { id:'instapay', name:'InstaPay', icon:'🏦', acctName:(window.ACCOUNT_NAME||(window.ACCOUNT_NAME||'LEGERYN PIA')), acctNum:'', img:'/images/pay-instapay.jpg' },
-  { id:'unionbank', name:'UnionBank', icon:'🟠', acctName:(window.ACCOUNT_NAME||(window.ACCOUNT_NAME||'LEGERYN PIA')), acctNum:(window.UNIONBANK_ACCOUNT||'1093-2100-0528'), img:'/images/pay-unionbank.jpg' }
-];
+// PAYMENT_METHODS removed: it listed accounts and QR image files but was
+// never referenced — dine-in checkout renders PAYMENT_IMAGE_URL from
+// Settings. Leaving it invited someone to 'fix' the wrong place.
 
 // ── SUGAR LEVELS ────────────────────────────────────────
 const SUGAR_LEVELS = [
