@@ -417,6 +417,25 @@ async function deleteGuard() {
   }
   const anon = await call({ action:'deleteOrder', orderId:'YANI-1' });
   check('delete refuses anonymous callers', anon.ok === false);
+
+  // Manager PIN — checked server-side, so it cannot be bypassed from the page.
+  section('Delete requires the manager PIN');
+  const unpaid = (recent.orders || []).find(o =>
+    o.paymentStatus !== 'VERIFIED' && o.status === 'CANCELLED');
+  if (unpaid) {
+    const noPin = await call({ action:'deleteOrder', userId: OWNER,
+                               orderId: unpaid.orderId, reason:'suite check' });
+    check('delete without a PIN is refused', noPin.ok === false && noPin.needsPin === true,
+          (noPin.error||'').slice(0,50));
+    const badPin = await call({ action:'deleteOrder', userId: OWNER,
+                                orderId: unpaid.orderId, reason:'suite check', pin:'000000' });
+    check('delete with the wrong PIN is refused', badPin.ok === false && badPin.badPin === true,
+          (badPin.error||'').slice(0,50));
+    const still = await call({ action:'getOrders', userId: OWNER, orderId: unpaid.orderId });
+    check('the order survived both attempts', (still.orders||[]).length === 1);
+  } else {
+    check('an unpaid order exists to test against', false, 'none found');
+  }
 }
 
 // ── run ────────────────────────────────────────────────────────────────────

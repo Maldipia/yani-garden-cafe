@@ -1,5 +1,6 @@
 // ── Order action handlers ─────────────────────────────────────────────────
 import { supaFetch, supa, auditLog, getSetting, logSync, pushToSheets } from '../lib/db.js';
+import bcrypt from 'bcryptjs';
 import { menuCache, MENU_CACHE_TTL, invalidateMenuCache } from '../lib/cache.js';
 import { getCategoryId, getCategoryName } from '../lib/categories.js';
 import { isValidOrderId, isNonEmptyString } from '../lib/validation.js';
@@ -1074,6 +1075,36 @@ export async function routeOrders(action, body, auth, req, res) {
           customer: ord.customer_name });
       }
 
+      // ── Manager PIN ──────────────────────────────────────────────────
+      // Deleting is now a two-person action: whoever is on the floor has to
+      // call a manager over. The PIN is checked HERE, not in the browser, so
+      // it cannot be bypassed by editing the page or calling the API directly.
+      // Only a bcrypt hash is stored; the PIN itself is nowhere in the system.
+      const pinCf = await supaFetch(
+        `${SUPABASE_URL}/rest/v1/secure_config?key=eq.DELETE_ORDER_PIN_HASH&select=value`);
+      const pinHash = Array.isArray(pinCf.data) && pinCf.data[0] ? pinCf.data[0].value : null;
+
+      if (pinHash) {
+        const pin = String(body.pin || '').trim();
+        if (!pin) {
+          return res.status(401).json({ ok:false, needsPin:true,
+            error:'A manager PIN is required to delete an order.' });
+        }
+        let pinOk = false;
+        try { pinOk = await bcrypt.compare(pin, pinHash); } catch(_) { pinOk = false; }
+        if (!pinOk) {
+          // Log the failure — repeated wrong PINs on deletes is worth seeing.
+          try {
+            await auditLog({ orderId, action: 'DELETE_PIN_REJECTED',
+              actor: { userId: authDO.userId || body.userId, role: authDO.role },
+              details: { customer: ord.customer_name,
+                         amount: ord.discounted_total ?? ord.total } });
+          } catch(_) {}
+          return res.status(401).json({ ok:false, badPin:true,
+            error:'Wrong PIN — the order was not deleted.' });
+        }
+      }
+
       // Reason required on anything that reached the kitchen — a NEW order
       // keyed by mistake is routine; a COMPLETED one is not.
       const delReason = String(body.reason || '').trim().slice(0, 300);
@@ -1099,7 +1130,8 @@ export async function routeOrders(action, body, auth, req, res) {
         newValue: 'deleted',
         details: { reason: delReason || null,
                    amount: ord.discounted_total ?? ord.total,
-                   customer: ord.customer_name } });
+                   customer: ord.customer_name,
+                   pinVerified: !!pinHash } });
       return res.status(200).json({ ok: true, orderId });
     }
 

@@ -830,14 +830,19 @@ async function deleteOrder(orderId) {
     }
   }
 
+  // Manager PIN. Asked for last, after the reason, so nobody is called over
+  // until the person deleting has actually committed to it. The PIN is only
+  // ever sent to the server — it is never stored or checked in the browser.
+  var pin = prompt('🔒 Manager PIN required to delete ' + orderId
+    + '\n\nAsk a manager to enter it.');
+  if (pin === null) return;
+  if (!String(pin).trim()) { showToast('No PIN entered — nothing deleted', 'error'); return; }
+
   try {
     var result = await api('deleteOrder', { orderId: orderId, reason: reason.trim(),
+                                            pin: String(pin).trim(),
                                             userId: currentUser && currentUser.userId });
-    if (result && result.paidOrder) {
-      showToast(result.error, 'error');
-      return;
-    }
-    if (result && result.needsReason) {
+    if (result && (result.paidOrder || result.needsReason || result.badPin || result.needsPin)) {
       showToast(result.error, 'error');
       return;
     }
