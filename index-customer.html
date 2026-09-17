@@ -272,10 +272,14 @@ a { color: var(--terra); text-decoration: none }
 .menu-img-wrap {
   position: relative;
   width: 100%;
-  aspect-ratio: 1;
+  aspect-ratio: 1 / 1;
   background: var(--mist-light);
   overflow: hidden;
-  position: relative;
+  /* The card is a flex column and grid rows stretch to the tallest card, so
+     the photo frame must be explicitly non-flexible. Without this it can grow
+     with the row and photos come out different heights down the page — tall
+     posters stay tall, and an item with no photo shows a huge empty box. */
+  flex: 0 0 auto;
 }
 .menu-img {
   width: 100%;
@@ -296,7 +300,7 @@ a { color: var(--terra); text-decoration: none }
   color: var(--mist);
 }
 .menu-info {
-  flex: 1;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -2086,7 +2090,7 @@ function renderMenu() {
        '</div>' +
        '<div class="menu-info">' +
          '<div class="menu-name">' + esc(item.name) + '</div>' +
-         '<div style="display:flex;align-items:center">' +
+         '<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:auto">' +
            '<span class="menu-cat-dot ' + getCategoryColorClass(item.category) + '"></span>' +
            priceStr +
          '</div>' +
