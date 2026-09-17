@@ -514,8 +514,13 @@ async function customerMenuPage() {
   check('photo frame is a fixed square',
         /padding-top:\s*100%/.test(wrapClean) && /height:\s*0/.test(wrapClean),
         'padding-box square, not aspect-ratio');
-  check('text block is fixed height so titles and prices line up',
-        /grid-template-rows:\s*2\.4em/.test(strip((html.match(/\.menu-info \{[^}]*\}/) || [''])[0])));
+  // The page sets * { box-sizing: border-box }. Under that, height:0 clamps the
+  // whole box to zero and padding-top cannot create height — the photo frame
+  // collapsed and took the card's text with it. This check exists because I
+  // shipped exactly that.
+  check('square frame overrides the global border-box',
+        /box-sizing:\s*content-box/.test(wrapClean),
+        'height:0 + padding-top needs content-box or the card collapses');
   check('item names reserve two lines so prices align',
         /min-height:\s*2\.4em/.test(strip((html.match(/\.menu-name \{[^}]*\}/) || [''])[0])));
 

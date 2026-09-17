@@ -270,11 +270,13 @@ a { color: var(--terra); text-decoration: none }
 }
 }
 .menu-img-wrap {
-  /* A padding-box square, not aspect-ratio. aspect-ratio on a flex item whose
-     height is also influenced by a stretched grid row was not holding — photos
-     came out at different heights in the same row. padding-top:100% makes the
-     frame's height exactly its own width, full stop, with nothing else able to
-     influence it. */
+  /* Square photo frame, height tied to its own width.
+     CRITICAL: box-sizing must be content-box here. The page sets
+     * { box-sizing: border-box }, under which height:0 clamps the WHOLE box to
+     zero and the padding cannot create height — the frame collapsed and took
+     the card's text with it. content-box makes padding add to the height, which
+     is what this technique needs. */
+  box-sizing: content-box;
   position: relative;
   width: 100%;
   height: 0;
@@ -303,15 +305,12 @@ a { color: var(--terra); text-decoration: none }
   color: var(--mist);
 }
 .menu-info {
-  /* Fixed-height text block: name occupies the top two lines, price sits on a
-     fixed row beneath. Previously the block stretched with the card and pushed
-     the price to the bottom of whichever card happened to be taller, so titles
-     and prices in the same row sat at different heights. */
+  /* Plain block flow. The name reserves two lines via min-height, the price
+     follows it. With every photo frame the same square, that is enough to line
+     titles up with titles and prices with prices — no flex or grid sizing that
+     can be influenced by the row. */
   flex: 0 0 auto;
-  display: grid;
-  grid-template-rows: 2.4em auto;
-  align-content: start;
-  gap: 4px; padding: 10px 10px 12px }
+  display: block; padding: 10px 10px 12px }
 .menu-name {
   font-family: var(--font-soul);
   font-size: .88rem;
