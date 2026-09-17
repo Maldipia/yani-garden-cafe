@@ -507,6 +507,15 @@ async function customerMenuPage() {
   check('add button is not clipped by the photo frame',
         !(wrapClips && btnBottom.startsWith('-')),
         `bottom:${btnBottom} inside a clipping wrapper`);
+  // aspect-ratio did not hold on a flex item inside a stretched grid row, so
+  // photos came out at different heights in the same row. The frame is now a
+  // padding-box square, which nothing else can influence.
+  const wrapClean = strip((html.match(/\.menu-img-wrap \{[^}]*\}/) || [''])[0]);
+  check('photo frame is a fixed square',
+        /padding-top:\s*100%/.test(wrapClean) && /height:\s*0/.test(wrapClean),
+        'padding-box square, not aspect-ratio');
+  check('text block is fixed height so titles and prices line up',
+        /grid-template-rows:\s*2\.4em/.test(strip((html.match(/\.menu-info \{[^}]*\}/) || [''])[0])));
   check('item names reserve two lines so prices align',
         /min-height:\s*2\.4em/.test(strip((html.match(/\.menu-name \{[^}]*\}/) || [''])[0])));
 
