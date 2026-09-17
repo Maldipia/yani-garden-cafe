@@ -1276,9 +1276,17 @@ a { color: var(--terra); text-decoration: none }
   display: flex; align-items: center; justify-content: center;
   opacity: 0; pointer-events: none;
   transition: opacity .18s ease;
+}
+/* Truly GONE when closed. Previously display:flex overrode the hidden
+   attribute, so an invisible full-screen fixed layer with a backdrop-filter
+   sat over the menu at all times, relying on pointer-events:none to let taps
+   through. iOS Safari has a history of hit-testing quirks with exactly that
+   combination. Now the element is not rendered at all unless it is open. */
+.pv-backdrop[hidden] { display: none !important; }
+.pv-backdrop.open {
+  opacity: 1; pointer-events: auto;
   -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
 }
-.pv-backdrop.open { opacity: 1; pointer-events: auto; }
 .pv-img {
   /* contain, never cover — the whole dish must be visible */
   max-width: 96vw; max-height: 92vh;
