@@ -271,11 +271,11 @@ a { color: var(--terra); text-decoration: none }
 }
 .menu-img-wrap {
   /* Square photo frame, height tied to its own width.
-     CRITICAL: box-sizing must be content-box here. The page sets
-     * { box-sizing: border-box }, under which height:0 clamps the WHOLE box to
-     zero and the padding cannot create height — the frame collapsed and took
-     the card's text with it. content-box makes padding add to the height, which
-     is what this technique needs. */
+     CRITICAL: box-sizing must be content-box here. The page applies border-box
+     globally, under which height:0 clamps the WHOLE box to zero and padding
+     cannot create height — the frame collapsed and took the card's text with
+     it. content-box makes padding add to the height, which this needs.
+     (No braces in this comment: they break simple CSS-rule regexes.) */
   box-sizing: content-box;
   position: relative;
   width: 100%;
