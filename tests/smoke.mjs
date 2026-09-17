@@ -495,6 +495,21 @@ async function customerMenuPage() {
         'search must scroll with the header, not away from it');
   check('rail offset is measured, not hardcoded', html.includes('syncHeaderHeight'));
 
+  // The add button was positioned at bottom:-17px inside .menu-img-wrap, which
+  // clips its children — so every + on the menu was sliced in half. Strip CSS
+  // comments before reading the value, or the comment describing the old bug
+  // matches and the check lies.
+  const strip = t => t.replace(/\/\*[\s\S]*?\*\//g, '');
+  const btn  = (html.match(/\.menu-add-btn \{[^}]*\}/) || [''])[0];
+  const wrap = (html.match(/\.menu-img-wrap \{[^}]*\}/) || [''])[0];
+  const btnBottom = (strip(btn).match(/bottom:\s*([^;]+);/) || [,''])[1].trim();
+  const wrapClips = /overflow:\s*hidden/.test(strip(wrap));
+  check('add button is not clipped by the photo frame',
+        !(wrapClips && btnBottom.startsWith('-')),
+        `bottom:${btnBottom} inside a clipping wrapper`);
+  check('item names reserve two lines so prices align',
+        /min-height:\s*2\.4em/.test(strip((html.match(/\.menu-name \{[^}]*\}/) || [''])[0])));
+
   // the menu the page renders must actually come back
   const menu = await call({ action:'getMenu' });
   const items = menu.items || [];
