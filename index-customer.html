@@ -1258,11 +1258,14 @@ a { color: var(--terra); text-decoration: none }
   gap: 8px; margin-top: 3px;
 }
 .menu-price { font-size: .9rem; font-weight: 700; color: var(--terra); }
-.menu-bestseller {
-  /* on the price row, never inside the clamped name where it got cut to "…" */
-  display: inline-block; margin-left: 7px;
+.menu-tag {
+  /* A fixed 14px line on EVERY card — text for best sellers, empty otherwise —
+     so a badge can never change a card's height or move its price. Inside the
+     name it was clamped to "…"; on the price row it wrapped and made the
+     card 8px taller. */
+  height: 14px; line-height: 14px; margin-top: 2px;
   font-size: .6rem; font-weight: 700; color: #a3781e; letter-spacing: .2px;
-  white-space: nowrap; vertical-align: 1px;
+  white-space: nowrap; overflow: hidden;
 }
 .menu-avail-note { font-size: .62rem; color: var(--timber); margin-top: 2px; }
 .menu-unavailable .menu-img-wrap { opacity: .45; }
@@ -2163,12 +2166,11 @@ function renderMenu() {
       '</div>' +
       '<div class="menu-info">' +
         '<div class="menu-name" onclick="openProductDetail(\'' + esc(item.code) + '\')">' + esc(item.name) + '</div>' +
+        '<div class="menu-tag">' + (item.isSignature ? '★ Best seller' : '') + '</div>' +
         (!item.available && item.availableLabel
           ? '<div class="menu-avail-note">' + esc(item.availableLabel) + '</div>' : '') +
         '<div class="menu-price-row">' +
-          '<span class="menu-price">' + priceStr +
-            (item.isSignature ? '<span class="menu-bestseller">★ Best seller</span>' : '') +
-          '</span>' +
+          '<span class="menu-price">' + priceStr + '</span>' +
           '<button class="menu-add-btn" onclick="event.stopPropagation();addItem(\'' + esc(item.code) + '\')" aria-label="Add ' + esc(item.name) + '">' +
             badge + '+' +
           '</button>' +
@@ -2349,7 +2351,13 @@ if (document.readyState !== 'loading') syncHeaderHeight();
       addToCart(st.item, sizeKey, sizeLabel, sugarObj, p.total, st.addonSel.slice());
     }
     toast(esc(st.item.name) + (st.qty > 1 ? ' ×' + st.qty : '') + ' added');
+    // addToCart re-renders the grid, which resets the scroll to 0 — after
+    // closeProductDetail had already restored it. Put it back once the
+    // re-render has painted, and once more in case a late refresh follows.
+    var y = savedScroll;
     closeProductDetail();
+    requestAnimationFrame(function () { window.scrollTo(0, y);
+      setTimeout(function () { window.scrollTo(0, y); }, 120); });
   }
 
   // The hero photo opens the full-screen viewer (the viewer already listens

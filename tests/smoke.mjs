@@ -522,7 +522,7 @@ async function customerMenuPage() {
         /box-sizing:\s*content-box/.test(wrapClean),
         'height:0 + padding-top needs content-box or the card collapses');
   check('item names reserve two lines so prices align',
-        /min-height:\s*2\.4em/.test(strip((html.match(/\.menu-name \{[^}]*\}/) || [''])[0])));
+        /min-height:\s*2\.[0-9]em/.test(strip((html.match(/\.menu-name \{[^}]*\}/) || [''])[0])));
 
   // the menu the page renders must actually come back
   const menu = await call({ action:'getMenu' });

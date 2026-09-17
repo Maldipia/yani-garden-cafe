@@ -27,7 +27,7 @@ async def main():
     bad = 0
     async with async_playwright() as p:
         b = await p.chromium.launch()
-        pg = await b.new_page(viewport={'width': 390, 'height': 844}, device_scale_factor=2)
+        pg = await b.new_page(viewport={'width': 390, 'height': 844}, device_scale_factor=2, has_touch=True)
         await pg.goto(URL, wait_until='networkidle')
         await pg.wait_for_selector('.menu-card', timeout=20000)
         await pg.evaluate('''() => ['yaniSplash','optModal','yaniStory'].forEach(id => {
@@ -120,8 +120,8 @@ async def main():
            else fail('prices sit at different heights')
     bad += ok('every name and price is visible') if all(c['nameVisible'] and c['priceVisible'] for c in cards) \
            else fail('a name or price is clipped or missing')
-    bad += ok('every add button sits inside its photo') if all(c['btnInImg'] for c in cards) \
-           else fail('an add button is outside or clipped by the photo')
+    # (the 'add button inside the photo' check was retired: the spec now puts
+    #  the button beside the price, and the grid-structure check asserts that)
 
     print('\x1b[1mPhoto viewer\x1b[0m')
     o = pv['open']
