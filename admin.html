@@ -1392,6 +1392,10 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
   .exp-line input, .exp-line select{ font-size:16px; padding:9px }  /* 16px stops iOS zooming on focus */
   .exp-del{ position:absolute; top:6px; right:8px; font-size:1rem; padding:2px 6px }
 }
+
+/* A deleted order surfaced by search: visibly inert so nobody actions it. */
+.order-card.oc-deleted{ opacity:.72; border-radius:0 0 10px 10px !important; }
+.order-card.oc-deleted button{ pointer-events:none; opacity:.5 }
 </style>
 <style id="menu-tag-styles">
 .menu-tag-row{background:#f0f7f0;border-radius:8px;padding:8px 12px}
@@ -2395,9 +2399,9 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
   </div>
 </div>
 
-<script src="/admin-core.js?v=51"></script>
+<script src="/admin-core.js?v=52"></script>
 
-  <script src="/admin-orders.js?v=44"></script>
+  <script src="/admin-orders.js?v=45"></script>
 <script src="/admin-payments.js?v=27"></script>
 <script src="/admin-hr.js?v=28"></script>
   <script src="/admin-menu.js?v=27"></script>

@@ -358,6 +358,37 @@ async function onlineOrderEndpoint() {
   }
 }
 
+
+// ── 11. ORDER LOOKUP ───────────────────────────────────────────────────────
+// Searching YANI-6077 returned "No order matching" although the order existed:
+// it was deleted, so it was never in the 200 rows the browser searched.
+async function orderLookup() {
+  section('Order lookup by number');
+  const recent = await call({ action:'getOrders', userId: OWNER, limit: 5 });
+  check('recent orders load', recent.ok === true && (recent.orders||[]).length > 0, recent.error);
+
+  const known = (recent.orders || [])[0];
+  if (known) {
+    const one = await call({ action:'getOrders', userId: OWNER, orderId: known.orderId });
+    check('lookup by order number returns that order',
+          one.ok === true && (one.orders||[]).some(o => o.orderId === known.orderId),
+          one.error);
+  }
+
+  // a deleted order must be findable ONLY when explicitly asked for
+  const hidden = await call({ action:'getOrders', userId: OWNER, orderId:'YANI-6077' });
+  const shown  = await call({ action:'getOrders', userId: OWNER, orderId:'YANI-6077',
+                              includeDeleted: true });
+  check('deleted order hidden by default', (hidden.orders||[]).length === 0);
+  check('deleted order findable with includeDeleted',
+        (shown.orders||[]).length === 1, 'explicit lookup must still find it');
+  if ((shown.orders||[]).length === 1) {
+    check('deleted order is flagged as deleted',
+          shown.orders[0].isDeleted === true || shown.orders[0].is_deleted === true,
+          'the UI relies on this flag to mark it');
+  }
+}
+
 // ── run ────────────────────────────────────────────────────────────────────
 const t0 = Date.now();
 console.log(`\nYANI POS regression suite → ${BASE}`);
@@ -371,6 +402,7 @@ await expensesPipeline();
 await staffReadiness();
 await viewIsolation();
 await onlineOrderEndpoint();
+await orderLookup();
 
 console.log(`\n${'─'.repeat(58)}`);
 console.log(`  passed ${pass}   failed ${fail}   (${((Date.now() - t0) / 1000).toFixed(1)}s)`);

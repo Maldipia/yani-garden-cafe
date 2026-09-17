@@ -153,7 +153,16 @@ function renderOrders() {
     var _isCardPaid = (_pmUpper.indexOf('CARD') !== -1 && _pmUpper !== 'YANI_CARD');
     var _isGcashPaid = (_pmUpper.indexOf('GCASH') !== -1);
     var _payClass = _isCardPaid ? ' card-paid' : (_isGcashPaid ? ' gcash-paid' : '');
-    var html = '<div class="order-card' + _payClass + '" data-status="' + o.status + '"' + (o.platform ? ' data-platform="' + esc(o.platform) + '"' : '') + (o.source === 'STAFF' ? ' data-source="STAFF"' : '') + '>';
+    // A deleted order found by search must be unmistakable — it is history,
+    // not a live order, and must not be actioned or used for a receipt.
+    var _del = !!(o.isDeleted || o.is_deleted);
+    var html = '';
+    if (_del) {
+      html += '<div style="background:#fef2f2;border:2px solid #fecaca;border-radius:10px 10px 0 0;'
+           +  'padding:8px 12px;font-size:.74rem;font-weight:800;color:#b91c1c">'
+           +  '🗑️ DELETED ORDER — for reference only, not counted in sales</div>';
+    }
+    html += '<div class="order-card' + _payClass + (_del ? ' oc-deleted' : '') + '" data-status="' + o.status + '"' + (o.platform ? ' data-platform="' + esc(o.platform) + '"' : '') + (o.source === 'STAFF' ? ' data-source="STAFF"' : '') + '>';
 
     // Header
     html += '<div class="oc-header">' +

@@ -930,11 +930,51 @@ function _sRow(icon, label, val, color) {
     + '</div>';
 }
 
-// Order-number search — filters the visible order cards live.
+// Order-number search — filters the visible order cards live, then falls back
+// to the server if nothing matches.
+//
+// The list only holds the most recent 200 non-deleted orders, so searching
+// YANI-6077 returned "No order matching" even though the order existed: it had
+// been deleted, so it was never in the list the browser was searching. A
+// search that can only see what is already on screen is not a search.
 function onOrderSearch(val) {
   window._orderSearch = (val || '').trim();
-  // Re-filter without rebuilding the filter bar (keeps the input focused).
   if (typeof renderOrders === 'function') renderOrders();
+
+  clearTimeout(window._orderSearchTimer);
+  var q = window._orderSearch;
+  if (!q || q.length < 3) return;
+
+  window._orderSearchTimer = setTimeout(function(){ lookupOrderOnServer(q); }, 450);
+}
+
+// Ask the server for an order the loaded list does not contain — including
+// deleted ones, because an explicit lookup by number is deliberate.
+async function lookupOrderOnServer(q) {
+  if (window._orderSearch !== q) return;                       // typing moved on
+  var already = (window.allOrders || []).some(function(o){
+    return String(o.orderId || '').toLowerCase().indexOf(q.toLowerCase()) !== -1;
+  });
+  if (already) return;
+
+  var ref = /^\d+$/.test(q) ? 'YANI-' + q : q.toUpperCase();
+  try {
+    var r = await api('getOrders', { userId: currentUser && currentUser.userId,
+                                     orderId: ref, includeDeleted: true });
+    if (window._orderSearch !== q) return;
+    var found = (r && r.ok && r.orders) ? r.orders : [];
+    if (!found.length) return;
+
+    found.forEach(function(o){
+      if (!(window.allOrders || []).some(function(x){ return x.orderId === o.orderId; })) {
+        window.allOrders.push(o);
+      }
+    });
+    if (typeof renderOrders === 'function') renderOrders();
+    if (typeof showToast === 'function' && found[0] && (found[0].isDeleted || found[0].is_deleted)) {
+      showToast('⚠️ ' + found[0].orderId + ' was DELETED — shown for reference only', 'error');
+    }
+  } catch (_) { /* search must never break the board */ }
 }
 
 function renderFilters() {
