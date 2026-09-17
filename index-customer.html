@@ -1266,6 +1266,48 @@ a { color: var(--terra); text-decoration: none }
   from { opacity: 0; transform: translateY(16px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* ── Photo viewer (lightbox) ─────────────────────────────────────────────
+   Tap a product photo → the photo, large, on a dark backdrop. Nothing else.
+   Purely visual: it never touches the cart, quantity or checkout. */
+.pv-backdrop {
+  position: fixed; inset: 0; z-index: 400;
+  background: rgba(8, 12, 9, .92);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none;
+  transition: opacity .18s ease;
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+}
+.pv-backdrop.open { opacity: 1; pointer-events: auto; }
+.pv-img {
+  /* contain, never cover — the whole dish must be visible */
+  max-width: 96vw; max-height: 92vh;
+  width: auto; height: auto;
+  object-fit: contain;
+  border-radius: 10px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.6);
+  transform: scale(.94); opacity: 0;
+  transition: transform .2s cubic-bezier(.2,.8,.2,1), opacity .18s ease;
+  user-select: none; -webkit-user-drag: none;
+  touch-action: pan-y;          /* lets the swipe-down handler see vertical moves */
+}
+.pv-backdrop.open .pv-img { transform: scale(1); opacity: 1; }
+.pv-close {
+  position: fixed; top: max(14px, env(safe-area-inset-top)); right: 16px;
+  width: 42px; height: 42px; border-radius: 50%;
+  background: rgba(255,255,255,.14); color: #fff;
+  border: 1px solid rgba(255,255,255,.22);
+  font-size: 1.35rem; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; z-index: 401;
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+}
+.pv-close:active { background: rgba(255,255,255,.28); }
+@media (min-width: 900px) {
+  .pv-img { max-width: 90vw; max-height: 90vh; border-radius: 14px; }
+}
+/* the product photo itself is tappable */
+.menu-img { cursor: zoom-in; }
 </style>
 </head>
 <body>
@@ -1288,6 +1330,12 @@ a { color: var(--terra); text-decoration: none }
     </div>
     <button class="splash-btn" id="splashBtn" onclick="dismissSplash()">See Our Menu →</button>
   </div>
+</div>
+
+<!-- ═══════════════════ PHOTO VIEWER ═══════════════════ -->
+<div class="pv-backdrop" id="pvBackdrop" role="dialog" aria-modal="true" aria-label="Product photo" hidden>
+  <button class="pv-close" id="pvClose" aria-label="Close photo">✕</button>
+  <img class="pv-img" id="pvImg" alt="" draggable="false">
 </div>
 
 <!-- ═══════════════════ HEADER ═══════════════════ -->
@@ -2119,6 +2167,80 @@ window.addEventListener('resize', syncHeaderHeight);
 window.addEventListener('orientationchange', function(){ setTimeout(syncHeaderHeight, 120); });
 document.addEventListener('DOMContentLoaded', syncHeaderHeight);
 if (document.readyState !== 'loading') syncHeaderHeight();
+
+
+// ── PHOTO VIEWER ────────────────────────────────────────────────────────────
+// Tap image → large photo → close → back to menu. It is wired to the existing
+// .menu-img element by event delegation, so every product gets it with no
+// change to the card template, and it is deliberately ignorant of the cart.
+(function () {
+  var backdrop, img, closeBtn, lastFocus = null, touchStartY = null;
+
+  function els() {
+    backdrop = backdrop || document.getElementById('pvBackdrop');
+    img      = img      || document.getElementById('pvImg');
+    closeBtn = closeBtn || document.getElementById('pvClose');
+    return backdrop && img && closeBtn;
+  }
+
+  function openViewer(src, alt) {
+    if (!els() || !src) return;
+    lastFocus = document.activeElement;
+    img.src = src;                       // the card already shows the full asset; reuse it
+    img.alt = alt || 'Product photo';
+    backdrop.hidden = false;
+    // two frames so the transition runs from the hidden state
+    requestAnimationFrame(function () { requestAnimationFrame(function () {
+      backdrop.classList.add('open');
+    }); });
+    document.body.style.overflow = 'hidden';
+    closeBtn.focus({ preventScroll: true });
+  }
+
+  function closeViewer() {
+    if (!els() || !backdrop.classList.contains('open')) return;
+    backdrop.classList.remove('open');
+    document.body.style.overflow = '';
+    setTimeout(function () {
+      backdrop.hidden = true;
+      img.removeAttribute('src');
+      if (lastFocus && lastFocus.focus) lastFocus.focus({ preventScroll: true });
+    }, 200);
+  }
+
+  // Open: any product photo, via delegation. Stops propagation so nothing
+  // else on the card can interpret the tap.
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    if (!(t && t.classList && t.classList.contains('menu-img'))) return;
+    if (!t.getAttribute('src')) return;
+    e.preventDefault(); e.stopPropagation();
+    openViewer(t.currentSrc || t.src, t.alt);
+  }, true);
+
+  // Close: X, the backdrop (not the photo), Escape, swipe down.
+  document.addEventListener('click', function (e) {
+    if (!els()) return;
+    if (e.target === closeBtn || closeBtn.contains(e.target)) { closeViewer(); return; }
+    if (e.target === backdrop) closeViewer();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && els() && backdrop.classList.contains('open')) closeViewer();
+  });
+  document.addEventListener('touchstart', function (e) {
+    if (!els() || !backdrop.classList.contains('open')) return;
+    touchStartY = e.touches[0].clientY;
+  }, { passive: true });
+  document.addEventListener('touchend', function (e) {
+    if (touchStartY === null || !els() || !backdrop.classList.contains('open')) return;
+    var dy = e.changedTouches[0].clientY - touchStartY;
+    touchStartY = null;
+    if (dy > 80) closeViewer();          // a deliberate downward swipe
+  }, { passive: true });
+
+  window.openPhotoViewer = openViewer;   // available if a detail view wants it
+  window.closePhotoViewer = closeViewer;
+})();
 
 function filterMenu() {
   state.search = document.getElementById('searchInput').value;

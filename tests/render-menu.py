@@ -46,6 +46,27 @@ async def main():
                      btnInImg: bt && w ? (bt.top >= w.top - 1 && bt.bottom <= w.bottom + 1) : false };
         })''')
         await pg.screenshot(path='/tmp/menu-render.png')
+
+        # ── Photo viewer ──────────────────────────────────────────────────
+        # Opens on a photo tap, contains (never crops), closes four ways, and
+        # never touches the cart. Tested here because it is behaviour, and
+        # behaviour can only be verified by running it.
+        pv = {}
+        cart0 = await pg.evaluate("state.cart.length")
+        await pg.click('.menu-card .menu-img', force=True); await pg.wait_for_timeout(350)
+        pv['open'] = await pg.evaluate('''() => { const bd=document.getElementById('pvBackdrop'), im=document.getElementById('pvImg');
+            const r=im.getBoundingClientRect(); return { open: bd.classList.contains('open') && !bd.hidden,
+            fit: getComputedStyle(im).objectFit, bigger: r.width > document.querySelector('.menu-img').getBoundingClientRect().width * 2,
+            aspect: Math.abs(im.naturalWidth/im.naturalHeight - r.width/r.height) < 0.03 }; }''')
+        await pg.click('#pvClose'); await pg.wait_for_timeout(300)
+        pv['x'] = await pg.evaluate("document.getElementById('pvBackdrop').hidden")
+        await pg.click('.menu-card .menu-img', force=True); await pg.wait_for_timeout(300)
+        await pg.mouse.click(8, 836); await pg.wait_for_timeout(300)
+        pv['backdrop'] = await pg.evaluate("document.getElementById('pvBackdrop').hidden")
+        await pg.click('.menu-card .menu-img', force=True); await pg.wait_for_timeout(300)
+        await pg.keyboard.press('Escape'); await pg.wait_for_timeout(300)
+        pv['esc'] = await pg.evaluate("document.getElementById('pvBackdrop').hidden")
+        pv['cartSame'] = (await pg.evaluate("state.cart.length")) == cart0
         await b.close()
 
     print('\x1b[1mRendered customer menu (390px phone)\x1b[0m')
@@ -69,6 +90,17 @@ async def main():
            else fail('a name or price is clipped or missing')
     bad += ok('every add button sits inside its photo') if all(c['btnInImg'] for c in cards) \
            else fail('an add button is outside or clipped by the photo')
+
+    print('\x1b[1mPhoto viewer\x1b[0m')
+    o = pv['open']
+    bad += ok('opens on photo tap') if o['open'] else fail('viewer did not open')
+    bad += ok('uses object-fit: contain (never crops)') if o['fit'] == 'contain' else fail(f"object-fit is {o['fit']}")
+    bad += ok('shows the photo substantially larger') if o['bigger'] else fail('viewer image is not larger than the card')
+    bad += ok('keeps the original aspect ratio') if o['aspect'] else fail('aspect ratio distorted')
+    bad += ok('closes with X') if pv['x'] else fail('X did not close')
+    bad += ok('closes on backdrop tap') if pv['backdrop'] else fail('backdrop tap did not close')
+    bad += ok('closes on Escape') if pv['esc'] else fail('Escape did not close')
+    bad += ok('cart untouched by viewing') if pv['cartSame'] else fail('cart changed while viewing a photo')
 
     print(f"\n  {'rendered layout OK' if not bad else f'{bad} layout problem(s)'}  (screenshot: /tmp/menu-render.png)\n")
     sys.exit(1 if bad else 0)
