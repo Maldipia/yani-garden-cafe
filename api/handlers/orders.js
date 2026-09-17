@@ -608,6 +608,34 @@ export async function routeOrders(action, body, auth, req, res) {
           error: 'Collect the cash first, then mark it received before completing.' });
       }
 
+      // ── Cancelling needs the manager PIN too ──────────────────────────────
+      // Delete was gated but cancel was not, so the softer action — which also
+      // removes an order from sales — went through with a single tap. Same
+      // control, same PIN, verified server-side.
+      if (newStatus === 'CANCELLED') {
+        const pinCfC = await supaFetch(
+          `${SUPABASE_URL}/rest/v1/secure_config?key=eq.DELETE_ORDER_PIN_HASH&select=value`);
+        const pinHashC = Array.isArray(pinCfC.data) && pinCfC.data[0] ? pinCfC.data[0].value : null;
+        if (pinHashC) {
+          const pinC = String(body.pin || '').trim();
+          if (!pinC) {
+            return res.status(401).json({ ok:false, needsPin:true,
+              error:'A manager PIN is required to cancel an order.' });
+          }
+          let okC = false;
+          try { okC = await bcrypt.compare(pinC, pinHashC); } catch(_) { okC = false; }
+          if (!okC) {
+            try {
+              await auditLog({ orderId, action:'CANCEL_PIN_REJECTED',
+                actor: { userId },
+                details: { attemptedStatus: 'CANCELLED' } });
+            } catch(_) {}
+            return res.status(401).json({ ok:false, badPin:true,
+              error:'Wrong PIN — the order was not cancelled.' });
+          }
+        }
+      }
+
       // ── Cancelling a PAID order needs a refund decision ───────────────────
       // 30 historical orders are VERIFIED-and-CANCELLED worth PHP 9,505.10,
       // with no record of whether the money was returned or kept. Each is

@@ -713,7 +713,24 @@ async function updateStatus(orderId, newStatus) {
       ]
     );
     if (!reason) return; // user dismissed
-    var result = await api('updateOrderStatus', { orderId:orderId, status:newStatus, cancelReason:reason, userId: currentUser && currentUser.userId });
+    // Cancelling removes an order from sales just as deleting does, so it asks
+    // for the manager PIN too. Requested last, after the reason.
+    var cancelPin = '';
+    if (newStatus === 'CANCELLED') {
+      cancelPin = prompt('🔒 Manager PIN required to cancel ' + orderId
+        + '\n\nAsk a manager to enter it.');
+      if (cancelPin === null) return;
+      if (!String(cancelPin).trim()) {
+        showToast('No PIN entered — order not cancelled', 'error'); return;
+      }
+    }
+
+    var result = await api('updateOrderStatus', { orderId:orderId, status:newStatus,
+      cancelReason:reason, pin: String(cancelPin).trim(),
+      userId: currentUser && currentUser.userId });
+    if (result && (result.needsPin || result.badPin)) {
+      showToast(result.error, 'error'); return;
+    }
     // The order is already paid — the server will not cancel it until we say
     // whether the money went back to the customer or was kept.
     if (result && result.needsPaymentDecision) {
@@ -1081,7 +1098,14 @@ async function eoCancelOrder() {
     { value: 'other',            label: '💬 Other' },
   ]);
   if (!reason) return;
-  var result = await api('updateOrderStatus', { orderId: eoOrderId, status: 'CANCELLED', cancelReason: reason, userId: currentUser && currentUser.userId });
+  var eoPin = prompt('🔒 Manager PIN required to cancel ' + eoOrderId
+    + '\n\nAsk a manager to enter it.');
+  if (eoPin === null) return;
+  if (!String(eoPin).trim()) { showToast('No PIN entered — order not cancelled', 'error'); return; }
+  var result = await api('updateOrderStatus', { orderId: eoOrderId, status: 'CANCELLED',
+    cancelReason: reason, pin: String(eoPin).trim(),
+    userId: currentUser && currentUser.userId });
+  if (result && (result.needsPin || result.badPin)) { showToast(result.error, 'error'); return; }
   if (result.ok) {
     allOrders.forEach(function(o) { if (o.orderId === eoOrderId) { o.status = 'CANCELLED'; o.cancelReason = reason; } });
     renderStats(); renderFilters(); renderOrders();
