@@ -697,34 +697,15 @@ textarea.form-input{resize:none;min-height:72px}
     <div class="info-box">💳 <strong>Online payment only</strong> — No cash on delivery. Send the exact amount then upload your proof below.</div>
 
     <!-- Pay methods -->
+    <!-- Payment details come from ONE place: the PAYMENT_IMAGE_URL uploaded in
+         Settings > Payment. This page used to carry its own hardcoded QR files
+         (/images/pay-*.jpg) and account numbers, so changing an account in the
+         dashboard left online customers paying into the old one. Dine-in
+         checkout already read the setting; this page now matches it. -->
     <div class="form-card">
-      <div class="form-card-title">Choose Payment Method</div>
-      <div class="pay-methods">
-        <button class="pay-btn active" id="payGcash" onclick="selectPayMethod('GCASH')">
-          <span class="pay-icon">💚</span>GCash
-        </button>
-        <button class="pay-btn" id="payInstapay" onclick="selectPayMethod('INSTAPAY')">
-          <span class="pay-icon">🏦</span>InstaPay
-        </button>
-        <button class="pay-btn" id="payBdo" onclick="selectPayMethod('BDO')">
-          <span class="pay-icon">🔵</span>BDO
-        </button>
-        <button class="pay-btn" id="payBpi" onclick="selectPayMethod('BPI')">
-          <span class="pay-icon">🔴</span>BPI
-        </button>
-        <button class="pay-btn" id="payUnionbank" onclick="selectPayMethod('UNIONBANK')">
-          <span class="pay-icon">🟠</span>UnionBank
-        </button>
-      </div>
-    </div>
-
-    <!-- QR + amount -->
-    <div class="qr-card">
-      <img class="qr-img" id="qrCodeImg" src="/images/pay-gcash.jpg" alt="QR Code">
-      <div class="qr-acct-name">Account Name</div>
-      <div class="qr-name" id="paymentName">LEGERYN PIA</div>
-      <div class="qr-lbl" id="paymentNumLabel">Scan QR to pay</div>
-      <div class="qr-num" id="paymentNumber">—</div>
+      <div class="form-card-title">Payment Details</div>
+      <div id="payImageWrap" style="border-radius:14px;overflow:hidden;background:#f5f5f7"></div>
+      <div id="payMethodPicker" style="margin-top:12px"></div>
     </div>
 
     <div class="pay-total">
@@ -846,6 +827,7 @@ textarea.form-input{resize:none;min-height:72px}
       var d = await r.json();
       if (d.ok) {
         APP_CONFIG = d.config;
+        window.APP_CONFIG = d.config;   // renderPaymentPanel reads this
         var bn = d.config.BUSINESS_NAME || 'My Cafe';
         document.title = bn + ' — Online Order';
         document.querySelectorAll('.brand-name').forEach(function(el){ el.textContent = bn; });
@@ -891,13 +873,10 @@ var selectedDeliveryType = 'YANI';
 var selectedZone = null;
 var selectedDeliveryFee = 0;
 
-var PAYMENT_DETAILS = {
-  GCASH:     { number: '',               name: (APP_CONFIG.ACCOUNT_NAME||'LEGERYN PIA'), numLabel: 'Scan QR to pay:',  img: '/images/pay-gcash.jpg' },
-  INSTAPAY:  { number: '',               name: (APP_CONFIG.ACCOUNT_NAME||'LEGERYN PIA'), numLabel: 'Scan QR to pay:',  img: '/images/pay-instapay.jpg' },
-  BDO:       { number: (APP_CONFIG.BDO_ACCOUNT||'0126-000-62617'), name: (APP_CONFIG.ACCOUNT_NAME||'LEGERYN PIA'), numLabel: 'Account No.:',     img: '/images/pay-bdo.jpg' },
-  BPI:       { number: (APP_CONFIG.BPI_ACCOUNT||'1539-235-628'),   name: (APP_CONFIG.ACCOUNT_NAME||'LEGERYN PIA'), numLabel: 'Account No.:',     img: '/images/pay-bpi.png' },
-  UNIONBANK: { number: (APP_CONFIG.UNIONBANK_ACCOUNT||'1093-2100-0528'), name: (APP_CONFIG.ACCOUNT_NAME||'LEGERYN PIA'), numLabel: 'Account No.:',     img: '/images/pay-unionbank.jpg' }
-};
+// PAYMENT_DETAILS removed. It hardcoded five QR image files and fallback
+// account numbers, so an account changed in the dashboard was ignored here
+// and online customers kept paying into the old one. The single source of
+// truth is now PAYMENT_IMAGE_URL from Settings > Payment.
 
 var SUGAR_LEVELS = [
   { key:'Grounded', label:'Grounded (25%)',         sub:'Light & clean' },
@@ -1371,6 +1350,7 @@ function goToStep(step) {
   if (catWrapper) catWrapper.style.display = step===1?'':'none';
   if (step===2) renderCartView();
   if (step===4) {
+    renderPaymentPanel();
     var total = getCartTotal();
     var delFee = selectedDeliveryType==='YANI'&&selectedZone&&selectedZone!==4?selectedDeliveryFee:0;
     document.getElementById('payAmount').textContent =
@@ -1382,18 +1362,39 @@ function goToStep(step) {
 }
 
 // ════ PAYMENT ════
+// Render the payment image from Settings, and a simple method picker used only
+// to label which account the customer actually sent to.
+function renderPaymentPanel() {
+  var cfg = window.APP_CONFIG || (typeof APP_CONFIG !== 'undefined' ? APP_CONFIG : {}) || {};
+  var url = cfg.PAYMENT_IMAGE_URL || '';
+  var wrap = document.getElementById('payImageWrap');
+  if (wrap) {
+    wrap.innerHTML = url
+      ? '<img src="' + url + '" alt="Payment details" style="width:100%;display:block" '
+        + 'onerror="this.parentElement.innerHTML=\'<div style=&quot;padding:24px;text-align:center;color:#6b5b4d&quot;>'
+        + '⚠️ Payment image unavailable — please message us for payment details.</div>\'">'
+      : '<div style="padding:24px;text-align:center;color:#6b5b4d;font-size:.85rem">'
+        + '⚠️ No payment image set. Please message us for payment details.</div>';
+  }
+  var pick = document.getElementById('payMethodPicker');
+  if (pick) {
+    var methods = [['GCASH','GCash'],['INSTAPAY','InstaPay'],['BDO','BDO'],
+                   ['BPI','BPI'],['UNIONBANK','UnionBank']];
+    pick.innerHTML = '<div style="font-size:.74rem;color:#6b5b4d;margin-bottom:6px">'
+      + 'Which account did you send to?</div><div class="pay-methods">'
+      + methods.map(function(m){
+          return '<button class="pay-btn' + (m[0]===selectedPayMethod?' active':'') + '" '
+               + 'id="pay_' + m[0] + '" onclick="selectPayMethod(\'' + m[0] + '\')">' + m[1] + '</button>';
+        }).join('') + '</div>';
+  }
+}
+
 function selectPayMethod(method) {
   selectedPayMethod = method;
   ['GCASH','INSTAPAY','BDO','BPI','UNIONBANK'].forEach(function(m){
-    var idMap={GCASH:'payGcash',INSTAPAY:'payInstapay',BDO:'payBdo',BPI:'payBpi',UNIONBANK:'payUnionbank'};
-    var btn=document.getElementById(idMap[m]);
-    if(btn) btn.classList.toggle('active',m===method);
+    var btn = document.getElementById('pay_' + m);
+    if (btn) btn.classList.toggle('active', m === method);
   });
-  var d = PAYMENT_DETAILS[method]||PAYMENT_DETAILS.GCASH;
-  document.getElementById('qrCodeImg').src = d.img;
-  document.getElementById('paymentName').textContent = d.name;
-  document.getElementById('paymentNumLabel').textContent = d.numLabel;
-  document.getElementById('paymentNumber').textContent = d.number||'—';
 }
 
 // ════ PROOF UPLOAD ════
