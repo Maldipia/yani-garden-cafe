@@ -47,23 +47,55 @@ async def main():
         })''')
         await pg.screenshot(path='/tmp/menu-render.png')
 
+        # ── Grid structure: photo → name → price, nothing over the photo ──
+        gs = await pg.evaluate('''() => [...document.querySelectorAll('.menu-card')].slice(0,8).map(c => ({
+            overlays: c.querySelectorAll('.menu-img-wrap *:not(img):not(.menu-img-placeholder)').length,
+            btnOverPhoto: c.querySelector('.menu-add-btn').getBoundingClientRect().top < c.querySelector('.menu-img-wrap').getBoundingClientRect().bottom,
+            cardBg: getComputedStyle(c).backgroundColor }))''')
+        bad += ok('nothing is drawn over the grid photos') if all(x['overlays']==0 for x in gs) else fail('something overlays a grid photo')
+        bad += ok('add button sits beside the price, not on the photo') if not any(x['btnOverPhoto'] for x in gs) else fail('add button overlaps a photo')
+        bad += ok('no card box behind products') if all(x['cardBg'] in ('rgba(0, 0, 0, 0)','transparent') for x in gs) else fail('a card background is drawn')
+
+        # ── Detail page flow ─────────────────────────────────────────────
+        await pg.evaluate("document.documentElement.style.scrollBehavior='auto'; window.scrollTo({top:600,behavior:'instant'})"); await pg.wait_for_timeout(300)
+        y0 = await pg.evaluate("Math.round(window.scrollY)")
+        await pg.locator('.menu-card').nth(4).locator('.menu-img-wrap').tap(); await pg.wait_for_timeout(450)
+        dd = await pg.evaluate('''() => { const v=document.getElementById('productDetail'), h=v.querySelector('.pd-hero').getBoundingClientRect();
+            return { open: !v.hidden, heroSquare: Math.abs(h.width-h.height)<2, viewer: !document.getElementById('pvBackdrop').hidden,
+                     name: !!document.getElementById('pdName').textContent, price: /₱/.test(document.getElementById('pdPrice').textContent),
+                     heroOverlays: v.querySelectorAll('.pd-hero *:not(img):not(.pd-img-placeholder):not(.pd-back)').length }; }''')
+        bad += ok('grid photo tap opens the detail page') if dd['open'] and not dd['viewer'] else fail('grid photo tap did not open detail (or opened the viewer)')
+        bad += ok('detail hero is a square photo with only a back button on it') if dd['heroSquare'] and dd['heroOverlays']==0 else fail('detail hero is wrong')
+        bad += ok('detail shows name and price') if dd['name'] and dd['price'] else fail('detail missing name or price')
+        await pg.locator('#pdImg').tap(); await pg.wait_for_timeout(400)
+        hv = await pg.evaluate("document.getElementById('pvBackdrop').classList.contains('open')")
+        await pg.locator('#pvClose').tap(); await pg.wait_for_timeout(350)
+        bad += ok('hero tap opens the full-screen viewer') if hv else fail('hero tap did not open the viewer')
+        c0 = await pg.evaluate("state.cart.length")
+        await pg.locator('#pdAdd').tap(); await pg.wait_for_timeout(500)
+        c1 = await pg.evaluate("state.cart.length"); closed = await pg.evaluate("document.getElementById('productDetail').hidden")
+        y1 = await pg.evaluate("Math.round(window.scrollY)")
+        bad += ok('add to cart from detail adds and returns to the menu') if c1==c0+1 and closed else fail('detail add did not add or did not return')
+        bad += ok('menu scroll position restored after detail') if abs(y0-y1)<=2 else fail(f'scroll {y0} -> {y1}')
+
         # ── Photo viewer ──────────────────────────────────────────────────
         # Opens on a photo tap, contains (never crops), closes four ways, and
         # never touches the cart. Tested here because it is behaviour, and
         # behaviour can only be verified by running it.
         pv = {}
         cart0 = await pg.evaluate("state.cart.length")
-        await pg.click('.menu-card .menu-img', force=True); await pg.wait_for_timeout(350)
+        await pg.locator('.menu-card').first.locator('.menu-img-wrap').tap(); await pg.wait_for_timeout(450)
+        await pg.click('#pdImg', force=True); await pg.wait_for_timeout(350)
         pv['open'] = await pg.evaluate('''() => { const bd=document.getElementById('pvBackdrop'), im=document.getElementById('pvImg');
             const r=im.getBoundingClientRect(); return { open: bd.classList.contains('open') && !bd.hidden,
-            fit: getComputedStyle(im).objectFit, bigger: r.width > document.querySelector('.menu-img').getBoundingClientRect().width * 2,
+            fit: getComputedStyle(im).objectFit, bigger: r.width > document.querySelector('.menu-img').getBoundingClientRect().width * 1.5,
             aspect: Math.abs(im.naturalWidth/im.naturalHeight - r.width/r.height) < 0.03 }; }''')
         await pg.click('#pvClose'); await pg.wait_for_timeout(300)
         pv['x'] = await pg.evaluate("document.getElementById('pvBackdrop').hidden")
-        await pg.click('.menu-card .menu-img', force=True); await pg.wait_for_timeout(300)
+        await pg.click('#pdImg', force=True); await pg.wait_for_timeout(300)
         await pg.mouse.click(8, 836); await pg.wait_for_timeout(300)
         pv['backdrop'] = await pg.evaluate("document.getElementById('pvBackdrop').hidden")
-        await pg.click('.menu-card .menu-img', force=True); await pg.wait_for_timeout(300)
+        await pg.click('#pdImg', force=True); await pg.wait_for_timeout(300)
         await pg.keyboard.press('Escape'); await pg.wait_for_timeout(300)
         pv['esc'] = await pg.evaluate("document.getElementById('pvBackdrop').hidden")
         pv['cartSame'] = (await pg.evaluate("state.cart.length")) == cart0
