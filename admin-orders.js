@@ -800,41 +800,41 @@ async function deleteOrder(orderId) {
   // how three real sales stayed missing for days.
   var o = (allOrders || []).find(function(x){ return x.orderId === orderId; }) || {};
   var isPaid = String(o.paymentStatus || '').toUpperCase() === 'VERIFIED';
-
-  if (isPaid) {
-    await ygcConfirm('🚫 Cannot delete a paid order',
-      orderId + ' is marked PAID. Deleting it would remove it from every sales '
-      + 'total with no trace.\n\nUse ✕ Cancel instead — that records whether the '
-      + 'money was refunded or kept.',
-      'OK', null);
-    return;
-  }
+  var amt = o.discountedTotal || o.total || 0;
 
   var confirmed = await ygcConfirm(
-    '⚠️ Delete order ' + orderId + '?',
-    'This hides the order from the board, all sales totals and search.\n\n'
-    + 'Delete is for mistakes and test rows. For a real order the customer '
-    + 'walked away from, use ✕ Cancel so it stays in the record.',
-    'Delete', 'Keep it'
+    isPaid ? '⚠️ Delete a PAID sale?' : ('⚠️ Delete order ' + orderId + '?'),
+    isPaid
+      ? orderId + ' — ' + (o.customerName || 'Guest') + ', \u20b1' + amt + ' already PAID.\n\n'
+        + 'Deleting removes it from today\u2019s sales and every report.\n'
+        + 'You will need a reason and the manager PIN.\n\n'
+        + 'If the customer simply cancelled, use \u2715 Cancel instead — that keeps '
+        + 'the sale in the record and asks whether the money was refunded.'
+      : 'This hides the order from the board, all sales totals and search.\n\n'
+        + 'Delete is for mistakes and test rows. For a real order the customer '
+        + 'walked away from, use \u2715 Cancel so it stays in the record.',
+    'Continue', 'Keep it'
   );
   if (!confirmed) return;
 
-  // Anything that reached the kitchen needs a reason, and the server enforces it.
+  // Reason — required for a paid sale, and for anything that reached the
+  // kitchen. The server enforces this too; the prompt is just the friendly half.
   var reason = '';
-  if (['COMPLETED','READY','PREPARING'].indexOf(o.status) !== -1) {
-    reason = prompt('Order ' + orderId + ' is ' + o.status
-      + '.\n\nWhy is it being deleted? (recorded with your name)');
+  if (isPaid || ['COMPLETED','READY','PREPARING'].indexOf(o.status) !== -1) {
+    reason = prompt('Step 1 of 2 — Reason\n\n'
+      + 'Why is ' + orderId + (isPaid ? ' (PAID \u20b1' + amt + ')' : ' (' + o.status + ')')
+      + ' being deleted?\n\nThis is recorded permanently.');
     if (reason === null) return;
     if (!reason.trim() || reason.trim().length < 3) {
       showToast('A reason is required — nothing deleted', 'error'); return;
     }
   }
 
-  // Manager PIN. Asked for last, after the reason, so nobody is called over
-  // until the person deleting has actually committed to it. The PIN is only
-  // ever sent to the server — it is never stored or checked in the browser.
-  var pin = prompt('🔒 Manager PIN required to delete ' + orderId
-    + '\n\nAsk a manager to enter it.');
+  // Manager PIN, asked last so nobody is called over until the person has
+  // actually committed. Only ever sent to the server — never stored or
+  // checked in the browser.
+  var pin = prompt('Step 2 of 2 — 🔒 Manager PIN\n\n'
+    + 'Ask a manager to enter the PIN to delete ' + orderId + '.');
   if (pin === null) return;
   if (!String(pin).trim()) { showToast('No PIN entered — nothing deleted', 'error'); return; }
 

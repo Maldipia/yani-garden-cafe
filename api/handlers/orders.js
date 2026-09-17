@@ -1066,14 +1066,11 @@ export async function routeOrders(action, body, auth, req, res) {
       const ord = Array.isArray(cur.data) ? cur.data[0] : null;
       if (!ord) return res.status(404).json({ ok:false, error:'Order not found' });
 
-      if (ord.payment_status === 'VERIFIED') {
-        return res.status(409).json({ ok:false, paidOrder:true,
-          error: 'This order is marked PAID and cannot be deleted. '
-               + 'Cancel it instead so the refund decision is recorded.',
-          orderId,
-          amount: ord.discounted_total ?? ord.total,
-          customer: ord.customer_name });
-      }
+      // A PAID order is not blocked outright — the owner asked for the manager
+      // PIN to be the control, not a wall. It does require BOTH the PIN and a
+      // written reason, and it is flagged in the audit entry and the nightly
+      // email, so a deleted sale is deliberate and visible rather than silent.
+      const wasPaid = ord.payment_status === 'VERIFIED';
 
       // ── Manager PIN ──────────────────────────────────────────────────
       // Deleting is now a two-person action: whoever is on the floor has to
@@ -1108,9 +1105,12 @@ export async function routeOrders(action, body, auth, req, res) {
       // Reason required on anything that reached the kitchen — a NEW order
       // keyed by mistake is routine; a COMPLETED one is not.
       const delReason = String(body.reason || '').trim().slice(0, 300);
-      if (['COMPLETED','READY','PREPARING'].includes(ord.status) && delReason.length < 3) {
+      if ((wasPaid || ['COMPLETED','READY','PREPARING'].includes(ord.status))
+          && delReason.length < 3) {
         return res.status(400).json({ ok:false, needsReason:true,
-          error: `This order is ${ord.status}. Give a reason for deleting it.` });
+          error: wasPaid
+            ? `This order is PAID (${ord.discounted_total ?? ord.total}). A written reason is required.`
+            : `This order is ${ord.status}. Give a reason for deleting it.` });
       }
 
       // Soft delete — preserve order history for analytics/audit
@@ -1131,6 +1131,7 @@ export async function routeOrders(action, body, auth, req, res) {
         details: { reason: delReason || null,
                    amount: ord.discounted_total ?? ord.total,
                    customer: ord.customer_name,
+                   wasPaid,
                    pinVerified: !!pinHash } });
       return res.status(200).json({ ok: true, orderId });
     }
