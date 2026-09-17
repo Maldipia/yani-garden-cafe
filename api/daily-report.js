@@ -70,9 +70,35 @@ async function buildReport() {
 
   // ── Orders for yesterday ──────────────────────────────────────────────
   const ordersR = await supaFetch(
-    `dine_in_orders?created_at=gte.${startISO}&created_at=lt.${endISO}&is_deleted=eq.false&is_test=eq.false&select=order_id,status,total,discounted_total,discount_type,discount_amount,order_type,payment_method,created_at,customer_name,table_no,subtotal,service_charge&order=created_at.asc`
+    `dine_in_orders?created_at=gte.${startISO}&created_at=lt.${endISO}&is_deleted=eq.false&is_test=eq.false&select=order_id,status,total,discounted_total,discount_type,discount_amount,order_type,payment_method,created_at,customer_name,table_no,subtotal,service_charge,cancel_reason&order=created_at.asc`
   );
   const orders = ordersR.data || [];
+
+  // ── Deleted orders ────────────────────────────────────────────────────
+  // Deleted orders are excluded from the figures above and always should be.
+  // But three real paid sales were deleted by mistake and stayed invisible for
+  // days precisely because nothing ever reported them. They are listed
+  // separately at the end of the email: excluded from the totals, but seen.
+  const deletedR = await supaFetch(
+    `dine_in_orders?created_at=gte.${startISO}&created_at=lt.${endISO}`
+    + `&is_deleted=eq.true&is_test=eq.false`
+    + `&select=order_id,status,total,discounted_total,payment_method,payment_status,`
+    + `created_at,customer_name,table_no,deleted_at&order=created_at.asc`
+  );
+  const deleted = deletedR.data || [];
+
+  // Who deleted each one, and why — from the audit trail.
+  let delAudit = {};
+  if (deleted.length) {
+    try {
+      const ids = deleted.map(o => `"${o.order_id}"`).join(',');
+      const aR = await supaFetch(
+        `order_audit_logs?order_id=in.(${ids})&action=eq.ORDER_DELETED`
+        + `&select=order_id,actor_name,details,created_at&order=created_at.desc`
+      );
+      (aR.data || []).forEach(a => { if (!delAudit[a.order_id]) delAudit[a.order_id] = a; });
+    } catch(_) {}
+  }
 
   const completed = orders.filter(o => o.status === 'COMPLETED');
   const cancelled = orders.filter(o => o.status === 'CANCELLED');
@@ -149,6 +175,8 @@ async function buildReport() {
     totalOrders: orders.length,
     completedOrders: completed.length,
     cancelledOrders: cancelled.length,
+    deletedOrders: deleted,
+    deletedAudit: delAudit,
     totalSales, avgOrder, totalDiscount,
     dineIn, takeOut,
     payBreakdown, topItems,
@@ -236,6 +264,55 @@ function buildEmailHTML(r) {
       💸 Total discounts applied: <strong>${fmt(r.totalDiscount)}</strong> (PWD / Senior / Promo)
     </div>` : ''}
   </td></tr>
+
+  <!-- VOIDED & DELETED — excluded from the totals above, but shown -->
+  ${(() => {
+    const dels = r.deletedOrders || [];
+    const cans = (r.orders||[]).filter(o => o.status === 'CANCELLED');
+    if (!dels.length && !cans.length) return '';
+    const amt = o => parseFloat(o.discounted_total || o.total || 0);
+    const paidDel = dels.filter(o => o.payment_status === 'VERIFIED');
+
+    const row = (o, kind) => {
+      const a = (r.deletedAudit || {})[o.order_id] || {};
+      const who = a.actor_name || '—';
+      const why = (a.details && a.details.reason) || o.cancel_reason || '—';
+      const wasPaid = o.payment_status === 'VERIFIED';
+      return `<tr style="border-top:1px solid #e2e8f0;">
+        <td style="padding:8px 12px;font-size:12px;font-weight:700;color:#1e293b;">${o.order_id}</td>
+        <td style="padding:8px 12px;font-size:12px;color:#475569;">${o.customer_name || 'Guest'}</td>
+        <td style="padding:8px 12px;font-size:11px;color:#64748b;">${kind}${wasPaid ? ' · <strong style="color:#b91c1c;">WAS PAID</strong>' : ''}</td>
+        <td style="padding:8px 12px;font-size:11px;color:#64748b;">${who}</td>
+        <td style="padding:8px 12px;font-size:11px;color:#64748b;">${String(why).slice(0,40)}</td>
+        <td style="padding:8px 12px;font-size:12px;text-align:right;font-weight:700;color:${wasPaid ? '#b91c1c' : '#64748b'};">${fmt(amt(o))}</td>
+      </tr>`;
+    };
+
+    return `
+  <tr><td style="padding:0 40px 24px;">
+    <h2 style="font-size:16px;font-weight:700;color:#1e293b;margin:0 0 4px;">🗑️ Voided &amp; Deleted Orders</h2>
+    <div style="font-size:12px;color:#64748b;margin:0 0 10px;">
+      Not counted in any figure above. Listed so nothing disappears unnoticed.
+    </div>
+    ${paidDel.length ? `
+    <div style="background:#fef2f2;border:2px solid #fecaca;border-radius:10px;padding:12px 16px;margin-bottom:10px;font-size:13px;color:#b91c1c;">
+      ⚠️ <strong>${paidDel.length} PAID order${paidDel.length>1?'s were':' was'} deleted</strong>
+      — ${fmt(paidDel.reduce((t,o)=>t+amt(o),0))} removed from today's sales. Please check ${paidDel.length>1?'these':'this'}.
+    </div>` : ''}
+    <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
+      <tr style="background:#f8fafc;">
+        <th style="padding:9px 12px;text-align:left;font-size:11px;color:#64748b;">ORDER</th>
+        <th style="padding:9px 12px;text-align:left;font-size:11px;color:#64748b;">CUSTOMER</th>
+        <th style="padding:9px 12px;text-align:left;font-size:11px;color:#64748b;">WHAT</th>
+        <th style="padding:9px 12px;text-align:left;font-size:11px;color:#64748b;">BY</th>
+        <th style="padding:9px 12px;text-align:left;font-size:11px;color:#64748b;">REASON</th>
+        <th style="padding:9px 12px;text-align:right;font-size:11px;color:#64748b;">AMOUNT</th>
+      </tr>
+      ${dels.map(o => row(o, 'Deleted')).join('')}
+      ${cans.map(o => row(o, 'Cancelled')).join('')}
+    </table>
+  </td></tr>`;
+  })()}
 
   <!-- ORDER TYPE -->
   <tr><td style="padding:0 40px 24px;">
