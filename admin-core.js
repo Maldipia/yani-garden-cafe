@@ -696,6 +696,7 @@ function renderStats() {
   var todayStr = bdayStart.toISOString().slice(0, 10); // label for "today's" biz day
 
   var todayOrders = allOrders.filter(function(o) {
+    if (o.isDeleted || o.status === 'DELETED') return false;   // never in sales
     try {
       var raw = o.createdAt || '';
       if (raw && !raw.endsWith('Z') && !raw.includes('+') && raw.length > 10) raw = raw + '+00:00';
@@ -981,11 +982,14 @@ function renderFilters() {
   // Only order-status chips — section navigation is now in the sidebar
   var counts = { ALL:0, ACTIVE:0, NEW:0, PREPARING:0, READY:0, COMPLETED:0, CANCELLED:0, PLATFORM:0, DELETED:0, SCHEDULED:0 };
   allOrders.forEach(function(o) {
+    // Deleted orders are loaded on demand for the Deleted tab. They must count
+    // ONLY there — otherwise opening that tab would inflate All, Done and the
+    // rest, and the board would start disagreeing with the sales figures.
+    if (o.isDeleted || o.status === 'DELETED') { counts.DELETED++; return; }
     counts.ALL++;
     if (!o.isTest) counts[o.status] = (counts[o.status] || 0) + 1;
     if (!o.isTest && (o.status === 'NEW' || o.status === 'PREPARING' || o.status === 'READY')) counts.ACTIVE++;
     if (o.platform) counts.PLATFORM++;
-    if (o.isDeleted || o.status === 'DELETED') counts.DELETED++;
     if (o.isPreorder && o.status === 'SCHEDULED') counts.SCHEDULED++;
   });
 
@@ -1171,9 +1175,35 @@ function jumpToOrder(orderId) {
   }, 300);
 }
 
+
+// Fetch deleted orders for the Deleted tab and merge them into the board.
+// They are excluded from stats and from every other tab by the existing
+// filters, which key on isDeleted.
+async function loadDeletedOrders(){
+  try {
+    var r = await api('getOrders', { userId: currentUser && currentUser.userId,
+                                     includeDeleted: true, limit: 200 });
+    if (!r || !r.ok) return;
+    var dels = (r.orders || []).filter(function(o){ return o.isDeleted || o.is_deleted; });
+    var added = 0;
+    dels.forEach(function(o){
+      if (!(window.allOrders || []).some(function(x){ return x.orderId === o.orderId; })) {
+        window.allOrders.push(o); added++;
+      }
+    });
+    if (added) { renderFilters(); renderOrders(); }
+  } catch (_) { /* the board must still work if this fails */ }
+}
+
 function setFilter(f) {
   currentFilter = f;
   renderFilters();
+
+  // The Deleted tab always read 0 and "No orders here yet": getOrders excludes
+  // deleted rows, so the list being filtered never contained any. Load them on
+  // demand when that tab is opened — they stay out of every total, they are
+  // simply visible.
+  if (f === 'DELETED') loadDeletedOrders();
   
   var orderGrid = document.getElementById('orderGrid');
   var paymentsView = document.getElementById('paymentsView');
