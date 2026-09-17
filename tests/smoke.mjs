@@ -483,6 +483,12 @@ async function customerMenuPage() {
     check(`${fn}() defined`, new RegExp(`function\\s+${fn}\\s*\\(`).test(html));
   }
   check('category rail markup present', html.includes('menu-layout') && html.includes('cat-ico'));
+  check('header is sticky', /\.header\s*\{[^}]*position:\s*sticky/.test(html));
+  check('search sits inside the sticky header',
+        html.indexOf('id="searchInput"') > html.indexOf('class="header"') &&
+        html.indexOf('id="searchInput"') < html.indexOf('menu-layout'),
+        'search must scroll with the header, not away from it');
+  check('rail offset is measured, not hardcoded', html.includes('syncHeaderHeight'));
 
   // the menu the page renders must actually come back
   const menu = await call({ action:'getMenu' });

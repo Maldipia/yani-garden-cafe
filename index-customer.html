@@ -15,6 +15,7 @@
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 
 :root {
+  --hdr-h: 96px;   /* compact sticky header; measured at runtime below */
   /* Brand Palette */
   --forest: #314C47;
   --forest-deep: #2B3F3A;
@@ -79,16 +80,30 @@ a { color: var(--terra); text-decoration: none }
 /* ══════════════════════════════════════════════════════════
    HEADER
    ══════════════════════════════════════════════════════════ */
+/* Sticky header. Was 20px of padding plus a 52px logo, a subtitle and a table
+   line — roughly 140px of a phone screen gone before a single item showed, and
+   the search sat outside it and scrolled away. Now one compact bar: brand and
+   table on one row, search beneath, the whole thing pinned. */
 .header {
   background: linear-gradient(160deg, var(--forest-deep) 0%, var(--forest) 60%, var(--forest-light) 100%);
   color: var(--white);
-  padding: 20px 20px 16px;
+  padding: 9px 14px 10px;
   text-align: center;
   position: sticky;
   top: 0;
   z-index: 100;
-  box-shadow: 0 2px 20px rgba(0,0,0,.15);
+  box-shadow: 0 2px 14px rgba(0,0,0,.18);
 }
+.header-row {
+  display: flex; align-items: center; gap: 9px;
+  justify-content: space-between;
+}
+.header-id { display: flex; align-items: center; gap: 8px; min-width: 0 }
+.header-name {
+  font-size: .95rem; font-weight: 800; letter-spacing: .2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.header-hours { font-size: .58rem; opacity: .72; letter-spacing: .4px }
 .header::after {
   content: '';
   position: absolute;
@@ -98,7 +113,7 @@ a { color: var(--terra); text-decoration: none }
   opacity: .6;
 }
 .header-brand { display: flex; align-items: center; justify-content: center }
-.header-logo { height: 52px; width: 52px; border-radius: 50%; object-fit: cover; box-shadow: 0 2px 8px rgba(0,0,0,.2) }
+.header-logo { height: 34px; width: 34px; flex-shrink: 0; border-radius: 50%; object-fit: cover; box-shadow: 0 2px 8px rgba(0,0,0,.2) }
 .header-sub { font-size: .72rem; opacity: .6; margin-top: 2px; letter-spacing: 2px; text-transform: uppercase; font-weight: 500 }
 .header-table {
   display: inline-block;
@@ -115,7 +130,7 @@ a { color: var(--terra); text-decoration: none }
 /* ══════════════════════════════════════════════════════════
    SEARCH BAR
    ══════════════════════════════════════════════════════════ */
-.search-wrap { padding: 14px 16px 6px; position: relative; z-index: 1 }
+.search-wrap { padding: 8px 0 0; position: relative; z-index: 1 }
 .search-input {
   width: 100%;
   padding: 11px 14px 11px 40px;
@@ -154,16 +169,19 @@ a { color: var(--terra); text-decoration: none }
 .cats {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 10px 6px 100px;
-  width: 74px;
+  gap: 2px;
+  padding: 8px 4px 90px;
+  width: 60px;
   flex-shrink: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
+  /* Pinned BELOW the sticky header, not under it. --hdr-h is the compact
+     header's height; if the header changes, only this one value moves. */
   position: sticky;
-  top: 0;
-  max-height: 100vh;
+  top: var(--hdr-h, 96px);
+  max-height: calc(100vh - var(--hdr-h, 96px));
+  border-right: 1px solid var(--mist-light);
   z-index: 90;
   background: var(--cream);
   box-shadow: 0 2px 6px rgba(0,0,0,.06);
@@ -175,9 +193,9 @@ a { color: var(--terra); text-decoration: none }
   flex-direction: column;
   align-items: center;
   gap: 3px;
-  padding: 9px 4px;
-  border-radius: 14px;
-  font-size: .56rem;
+  padding: 6px 2px;
+  border-radius: 11px;
+  font-size: .5rem;
   font-weight: 700;
   line-height: 1.15;
   text-align: center;
@@ -188,11 +206,11 @@ a { color: var(--terra); text-decoration: none }
   word-break: break-word;
 }
 .cat-tab .cat-ico {
-  width: 40px; height: 40px;
+  width: 30px; height: 30px;
   border-radius: 50%;
   background: var(--mist-light);
   display: flex; align-items: center; justify-content: center;
-  font-size: 1.15rem;
+  font-size: .88rem;
   transition: all .18s;
 }
 .cat-tab.active { color: var(--forest-deep); }
@@ -1251,15 +1269,20 @@ a { color: var(--terra); text-decoration: none }
 
 <!-- ═══════════════════ HEADER ═══════════════════ -->
 <div class="header">
-  <div class="header-brand"><img class="header-logo" src="/images/logo.png" alt="<span class="brand-name">Yani Garden Cafe</span>"></div>
-  <div class="header-sub">Highland Sanctuary • Amadeo</div>
-  <div class="header-table" id="headerTable">Table —</div>
-</div>
-
-<!-- ═══════════════════ SEARCH ═══════════════════ -->
-<div class="search-wrap">
-  <span class="search-icon">🔍</span>
-  <input type="text" class="search-input" id="searchInput" placeholder="Search menu..." oninput="filterMenu()">
+  <div class="header-row">
+    <div class="header-id">
+      <img class="header-logo" src="/images/logo.png" alt="Yani Garden Cafe">
+      <div style="text-align:left;min-width:0">
+        <div class="header-name">Yani Garden Cafe</div>
+        <div class="header-hours">Amadeo, Cavite</div>
+      </div>
+    </div>
+    <div class="header-table" id="headerTable">Table —</div>
+  </div>
+  <div class="search-wrap">
+    <span class="search-icon">🔍</span>
+    <input type="text" class="search-input" id="searchInput" placeholder="Search the menu…" oninput="filterMenu()">
+  </div>
 </div>
 
 <!-- ═══════════════════ CATEGORIES ═══════════════════ -->
@@ -2059,6 +2082,20 @@ function renderMenu() {
      '</div>';
   }).join('');
 }
+
+// The rail pins below the header, so it needs the header's REAL height — a
+// hardcoded value is wrong the moment the brand name wraps or a phone renders
+// the search box taller. Measure it, and re-measure on resize and rotate.
+function syncHeaderHeight() {
+  var h = document.querySelector('.header');
+  if (!h) return;
+  var px = Math.round(h.getBoundingClientRect().height);
+  if (px > 0) document.documentElement.style.setProperty('--hdr-h', px + 'px');
+}
+window.addEventListener('resize', syncHeaderHeight);
+window.addEventListener('orientationchange', function(){ setTimeout(syncHeaderHeight, 120); });
+document.addEventListener('DOMContentLoaded', syncHeaderHeight);
+if (document.readyState !== 'loading') syncHeaderHeight();
 
 function filterMenu() {
   state.search = document.getElementById('searchInput').value;
