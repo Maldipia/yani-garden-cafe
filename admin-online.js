@@ -1116,6 +1116,73 @@ async function runMenuSync() {
 }
 
 // ══════════════════════════════════════════════════════════
+// MASKED PIN DIALOG — the browser's prompt() cannot hide what is typed,
+// so a manager's PIN was visible to anyone looking at the screen.
+// ══════════════════════════════════════════════════════════
+function ygcPinPrompt(title, msg) {
+  return new Promise(function(resolve) {
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+    var box = document.createElement('div');
+    box.style.cssText = 'background:#fff;border-radius:16px;padding:24px;max-width:360px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3)';
+    box.innerHTML =
+        '<div style="font-weight:700;font-size:16px;margin-bottom:6px;color:#1a1a1a">🔒 ' + title + '</div>'
+      + '<div style="font-size:13px;color:#666;margin-bottom:14px">' + (msg || 'Ask a manager to enter their PIN.') + '</div>'
+      + '<input id="ygcPinInput" type="password" inputmode="numeric" autocomplete="one-time-code" maxlength="12" placeholder="••••••••" '
+      +   'style="width:100%;box-sizing:border-box;font-size:22px;letter-spacing:8px;text-align:center;padding:12px;border:1.5px solid #d1d5db;border-radius:10px;font-family:inherit">'
+      + '<div style="display:flex;gap:10px;margin-top:16px">'
+      +   '<button id="ygcPinCancel" style="flex:1;padding:10px;border-radius:8px;border:1.5px solid #e5e7eb;background:#fff;cursor:pointer;font-weight:600;color:#666">Cancel</button>'
+      +   '<button id="ygcPinOk" style="flex:1;padding:10px;border-radius:8px;border:none;background:var(--forest,#1f3d2b);color:#fff;cursor:pointer;font-weight:700">Confirm</button>'
+      + '</div>';
+    overlay.appendChild(box); document.body.appendChild(overlay);
+    var inp = box.querySelector('#ygcPinInput');
+    setTimeout(function(){ inp.focus(); }, 60);
+    function done(v){ document.body.removeChild(overlay); resolve(v); }
+    box.querySelector('#ygcPinOk').onclick = function(){ var v = inp.value.trim(); done(v === '' ? null : v); };
+    box.querySelector('#ygcPinCancel').onclick = function(){ done(null); };
+    overlay.onclick = function(e){ if (e.target === overlay) done(null); };
+    inp.onkeydown = function(e){ if (e.key === 'Enter') { var v = inp.value.trim(); done(v === '' ? null : v); } if (e.key === 'Escape') done(null); };
+  });
+}
+
+// ══════════════════════════════════════════════════════════
+// REASON DIALOG — preset reasons PLUS a text box. 'Other' requires text;
+// any other choice may add a note. Resolves to { value, text } or null.
+// ══════════════════════════════════════════════════════════
+function ygcReasonPrompt(title, msg, options, okLabel, cancelLabel) {
+  return new Promise(function(resolve) {
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+    var box = document.createElement('div');
+    box.style.cssText = 'background:#fff;border-radius:16px;padding:22px;max-width:400px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3);max-height:92vh;overflow:auto';
+    var html = '<div style="font-weight:700;font-size:16px;margin-bottom:6px;color:#1a1a1a">' + title + '</div>'
+             + '<div style="font-size:13px;color:#666;margin-bottom:12px">' + msg + '</div>';
+    options.forEach(function(opt, i) {
+      html += '<label style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;cursor:pointer;margin-bottom:6px;border:1.5px solid #e5e7eb;font-size:13px">'
+            + '<input type="radio" name="ygcRsn" value="' + opt.value + '"' + (i === 0 ? ' checked' : '') + ' style="accent-color:#1f3d2b">' + opt.label + '</label>';
+    });
+    html += '<textarea id="ygcRsnText" rows="2" placeholder="Add details (required for Other)…" '
+          +   'style="width:100%;box-sizing:border-box;margin-top:8px;padding:10px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;resize:vertical"></textarea>'
+          + '<div id="ygcRsnErr" style="font-size:12px;color:#b91c1c;margin-top:6px;display:none">Please describe the reason.</div>'
+          + '<div style="display:flex;gap:10px;margin-top:14px">'
+          +   '<button id="ygcRsnCancel" style="flex:1;padding:10px;border-radius:8px;border:1.5px solid #e5e7eb;background:#fff;cursor:pointer;font-weight:600;color:#666">' + (cancelLabel || 'Keep Order') + '</button>'
+          +   '<button id="ygcRsnOk" style="flex:1;padding:10px;border-radius:8px;border:none;background:#ef4444;color:#fff;cursor:pointer;font-weight:700">' + (okLabel || 'Cancel Order') + '</button>'
+          + '</div>';
+    box.innerHTML = html; overlay.appendChild(box); document.body.appendChild(overlay);
+    var ta = box.querySelector('#ygcRsnText'), err = box.querySelector('#ygcRsnErr');
+    function done(v){ document.body.removeChild(overlay); resolve(v); }
+    box.querySelector('#ygcRsnOk').onclick = function() {
+      var sel = box.querySelector('input[name="ygcRsn"]:checked');
+      var value = sel ? sel.value : options[0].value, text = ta.value.trim();
+      if (value === 'other' && !text) { err.style.display = 'block'; ta.focus(); return; }
+      done({ value: value, text: text });
+    };
+    box.querySelector('#ygcRsnCancel').onclick = function(){ done(null); };
+    overlay.onclick = function(e){ if (e.target === overlay) done(null); };
+  });
+}
+
+// ══════════════════════════════════════════════════════════
 // NON-BLOCKING PROMPT DIALOG (fixes INP on reject payment button)
 // ══════════════════════════════════════════════════════════
 // ══════════════════════════════════════════════════════════

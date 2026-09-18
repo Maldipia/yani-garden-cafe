@@ -706,9 +706,9 @@ async function markPaymentReceived(orderId, method) {
 async function updateStatus(orderId, newStatus) {
   if (newStatus === 'CANCELLED') {
     // Ask for cancel reason
-    var reason = await ygcSelectPrompt(
+    var reasonSel = await ygcReasonPrompt(
       '✕ Cancel Order — ' + orderId,
-      'Select a reason for cancellation:',
+      'Select a reason, and add details if needed:',
       [
         { value: 'wrong_order',       label: '🔄 Wrong order / Customer changed mind' },
         { value: 'customer_left',     label: '🚶 Customer left' },
@@ -718,17 +718,14 @@ async function updateStatus(orderId, newStatus) {
         { value: 'other',             label: '💬 Other' },
       ]
     );
-    if (!reason) return; // user dismissed
+    if (!reasonSel) return; // user dismissed
+    var reason = reasonSel.value + (reasonSel.text ? ': ' + reasonSel.text : '');
     // Cancelling removes an order from sales just as deleting does, so it asks
     // for the manager PIN too. Requested last, after the reason.
     var cancelPin = '';
     if (newStatus === 'CANCELLED') {
-      cancelPin = prompt('🔒 Manager PIN required to cancel ' + orderId
-        + '\n\nAsk a manager to enter it.');
-      if (cancelPin === null) return;
-      if (!String(cancelPin).trim()) {
-        showToast('No PIN entered — order not cancelled', 'error'); return;
-      }
+      cancelPin = await ygcPinPrompt('Manager PIN to cancel ' + orderId, 'Ask a manager to enter their PIN. It is hidden as you type.');
+      if (cancelPin === null) { showToast('No PIN entered — order not cancelled', 'error'); return; }
     }
 
     var result = await api('updateOrderStatus', { orderId:orderId, status:newStatus,
@@ -881,10 +878,8 @@ async function deleteOrder(orderId) {
   // Manager PIN, asked last so nobody is called over until the person has
   // actually committed. Only ever sent to the server — never stored or
   // checked in the browser.
-  var pin = prompt('Step 2 of 2 — 🔒 Manager PIN\n\n'
-    + 'Ask a manager to enter the PIN to delete ' + orderId + '.');
-  if (pin === null) return;
-  if (!String(pin).trim()) { showToast('No PIN entered — nothing deleted', 'error'); return; }
+  var pin = await ygcPinPrompt('Step 2 of 2 — Manager PIN', 'Ask a manager to enter their PIN to delete ' + orderId + '. It is hidden as you type.');
+  if (pin === null) { showToast('No PIN entered — nothing deleted', 'error'); return; }
 
   try {
     var result = await api('deleteOrder', { orderId: orderId, reason: reason.trim(),
@@ -1120,7 +1115,7 @@ async function eoAddItem(code) {
 
 async function eoCancelOrder() {
   if (!eoOrderId) return;
-  var reason = await ygcSelectPrompt('✕ Cancel Order — ' + eoOrderId, 'Select a reason for cancellation:', [
+  var reasonSel2 = await ygcReasonPrompt('✕ Cancel Order — ' + eoOrderId, 'Select a reason, and add details if needed:', [
     { value: 'wrong_order',      label: '🔄 Wrong order / Customer changed mind' },
     { value: 'customer_left',    label: '🚶 Customer left' },
     { value: 'duplicate',        label: '📋 Duplicate order' },
@@ -1128,11 +1123,10 @@ async function eoCancelOrder() {
     { value: 'item_unavailable', label: '❌ Item unavailable' },
     { value: 'other',            label: '💬 Other' },
   ]);
-  if (!reason) return;
-  var eoPin = prompt('🔒 Manager PIN required to cancel ' + eoOrderId
-    + '\n\nAsk a manager to enter it.');
-  if (eoPin === null) return;
-  if (!String(eoPin).trim()) { showToast('No PIN entered — order not cancelled', 'error'); return; }
+  if (!reasonSel2) return;
+  var reason = reasonSel2.value + (reasonSel2.text ? ': ' + reasonSel2.text : '');
+  var eoPin = await ygcPinPrompt('Manager PIN to cancel ' + eoOrderId, 'Ask a manager to enter their PIN. It is hidden as you type.');
+  if (eoPin === null) { showToast('No PIN entered — order not cancelled', 'error'); return; }
   var result = await api('updateOrderStatus', { orderId: eoOrderId, status: 'CANCELLED',
     cancelReason: reason, pin: String(eoPin).trim(),
     userId: currentUser && currentUser.userId });
