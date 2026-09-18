@@ -2041,6 +2041,8 @@ function showStoryAfterOrder() {
   var splash = document.getElementById('yaniSplash');
   if (!splash) return;
   _applySplashConfigLate();
+  var btn = document.getElementById('splashBtn');
+  if (btn) btn.textContent = 'Track my order →';   // it read 'See Our Menu' — wrong after ordering
   splash.classList.remove('fade-out');
   splash.style.display = '';
 }
@@ -3622,7 +3624,6 @@ function renderReceiptPage() {
     if (rp && rp.style.display !== 'none') {
       state.receiptType = '';
       closePage('receipt'); openPage('status'); startStatusPolling();
-      try { showStoryAfterOrder(); } catch (e) {}
     }
   }, 45000);
 
@@ -3753,8 +3754,6 @@ async function selectReceiptDelivery(method) {
   // Payment already done — go straight to order status
   openPage('status');
   startStatusPolling();
-  // …and, once, the YANI story while they wait
-  try { showStoryAfterOrder(); } catch (e) {}
 }
 
 
@@ -4534,6 +4533,11 @@ function resetOrder() {
 function openPage(name) {
   document.getElementById(name + 'Page').classList.add('open');
   if (name === 'cart') renderCartPage();
+  // The YANI story shows once, the first time the status page opens after an
+  // order is placed — whichever of the three routes brought the customer here
+  // (receipt chosen, no receipt, or payment done). Hooking each button missed
+  // one; hooking the destination cannot.
+  if (name === 'status' && state.orderId) { try { showStoryAfterOrder(); } catch (e) {} }
   if (name === 'checkout') {
     // Auto-sync Yani Card from portal session (localStorage)
     if (!state.yaniCardValid && !state._yaniDigits) {
