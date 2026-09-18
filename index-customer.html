@@ -1376,7 +1376,8 @@ body { position: relative; z-index: 0; }
           background: var(--forest); color: #fff; font-size: 1rem; font-weight: 700; cursor: pointer; margin-top: 10px; }
 .gs-link { display: block; width: 100%; background: none; border: none; color: var(--timber);
            font-size: .82rem; text-decoration: underline; padding: 12px 0 0; cursor: pointer; }
-.gs-privacy { font-size: .68rem; color: var(--timber); line-height: 1.45; text-align: center; margin: 14px 4px 0; }
+.gs-note { font-size: .8rem; line-height: 1.5; text-align: center; margin: 16px 6px 0; opacity: .92; font-style: italic; }
+.gs-privacy { font-size: .68rem; color: var(--timber); line-height: 1.45; text-align: center; margin: 12px 4px 0; }
 .gs-privacy a { color: var(--forest-deep); }
 /* hero screens (welcome, final) */
 .gs-hero { padding: 0; display: flex; align-items: flex-end; min-height: 100%; }
@@ -1394,6 +1395,7 @@ body { position: relative; z-index: 0; }
 .gs-final-copy { font-size: 1rem; }
 .gs-hero .gs-btn { background: #fff; color: var(--forest-deep); }
 .gs-hero .gs-link, .gs-hero .gs-privacy { color: #E6EDE6; }
+.gs-hero .gs-note { color: #F3F0E8; }
 .gs-hero .gs-privacy a { color: #fff; }
 /* country */
 .gs-search { display: flex; align-items: center; gap: 8px; background: #F5F1EA; border: 1px solid #D9D4C8;
@@ -1449,9 +1451,10 @@ body { position: relative; z-index: 0; }
       <img class="gs-logo" src="/images/logo.png" alt="YANI Garden Cafe">
       <div class="gs-hero-title">Welcome</div>
       <div class="gs-hero-sub">TO YANI</div>
-      <p class="gs-hero-copy">Good food, good coffee, and good people.<br>Help us get to know our YANI community.<br><span>This takes less than 10 seconds.</span></p>
+      <p class="gs-hero-copy">A small garden café, run by a family.<br>We're glad you're here.</p>
       <button class="gs-btn" data-go="q1">Let's Get Started →</button>
       <button class="gs-link" data-skip="1">Skip for now</button>
+      <p class="gs-note">Our small family kitchen asks for a little time.<br>Prep times are noted beside each dish — worth every minute.</p>
       <p class="gs-privacy">Your answers help us improve our menu, service and community. We collect only what's needed. <a href="#" data-privacy="1">Learn more</a></p>
     </div>
   </section>
