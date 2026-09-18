@@ -15,6 +15,7 @@
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 
 :root {
+  --leaf-uri: url("data:image/svg+xml;utf8,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%20200%20320%27%3E%3Cg%20fill=%27none%27%20stroke=%27%23000%27%20stroke-width=%272.2%27%20stroke-linecap=%27round%27%3E%3Cpath%20d=%27M100%20310%20C%2096%20250,%20104%20190,%20100%20130%20C%2098%2090,%20104%2050,%20100%2010%27/%3E%3C/g%3E%3Cg%20fill=%27%23000%27%3E%3Cpath%20d=%27M100%20280%20C%2060%20270,%2040%20240,%2050%20205%20C%2085%20215,%20100%20245,%20100%20280%20Z%27/%3E%3Cpath%20d=%27M100%20235%20C%20140%20225,%20160%20195,%20150%20160%20C%20115%20170,%20100%20200,%20100%20235%20Z%27/%3E%3Cpath%20d=%27M100%20190%20C%2060%20180,%2040%20150,%2050%20115%20C%2085%20125,%20100%20155,%20100%20190%20Z%27/%3E%3Cpath%20d=%27M100%20145%20C%20140%20135,%20160%20105,%20150%2070%20C%20115%2080,%20100%20110,%20100%20145%20Z%27/%3E%3Cpath%20d=%27M100%20100%20C%2060%2090,%2040%2060,%2050%2025%20C%2085%2035,%20100%2065,%20100%20100%20Z%27/%3E%3Cpath%20d=%27M100%2060%20C%20128%2048,%20140%2026,%20132%204%20C%20112%2012,%20100%2034,%20100%2060%20Z%27/%3E%3C/g%3E%3C/svg%3E");
   --hdr-h: 96px;   /* compact sticky header; measured at runtime below */
   /* Brand Palette */
   --forest: #314C47;
@@ -1334,6 +1335,83 @@ body { position: relative; z-index: 0; }
   filter: invert(1);
   transform: rotate(-18deg);
 }
+
+/* ── Guest survey (pre-menu) ───────────────────────────────────────────────
+   A full view above the menu. Beige canvas with the same faint leaves, the
+   logo on every screen, one question per screen, big tappable rows. */
+.gs { position: fixed; inset: 0; z-index: 350; background: var(--cream); overflow-y: auto;
+      -webkit-overflow-scrolling: touch; font-family: var(--font-body); }
+.gs[hidden] { display: none !important; }
+.gs-leaves { position: absolute; inset: 0; pointer-events: none; opacity: .09;
+  background-image: var(--leaf-uri), var(--leaf-uri);
+  background-repeat: no-repeat; background-size: 150px 240px, 120px 192px;
+  background-position: -50px 30%, calc(100% + 30px) 80%;
+  filter: sepia(1) saturate(1.6) hue-rotate(60deg); }
+.gs-screen { position: relative; min-height: 100%; padding: 14px 18px calc(30px + env(safe-area-inset-bottom)); }
+.gs-screen[hidden] { display: none !important; }
+.gs-top { display: flex; justify-content: space-between; align-items: center; height: 36px; }
+.gs-back { width: 36px; height: 36px; border-radius: 50%; border: none; background: transparent;
+           color: var(--coffee); font-size: 1.6rem; line-height: 1; cursor: pointer; }
+.gs-step { font-size: .78rem; color: var(--timber); font-weight: 600; }
+.gs-logo { display: block; width: 88px; height: 88px; border-radius: 50%; object-fit: cover; margin: 0 auto;
+           box-shadow: 0 2px 10px rgba(0,0,0,.14); background: #fff; }
+.gs-logo-sm { width: 64px; height: 64px; margin: 2px auto 10px; }
+.gs-prog { display: flex; gap: 6px; justify-content: center; margin: 0 0 14px; }
+.gs-prog i { width: 34px; height: 4px; border-radius: 2px; background: #D7D2C6; display: block; }
+.gs-prog i.on { background: var(--forest); }
+.gs-q { font-family: var(--font-soul); font-size: 1.5rem; font-weight: 700; line-height: 1.2; text-align: center;
+        color: var(--coffee); margin: 0 0 6px; }
+.gs-sub { font-size: .86rem; color: var(--timber); text-align: center; margin: 0 0 16px; line-height: 1.45; }
+.gs-opt { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+          background: #F5F1EA; border: 1px solid #D9D4C8; border-radius: 14px; padding: 13px 14px;
+          margin-bottom: 10px; cursor: pointer; font-family: inherit; }
+.gs-opt:active { background: #ECE6DA; }
+.gs-ico { width: 40px; height: 40px; border-radius: 50%; background: #E6E0D3; display: flex;
+          align-items: center; justify-content: center; font-size: 1.15rem; flex-shrink: 0; }
+.gs-t { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.gs-t b { font-size: .98rem; font-weight: 700; color: var(--coffee); }
+.gs-t small { font-size: .74rem; color: var(--timber); line-height: 1.35; }
+.gs-chev { color: #9A948A; font-size: 1.3rem; }
+.gs-btn { display: block; width: 100%; padding: 14px 0; border-radius: 14px; border: none;
+          background: var(--forest); color: #fff; font-size: 1rem; font-weight: 700; cursor: pointer; margin-top: 10px; }
+.gs-link { display: block; width: 100%; background: none; border: none; color: var(--timber);
+           font-size: .82rem; text-decoration: underline; padding: 12px 0 0; cursor: pointer; }
+.gs-privacy { font-size: .68rem; color: var(--timber); line-height: 1.45; text-align: center; margin: 14px 4px 0; }
+.gs-privacy a { color: var(--forest-deep); }
+/* hero screens (welcome, final) */
+.gs-hero { padding: 0; display: flex; align-items: flex-end; min-height: 100%; }
+.gs-hero-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.gs-hero-shade { position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(20,30,22,.15) 0%, rgba(20,30,22,.55) 45%, rgba(20,30,22,.88) 100%); }
+.gs-hero-body { position: relative; width: 100%; padding: 40px 22px calc(28px + env(safe-area-inset-bottom));
+                text-align: center; color: #fff; }
+.gs-hero .gs-logo { width: 96px; height: 96px; margin-bottom: 14px; }
+.gs-hero-title { font-family: var(--font-soul); font-size: 3rem; font-style: italic; font-weight: 500; line-height: 1; }
+.gs-hero-title-sm { font-size: 2.4rem; line-height: 1.1; }
+.gs-hero-sub { font-size: .9rem; letter-spacing: 3px; margin-top: 4px; opacity: .9; }
+.gs-hero-copy { font-size: .95rem; line-height: 1.55; margin: 16px 0 18px; opacity: .95; }
+.gs-hero-copy span { display: block; margin-top: 8px; font-size: .84rem; opacity: .85; }
+.gs-final-copy { font-size: 1rem; }
+.gs-hero .gs-btn { background: #fff; color: var(--forest-deep); }
+.gs-hero .gs-link, .gs-hero .gs-privacy { color: #E6EDE6; }
+.gs-hero .gs-privacy a { color: #fff; }
+/* country */
+.gs-search { display: flex; align-items: center; gap: 8px; background: #F5F1EA; border: 1px solid #D9D4C8;
+             border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; }
+.gs-search input { flex: 1; border: none; background: transparent; font-size: 16px; outline: none; font-family: inherit; }
+.gs-list { background: #F5F1EA; border: 1px solid #D9D4C8; border-radius: 12px; overflow: hidden; }
+.gs-list button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: none;
+                  border: none; border-bottom: 1px solid #E6E0D3; padding: 12px 14px; font-size: .95rem;
+                  color: var(--coffee); cursor: pointer; font-family: inherit; }
+.gs-list button:last-child { border-bottom: none; }
+.gs-list button span:last-child { margin-left: auto; color: #9A948A; }
+/* card explainer, shown on request */
+.gs-cardinfo { display: flex; gap: 12px; align-items: center; background: var(--forest-deep); color: #fff;
+               border-radius: 14px; padding: 12px; margin-top: 6px; }
+.gs-cardinfo img { width: 76px; height: 76px; object-fit: cover; border-radius: 10px; flex-shrink: 0; }
+.gs-cardinfo div { display: flex; flex-direction: column; gap: 3px; }
+.gs-cardinfo b { font-size: .98rem; } .gs-cardinfo span { font-size: .82rem; opacity: .92; }
+.gs-cardinfo small { font-size: .7rem; opacity: .75; margin-top: 4px; }
 </style>
 </head>
 <body>
@@ -1357,6 +1435,101 @@ body { position: relative; z-index: 0; }
     </div>
     <button class="splash-btn" id="splashBtn" onclick="dismissSplash()">See Our Menu →</button>
   </div>
+</div>
+
+<!-- ═══════════════════ GUEST SURVEY (pre-menu) ═══════════════════ -->
+<div id="guestSurvey" class="gs" hidden>
+  <div class="gs-leaves" aria-hidden="true"></div>
+
+  <!-- welcome -->
+  <section class="gs-screen gs-hero" data-screen="welcome">
+    <img class="gs-hero-img" src="/images/welcome-garden.jpg" alt="">
+    <div class="gs-hero-shade"></div>
+    <div class="gs-hero-body">
+      <img class="gs-logo" src="/images/logo.png" alt="YANI Garden Cafe">
+      <div class="gs-hero-title">Welcome</div>
+      <div class="gs-hero-sub">TO YANI</div>
+      <p class="gs-hero-copy">Good food, good coffee, and good people.<br>Help us get to know our YANI community.<br><span>This takes less than 10 seconds.</span></p>
+      <button class="gs-btn" data-go="q1">Let's Get Started →</button>
+      <button class="gs-link" data-skip="1">Skip for now</button>
+      <p class="gs-privacy">Your answers help us improve our menu, service and community. We collect only what's needed. <a href="#" data-privacy="1">Learn more</a></p>
+    </div>
+  </section>
+
+  <!-- Q1 -->
+  <section class="gs-screen" data-screen="q1" hidden>
+    <div class="gs-top"><button class="gs-back" data-back="welcome" aria-label="Back">‹</button><span class="gs-step">1/2</span></div>
+    <img class="gs-logo gs-logo-sm" src="/images/logo.png" alt="">
+    <div class="gs-prog"><i class="on"></i><i></i></div>
+    <h2 class="gs-q">Have you visited<br>YANI before?</h2>
+    <p class="gs-sub">This helps us understand our guests.</p>
+    <button class="gs-opt" data-visit="first_time"><span class="gs-ico">🌱</span><span class="gs-t"><b>First time here</b><small>I'm visiting YANI for the first time.</small></span><span class="gs-chev">›</span></button>
+    <button class="gs-opt" data-visit="returning"><span class="gs-ico">☕</span><span class="gs-t"><b>I've been here before</b><small>This is not my first visit.</small></span><span class="gs-chev">›</span></button>
+  </section>
+
+  <!-- first-time → origin -->
+  <section class="gs-screen" data-screen="origin" hidden>
+    <div class="gs-top"><button class="gs-back" data-back="q1" aria-label="Back">‹</button><span class="gs-step">2/2</span></div>
+    <img class="gs-logo gs-logo-sm" src="/images/logo.png" alt="">
+    <div class="gs-prog"><i class="on"></i><i class="on"></i></div>
+    <h2 class="gs-q">Where are you<br>visiting YANI from?</h2>
+    <p class="gs-sub">This helps us support Amadeo tourism.</p>
+    <button class="gs-opt" data-origin="amadeo"><span class="gs-ico">🏡</span><span class="gs-t"><b>Amadeo</b><small>I live in Amadeo.</small></span><span class="gs-chev">›</span></button>
+    <button class="gs-opt" data-origin="cavite"><span class="gs-ico">🚗</span><span class="gs-t"><b>Nearby / Cavite</b><small>I'm from nearby areas in Cavite.</small></span><span class="gs-chev">›</span></button>
+    <button class="gs-opt" data-origin="other_ph"><span class="gs-ico">📍</span><span class="gs-t"><b>Other parts of the Philippines</b><small>I'm from a different city or province.</small></span><span class="gs-chev">›</span></button>
+    <button class="gs-opt" data-origin="abroad"><span class="gs-ico">🌏</span><span class="gs-t"><b>Outside the Philippines</b><small>I'm visiting from another country.</small></span><span class="gs-chev">›</span></button>
+  </section>
+
+  <!-- other PH → region -->
+  <section class="gs-screen" data-screen="region" hidden>
+    <div class="gs-top"><button class="gs-back" data-back="origin" aria-label="Back">‹</button><span class="gs-step">2/2</span></div>
+    <img class="gs-logo gs-logo-sm" src="/images/logo.png" alt="">
+    <h2 class="gs-q">Which part of<br>the Philippines?</h2>
+    <p class="gs-sub">So we know where our guests travel from.</p>
+    <button class="gs-opt" data-region="metro_manila"><span class="gs-ico">🏙️</span><span class="gs-t"><b>Metro Manila</b></span><span class="gs-chev">›</span></button>
+    <button class="gs-opt" data-region="luzon"><span class="gs-ico">⛰️</span><span class="gs-t"><b>Luzon</b></span><span class="gs-chev">›</span></button>
+    <button class="gs-opt" data-region="visayas"><span class="gs-ico">🏝️</span><span class="gs-t"><b>Visayas</b></span><span class="gs-chev">›</span></button>
+    <button class="gs-opt" data-region="mindanao"><span class="gs-ico">🌄</span><span class="gs-t"><b>Mindanao</b></span><span class="gs-chev">›</span></button>
+  </section>
+
+  <!-- abroad → country -->
+  <section class="gs-screen" data-screen="country" hidden>
+    <div class="gs-top"><button class="gs-back" data-back="origin" aria-label="Back">‹</button><span class="gs-step">2/2</span></div>
+    <img class="gs-logo gs-logo-sm" src="/images/logo.png" alt="">
+    <h2 class="gs-q">Which country are you<br>visiting from?</h2>
+    <p class="gs-sub">Please select your country.</p>
+    <div class="gs-search"><span>🔍</span><input id="gsCountrySearch" type="search" placeholder="Search country…" autocomplete="off"></div>
+    <div class="gs-list" id="gsCountryList"></div>
+  </section>
+
+  <!-- returning → card -->
+  <section class="gs-screen" data-screen="card" hidden>
+    <div class="gs-top"><button class="gs-back" data-back="q1" aria-label="Back">‹</button><span class="gs-step">2/2</span></div>
+    <img class="gs-logo gs-logo-sm" src="/images/logo.png" alt="">
+    <div class="gs-prog"><i class="on"></i><i class="on"></i></div>
+    <h2 class="gs-q">Do you have<br>a YANI Card?</h2>
+    <p class="gs-sub">Enjoy 10% off and member freebies at YANI.</p>
+    <button class="gs-opt" data-card="yes"><span class="gs-ico">💳</span><span class="gs-t"><b>Yes, I have one</b><small>Enter your card at checkout to apply the discount.</small></span><span class="gs-chev">›</span></button>
+    <button class="gs-opt" data-card="not_yet"><span class="gs-ico">✨</span><span class="gs-t"><b>Not yet</b><small>I don't have a YANI Card.</small></span><span class="gs-chev">›</span></button>
+    <button class="gs-opt" data-card="asked_what"><span class="gs-ico">❔</span><span class="gs-t"><b>What's a YANI Card?</b><small>Learn about the benefits.</small></span><span class="gs-chev">›</span></button>
+    <div class="gs-cardinfo" id="gsCardInfo" hidden>
+      <img src="/images/welcome-cups.jpg" alt="">
+      <div><b>YANI Card</b><span>Enjoy 10% off and member freebies at YANI.</span><small>Ask our team how to get yours.</small></div>
+    </div>
+  </section>
+
+  <!-- final -->
+  <section class="gs-screen gs-hero" data-screen="final" hidden>
+    <img class="gs-hero-img" src="/images/welcome-garden.jpg" alt="">
+    <div class="gs-hero-shade"></div>
+    <div class="gs-hero-body">
+      <img class="gs-logo" src="/images/logo.png" alt="">
+      <div class="gs-hero-title gs-hero-title-sm">Welcome<br>to the Menu</div>
+      <p class="gs-hero-copy gs-final-copy">Our small family kitchen asks for a little time.<br>Prep times are noted beside each dish — worth every minute.</p>
+      <button class="gs-btn" data-finish="1">View Menu →</button>
+      <button class="gs-link" data-go="q1">Change my answers</button>
+    </div>
+  </section>
 </div>
 
 <!-- ═══════════════════ PRODUCT DETAIL ═══════════════════ -->
@@ -1850,7 +2023,34 @@ function dismissSplash() {
 }
 
 function initSplash() {
-  // Skip if already seen this session (e.g. page refresh)
+  // The story no longer greets people before the menu — the guest survey does
+  // that now. It shows once, after they have placed an order, while they wait.
+  var el0 = document.getElementById('yaniSplash');
+  if (el0) el0.style.display = 'none';
+  return;
+}
+
+// Called after a successful order: show the story once per session.
+function showStoryAfterOrder() {
+  var seen = false;
+  try { seen = sessionStorage.getItem('yani_intro_seen') === '1'; } catch(e) {}
+  if (seen) return;
+  var splash = document.getElementById('yaniSplash');
+  if (!splash) return;
+  _applySplashConfigLate();
+  splash.classList.remove('fade-out');
+  splash.style.display = '';
+}
+function _applySplashConfigLate() {
+  var cfg = window.APP_CONFIG || {};
+  var titleEl = document.getElementById('splashTitle');
+  if (titleEl && cfg.WELCOME_TITLE) titleEl.textContent = cfg.WELCOME_TITLE;
+  var storyEl = document.getElementById('splashStoryText');
+  if (storyEl && cfg.WELCOME_STORY) {
+    storyEl.innerHTML = cfg.WELCOME_STORY.split(/\n\n+/).map(function(p){ return '<p>' + p.replace(/\n/g,'<br>') + '</p>'; }).join('');
+  }
+}
+function _initSplash_unused() {
   var seen = false;
   try { seen = sessionStorage.getItem('yani_intro_seen') === '1'; } catch(e) {}
   if (seen) {
@@ -2223,6 +2423,106 @@ document.addEventListener('DOMContentLoaded', syncHeaderHeight);
 if (document.readyState !== 'loading') syncHeaderHeight();
 
 
+
+
+// ── GUEST SURVEY ────────────────────────────────────────────────────────────
+// Two taps before the menu. Categories only, saved once per device per day,
+// remembered on the device for 30 days, never linked to an order.
+(function () {
+  var KEY = 'yani_guest_v1', DAYS = 30;
+  var COUNTRIES = [['US','🇺🇸 United States'],['KR','🇰🇷 South Korea'],['JP','🇯🇵 Japan'],['SG','🇸🇬 Singapore'],['AU','🇦🇺 Australia'],['CA','🇨🇦 Canada'],['GB','🇬🇧 United Kingdom'],['CN','🇨🇳 China'],['TW','🇹🇼 Taiwan'],['HK','🇭🇰 Hong Kong'],['AE','🇦🇪 United Arab Emirates'],['SA','🇸🇦 Saudi Arabia'],['QA','🇶🇦 Qatar'],['KW','🇰🇼 Kuwait'],['MY','🇲🇾 Malaysia'],['ID','🇮🇩 Indonesia'],['TH','🇹🇭 Thailand'],['VN','🇻🇳 Vietnam'],['IN','🇮🇳 India'],['DE','🇩🇪 Germany'],['FR','🇫🇷 France'],['IT','🇮🇹 Italy'],['ES','🇪🇸 Spain'],['NL','🇳🇱 Netherlands'],['NZ','🇳🇿 New Zealand'],['IE','🇮🇪 Ireland'],['CH','🇨🇭 Switzerland'],['SE','🇸🇪 Sweden'],['NO','🇳🇴 Norway'],['DK','🇩🇰 Denmark'],['FI','🇫🇮 Finland'],['BE','🇧🇪 Belgium'],['AT','🇦🇹 Austria'],['PT','🇵🇹 Portugal'],['PL','🇵🇱 Poland'],['CZ','🇨🇿 Czechia'],['GR','🇬🇷 Greece'],['TR','🇹🇷 Türkiye'],['IL','🇮🇱 Israel'],['BH','🇧🇭 Bahrain'],['OM','🇴🇲 Oman'],['JO','🇯🇴 Jordan'],['EG','🇪🇬 Egypt'],['ZA','🇿🇦 South Africa'],['NG','🇳🇬 Nigeria'],['KE','🇰🇪 Kenya'],['BR','🇧🇷 Brazil'],['MX','🇲🇽 Mexico'],['AR','🇦🇷 Argentina'],['CL','🇨🇱 Chile'],['CO','🇨🇴 Colombia'],['PE','🇵🇪 Peru'],['RU','🇷🇺 Russia'],['UA','🇺🇦 Ukraine'],['PK','🇵🇰 Pakistan'],['BD','🇧🇩 Bangladesh'],['LK','🇱🇰 Sri Lanka'],['NP','🇳🇵 Nepal'],['MM','🇲🇲 Myanmar'],['KH','🇰🇭 Cambodia'],['LA','🇱🇦 Laos'],['BN','🇧🇳 Brunei'],['MO','🇲🇴 Macau'],['MN','🇲🇳 Mongolia'],['KZ','🇰🇿 Kazakhstan'],['PG','🇵🇬 Papua New Guinea'],['FJ','🇫🇯 Fiji'],['GU','🇬🇺 Guam'],['HU','🇭🇺 Hungary'],['RO','🇷🇴 Romania'],['BG','🇧🇬 Bulgaria'],['HR','🇭🇷 Croatia'],['RS','🇷🇸 Serbia'],['SK','🇸🇰 Slovakia'],['SI','🇸🇮 Slovenia'],['LT','🇱🇹 Lithuania'],['LV','🇱🇻 Latvia'],['EE','🇪🇪 Estonia'],['IS','🇮🇸 Iceland'],['LU','🇱🇺 Luxembourg'],['MT','🇲🇹 Malta'],['CY','🇨🇾 Cyprus'],['MA','🇲🇦 Morocco'],['TN','🇹🇳 Tunisia'],['GH','🇬🇭 Ghana'],['ET','🇪🇹 Ethiopia'],['TZ','🇹🇿 Tanzania'],['UG','🇺🇬 Uganda'],['IR','🇮🇷 Iran'],['IQ','🇮🇶 Iraq'],['LB','🇱🇧 Lebanon'],['VE','🇻🇪 Venezuela'],['EC','🇪🇨 Ecuador'],['UY','🇺🇾 Uruguay'],['PA','🇵🇦 Panama'],['CR','🇨🇷 Costa Rica'],['DO','🇩🇴 Dominican Republic'],['PR','🇵🇷 Puerto Rico'],['JM','🇯🇲 Jamaica'],['CU','🇨🇺 Cuba'],['GT','🇬🇹 Guatemala']];
+  var ans = {}, cur = 'welcome';
+
+  function $(id) { return document.getElementById(id); }
+  function root() { return $('guestSurvey'); }
+  function token() {
+    try {
+      var saved = JSON.parse(localStorage.getItem(KEY) || 'null');
+      if (saved && saved.token) return saved;
+    } catch (_) {}
+    var t = Array.from(crypto.getRandomValues(new Uint8Array(12)), function (b) { return (b % 36).toString(36); }).join('');
+    return { token: t, at: 0 };
+  }
+  function remember(rec) { try { localStorage.setItem(KEY, JSON.stringify({ token: rec.token, at: Date.now() })); } catch (_) {} }
+
+  function shouldAsk() {
+    // A recognised YANI Card holder is never asked.
+    try { var cs = JSON.parse(localStorage.getItem('yanicardSession') || 'null');
+          if (cs && cs.cardNumber) return false; } catch (_) {}
+    var rec = token();
+    return !(rec.at && (Date.now() - rec.at) < DAYS * 86400000);
+  }
+
+  function show(name) {
+    cur = name;
+    root().querySelectorAll('.gs-screen').forEach(function (sc) { sc.hidden = sc.dataset.screen !== name; });
+    root().scrollTop = 0;
+    if (name === 'country') renderCountries('');
+  }
+
+  function renderCountries(q) {
+    var needle = (q || '').toLowerCase().trim();
+    var list = COUNTRIES.filter(function (c) { return !needle || c[1].toLowerCase().indexOf(needle) !== -1; });
+    $('gsCountryList').innerHTML = list.map(function (c) {
+      return '<button data-country="' + c[0] + '"><span>' + c[1] + '</span><span>›</span></button>';
+    }).join('') || '<div style="padding:14px;color:var(--timber);font-size:.85rem">No match — try another spelling.</div>';
+  }
+
+  function save(extra) {
+    var rec = token();
+    var body = Object.assign({ action: 'guestSurveySave', deviceToken: rec.token,
+      table: state && state.tableNo, visitType: ans.visit || 'skipped' }, ans, extra || {});
+    body.hasCard = ans.card; delete body.card; delete body.visit;
+    if (ans.visit === 'first_time') body.visitType = 'first_time';
+    if (ans.visit === 'returning')  body.visitType = 'returning';
+    fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .catch(function () {});     // analytics must never block the menu
+    remember(rec);
+  }
+
+  function finish(skipped) {
+    if (skipped) { ans = {}; save({ visitType: 'skipped' }); } else { save(); }
+    root().hidden = true;
+    document.body.style.overflow = '';
+    if (ans.card === 'yes' && typeof toast === 'function') toast('Enter your YANI Card at checkout for 10% off');
+  }
+
+  function open() {
+    ans = {}; cur = 'welcome';
+    root().hidden = false;
+    document.body.style.overflow = 'hidden';
+    show('welcome');
+  }
+
+  root() && root().addEventListener('click', function (e) {
+    var t = e.target.closest('button, a');
+    if (!t) return;
+    if (t.dataset.privacy) { e.preventDefault(); alert('YANI collects only the answers you give here — whether you have visited before, where you are visiting from, and whether you hold a YANI Card. No name, phone number or email. Answers are stored as counts to help us understand our guests and improve our menu and service. Your device remembers that you answered for 30 days so we do not ask again.'); return; }
+    if (t.dataset.skip)  { finish(true); return; }
+    if (t.dataset.finish){ finish(false); return; }
+    if (t.dataset.go)    { show(t.dataset.go); return; }
+    if (t.dataset.back)  { show(t.dataset.back); return; }
+    if (t.dataset.visit) { ans.visit = t.dataset.visit; ans.origin = ans.region = ans.country = ans.card = undefined;
+                           show(ans.visit === 'first_time' ? 'origin' : 'card'); return; }
+    if (t.dataset.origin){ ans.origin = t.dataset.origin;
+                           show(ans.origin === 'other_ph' ? 'region' : ans.origin === 'abroad' ? 'country' : 'final'); return; }
+    if (t.dataset.region){ ans.region = t.dataset.region; show('final'); return; }
+    if (t.dataset.country){ ans.country = t.dataset.country; show('final'); return; }
+    if (t.dataset.card)  { ans.card = t.dataset.card;
+                           if (ans.card === 'asked_what') { $('gsCardInfo').hidden = false; $('gsCardInfo').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                                                            setTimeout(function () { show('final'); }, 2600); return; }
+                           show('final'); return; }
+  });
+  var cs = $('gsCountrySearch'); if (cs) cs.addEventListener('input', function () { renderCountries(cs.value); });
+
+  window.openGuestSurvey = open;
+  window.guestSurveyShouldAsk = shouldAsk;
+  document.addEventListener('DOMContentLoaded', function () {
+    if (shouldAsk()) open();
+    else { try { var c = JSON.parse(localStorage.getItem('yanicardSession') || 'null');
+                 if (c && c.cardNumber && typeof toast === 'function') setTimeout(function () { toast('Welcome back — your YANI Card is active'); }, 900); } catch (_) {} }
+  });
+})();
 
 // ── PRODUCT DETAIL ──────────────────────────────────────────────────────────
 // Menu → tap product → this view. Hero photo → full-screen viewer. Back → the
@@ -3312,6 +3612,7 @@ function renderReceiptPage() {
     if (rp && rp.style.display !== 'none') {
       state.receiptType = '';
       closePage('receipt'); openPage('status'); startStatusPolling();
+      try { showStoryAfterOrder(); } catch (e) {}
     }
   }, 45000);
 
@@ -3442,6 +3743,8 @@ async function selectReceiptDelivery(method) {
   // Payment already done — go straight to order status
   openPage('status');
   startStatusPolling();
+  // …and, once, the YANI story while they wait
+  try { showStoryAfterOrder(); } catch (e) {}
 }
 
 

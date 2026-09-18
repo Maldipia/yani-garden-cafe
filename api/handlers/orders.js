@@ -428,6 +428,58 @@ export async function routeOrders(action, body, auth, req, res) {
     }
 
     // ── getTableStatus — same as getTables, used by customer menu to refresh tokens ─
+    // ── guestSurveySave (public) ─────────────────────────────────────────
+    // Two taps before the menu. Accepts ONLY category values — every field
+    // is validated against an allow-list, so a name, phone or email cannot
+    // be smuggled in even by a modified page. Not linked to any order.
+    if (action === 'guestSurveySave') {
+      const pick = (v, allowed) => allowed.includes(v) ? v : null;
+      const visit  = pick(String(body.visitType || ''), ['first_time','returning','skipped']);
+      if (!visit) return res.status(400).json({ ok:false, error:'visitType invalid' });
+      const origin = pick(String(body.origin || ''), ['amadeo','cavite','other_ph','abroad']);
+      const region = pick(String(body.region || ''), ['metro_manila','luzon','visayas','mindanao']);
+      const card   = pick(String(body.hasCard || ''), ['yes','not_yet','asked_what']);
+      const country = /^[A-Z]{2}$/.test(String(body.country || '')) && body.country !== 'PH'
+                        ? body.country : null;
+      const tableNo = Number.isInteger(+body.table) && +body.table > 0 && +body.table < 200 ? +body.table : null;
+      const token = /^[a-z0-9]{8,40}$/i.test(String(body.deviceToken || '')) ? String(body.deviceToken) : null;
+
+      // one response per device per day — a double-tap or reload must not
+      // count twice
+      if (token) {
+        const dup = await supaFetch(`${SUPABASE_URL}/rest/v1/guest_survey`
+          + `?device_token=eq.${encodeURIComponent(token)}&created_at=gte.${new Date(Date.now()-86400000).toISOString()}`
+          + `&select=id&limit=1`);
+        if (Array.isArray(dup.data) && dup.data.length) return res.status(200).json({ ok:true, deduped:true });
+      }
+
+      const r = await supa('POST', 'guest_survey', {
+        table_no: tableNo, device_token: token, visit_type: visit,
+        origin: visit === 'first_time' ? origin : null,
+        region: origin === 'other_ph' ? region : null,
+        country: origin === 'abroad' ? country : null,
+        has_card: visit === 'returning' ? card : null,
+        skipped: visit === 'skipped',
+        is_test: body.test === true,
+        user_agent: String(req.headers['user-agent'] || '').slice(0, 160),
+      });
+      if (!r.ok) return res.status(500).json({ ok:false, error:'Could not save' });
+      return res.status(200).json({ ok:true });
+    }
+
+    // ── guestSurveyStats ─────────────────────────────────────────────────
+    if (action === 'guestSurveyStats') {
+      const authGS = await checkAuth(['OWNER','ADMIN','MANAGER']);
+      if (!authGS.ok) return res.status(403).json({ ok:false, error: authGS.error });
+      const today = new Date(Date.now() + 8*3600*1000).toISOString().slice(0,10);
+      const from = /^\d{4}-\d{2}-\d{2}$/.test(body.from||'') ? body.from : today.slice(0,8)+'01';
+      const to   = /^\d{4}-\d{2}-\d{2}$/.test(body.to||'')   ? body.to   : today;
+      const r = await supaFetch(`${SUPABASE_URL}/rest/v1/rpc/guest_survey_stats`,
+        { method:'POST', body: JSON.stringify({ p_from: from, p_to: to }) });
+      if (!r.ok) return res.status(500).json({ ok:false, error:'Could not load' });
+      return res.status(200).json({ ok:true, from, to, stats: r.data });
+    }
+
     if (action === 'getTableStatus') {
       const r = await supaFetch(
         `${SUPABASE_URL}/rest/v1/cafe_tables?select=table_number,table_name,qr_token,status&order=table_number.asc`
