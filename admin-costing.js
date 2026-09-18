@@ -1891,12 +1891,19 @@ function renderCashView() {
     : _cashSessions.filter(function(s){ return s.status === 'CLOSED'; }).map(function(s) {
       var varColor = parseFloat(s.variance||0) === 0 ? '#64748b' : parseFloat(s.variance||0) > 0 ? '#22c55e' : '#ef4444';
       var varLabel = parseFloat(s.variance||0) === 0 ? 'Exact' : parseFloat(s.variance||0) > 0 ? 'OVER ₱' + Math.abs(s.variance).toFixed(2) : 'SHORT ₱' + Math.abs(s.variance).toFixed(2);
-      return '<div style="background:#fff;border-radius:12px;box-shadow:0 1px 6px rgba(0,0,0,.07);padding:14px 16px;margin-bottom:8px">'
-        + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'
+      // A session left open across days has 'expected cash' summed over every
+      // one of those days, against a drawer counted once. Its variance is
+      // not a shortage — say so, instead of showing a five-month total in red.
+      var hrs = (s.closed_at && s.opened_at) ? (new Date(s.closed_at) - new Date(s.opened_at)) / 36e5 : 0;
+      var spanned = hrs > 20;
+      if (spanned) { varColor = '#b45309'; varLabel = '⚠ ran ' + (hrs >= 48 ? Math.round(hrs/24) + ' days' : Math.round(hrs) + ' hrs') + ' — variance not meaningful'; }
+      return '<div style="background:#fff;border-radius:12px;box-shadow:0 1px 6px rgba(0,0,0,.07);padding:14px 16px;margin-bottom:8px' + (spanned ? ';border-left:4px solid #f59e0b' : '') + '">'
+        + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;gap:8px;flex-wrap:wrap">'
         + '<div><span style="font-weight:700;font-size:.85rem">' + s.session_id + '</span>'
         + ' <span style="font-size:.72rem;color:#64748b">' + (s.shift||'') + '</span></div>'
-        + '<span style="font-weight:700;color:' + varColor + ';font-size:.82rem">' + varLabel + '</span>'
+        + '<span style="font-weight:700;color:' + varColor + ';font-size:.8rem">' + varLabel + '</span>'
         + '</div>'
+        + (spanned ? '<div style="font-size:.72rem;color:#92400e;background:#fffbeb;border-radius:8px;padding:6px 10px;margin-bottom:8px">Expected cash here is every cash sale from open to close — ' + (hrs >= 48 ? Math.round(hrs/24) + ' days' : Math.round(hrs) + ' hours') + ' of trading — compared against one drawer count. Close the drawer every day for this number to mean anything.</div>' : '')
         + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px">'
         + statCard('Float', '₱' + parseFloat(s.opening_float||0).toFixed(0), '#64748b', '#f8fafc')
         + statCard('Cash Sales', '₱' + parseFloat(s.cash_sales||0).toFixed(0), '#0284c7', '#eff6ff')
@@ -1906,7 +1913,11 @@ function renderCashView() {
         + '<div style="font-size:.68rem;color:#94a3b8;margin-top:6px">'
         + new Date(s.opened_at).toLocaleDateString('en-PH',{month:'short',day:'numeric'})
         + ' ' + new Date(s.opened_at).toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'})
-        + ' → ' + (s.closed_at ? new Date(s.closed_at).toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'}) : '—')
+        + ' → ' + (s.closed_at
+            ? ((new Date(s.closed_at).toDateString() !== new Date(s.opened_at).toDateString())
+                 ? new Date(s.closed_at).toLocaleDateString('en-PH',{month:'short',day:'numeric'}) + ' ' : '')
+              + new Date(s.closed_at).toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'})
+            : '—')
         + ' · ' + (s.closed_by||'—')
         + (s.notes ? ' · ' + s.notes : '')
         + '</div></div>';

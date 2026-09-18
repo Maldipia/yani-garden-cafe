@@ -1054,7 +1054,10 @@ function renderSidebar() {
   html += item('ONLINE_ORDERS', '🛵', 'Online Orders', onlineOrderPendingCount || '', onlineOrderPendingCount > 0);
   if (role !== 'KITCHEN') html += item('EXPENSES', '💰', 'Expenses', '');
   if (isOwner) html += item('REFUNDS', '↩️', 'Refunds', '');
-  if (isOwner) html += item('CASH', '💵', 'Cash Sessions', '');
+  // OWNER and ADMIN — the API already lets ADMIN open and close sessions
+  // and read history, and the admin had been opening drawers from the
+  // login banner with no page to close them from.
+  if (isAdmin) html += item('CASH', '💵', 'Cash Sessions', '');
 
   if (isAdmin) {
     html += '<div class="sidebar-divider"></div>';
