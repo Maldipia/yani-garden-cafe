@@ -684,9 +684,84 @@ async function _completeYaniCardOrder(orderId) {
 }
 
 // Staff confirms an AWAITING_PAYMENT (cash/card) order was paid at the table.
-// Sets the method VERIFIED, which releases the prep hold.
+// For CASH, a change calculator opens first: staff type what they were
+// handed, the change shows, then the SAME marking runs as before. Nothing new
+// is stored and the server call is unchanged — it is a calculator.
 async function markPaymentReceived(orderId, method) {
   var m = (method || 'CASH').toUpperCase();
+  if (m === 'CASH') {
+    var o = (allOrders || []).find(function(x){ return x.orderId === orderId; }) || {};
+    var due = parseFloat(o.discountedTotal && o.discountedTotal > 0 ? o.discountedTotal : (o.total || 0)) || 0;
+    var ok = await ygcCashChangeDialog(orderId, due, o.customerName, o.tableNo || o.table);
+    if (!ok) return;                       // staff backed out — nothing changes
+  }
+  return _markPaymentReceivedNow(orderId, m);
+}
+
+// The change calculator. Reads the order's final total (after any discount
+// the discount system has already applied). Resolves true on Mark Paid.
+function ygcCashChangeDialog(orderId, due, customer, table) {
+  return new Promise(function(resolve) {
+    var peso = function(n){ return '₱' + (Math.round(n * 100) / 100).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+    var box = document.createElement('div');
+    box.style.cssText = 'background:#fff;border-radius:16px;padding:20px;max-width:360px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3)';
+    box.innerHTML =
+        '<div style="font-weight:700;font-size:16px;color:#1a1a1a">💵 Cash — ' + esc(orderId) + '</div>'
+      + '<div style="font-size:12px;color:#666;margin-top:2px">' + (table ? 'Table ' + esc(String(table)) + ' · ' : '') + esc(customer || 'Guest') + '</div>'
+      + '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:14px">'
+      +   '<span style="font-size:11px;letter-spacing:.5px;color:#777;font-weight:700">AMOUNT DUE</span>'
+      +   '<span style="font-size:24px;font-weight:800;color:#1a1a1a">' + peso(due) + '</span></div>'
+      + '<div style="font-size:11px;letter-spacing:.5px;color:#777;font-weight:700;margin-top:16px">CASH RECEIVED</div>'
+      + '<div style="display:flex;gap:8px;margin-top:8px">'
+      +   '<button id="ccExact" type="button" style="padding:0 16px;border-radius:10px;border:1.5px solid #d1d5db;background:#fff;font-weight:700;font-size:14px;cursor:pointer">Exact</button>'
+      +   '<div style="flex:1;display:flex;align-items:center;gap:6px;border:1.5px solid #9ca3af;border-radius:10px;padding:6px 12px;background:#fafafa">'
+      +     '<span style="font-size:20px;color:#888">₱</span>'
+      +     '<input id="ccAmt" type="text" inputmode="decimal" placeholder="0" autocomplete="off" style="flex:1;min-width:0;border:none;background:transparent;font-size:24px;font-weight:700;outline:none;font-family:inherit;color:#1a1a1a">'
+      +   '</div></div>'
+      + '<div id="ccChangeBox" style="margin-top:12px;border-radius:12px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;background:#f3f4f6">'
+      +   '<div><div id="ccLbl" style="font-size:11px;letter-spacing:.5px;font-weight:700;color:#777">CHANGE TO GIVE</div>'
+      +   '<div id="ccSub" style="font-size:11px;color:#888;margin-top:2px">Enter the cash received</div></div>'
+      +   '<div id="ccChange" style="font-size:30px;font-weight:800;color:#9ca3af">—</div></div>'
+      + '<button id="ccOk" type="button" disabled style="width:100%;margin-top:12px;padding:13px 0;border-radius:12px;border:none;background:var(--forest,#1f3d2b);color:#fff;font-size:15px;font-weight:700;cursor:pointer;opacity:.45">Mark Paid</button>'
+      + '<button id="ccCancel" type="button" style="display:block;width:100%;background:none;border:none;color:#888;font-size:12px;text-decoration:underline;margin-top:8px;cursor:pointer;font-family:inherit">Cancel</button>';
+    overlay.appendChild(box); document.body.appendChild(overlay);
+
+    var inp = box.querySelector('#ccAmt'), okBtn = box.querySelector('#ccOk'), cbox = box.querySelector('#ccChangeBox'),
+        chg = box.querySelector('#ccChange'), lbl = box.querySelector('#ccLbl'), sub = box.querySelector('#ccSub');
+    function recalc() {
+      var v = parseFloat(String(inp.value).replace(/[^0-9.]/g, ''));
+      if (!isFinite(v) || v <= 0) {
+        cbox.style.background = '#f3f4f6'; lbl.style.color = '#777'; sub.style.color = '#888'; chg.style.color = '#9ca3af';
+        lbl.textContent = 'CHANGE TO GIVE'; sub.textContent = 'Enter the cash received'; chg.textContent = '—';
+        okBtn.disabled = true; okBtn.style.opacity = '.45'; okBtn.textContent = 'Mark Paid'; return;
+      }
+      var diff = Math.round((v - due) * 100) / 100;
+      if (diff < 0) {
+        cbox.style.background = '#fdecec'; lbl.style.color = '#991b1b'; sub.style.color = '#991b1b'; chg.style.color = '#991b1b';
+        lbl.textContent = 'SHORT'; sub.textContent = peso(v) + ' − ' + peso(due); chg.textContent = peso(-diff) + ' short';
+        okBtn.disabled = true; okBtn.style.opacity = '.45'; okBtn.textContent = 'Mark Paid';
+      } else {
+        cbox.style.background = '#e1f5ee'; lbl.style.color = '#085041'; sub.style.color = '#085041'; chg.style.color = '#085041';
+        lbl.textContent = 'CHANGE TO GIVE'; sub.textContent = peso(v) + ' − ' + peso(due); chg.textContent = peso(diff);
+        okBtn.disabled = false; okBtn.style.opacity = '1'; okBtn.textContent = 'Mark Paid · ' + peso(due) + ' received';
+      }
+    }
+    inp.addEventListener('input', recalc);
+    box.querySelector('#ccExact').onclick = function(){ inp.value = String(Math.round(due * 100) / 100); recalc(); inp.focus(); };
+    function done(v){ document.body.removeChild(overlay); resolve(v); }
+    okBtn.onclick = function(){ if (!okBtn.disabled) done(true); };
+    box.querySelector('#ccCancel').onclick = function(){ done(false); };
+    overlay.onclick = function(e){ if (e.target === overlay) done(false); };
+    inp.onkeydown = function(e){ if (e.key === 'Enter' && !okBtn.disabled) done(true); if (e.key === 'Escape') done(false); };
+    setTimeout(function(){ inp.focus(); }, 60);
+  });
+}
+
+// The original marking, untouched. Called after the calculator (cash) or
+// directly (card).
+async function _markPaymentReceivedNow(orderId, m) {
   var result = await api('setPaymentMethod', {
     orderId: orderId, method: m,
     userId: currentUser && currentUser.userId
