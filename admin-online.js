@@ -665,9 +665,27 @@ async function loadAnalytics(silent) {
 // ── COMMUNITY INSIGHTS ──────────────────────────────────────────────────────
 // From the two-tap guest survey. Categories only — there is no name behind
 // any of these numbers, by design.
-async function loadCommunityInsights(){
-  var el = document.getElementById('communityInsights'); if (!el) return;
-  var r = await api('guestSurveyStats', { userId: currentUser && currentUser.userId });
+// Dedicated Guests view (sidebar → Insights → Guests), with a month picker.
+async function loadGuestsView(){
+  var el = document.getElementById('guestsContent'); if (!el) return;
+  var m = document.getElementById('guestsMonth');
+  if (m && !m.value) {
+    var d = new Date(Date.now() + 8*3600*1000);
+    m.value = d.toISOString().slice(0,7);
+  }
+  var ym = (m && m.value) || new Date().toISOString().slice(0,7);
+  var from = ym + '-01';
+  var last = new Date(Number(ym.slice(0,4)), Number(ym.slice(5,7)), 0).getDate();
+  var to = ym + '-' + String(last).padStart(2,'0');
+  el.innerHTML = '<div style="text-align:center;padding:30px;color:var(--forest-mid)">Loading…</div>';
+  await loadCommunityInsights(el, from, to);
+}
+
+async function loadCommunityInsights(targetEl, from, to){
+  var el = targetEl || document.getElementById('communityInsights'); if (!el) return;
+  var payload = { userId: currentUser && currentUser.userId };
+  if (from) payload.from = from; if (to) payload.to = to;
+  var r = await api('guestSurveyStats', payload);
   if (!r || !r.ok || !r.stats) { el.innerHTML = ''; return; }
   var s = r.stats, v = s.visit || {}, o = s.origin || {}, g = s.region || {}, c = s.card || {};
   var total = (s.responses || 0);

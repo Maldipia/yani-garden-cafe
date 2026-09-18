@@ -1602,6 +1602,25 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
     <div style="padding:16px 16px 0" id="onlineOrdersGrid"></div>
   </div>
 
+  <!-- Guests View — Community Insights from the pre-menu survey -->
+  <div id="guestsView" style="display:none;padding:0 0 100px">
+    <div style="background:#fff;border-bottom:1.5px solid var(--mist);padding:14px 16px;position:sticky;top:0;z-index:10">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+        <div>
+          <div style="font-weight:800;font-size:1.1rem;color:var(--forest-deep)">🌿 Guests</div>
+          <div style="font-size:.8rem;color:var(--forest-mid);margin-top:2px">Who visits YANI — from the two-tap welcome survey. Categories only, no names.</div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="month" id="guestsMonth" style="padding:7px 10px;border:1.5px solid var(--mist);border-radius:8px;font-size:.8rem;font-family:inherit" onchange="loadGuestsView()">
+          <button onclick="loadGuestsView()" style="background:var(--forest);color:#fff;border:none;border-radius:8px;padding:8px 12px;font-size:.8rem;font-weight:700;cursor:pointer">Refresh</button>
+        </div>
+      </div>
+    </div>
+    <div id="guestsContent" style="padding:16px">
+      <div style="text-align:center;padding:40px;color:var(--forest-mid)">Loading…</div>
+    </div>
+  </div>
+
   <!-- Analytics View (ADMIN/OWNER only) -->
   <div id="analyticsView" style="display:none;padding:0 0 100px">
     <div style="background:#fff;border-bottom:1.5px solid var(--mist);padding:14px 16px;position:sticky;top:0;z-index:10">
@@ -2399,13 +2418,13 @@ body { font-family:var(--font-body); background:var(--cream); color:var(--forest
   </div>
 </div>
 
-<script src="/admin-core.js?v=53"></script>
+<script src="/admin-core.js?v=54"></script>
 
   <script src="/admin-orders.js?v=50"></script>
 <script src="/admin-payments.js?v=27"></script>
 <script src="/admin-hr.js?v=28"></script>
   <script src="/admin-menu.js?v=27"></script>
-<script src="/admin-online.js?v=38"></script>
+<script src="/admin-online.js?v=39"></script>
 <script src="/admin-tables.js?v=20"></script>
 <script src="/admin-checkout.js?v=22"></script>
 

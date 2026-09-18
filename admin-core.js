@@ -1079,6 +1079,7 @@ function renderSidebar() {
     html += '<div class="sidebar-divider"></div>';
     html += '<div class="sidebar-section-label">Insights</div>';
     html += item('ANALYTICS', '📈', 'Analytics', '');
+    html += item('GUESTS', '🌿', 'Guests', '');
     html += item('REVIEWS', '⭐', 'Reviews', reviewAlertCount || '', reviewAlertCount > 0);
     html += item('SHEETS', '📊', 'Sheets Sync', '');
     if (isOwner) html += item('SHIFT', '📋', 'Shift Summary', '');
@@ -1232,6 +1233,8 @@ function setFilter(f) {
 
   var analyticsView = document.getElementById('analyticsView');
   if (analyticsView) analyticsView.style.display = 'none';
+  var guestsView = document.getElementById('guestsView');
+  if (guestsView) guestsView.style.display = 'none';
 
   var tablesView = document.getElementById('tablesView');
   if (tablesView) tablesView.style.display = 'none';
@@ -1318,6 +1321,9 @@ function setFilter(f) {
     if (analyticsView) analyticsView.style.display = 'block';
     loadAnalytics();
     if (typeof startAnalyticsAutoRefresh === 'function') startAnalyticsAutoRefresh();
+  } else if (f === 'GUESTS') {
+    if (guestsView) guestsView.style.display = 'block';
+    if (typeof loadGuestsView === 'function') loadGuestsView();
   } else if (f === 'TABLES') {
     if (tablesView) tablesView.style.display = 'block';
     loadOrders().then(function() { loadTablesView(); });
