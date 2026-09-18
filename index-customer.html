@@ -2471,7 +2471,10 @@ if (document.readyState !== 'loading') syncHeaderHeight();
   function save(extra) {
     var rec = token();
     var body = Object.assign({ action: 'guestSurveySave', deviceToken: rec.token,
-      table: state && state.tableNo, visitType: ans.visit || 'skipped' }, ans, extra || {});
+      table: state && state.tableNo, visitType: ans.visit || 'skipped',
+      // Automated checks open the real page with ?test=1 so their answers are
+      // flagged and never counted as guests.
+      test: /[?&]test=1(&|$)/.test(location.search) }, ans, extra || {});
     body.hasCard = ans.card; delete body.card; delete body.visit;
     if (ans.visit === 'first_time') body.visitType = 'first_time';
     if (ans.visit === 'returning')  body.visitType = 'returning';
