@@ -553,6 +553,12 @@ async function guestSurvey() {
   check('survey stats refuse anonymous', anon.ok === false);
   const own = await call({ action:'guestSurveyStats', userId: OWNER });
   check('survey stats work for the owner', own.ok === true && own.stats && typeof own.stats.responses === 'number', own.error);
+  const lst = await call({ action:'guestSurveyList', userId: OWNER });
+  check('survey list works for the owner', lst.ok === true && Array.isArray(lst.rows), lst.error);
+  check('survey list never returns device identifiers',
+        (lst.rows || []).every(r => !('device_token' in r) && !('user_agent' in r) && !('id' in r)));
+  const lstAnon = await call({ action:'guestSurveyList' });
+  check('survey list refuses anonymous', lstAnon.ok === false);
 }
 
 // ── run ────────────────────────────────────────────────────────────────────

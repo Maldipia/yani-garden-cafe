@@ -467,6 +467,24 @@ export async function routeOrders(action, body, auth, req, res) {
       return res.status(200).json({ ok:true });
     }
 
+    // ── guestSurveyList ──────────────────────────────────────────────────
+    // Individual responses for the Guests view: time, table, answers. The
+    // device token and user agent are NOT returned — they identify a phone,
+    // and the owner has no need for them.
+    if (action === 'guestSurveyList') {
+      const authGL = await checkAuth(['OWNER','ADMIN','MANAGER']);
+      if (!authGL.ok) return res.status(403).json({ ok:false, error: authGL.error });
+      const today = new Date(Date.now() + 8*3600*1000).toISOString().slice(0,10);
+      const from = /^\d{4}-\d{2}-\d{2}$/.test(body.from||'') ? body.from : today.slice(0,8)+'01';
+      const to   = /^\d{4}-\d{2}-\d{2}$/.test(body.to||'')   ? body.to   : today;
+      const r = await supaFetch(`${SUPABASE_URL}/rest/v1/guest_survey`
+        + `?is_test=eq.false&created_at=gte.${from}T00:00:00%2B08:00&created_at=lte.${to}T23:59:59%2B08:00`
+        + `&select=created_at,table_no,visit_type,origin,region,country,has_card,skipped`
+        + `&order=created_at.desc&limit=500`);
+      if (!r.ok) return res.status(500).json({ ok:false, error:'Could not load' });
+      return res.status(200).json({ ok:true, from, to, rows: r.data || [] });
+    }
+
     // ── guestSurveyStats ─────────────────────────────────────────────────
     if (action === 'guestSurveyStats') {
       const authGS = await checkAuth(['OWNER','ADMIN','MANAGER']);

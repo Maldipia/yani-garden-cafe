@@ -715,7 +715,46 @@ async function loadCommunityInsights(targetEl, from, to){
     + block('YANI CARD', row('Have a card', c.yes, c.asked) + row('Not yet', c.not_yet, c.asked) + row('Asked what it is', c.asked_what, c.asked),
             'Asked of returning guests only (' + (c.asked||0) + ').')
     + block('INTERNATIONAL · ' + (s.country_count||0) + ' countr' + (s.country_count===1?'y':'ies'), countries)
-    + '</div>';
+    + '</div>'
+    + '<div id="guestLog" style="margin-top:14px"></div>';
+  loadGuestLog(from, to);
+}
+
+// Every response, newest first — date, time, table, answers. No names, no
+// device identifiers: the owner sees what was answered, not who answered.
+async function loadGuestLog(from, to){
+  var el = document.getElementById('guestLog'); if (!el) return;
+  var payload = { userId: currentUser && currentUser.userId };
+  if (from) payload.from = from; if (to) payload.to = to;
+  var r = await api('guestSurveyList', payload);
+  if (!r || !r.ok) { el.innerHTML = ''; return; }
+  var L = { first_time:'First time', returning:'Returning', skipped:'Skipped',
+            amadeo:'Amadeo', cavite:'Nearby / Cavite', other_ph:'Other parts of PH', abroad:'International',
+            metro_manila:'Metro Manila', luzon:'Luzon', visayas:'Visayas', mindanao:'Mindanao',
+            yes:'Has a card', not_yet:'Not yet', asked_what:'Asked what it is' };
+  var rows = (r.rows || []).map(function(x){
+    var d = new Date(x.created_at);
+    var when = d.toLocaleDateString('en-PH', { month:'short', day:'numeric', timeZone:'Asia/Manila' })
+             + ' · ' + d.toLocaleTimeString('en-PH', { hour:'numeric', minute:'2-digit', timeZone:'Asia/Manila' });
+    var answer = x.skipped ? '<span style="color:var(--forest-mid)">Skipped</span>'
+      : x.visit_type === 'first_time'
+        ? (L[x.origin] || '—') + (x.region ? ' · ' + L[x.region] : '') + (x.country ? ' · ' + cc2name(x.country) : '')
+        : (L[x.has_card] || '—');
+    return '<tr>'
+      + '<td style="padding:7px 8px;white-space:nowrap;color:var(--forest-deep)">' + when + '</td>'
+      + '<td style="padding:7px 8px;text-align:center">' + (x.table_no ? 'T' + x.table_no : '—') + '</td>'
+      + '<td style="padding:7px 8px;font-weight:600;color:var(--forest-deep)">' + (L[x.visit_type] || x.visit_type) + '</td>'
+      + '<td style="padding:7px 8px">' + answer + '</td>'
+      + '</tr>';
+  }).join('');
+  el.innerHTML =
+    '<div style="background:#fff;border:1px solid var(--mist);border-radius:10px;overflow:hidden">'
+    + '<div style="padding:10px 14px;font-size:.7rem;font-weight:800;letter-spacing:.5px;color:var(--forest-mid);border-bottom:1px solid var(--mist)">RESPONSES · ' + (r.rows||[]).length + ' · newest first</div>'
+    + '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.8rem">'
+    + '<thead><tr style="background:#F7F5F0;color:var(--forest-mid);font-size:.68rem;text-transform:uppercase;letter-spacing:.4px">'
+    + '<th style="padding:7px 8px;text-align:left">When</th><th style="padding:7px 8px">Table</th><th style="padding:7px 8px;text-align:left">Visit</th><th style="padding:7px 8px;text-align:left">Answer</th></tr></thead>'
+    + '<tbody>' + (rows || '<tr><td colspan="4" style="padding:14px;color:var(--forest-mid)">No responses in this period.</td></tr>') + '</tbody>'
+    + '</table></div></div>';
 }
 var _CC = {US:'United States',KR:'South Korea',JP:'Japan',SG:'Singapore',AU:'Australia',CA:'Canada',GB:'United Kingdom',CN:'China',TW:'Taiwan',HK:'Hong Kong',AE:'UAE',SA:'Saudi Arabia',QA:'Qatar',KW:'Kuwait',MY:'Malaysia',ID:'Indonesia',TH:'Thailand',VN:'Vietnam',IN:'India',DE:'Germany',FR:'France',IT:'Italy',ES:'Spain',NL:'Netherlands',NZ:'New Zealand',IE:'Ireland',CH:'Switzerland',SE:'Sweden',NO:'Norway',DK:'Denmark',FI:'Finland',BE:'Belgium',AT:'Austria',PT:'Portugal',PL:'Poland',GR:'Greece',TR:'Türkiye',IL:'Israel',BH:'Bahrain',OM:'Oman',BR:'Brazil',MX:'Mexico',RU:'Russia',PK:'Pakistan',BD:'Bangladesh',LK:'Sri Lanka',NP:'Nepal',MM:'Myanmar',KH:'Cambodia',BN:'Brunei',MO:'Macau',GU:'Guam',PG:'Papua New Guinea',FJ:'Fiji'};
 function cc2name(cc){ var f = cc ? String.fromCodePoint.apply(null, [...cc].map(function(ch){ return 0x1F1E6 + ch.charCodeAt(0) - 65; })) : ''; return f + ' ' + (_CC[cc] || cc); }
