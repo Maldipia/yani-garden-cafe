@@ -2475,9 +2475,13 @@ if (document.readyState !== 'loading') syncHeaderHeight();
     body.hasCard = ans.card; delete body.card; delete body.visit;
     if (ans.visit === 'first_time') body.visitType = 'first_time';
     if (ans.visit === 'returning')  body.visitType = 'returning';
-    fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-      .catch(function () {});     // analytics must never block the menu
+    // Remember FIRST, then send. If the network call throws, the menu still
+    // opens and the device is still marked as answered.
     remember(rec);
+    try {
+      fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        .catch(function () {});   // analytics must never block the menu
+    } catch (_) {}
   }
 
   function finish(skipped) {

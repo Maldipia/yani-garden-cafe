@@ -652,12 +652,56 @@ async function loadAnalytics(silent) {
             '<span style="font-weight:700;color:var(--forest)">' + kv[1] + '</span>' +
           '</div>';
         }).join('') +
-      '</div>';
+      '</div>' +
+      '<div id="communityInsights" style="margin-top:14px"></div>';
+
+    loadCommunityInsights();   // separate call; never blocks the sales numbers
 
   } catch(e) {
     el.innerHTML = '<div style="color:#dc2626;padding:20px">Error: ' + esc(String(e.message)) + '</div>';
   }
 }
+
+// ── COMMUNITY INSIGHTS ──────────────────────────────────────────────────────
+// From the two-tap guest survey. Categories only — there is no name behind
+// any of these numbers, by design.
+async function loadCommunityInsights(){
+  var el = document.getElementById('communityInsights'); if (!el) return;
+  var r = await api('guestSurveyStats', { userId: currentUser && currentUser.userId });
+  if (!r || !r.ok || !r.stats) { el.innerHTML = ''; return; }
+  var s = r.stats, v = s.visit || {}, o = s.origin || {}, g = s.region || {}, c = s.card || {};
+  var total = (s.responses || 0);
+  var pct = function(n, d){ return d ? Math.round(100*n/d) + '%' : '—'; };
+  var row = function(label, n, d){
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--mist);font-size:.82rem">'
+      + '<span style="color:var(--forest-deep)">' + label + '</span>'
+      + '<span><strong style="color:var(--forest)">' + (n||0) + '</strong>'
+      + '<span style="color:var(--forest-mid);font-size:.72rem;margin-left:8px;min-width:34px;display:inline-block;text-align:right">' + pct(n||0, d) + '</span></span></div>';
+  };
+  var block = function(title, rows, note){
+    return '<div style="background:#fff;border:1px solid var(--mist);border-radius:10px;padding:12px 14px">'
+      + '<div style="font-size:.7rem;font-weight:800;letter-spacing:.5px;color:var(--forest-mid);margin-bottom:6px">' + title + '</div>'
+      + rows + (note ? '<div style="font-size:.66rem;color:var(--forest-mid);margin-top:6px">' + note + '</div>' : '') + '</div>';
+  };
+  var countries = (s.countries || []).slice(0, 12).map(function(x){ return row(cc2name(x.country), x.guests, o.abroad); }).join('')
+                  || '<div style="font-size:.8rem;color:var(--forest-mid);padding:6px 0">No international guests yet this period.</div>';
+  el.innerHTML =
+    '<h3 style="font-size:1rem;color:var(--forest-deep);margin:18px 0 4px">🌿 Community Insights</h3>'
+    + '<div style="font-size:.74rem;color:var(--forest-mid);margin-bottom:10px">' + r.from + ' → ' + r.to
+    + ' · <strong>' + total + '</strong> guests answered · ' + (s.skipped||0) + ' skipped · ' + (s.devices||0) + ' devices. Categories only — no names, by design.</div>'
+    + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">'
+    + block('VISIT', row('First-time guests', v.first_time, total) + row('Returning guests', v.returning, total))
+    + block('WHERE FROM', row('Amadeo', o.amadeo, o.asked) + row('Nearby / Cavite', o.cavite, o.asked) + row('Other parts of PH', o.other_ph, o.asked) + row('International', o.abroad, o.asked),
+            'Asked of first-time guests only (' + (o.asked||0) + ').')
+    + block('OTHER PARTS OF PH', row('Metro Manila', g.metro_manila, o.other_ph) + row('Luzon', g.luzon, o.other_ph) + row('Visayas', g.visayas, o.other_ph) + row('Mindanao', g.mindanao, o.other_ph))
+    + block('YANI CARD', row('Have a card', c.yes, c.asked) + row('Not yet', c.not_yet, c.asked) + row('Asked what it is', c.asked_what, c.asked),
+            'Asked of returning guests only (' + (c.asked||0) + ').')
+    + block('INTERNATIONAL · ' + (s.country_count||0) + ' countr' + (s.country_count===1?'y':'ies'), countries)
+    + '</div>';
+}
+var _CC = {US:'United States',KR:'South Korea',JP:'Japan',SG:'Singapore',AU:'Australia',CA:'Canada',GB:'United Kingdom',CN:'China',TW:'Taiwan',HK:'Hong Kong',AE:'UAE',SA:'Saudi Arabia',QA:'Qatar',KW:'Kuwait',MY:'Malaysia',ID:'Indonesia',TH:'Thailand',VN:'Vietnam',IN:'India',DE:'Germany',FR:'France',IT:'Italy',ES:'Spain',NL:'Netherlands',NZ:'New Zealand',IE:'Ireland',CH:'Switzerland',SE:'Sweden',NO:'Norway',DK:'Denmark',FI:'Finland',BE:'Belgium',AT:'Austria',PT:'Portugal',PL:'Poland',GR:'Greece',TR:'Türkiye',IL:'Israel',BH:'Bahrain',OM:'Oman',BR:'Brazil',MX:'Mexico',RU:'Russia',PK:'Pakistan',BD:'Bangladesh',LK:'Sri Lanka',NP:'Nepal',MM:'Myanmar',KH:'Cambodia',BN:'Brunei',MO:'Macau',GU:'Guam',PG:'Papua New Guinea',FJ:'Fiji'};
+function cc2name(cc){ var f = cc ? String.fromCodePoint.apply(null, [...cc].map(function(ch){ return 0x1F1E6 + ch.charCodeAt(0) - 65; })) : ''; return f + ' ' + (_CC[cc] || cc); }
+
 
 // ── PDF Report Export ─────────────────────────────────────────────────────────
 async function exportReportPDF() {

@@ -537,6 +537,24 @@ async function customerMenuPage() {
   check('table QR link resolves', t.status === 200, `HTTP ${t.status}`);
 }
 
+
+// ── 14. GUEST SURVEY ───────────────────────────────────────────────────────
+async function guestSurvey() {
+  section('Guest survey endpoint');
+  const tok = 'smoke' + Date.now().toString(36);
+  const pii = await call({ action:'guestSurveySave', visitType:'first_time', origin:'abroad', country:'JP',
+                           deviceToken: tok, name:'PROBE NAME', phone:'0917', email:'p@x', test:true });
+  check('survey save accepts a valid response', pii.ok === true, pii.error);
+  const bad = await call({ action:'guestSurveySave', visitType:'vip', test:true });
+  check('survey save rejects an unknown visit type', bad.ok === false);
+  const dup = await call({ action:'guestSurveySave', visitType:'returning', hasCard:'yes', deviceToken: tok, test:true });
+  check('same device within a day is deduplicated', dup.deduped === true);
+  const anon = await call({ action:'guestSurveyStats' });
+  check('survey stats refuse anonymous', anon.ok === false);
+  const own = await call({ action:'guestSurveyStats', userId: OWNER });
+  check('survey stats work for the owner', own.ok === true && own.stats && typeof own.stats.responses === 'number', own.error);
+}
+
 // ── run ────────────────────────────────────────────────────────────────────
 const t0 = Date.now();
 console.log(`\nYANI POS regression suite → ${BASE}`);
@@ -553,6 +571,7 @@ await onlineOrderEndpoint();
 await orderLookup();
 await deleteGuard();
 await customerMenuPage();
+await guestSurvey();
 
 console.log(`\n${'─'.repeat(58)}`);
 console.log(`  passed ${pass}   failed ${fail}   (${((Date.now() - t0) / 1000).toFixed(1)}s)`);

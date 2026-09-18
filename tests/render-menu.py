@@ -30,9 +30,28 @@ async def main():
         pg = await b.new_page(viewport={'width': 390, 'height': 844}, device_scale_factor=2, has_touch=True)
         await pg.goto(URL, wait_until='networkidle')
         await pg.wait_for_selector('.menu-card', timeout=20000)
+        await pg.wait_for_timeout(800)
+
+        # ── Guest survey: appears on a fresh device, before the menu ──────
+        sv = await pg.evaluate('''() => ({ shown: !document.getElementById('guestSurvey').hidden,
+            screen: [...document.querySelectorAll('.gs-screen')].find(s => !s.hidden)?.dataset.screen,
+            story: getComputedStyle(document.getElementById('yaniSplash')).display,
+            logo: !!document.querySelector('.gs-screen[data-screen="welcome"] .gs-logo'),
+            leaves: !!document.querySelector('.gs-leaves') })''')
+        # walk the first-time → abroad → Japan path
+        await pg.tap('.gs-btn[data-go="q1"]'); await pg.wait_for_timeout(200)
+        await pg.tap('[data-visit="first_time"]'); await pg.wait_for_timeout(200)
+        s2 = await pg.evaluate("[...document.querySelectorAll('.gs-screen')].find(s=>!s.hidden).dataset.screen")
+        await pg.tap('[data-origin="abroad"]'); await pg.wait_for_timeout(250)
+        ph = await pg.evaluate("[...document.querySelectorAll('#gsCountryList button')].some(b => b.dataset.country === 'PH')")
+        await pg.tap('[data-country="JP"]'); await pg.wait_for_timeout(200)
+        fin = await pg.evaluate("[...document.querySelectorAll('.gs-screen')].find(s=>!s.hidden).dataset.screen")
+        await pg.tap('[data-finish="1"]'); await pg.wait_for_timeout(500)
+        closed = await pg.evaluate("document.getElementById('guestSurvey').hidden && !!localStorage.getItem('yani_guest_v1')")
+
         await pg.evaluate('''() => ['yaniSplash','optModal','yaniStory'].forEach(id => {
             const e = document.getElementById(id); if (e) e.style.display = 'none'; })''')
-        await pg.wait_for_timeout(800)
+        await pg.wait_for_timeout(300)
 
         cards = await pg.evaluate('''() => [...document.querySelectorAll('.menu-card')].slice(0, 8).map(c => {
             const q = s => c.querySelector(s), r = e => e ? e.getBoundingClientRect() : null;
@@ -111,6 +130,15 @@ async def main():
         pv['esc'] = await pg.evaluate("document.getElementById('pvBackdrop').hidden")
         pv['cartSame'] = (await pg.evaluate("state.cart.length")) == cart0
         await b.close()
+
+    print('\x1b[1mGuest survey\x1b[0m')
+    bad += ok('survey shows on a fresh device, on the welcome screen') if sv['shown'] and sv['screen']=='welcome' else fail('survey did not show first')
+    bad += ok('story splash no longer shows before the menu') if sv['story']=='none' else fail('story splash is still showing before the menu')
+    bad += ok('logo and leaves present on the survey') if sv['logo'] and sv['leaves'] else fail('survey missing logo or leaves')
+    bad += ok('first-time → origin question') if s2=='origin' else fail(f'first-time went to {s2}')
+    bad += ok('country list has no Philippines') if not ph else fail('Philippines is in the country list')
+    bad += ok('country → final screen') if fin=='final' else fail(f'country went to {fin}')
+    bad += ok('View Menu closes the survey and remembers the device') if closed else fail('survey did not close or did not remember')
 
     print('\x1b[1mRendered customer menu (390px phone)\x1b[0m')
     for c in cards:
