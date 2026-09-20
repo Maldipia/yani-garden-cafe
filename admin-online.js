@@ -708,7 +708,8 @@ async function loadCommunityInsights(targetEl, from, to){
     + '<div style="font-size:.74rem;color:var(--forest-mid);margin-bottom:10px">' + r.from + ' → ' + r.to
     + ' · <strong>' + total + '</strong> guests answered · ' + (s.skipped||0) + ' skipped · ' + (s.devices||0) + ' devices. Categories only — no names, by design.</div>'
     + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">'
-    + block('VISIT', row('First-time guests', v.first_time, total) + row('Returning guests', v.returning, total))
+    + block('VISIT', row('🌱 First-time guests', v.first_time, total)
+                   + row('<span style="background:#FFF7E0;padding:2px 6px;border-radius:6px;color:#8A5A0B;font-weight:700">↩ Returning guests</span>', v.returning, total))
     + block('WHERE FROM', row('Amadeo', o.amadeo, o.asked) + row('Nearby / Cavite', o.cavite, o.asked) + row('Other parts of PH', o.other_ph, o.asked) + row('International', o.abroad, o.asked),
             'Asked of first-time guests only (' + (o.asked||0) + ').')
     + block('OTHER PARTS OF PH', row('Metro Manila', g.metro_manila, o.other_ph) + row('Luzon', g.luzon, o.other_ph) + row('Visayas', g.visayas, o.other_ph) + row('Mindanao', g.mindanao, o.other_ph))
@@ -740,10 +741,19 @@ async function loadGuestLog(from, to){
       : x.visit_type === 'first_time'
         ? (L[x.origin] || '—') + (x.region ? ' · ' + L[x.region] : '') + (x.country ? ' · ' + cc2name(x.country) : '')
         : (L[x.has_card] || '—');
-    return '<tr>'
+    // Colour by visit type so a returning guest is spotted at a glance:
+    // returning = warm gold row + pill; first time = green pill; skipped = grey.
+    var kind = x.skipped ? 'skipped' : x.visit_type;
+    var rowBg = kind === 'returning' ? '#FFF7E0' : '';
+    var pill = kind === 'returning'
+      ? '<span style="display:inline-block;padding:2px 9px;border-radius:999px;background:#B7791F;color:#fff;font-weight:700;font-size:.72rem">↩ Returning</span>'
+      : kind === 'first_time'
+      ? '<span style="display:inline-block;padding:2px 9px;border-radius:999px;background:#E6F2EA;color:#1F3D2B;font-weight:700;font-size:.72rem">🌱 First time</span>'
+      : '<span style="display:inline-block;padding:2px 9px;border-radius:999px;background:#EEE;color:#777;font-weight:600;font-size:.72rem">Skipped</span>';
+    return '<tr style="' + (rowBg ? 'background:' + rowBg + ';' : '') + '">'
       + '<td style="padding:7px 8px;white-space:nowrap;color:var(--forest-deep)">' + when + '</td>'
       + '<td style="padding:7px 8px;text-align:center">' + (x.table_no ? 'T' + x.table_no : '—') + '</td>'
-      + '<td style="padding:7px 8px;font-weight:600;color:var(--forest-deep)">' + (L[x.visit_type] || x.visit_type) + '</td>'
+      + '<td style="padding:7px 8px">' + pill + '</td>'
       + '<td style="padding:7px 8px">' + answer + '</td>'
       + '</tr>';
   }).join('');
