@@ -1,6 +1,6 @@
 // ── Menu action handlers ──────────────────────────────────────────────────
 import { supaFetch, supa, auditLog, logSync } from '../lib/db.js';
-import { menuCache, MENU_CACHE_TTL, MENU_CACHE_TTL_ADMIN, invalidateMenuCache, _settingsCache, SETTINGS_CACHE_TTL } from '../lib/cache.js';
+import { menuCache, MENU_CACHE_TTL, MENU_CACHE_TTL_ADMIN, invalidateMenuCache, currentMenuStamp, _settingsCache, SETTINGS_CACHE_TTL } from '../lib/cache.js';
 import { getCategoryId, getCategoryName, CATEGORY_ID_TO_NAME } from '../lib/categories.js';
 import { isNonEmptyString, isValidItemCode, validateMenuPayload } from '../lib/validation.js';
 import { SUPABASE_URL, BUSINESS_NAME, SERVICE_CHARGE_RATE } from '../lib/config.js';
@@ -83,7 +83,9 @@ export async function routeMenu(action, body, auth, req, res) {
 
     if (action === 'getMenu') {
       const now = Date.now();
-      if (menuCache.public && (now - menuCache.tsPublic) < MENU_CACHE_TTL) {
+      const stampP = await currentMenuStamp();
+      if (menuCache.public && (now - menuCache.tsPublic) < MENU_CACHE_TTL
+          && (stampP === null || stampP === menuCache.stampPublic)) {
         return res.status(200).json({ ok: true, items: menuCache.public, cached: true });
       }
       // Fetch from DB with 5-second timeout — if DB is slow, fall back to stale cache
@@ -157,6 +159,7 @@ export async function routeMenu(action, body, auth, req, res) {
       });
       menuCache.public = items;
       menuCache.tsPublic = now;
+      menuCache.stampPublic = stampP || '';
       return res.status(200).json({ ok: true, items });
     }
 
@@ -165,7 +168,9 @@ export async function routeMenu(action, body, auth, req, res) {
       const authMA = await checkAdminAuth();
       if (!authMA.ok) return res.status(403).json({ ok: false, error: authMA.error });
       const now = Date.now();
-      if (menuCache.admin && (now - menuCache.tsAdmin) < MENU_CACHE_TTL_ADMIN) {
+      const stampA = await currentMenuStamp();
+      if (menuCache.admin && (now - menuCache.tsAdmin) < MENU_CACHE_TTL_ADMIN
+          && (stampA === null || stampA === menuCache.stampAdmin)) {
         return res.status(200).json({ ok: true, items: menuCache.admin, cached: true });
       }
       const r = await supaFetch(
@@ -197,6 +202,7 @@ export async function routeMenu(action, body, auth, req, res) {
       }));
       menuCache.admin = items;
       menuCache.tsAdmin = now;
+      menuCache.stampAdmin = stampA || '';
       return res.status(200).json({ ok: true, items });
     }
 

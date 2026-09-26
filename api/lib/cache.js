@@ -2,12 +2,31 @@
 import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
 
 // ── Menu cache (15-min TTL, 1-min admin TTL, stale-while-valid fallback) ──
-export const menuCache = { public: null, admin: null, tsPublic: 0, tsAdmin: 0 };
+export const menuCache = { public: null, admin: null, tsPublic: 0, tsAdmin: 0, stampPublic: '', stampAdmin: '' };
 export const MENU_CACHE_TTL       =  2 * 60 * 1000; // 2 min — items deactivated show quickly
 export const MENU_CACHE_TTL_ADMIN =  1 * 60 * 1000;
 export function invalidateMenuCache() {
   menuCache.public = null; menuCache.admin = null;
   menuCache.tsPublic = 0; menuCache.tsAdmin = 0;
+  menuCache.stampPublic = ''; menuCache.stampAdmin = '';
+}
+
+// The cache is per serverless instance, and invalidateMenuCache() only
+// reaches the instance that handled the write. Every other instance kept
+// serving the old menu for up to two minutes — so a best-seller toggle looked
+// like it had not saved. menu_version() is one tiny DB call that changes on
+// any menu edit; a cached menu is served only while its stamp still matches.
+export async function currentMenuStamp() {
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/menu_version`, {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    if (!r.ok) return null;
+    const v = await r.json();
+    return typeof v === 'string' ? v : null;
+  } catch { return null; }             // unknown stamp → fall back to the TTL
 }
 
 // ── Settings cache (2-min TTL) ────────────────────────────────────────────

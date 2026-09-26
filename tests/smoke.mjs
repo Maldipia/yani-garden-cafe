@@ -26,7 +26,7 @@ const DESTRUCTIVE = ['deleteOrder','voidExpense','voidDocsEntry','deleteMenuItem
                      'trash_file','hrDeleteStaff'];
 function assertSafeTarget(payload) {
   if (!payload || !DESTRUCTIVE.includes(payload.action)) return;
-  const id = String(payload.orderId || payload.id || '');
+  const id = String(payload.orderId || payload.id || payload.itemId || payload.staffId || '');
   if (!/0{4,}$/.test(id)) {
     throw new Error(`REFUSING: ${payload.action} aimed at a real record (${id}). `
       + 'This suite runs against production — destructive checks must target a '
@@ -561,6 +561,48 @@ async function guestSurvey() {
   check('survey list refuses anonymous', lstAnon.ok === false);
 }
 
+
+// ── 15. MENU CACHE IS CONSISTENT ACROSS SERVER INSTANCES ──────────────────
+// The menu cache lives in memory per serverless instance and a write only
+// cleared the instance that handled it; every other instance served the old
+// menu for up to two minutes, so a best-seller toggle looked unsaved. The
+// stamp check must make every instance see a change on its next request.
+// Uses a throwaway INACTIVE item, so it never appears on the customer menu.
+async function menuCacheConsistency() {
+  section('Menu cache consistency');
+  const code = 'SMOKEPROBE_' + Date.now().toString(36).toUpperCase() + '0000';
+  const made = await call({ action:'addMenuItem', userId: OWNER, itemId: code, name: 'ZZ smoke probe (auto-deleted)',
+                            category: 'OTHER', price: 1, status: 'INACTIVE', isSignature: false });
+  check('probe item created (inactive)', made.ok === true, made.error);
+  if (!made.ok) return;
+  try {
+    // warm the admin cache on as many instances as we can reach
+    for (let i = 0; i < 4; i++) await call({ action:'getMenuAdmin', userId: OWNER });
+    const flip = await call({ action:'updateMenuItem', userId: OWNER, itemId: code, isSignature: true });
+    check('probe flagged as best seller', flip.ok === true, flip.error);
+    let stale = 0;
+    for (let i = 0; i < 6; i++) {
+      const r = await call({ action:'getMenuAdmin', userId: OWNER });
+      const it = (r.items || []).find(x => x.code === code);
+      if (!it || it.isSignature !== true) stale++;
+    }
+    check('every instance shows the change immediately (6 reads, 0 stale)', stale === 0, `${stale} stale read(s)`);
+    const back = await call({ action:'updateMenuItem', userId: OWNER, itemId: code, isSignature: false });
+    stale = 0;
+    for (let i = 0; i < 6; i++) {
+      const r = await call({ action:'getMenuAdmin', userId: OWNER });
+      const it = (r.items || []).find(x => x.code === code);
+      if (!it || it.isSignature !== false) stale++;
+    }
+    check('…and the removal too (6 reads, 0 stale)', back.ok === true && stale === 0, `${stale} stale read(s)`);
+    const pub = await call({ action:'getMenu' });
+    check('inactive probe never reaches the customer menu', !(pub.items || []).some(x => x.code === code));
+  } finally {
+    const del = await call({ action:'deleteMenuItem', userId: OWNER, itemId: code });
+    check('probe item deleted', del.ok === true, del.error);
+  }
+}
+
 // ── run ────────────────────────────────────────────────────────────────────
 const t0 = Date.now();
 console.log(`\nYANI POS regression suite → ${BASE}`);
@@ -578,6 +620,7 @@ await orderLookup();
 await deleteGuard();
 await customerMenuPage();
 await guestSurvey();
+await menuCacheConsistency();
 
 console.log(`\n${'─'.repeat(58)}`);
 console.log(`  passed ${pass}   failed ${fail}   (${((Date.now() - t0) / 1000).toFixed(1)}s)`);
