@@ -2324,18 +2324,24 @@ async function api(action, data) {
 // ══════════════════════════════════════════════════════════
 // CATEGORY TABS
 // ══════════════════════════════════════════════════════════
+// 'BEST_SELLER' is a virtual category: it is not a menu category but a
+// filter on items flagged as signature. Shown right after All, and only when
+// at least one item carries the flag.
+var BEST_SELLER = 'BEST_SELLER';
+
 function renderCategories() {
   var cats = ['ALL'];
+  if (MENU_DATA.some(function(i){ return i.isSignature; })) cats.push(BEST_SELLER);
   MENU_DATA.forEach(function(item) {
     if (cats.indexOf(item.category) === -1) cats.push(item.category);
   });
 
   var html = cats.map(function(c) {
     var active = c === state.activeCategory ? ' active' : '';
-    var icon = c === 'ALL' ? '🍃' : getCategoryIcon(c);
+    var icon = c === 'ALL' ? '🍃' : c === BEST_SELLER ? '⭐' : getCategoryIcon(c);
     // Icon in a circle above the label — the label stays readable in a 74px
     // rail, and the active state reads from the filled circle at a glance.
-    var label = c === 'ALL' ? 'All' : esc(c);
+    var label = c === 'ALL' ? 'All' : c === BEST_SELLER ? 'Best seller' : esc(c);
     return '<button class="cat-tab' + active + '" onclick="setCategory(\'' + esc(c) + '\')">'
          +   '<span class="cat-ico">' + icon + '</span>'
          +   '<span>' + label + '</span>'
@@ -2356,7 +2362,8 @@ function setCategory(cat) {
 // ══════════════════════════════════════════════════════════
 function renderMenu() {
   var items = MENU_DATA.filter(function(item) {
-    var matchCat = state.activeCategory === 'ALL' || item.category === state.activeCategory;
+    var matchCat = state.activeCategory === 'ALL'
+                || (state.activeCategory === BEST_SELLER ? !!item.isSignature : item.category === state.activeCategory);
     var matchSearch = !state.search || item.name.toLowerCase().indexOf(state.search.toLowerCase()) > -1;
     var matchContent = itemMatchesFilter(item);
     return matchCat && matchSearch && matchContent;
