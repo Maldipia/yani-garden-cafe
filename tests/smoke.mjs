@@ -211,13 +211,17 @@ async function payrollMath() {
           n(row.net_pay) === n(n(row.gross_pay) - n(row.total_deductions)),
           `${n(row.net_pay)}`);
 
-    check(`${who}: regular pay = hours x rate`,
-          n(row.regular_pay) === n(n(row.approved_regular_hours) * n(row.hourly_rate)),
-          `${n(row.regular_pay)}`);
-
-    check(`${who}: OT paid at 1.25x approved hours`,
-          n(row.overtime_pay) === n(n(row.approved_ot_hours) * n(row.hourly_rate) * 1.25),
-          `${n(row.overtime_pay)}`);
+    // Pay is accumulated per day at that day's rate (rates can change inside
+    // a cut-off), so the header must equal the sum of the per-day amounts.
+    const dailyR = await call({ action:'hrPayrollDaily', userId: OWNER, cutoffId: cut.id, staffId: row.staff_id });
+    const dd = (dailyR.days || []);
+    const sumRegPay = n(dd.reduce((a, d) => a + n(parseFloat(d.regular_hours||0) * parseFloat(d.hourly_rate||0)), 0));
+    const sumOtPay  = n(dd.reduce((a, d) => a + n(parseFloat(d.ot_paid_hours||0) * parseFloat(d.hourly_rate||0) * 1.25), 0));
+    const sumNdPay  = n(dd.reduce((a, d) => a + n(parseFloat(d.nd_paid_hours||0) * parseFloat(d.hourly_rate||0) * 0.10), 0));
+    check(`${who}: regular pay = Σ day hours × day rate`, n(row.regular_pay) === sumRegPay, `${n(row.regular_pay)} vs ${sumRegPay}`);
+    check(`${who}: OT pay = Σ approved OT × day rate × 1.25`, n(row.overtime_pay) === sumOtPay, `${n(row.overtime_pay)} vs ${sumOtPay}`);
+    check(`${who}: ND pay = Σ approved ND × day rate × 10%`, n(row.night_diff_pay) === sumNdPay, `${n(row.night_diff_pay)} vs ${sumNdPay}`);
+    check(`${who}: every day carries a rate`, dd.length === 0 || dd.every(d => parseFloat(d.hourly_rate||0) > 0 || parseFloat(d.regular_hours||0) === 0));
 
     check(`${who}: paid OT never exceeds worked OT`,
           n(row.approved_ot_hours) <= n(row.actual_ot_hours) + 0.001,
@@ -226,8 +230,7 @@ async function payrollMath() {
     check(`${who}: net is not negative`, n(row.net_pay) >= 0, `${row.net_pay}`);
 
     // daily breakdown must reconcile to the header it is evidence for
-    const daily = await call({ action:'hrPayrollDaily', userId: OWNER,
-                               cutoffId: cut.id, staffId: row.staff_id });
+    const daily = dailyR;
     if (daily.ok) {
       const sumReg = n((daily.days || []).reduce((a, d) => a + parseFloat(d.regular_hours || 0), 0));
       const sumPay = n((daily.days || []).reduce((a, d) => a + parseFloat(d.day_pay || 0), 0));
@@ -238,10 +241,18 @@ async function payrollMath() {
             `${sumPay} vs ${n(n(row.regular_pay) + n(row.overtime_pay) + n(row.night_diff_pay))}`);
       const sumNdPaid = n((daily.days || []).reduce((a, d) => a + parseFloat(d.nd_paid_hours || 0), 0));
       check(`${who}: night diff paid only on approved hours`,
-            sumNdPaid === n(row.night_diff_hours) &&
-            n(row.night_diff_pay) === n(n(row.night_diff_hours) * n(row.hourly_rate) * 0.10),
-            `${sumNdPaid} h vs ${row.night_diff_hours} h · ${row.night_diff_pay}`);
+            sumNdPaid === n(row.night_diff_hours), `${sumNdPaid} h vs ${row.night_diff_hours} h`);
     }
+  }
+
+  // Rate history: readable by owner, refused anonymously; a change needs a reason.
+  {
+    const rr = await call({ action:'hrGetRateHistory', userId: OWNER, staffId: (pay.rows||[])[0]?.staff_id });
+    check('rate history readable by owner', rr.ok === true && Array.isArray(rr.rows) && rr.current && parseFloat(rr.current.hourly) > 0, JSON.stringify(rr).slice(0,80));
+    const anonR = await call({ action:'hrGetRateHistory', staffId: (pay.rows||[])[0]?.staff_id });
+    check('rate history refuses anonymous', anonR.ok === false);
+    const noReason = await call({ action:'hrAddRateChange', userId: OWNER, staffId:'00000000-0000-0000-0000-000000000000', effective_date:'2026-01-01', basic_rate: 500, reason:'' });
+    check('rate change without a reason is refused', noReason.ok === false && /reason/i.test(noReason.error||''), noReason.error);
   }
 
   // Night differential review is owner-only and mirrors the OT review shape.

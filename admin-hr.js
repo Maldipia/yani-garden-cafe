@@ -257,7 +257,7 @@ async function loadHRTab(s,tab) {
         tc.innerHTML=renderProfileTab(s);
         loadGovtNumbers(s);
         break;
-      case 'pay':        tc.innerHTML=renderPayTab(s); break;
+      case 'pay':        await loadPayTab(s,tc); break;
       case 'loans':      await loadLoansTab(s,tc); break;
       case 'schedule':   tc.innerHTML=renderScheduleTab(s); break;
       case 'leave':      await loadLeaveTab(s,tc); break;
@@ -378,27 +378,85 @@ function setHRPin(staffId, name, kind) {
   });
 }
 
-function renderPayTab(s) {
-  const rate=s.daily_rate?hrPeso(s.daily_rate):'Not set';
-  const monthly=s.daily_rate?hrPeso(parseFloat(s.daily_rate)*26):'—';
-  return `
+async function loadPayTab(s,tc) {
+  const r = await api('hrGetRateHistory',{userId:currentUser?.userId,staffId:s.id});
+  const rows = (r&&r.rows)||[];
+  const cur = r&&r.current;
+  const N=v=>parseFloat(v||0);
+  const std = N(s.standard_hours_per_day)||8;
+  const unit = b => b==='HOURLY'?'/hr':b==='MONTHLY'?'/month':'/day';
+  const rate = cur && cur.basic_rate!=null ? hrPeso(cur.basic_rate)+unit(cur.pay_basis) : (s.daily_rate?hrPeso(s.daily_rate)+'/day':'Not set');
+  const hourly = cur ? hrPeso(cur.hourly) : (s.daily_rate?hrPeso(N(s.daily_rate)/std):'—');
+  const since = cur && cur.effective_date ? 'since '+hrDate(cur.effective_date) : '';
+  const today = r&&r.today;
+  const hist = rows.length ? rows.map((h,i)=>{
+    const future = today && h.effective_date > today;
+    const isCur = cur && cur.effective_date===h.effective_date;
+    return `<div class="hr-table-row" style="${isCur?'background:#f0fdf4':''}">
+      <span class="hr-td-date">${hrDate(h.effective_date)}${future?' <span style="font-size:.58rem;font-weight:700;background:#e0e7ff;color:#4338ca;padding:1px 5px;border-radius:20px">UPCOMING</span>':''}${isCur?' <span style="font-size:.58rem;font-weight:700;background:#dcfce7;color:#15803d;padding:1px 5px;border-radius:20px">CURRENT</span>':''}</span>
+      <span><b>${hrPeso(h.basic_rate)}</b>${unit(h.pay_basis)} <span style="color:#6b7280;font-size:.68rem">= ${hrPeso(h.pay_basis==='HOURLY'?N(h.basic_rate):h.pay_basis==='MONTHLY'?N(h.basic_rate)*12/(52*6*std):N(h.basic_rate)/std)}/hr</span></span>
+      <span style="font-size:.7rem;color:#6b7280">${esc(h.reason_for_change||'')}</span>
+    </div>`; }).join('') : '<div class="hr-empty-sm">No rate on record yet — add one with "+ Rate change".</div>';
+  tc.innerHTML=`
     <div class="hr-section">
       <div class="hr-pay-card">
-        <div class="hr-pay-label">DAILY RATE</div>
+        <div class="hr-pay-label">CURRENT RATE ${since?'<span style="font-weight:400;text-transform:none;letter-spacing:0">· '+since+'</span>':''}</div>
         <div class="hr-pay-amount">${rate}</div>
-        <div class="hr-pay-sub">Est. monthly (26 days): ${monthly}</div>
+        <div class="hr-pay-sub">${hourly}/hr · est. monthly (26 days): ${cur&&cur.pay_basis==='DAILY'?hrPeso(N(cur.basic_rate)*26):(s.daily_rate?hrPeso(N(s.daily_rate)*26):'—')}</div>
       </div>
       <div class="hr-grid-2" style="margin-top:10px">
-        ${hf('Pay basis',s.pay_basis||'DAILY')}
-        ${hf('Hourly rate',s.hourly_rate?hrPeso(s.hourly_rate)+'/hr':'Auto (÷8)')}
-        ${hf('Std hrs/day',s.standard_hours_per_day||8)}
+        ${hf('Pay basis',(cur&&cur.pay_basis)||s.pay_basis||'DAILY')}
+        ${hf('Std hrs/day',std)}
         ${hf('OT allowed',s.overtime_allowed?'✅ Yes':'❌ No')}
+        ${hf('Art. 82 exempt',s.art82_exempt?'Yes — no OT / ND':'No')}
       </div>
     </div>
     <div class="hr-section">
-      <div class="hr-section-title">Payroll History</div>
-      <div class="hr-empty-sm">No payroll runs yet. Will appear once payroll is processed.</div>
+      <div class="hr-section-hdr">
+        <div>
+          <div class="hr-section-title">📈 Rate history</div>
+          <div style="font-size:.68rem;color:#6b7280;margin-top:2px">Payroll pays each day at the rate in force on that day — a change mid cut-off applies from its date.</div>
+        </div>
+        <button class="hr-action-btn hr-btn-primary" onclick="openRateChangeModal('${s.id}')">+ Rate change</button>
+      </div>
+      <div class="hr-list-table">
+        <div class="hr-table-hdr"><span>Effective</span><span>Rate</span><span>Reason</span></div>
+        ${hist}
+      </div>
     </div>`;
+}
+
+function openRateChangeModal(staffId){
+  const s=_hrSelected||{};
+  const today=new Date(Date.now()+8*3600*1000).toISOString().slice(0,10);
+  hrModal('Rate change', `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="hr-edit-row"><label class="hr-edit-label">Effective date *</label>
+        <input class="hr-edit-input" id="rcDate" type="date" value="${today}"></div>
+      <div class="hr-edit-row"><label class="hr-edit-label">Pay basis</label>
+        <select class="hr-edit-input" id="rcBasis">
+          <option value="DAILY"${(s.pay_basis||'DAILY')==='DAILY'?' selected':''}>Daily</option>
+          <option value="HOURLY"${s.pay_basis==='HOURLY'?' selected':''}>Hourly</option>
+          <option value="MONTHLY"${s.pay_basis==='MONTHLY'?' selected':''}>Monthly</option>
+        </select></div>
+    </div>
+    <div class="hr-edit-row"><label class="hr-edit-label">New rate (₱) *</label>
+      <input class="hr-edit-input" id="rcRate" type="number" step="0.01" min="0" placeholder="600.00"></div>
+    <div class="hr-edit-row"><label class="hr-edit-label">Reason (required)</label>
+      <input class="hr-edit-input" id="rcReason" type="text" placeholder="e.g. Regularized after training"></div>
+    <div style="font-size:.66rem;color:#6b7280;margin-top:4px">Days from the effective date onward are paid at the new rate; earlier days keep the old one. Open cut-offs it touches are recomputed. A finalized or paid cut-off must be reopened first.</div>
+  `, async function(){
+    const v=id=>document.getElementById(id).value;
+    if(!v('rcDate')||!(parseFloat(v('rcRate'))>0)){ showToast('Effective date and a rate are required','error'); return false; }
+    if((v('rcReason')||'').trim().length<3){ showToast('A reason is required','error'); return false; }
+    const r=await api('hrAddRateChange',{userId:currentUser?.userId,staffId,effective_date:v('rcDate'),
+      pay_basis:v('rcBasis'),basic_rate:v('rcRate'),reason:v('rcReason').trim()});
+    if(!r||!r.ok){ showToast(r&&r.error?r.error:'Could not save','error'); return false; }
+    showToast('Rate saved'+((r.recomputed||[]).length?' · recomputed '+r.recomputed.join(', '):'')+' ✅','success');
+    // refresh the staff record so the header/profile shows the current rate
+    try{ const st=await api('getHRStaff',{userId:currentUser?.userId}); const me=(st.staff||[]).find(x=>x.id===staffId); if(me){ _hrSelected=me; const i=_hrStaff.findIndex(x=>x.id===staffId); if(i>=0)_hrStaff[i]=me; } }catch(_){}
+    await loadHRTab(_hrSelected,'pay');
+  });
 }
 
 // ── LOANS TAB ──────────────────────────────────────────────────────────────
@@ -976,6 +1034,13 @@ async function renderPayrollSection(s, tc){
   const R2 = v => Math.round(v*100)/100;
   const rate0 = N(((br.days||[])[0]||{}).hourly_rate);
   const otRate = R2(rate0*1.25), ndRate = R2(rate0*0.10);
+  // Contiguous runs of days on the same hourly rate, e.g. 62.50 (09-03–09-15) → 75.00 (09-16–09-30)
+  const rateSpans = [];
+  (br.days||[]).forEach(x=>{ const rt=N(x.hourly_rate); const last=rateSpans[rateSpans.length-1];
+    if(last && last.rate===rt) last.to=x.work_date; else rateSpans.push({rate:rt,from:x.work_date,to:x.work_date}); });
+  const rateCap = (mult, suffix) => rateSpans.length>1
+    ? rateSpans.map(x=>money(R2(x.rate*mult))+' from '+x.from.slice(5)).join(' · ')+'/h'+suffix
+    : '@ '+money(R2(rate0*mult))+'/h'+suffix;
   let totHrs=0, totOt=0, totPay=0, totUt=0, totNd=0, totNdPay=0, totNdPaid=0;
   let totWorked=0, totRegPay=0, totOtPaid=0, totOtPay=0, totNdPayPaid=0, totBrkMin=0;
   const hm = mins => { mins=Math.round(mins); const h=Math.floor(mins/60), m=mins%60; return h ? h+'h '+(m?m+'m':'') : m+'m'; };
@@ -1041,7 +1106,7 @@ async function renderPayrollSection(s, tc){
       <div class="hr-grid-2">
         <div class="hr-pay-card"><div class="hr-pay-label">GROSS PAY</div>
           <div class="hr-pay-amount">${money(mine.gross_pay)}</div>
-          <div class="hr-pay-sub">${parseFloat(mine.approved_regular_hours||0)} reg hrs @ ${money(mine.hourly_rate)}/hr</div>
+          <div class="hr-pay-sub">${parseFloat(mine.approved_regular_hours||0)} reg hrs @ ${rateSpans.length>1 ? rateSpans.map(x=>money(x.rate)+'/hr ('+x.from.slice(5)+'–'+x.to.slice(5)+')').join(' → ') : money(mine.hourly_rate)+'/hr'}</div>
           <div class="hr-pay-sub" style="margin-top:3px">
             ${parseFloat(mine.approved_ot_hours||0)>0?`<span style="color:#1d4ed8;font-weight:700">OT ${parseFloat(mine.approved_ot_hours).toFixed(2)} hrs</span> `:''}
             ${parseFloat(mine.night_diff_hours||0)>0?`<span style="color:#6d28d9;font-weight:700">🌙 ND ${parseFloat(mine.night_diff_hours).toFixed(2)} hrs = ${money(mine.night_diff_pay)}</span> `:''}
@@ -1068,11 +1133,11 @@ async function renderPayrollSection(s, tc){
           <th style="padding:5px 7px;text-align:right" title="Unpaid; hover a cell for the exact times">BREAK</th>
           <th style="padding:5px 7px;text-align:right" title="Clock in → out, minus breaks">HRS</th>
           <th style="padding:5px 7px;text-align:right">REG h</th>
-          <th style="padding:5px 7px;text-align:right">REG ₱<div style="font-size:.58rem;font-weight:400;color:#6b7280">@ ${money(rate0)}/h</div></th>
+          <th style="padding:5px 7px;text-align:right">REG ₱<div style="font-size:.58rem;font-weight:400;color:#6b7280">${rateCap(1,'')}</div></th>
           <th style="padding:5px 7px;text-align:right;color:#1d4ed8">OT h</th>
-          <th style="padding:5px 7px;text-align:right;color:#1d4ed8">OT ₱<div style="font-size:.58rem;font-weight:400;color:#6b7280">@ ${money(otRate)}/h (×1.25)</div></th>
+          <th style="padding:5px 7px;text-align:right;color:#1d4ed8">OT ₱<div style="font-size:.58rem;font-weight:400;color:#6b7280">${rateCap(1.25,' (×1.25)')}</div></th>
           <th style="padding:5px 7px;text-align:right;color:#6d28d9">ND h</th>
-          <th style="padding:5px 7px;text-align:right;color:#6d28d9">ND ₱<div style="font-size:.58rem;font-weight:400;color:#6b7280">@ ${money(ndRate)}/h (10%)</div></th>
+          <th style="padding:5px 7px;text-align:right;color:#6d28d9">ND ₱<div style="font-size:.58rem;font-weight:400;color:#6b7280">${rateCap(0.10,' (10%)')}</div></th>
           <th style="padding:5px 7px;text-align:right;color:#b45309">UT h</th>
           <th style="padding:5px 7px;text-align:right">DAY PAY</th>
         </tr></thead>
@@ -1092,7 +1157,7 @@ async function renderPayrollSection(s, tc){
       </table></div>
       <div style="font-size:.66rem;color:#6b7280;margin-top:6px">
         <span style="${'background:#fef3c7;color:#92400e;border-radius:4px;padding:0 5px;font-weight:700'}">✎ amber</span> = time entered by an admin, not tapped (hover for who and why; ✕ removes it) ·
-        Rate ${money(rate0)}/h = daily rate ÷ ${N(((br.days||[])[0]||{}).standard_hours||8).toFixed(0)} h · REG capped at ${N(((br.days||[])[0]||{}).standard_hours||8).toFixed(0)} h/day · OT and ND pay only on <u>approved</u> hours (grey ₱0 = not yet approved; hover for the value) · breaks unpaid · DAY PAY = REG ₱ + OT ₱ + ND ₱.
+        ${rateSpans.length>1 ? 'Rate changed inside this cut-off — each day is paid at the rate in force that day (see Pay tab › Rate history)' : 'Rate '+money(rate0)+'/h = daily rate ÷ '+N(((br.days||[])[0]||{}).standard_hours||8).toFixed(0)+' h'} · REG capped at ${N(((br.days||[])[0]||{}).standard_hours||8).toFixed(0)} h/day · OT and ND pay only on <u>approved</u> hours (grey ₱0 = not yet approved; hover for the value) · breaks unpaid · DAY PAY = REG ₱ + OT ₱ + ND ₱.
       </div>
 
       <div class="hr-section-title" style="margin-top:14px">💸 Deductions</div>
@@ -1186,12 +1251,14 @@ async function printPayslip(){
   // amount those hours earned, for regular / overtime / night differential.
   const R2=v=>Math.round(v*100)/100;
   let psReg=0, psOt=0, psNd=0;
+  const psRates=[...new Set(days.map(x=>N(x.hourly_rate)))];
+  const psMixed=psRates.length>1;
   const dayRows=days.map(x=>{
     const rate=N(x.hourly_rate), reg=N(x.regular_hours), otP=N(x.ot_paid_hours), ndP=N(x.nd_paid_hours);
     const regPay=R2(reg*rate), otPay=R2(otP*rate*1.25), ndPay=R2(ndP*rate*0.10);
     psReg+=regPay; psOt+=otPay; psNd+=ndPay;
     return `<tr${x.is_holiday?' class="hol"':''}>
-    <td>${x.work_date.slice(5)}${x.is_holiday?' <b>H</b>':''}</td>
+    <td>${x.work_date.slice(5)}${x.is_holiday?' <b>H</b>':''}${psMixed?' <span style="color:#777">@₱'+P(rate)+'</span>':''}</td>
     <td>${x.clock_in||'-'}</td><td>${esc(x.break_detail||'-')}</td><td>${x.clock_out||'-'}</td>
     <td class="r">${N(x.worked_hours).toFixed(2)}</td>
     <td class="r">${reg.toFixed(2)}</td><td class="r">${P(regPay)}</td>
@@ -1296,9 +1363,9 @@ async function printPayslip(){
     <thead>
       <tr><th rowspan="2">DATE</th><th rowspan="2">IN</th><th rowspan="2">BREAKS</th><th rowspan="2">OUT</th>
         <th class="r" rowspan="2">WORKED<br>HRS</th>
-        <th class="r" colspan="2" style="text-align:center">REGULAR (× ₱${P(N(row.hourly_rate))})</th>
-        <th class="r" colspan="3" style="text-align:center">OVERTIME (× ₱${P(N(row.hourly_rate))} × 1.25)</th>
-        <th class="r" colspan="3" style="text-align:center">NIGHT DIFF 10PM–6AM (× ₱${P(N(row.hourly_rate))} × 10%)</th>
+        <th class="r" colspan="2" style="text-align:center">REGULAR (× ${psMixed?'day rate':'₱'+P(N(row.hourly_rate))})</th>
+        <th class="r" colspan="3" style="text-align:center">OVERTIME (× ${psMixed?'day rate':'₱'+P(N(row.hourly_rate))} × 1.25)</th>
+        <th class="r" colspan="3" style="text-align:center">NIGHT DIFF 10PM–6AM (× ${psMixed?'day rate':'₱'+P(N(row.hourly_rate))} × 10%)</th>
         <th class="r" rowspan="2">UT<br>HRS</th><th class="r" rowspan="2">DAY PAY</th></tr>
       <tr><th class="r">HRS</th><th class="r">PAY</th>
         <th class="r">WORKED</th><th class="r">APPROVED</th><th class="r">PAY</th>
@@ -1317,7 +1384,7 @@ async function printPayslip(){
   </table>
 
   <div class="note">
-    <b>How this was computed.</b> Hourly rate \u20b1${P(N(row.hourly_rate))} = daily rate \u20b1${P(N(row.daily_rate))} \u00f7 ${stdH} hours.
+    <b>How this was computed.</b> ${psMixed ? 'The rate changed during this cut-off; each day is paid at the rate in force that day (shown beside the date).' : 'Hourly rate \u20b1'+P(N(row.hourly_rate))+' = daily rate \u20b1'+P(N(row.daily_rate))+' \u00f7 '+stdH+' hours.'}
     Worked hours = clock-in to clock-out minus tapped breaks (meal and rest breaks are unpaid).
     Regular pay = worked hours up to ${stdH} a day \u00d7 hourly rate.
     Overtime = hours beyond ${stdH} that were approved \u00d7 hourly rate \u00d7 1.25; unapproved overtime hours are listed but unpaid.

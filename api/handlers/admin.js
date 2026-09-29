@@ -80,6 +80,81 @@ export async function routeAdmin(action, body, auth, req, res) {
     return res.status(200).json({ok:true, days:r.data});
   }
 
+  // ── Rate history: pay rates by effective date ──────────────────────────
+  // Payroll uses the rate in force on each work date (hr_rate_on), so a
+  // change in the middle of a cut-off applies from that day. The profile
+  // rate is kept equal to the latest row already in effect.
+  if (action === 'hrGetRateHistory') {
+    const authRh = await checkAuth(['OWNER']);
+    if (!authRh.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
+    if (!body.staffId) return res.status(400).json({ok:false,error:'staffId required'});
+    const todayPH = new Date(Date.now() + 8*3600*1000).toISOString().slice(0,10);
+    const [rows, cur] = await Promise.all([
+      supaFetch(SUPABASE_URL+'/rest/v1/hr_compensation_history?staff_id=eq.'+encodeURIComponent(body.staffId)+
+        '&select=id,effective_date,pay_basis,basic_rate,hourly_rate,reason_for_change,created_at&order=effective_date.desc'),
+      supaFetch(SUPABASE_URL+'/rest/v1/rpc/hr_rate_on',
+        {method:'POST',body:JSON.stringify({p_staff_id:body.staffId,p_date:todayPH})}),
+    ]);
+    return res.status(200).json({ok:true, rows: Array.isArray(rows.data)?rows.data:[],
+      current: Array.isArray(cur.data)?cur.data[0]:null, today: todayPH});
+  }
+
+  if (action === 'hrAddRateChange') {
+    const authRc = await checkAuth(['OWNER']);
+    if (!authRc.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
+    const TENANT_HR2 = '11111111-1111-4111-8111-111111111111';
+    const staffId = String(body.staffId||'');
+    const eff = String(body.effective_date||'');
+    const basis = ['DAILY','HOURLY','MONTHLY'].includes(String(body.pay_basis||'').toUpperCase())
+      ? String(body.pay_basis).toUpperCase() : 'DAILY';
+    const rate = Math.round(parseFloat(body.basic_rate)*100)/100;
+    const reason = String(body.reason||'').trim();
+    if (!staffId || !/^\d{4}-\d{2}-\d{2}$/.test(eff)) return res.status(400).json({ok:false,error:'staffId and effective_date required'});
+    if (!(rate > 0)) return res.status(400).json({ok:false,error:'Rate must be greater than zero'});
+    if (reason.length < 3) return res.status(400).json({ok:false,error:'A reason is required for a rate change'});
+    // A rate that reaches into a cut-off already finalized or paid would
+    // silently change what was paid; that cut-off has to be reopened first.
+    const locked = await supaFetch(SUPABASE_URL+'/rest/v1/hr_payroll_cut_offs?tenant_id=eq.'+TENANT_HR2+
+      '&end_date=gte.'+eff+'&payroll_status=in.(FINALIZED,PAID)&select=cutoff_name&limit=1');
+    if (Array.isArray(locked.data) && locked.data.length) {
+      return res.status(400).json({ok:false,error:'"'+locked.data[0].cutoff_name+'" is '+'already finalized/paid — reopen it before changing a rate that applies to it'});
+    }
+    const who = authRc.userId || body.userId || 'UNKNOWN';
+    const row = { tenant_id:TENANT_HR2, staff_id:staffId, effective_date:eff, pay_basis:basis,
+      basic_rate:rate, hourly_rate: basis==='HOURLY' ? rate : null,
+      reason_for_change: '['+who+'] '+reason.substring(0,300) };
+    const ins = await supaFetch(SUPABASE_URL+'/rest/v1/hr_compensation_history?on_conflict=staff_id,effective_date',
+      {method:'POST', headers:{Prefer:'resolution=merge-duplicates,return=representation'}, body:JSON.stringify(row)});
+    if (!ins.ok) return res.status(500).json({ok:false,error:'Could not save the rate change'});
+
+    // Keep the profile equal to the rate in force today.
+    const todayPH = new Date(Date.now() + 8*3600*1000).toISOString().slice(0,10);
+    const cur = await supaFetch(SUPABASE_URL+'/rest/v1/rpc/hr_rate_on',
+      {method:'POST',body:JSON.stringify({p_staff_id:staffId,p_date:todayPH})});
+    const c = Array.isArray(cur.data) ? cur.data[0] : null;
+    if (c && c.basic_rate != null) {
+      const patch = { pay_basis: c.pay_basis, updated_at: new Date().toISOString(),
+        daily_rate:   c.pay_basis==='DAILY'   ? c.basic_rate : null,
+        hourly_rate:  c.pay_basis==='HOURLY'  ? c.basic_rate : null,
+        monthly_rate: c.pay_basis==='MONTHLY' ? c.basic_rate : null };
+      await supaFetch(SUPABASE_URL+'/rest/v1/hr_staff_master?id=eq.'+encodeURIComponent(staffId), {method:'PATCH', body:JSON.stringify(patch)});
+    }
+    // Recompute every OPEN cut-off the new rate touches.
+    const cuts = await supaFetch(SUPABASE_URL+'/rest/v1/hr_payroll_cut_offs?tenant_id=eq.'+TENANT_HR2+
+      '&end_date=gte.'+eff+'&start_date=lte.'+todayPH+'&select=id,cutoff_name,payroll_status');
+    const recomputed = [];
+    for (const k of (Array.isArray(cuts.data)?cuts.data:[])) {
+      if (['FINALIZED','PAID'].includes(k.payroll_status)) continue;
+      const r = await supaFetch(SUPABASE_URL+'/rest/v1/rpc/hr_compute_payroll',
+        {method:'POST',body:JSON.stringify({p_cutoff_id:k.id,p_actor:who+' (rate change)'})});
+      if (r.ok) recomputed.push(k.cutoff_name);
+    }
+    await hrAudit({ action:'RATE_CHANGED', module:'EMPLOYEE', recordId: staffId,
+      next:{effective_date:eff, pay_basis:basis, basic_rate:rate, recomputed}, reason,
+      actorCode: who, role: authRc.role, req });
+    return res.status(200).json({ok:true, recomputed});
+  }
+
   // ── Night differential: same review/decide shape as overtime ────────────
   if (action === 'hrNightDiffReview') {
     const authNr = await checkAuth(['OWNER']);
@@ -284,6 +359,29 @@ export async function routeAdmin(action, body, auth, req, res) {
       { method:'PATCH', body:JSON.stringify(masterPatch) }
     );
     if (!rMaster.ok) return res.status(500).json({ ok:false, error:'Staff update failed' });
+
+    // A rate edited on the profile is a rate change effective today, so it
+    // must land in hr_compensation_history too — payroll reads the history.
+    try {
+      const rateKeys = ['daily_rate','hourly_rate','pay_basis'];
+      const rateTouched = rateKeys.some(k => masterPatch[k] !== undefined &&
+        String(masterPatch[k] ?? '') !== String((beforeVals||{})[k] ?? ''));
+      if (rateTouched) {
+        const basis = String(masterPatch.pay_basis || (beforeVals||{}).pay_basis || 'DAILY').toUpperCase();
+        const rateVal = basis==='HOURLY'
+          ? (masterPatch.hourly_rate !== undefined ? masterPatch.hourly_rate : (beforeVals||{}).hourly_rate)
+          : (masterPatch.daily_rate  !== undefined ? masterPatch.daily_rate  : (beforeVals||{}).daily_rate);
+        const rateNum = parseFloat(rateVal);
+        if (rateNum > 0) {
+          const todayPH = new Date(Date.now() + 8*3600*1000).toISOString().slice(0,10);
+          await supaFetch(SUPABASE_URL+'/rest/v1/hr_compensation_history?on_conflict=staff_id,effective_date',
+            {method:'POST', headers:{Prefer:'resolution=merge-duplicates'},
+             body:JSON.stringify({ tenant_id:TENANT_HR, staff_id:hrStaffId, effective_date:todayPH, pay_basis:basis,
+               basic_rate: Math.round(rateNum*100)/100, hourly_rate: basis==='HOURLY' ? Math.round(rateNum*100)/100 : null,
+               reason_for_change: '['+(authHR.userId||body.userId||'?')+'] '+(body.reason || 'Edited on profile') })});
+        }
+      }
+    } catch(_) { /* the profile update itself already succeeded */ }
 
     {
       const changed = { ...masterPatch }; delete changed.updated_at;

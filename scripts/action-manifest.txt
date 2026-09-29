@@ -81,12 +81,14 @@ getShiftSummary
 getStaff
 getTableStatus
 getTables
+hrAddRateChange
 hrClockEvent
 hrCompute13thMonth
 hrEmployeeLogin
 hrGetClockStatus
 hrGetDailyHours
 hrGetHolidays
+hrGetRateHistory
 hrLookupStaff
 hrNightDiffDecide
 hrNightDiffReview
