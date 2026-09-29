@@ -962,41 +962,39 @@ async function renderPayrollSection(s, tc){
     + `${esc(c.cutoff_name)} · ${c.payroll_status}</option>`).join('');
 
   const money = v => hrPeso(parseFloat(v||0));
-  let totHrs=0, totOt=0, totPay=0, totUt=0, totNd=0, totNdPay=0, totNdPaid=0;
-  let totWorked=0, totRegPay=0, totOtPaid=0, totOtPay=0, totOtIf=0, totNdPayPaid=0, totNdIf=0, totUtPay=0;
   const N = v => parseFloat(v||0);
   const R2 = v => Math.round(v*100)/100;
+  const rate0 = N(((br.days||[])[0]||{}).hourly_rate);
+  const otRate = R2(rate0*1.25), ndRate = R2(rate0*0.10);
+  let totHrs=0, totOt=0, totPay=0, totUt=0, totNd=0, totNdPay=0, totNdPaid=0;
+  let totWorked=0, totRegPay=0, totOtPaid=0, totOtPay=0, totNdPayPaid=0;
   const dayRows = (br.days||[]).length ? (br.days||[]).map(function(x){
     var rate = N(x.hourly_rate), reg = N(x.regular_hours), ot = N(x.ot_hours), otPaid = N(x.ot_paid_hours);
     var nd = N(x.night_hours), ndPaid = N(x.nd_paid_hours), ut = N(x.undertime_hours), worked = N(x.worked_hours);
-    var regPay = R2(reg*rate), otPay = R2(otPaid*rate*1.25), otIf = R2((ot-otPaid)*rate*1.25);
-    var ndPay = R2(ndPaid*rate*0.10), ndIf = R2((nd-ndPaid)*rate*0.10), utPay = R2(ut*rate);
+    var regPay = R2(reg*rate), otPay = R2(otPaid*rate*1.25), ndPay = R2(ndPaid*rate*0.10);
     totHrs += reg; totOt += ot; totPay += N(x.day_pay); totNdPaid += ndPaid; totUt += ut; totNd += nd;
     totNdPay += N(x.night_diff_suggested); totWorked += worked; totRegPay += regPay; totOtPaid += otPaid;
-    totOtPay += otPay; totOtIf += otIf; totNdPayPaid += ndPay; totNdIf += ndIf; totUtPay += utPay;
+    totOtPay += otPay; totNdPayPaid += ndPay;
     var rowBg = x.is_holiday ? '#fff7ed' : '';
-    var sub = t => `<div style="font-size:.62rem;color:#6b7280;font-weight:400;white-space:nowrap">${t}</div>`;
-    var cell = (main, subtxt, color, title) => `<td style="padding:5px 7px;text-align:right;vertical-align:top${color?';color:'+color:''}" title="${esc(title||'')}">${main}${subtxt?sub(subtxt):''}</td>`;
+    var td = (v, style, title) => `<td style="padding:5px 7px;text-align:right${style||''}"${title?` title="${esc(title)}"`:''}>${v}</td>`;
+    var grey = ';color:#9ca3af';
     return `<tr${rowBg?' style="background:'+rowBg+'"':''}>
-      <td style="padding:5px 7px;vertical-align:top">${esc(x.work_date)}${x.is_holiday?` <span title="${esc(x.holiday_name||'')}" style="font-size:.58rem;font-weight:700;background:#ffedd5;color:#c2410c;padding:1px 5px;border-radius:20px">HOL</span>`:''}</td>
-      <td style="padding:5px 7px;vertical-align:top">${esc(x.clock_in||'—')}</td>
-      <td style="padding:5px 7px;vertical-align:top">${x.clock_out ? esc(x.clock_out)
+      <td style="padding:5px 7px">${esc(x.work_date)}${x.is_holiday?` <span title="${esc(x.holiday_name||'')}" style="font-size:.58rem;font-weight:700;background:#ffedd5;color:#c2410c;padding:1px 5px;border-radius:20px">HOL</span>`:''}</td>
+      <td style="padding:5px 7px">${esc(x.clock_in||'—')}</td>
+      <td style="padding:5px 7px">${x.clock_out ? esc(x.clock_out)
         : `<span style="color:#b45309;font-weight:700" title="No time-out was tapped — hours stop at the last tap">—</span> <a href="#" onclick="openManualClockModal('${s.id}',{date:'${esc(x.work_date)}',event:'CLOCK_OUT'});return false" style="font-size:.62rem;color:#1d4ed8;text-decoration:none;white-space:nowrap">+ add time-out</a>`}</td>
-      ${cell(worked.toFixed(2)+' h', N(x.break_mins)>0 ? '−'+Math.round(N(x.break_mins))+'m break'+(N(x.break_count)>1?'s':'') : 'no break', '', 'Clock in → clock out, minus tapped breaks'+(x.break_detail?': '+x.break_detail:''))}
-      ${cell('<b>'+reg.toFixed(2)+' h</b>', hrPeso(regPay), '', reg.toFixed(2)+' h × '+hrPeso(rate)+' — regular hours are capped at '+N(x.standard_hours||8).toFixed(0)+' h a day')}
-      ${ot>0
-        ? cell(ot.toFixed(2)+' h', otPaid>0 ? '<b style="color:#1d4ed8">'+hrPeso(otPay)+'</b> · '+otPaid.toFixed(2)+' h paid' : '<span style="color:#9ca3af">₱0 · '+hrPeso(otIf)+' if approved</span>', otPaid>0?'#1d4ed8':'#6b7280', (otPaid>0 ? otPaid.toFixed(2)+' h × '+hrPeso(rate)+' × 1.25 = '+hrPeso(otPay)+'. ' : '')+'Overtime = approved hours × hourly rate × 1.25')
-        : cell('—','', '#9ca3af','')}
-      ${nd>0
-        ? cell(nd.toFixed(2)+' h', ndPaid>0 ? '<b style="color:#6d28d9">'+hrPeso(ndPay)+' ✓</b>' : '<span style="color:#9ca3af">'+hrPeso(ndIf)+' pending</span>', ndPaid>0?'#6d28d9':'#6b7280', nd.toFixed(2)+' h × '+hrPeso(rate)+' × 10% = '+hrPeso(ndPaid>0?ndPay:ndIf)+'. Night differential = approved hours between 10:00 PM and 6:00 AM × hourly rate × 10%')
-        : cell('—','', '#9ca3af','')}
-      ${ut>0
-        ? cell('<b>'+ut.toFixed(2)+' h</b>', '−'+hrPeso(utPay), '#b45309', ut.toFixed(2)+' h × '+hrPeso(rate)+' — hours short of the standard day, already reflected in the lower regular pay')
-        : cell('—','', '#9ca3af','')}
-      <td style="padding:5px 7px;text-align:right;vertical-align:top;font-weight:800;white-space:nowrap" title="Regular + approved OT + approved night diff">${hrPeso(N(x.day_pay))}${(otPay>0||ndPay>0)?sub(hrPeso(regPay)+(otPay>0?' + '+hrPeso(otPay):'')+(ndPay>0?' + '+hrPeso(ndPay):'')):''}</td>
-      <td style="padding:5px 7px;font-size:.6rem;color:#6b7280;vertical-align:top">${esc(x.sources||'—')}</td>
+      ${td(worked.toFixed(2), '', 'Clock in → out minus breaks'+(x.break_detail?' ('+x.break_detail+')':''))}
+      ${td(reg.toFixed(2), ';font-weight:700')}
+      ${td(hrPeso(regPay), '')}
+      ${td(ot>0?ot.toFixed(2):'—', ot>0?';color:#1d4ed8;font-weight:700':grey)}
+      ${td(ot>0?(otPaid>0?hrPeso(otPay):'₱0'):'—', otPaid>0?';color:#1d4ed8;font-weight:700':grey, ot>0&&otPaid===0?'Not approved — '+hrPeso(R2(ot*otRate))+' if approved':(otPaid>0?otPaid.toFixed(2)+' h approved × '+hrPeso(otRate):''))}
+      ${td(nd>0?nd.toFixed(2):'—', nd>0?';color:#6d28d9;font-weight:700':grey)}
+      ${td(nd>0?(ndPaid>0?hrPeso(ndPay):'₱0'):'—', ndPaid>0?';color:#6d28d9;font-weight:700':grey, nd>0&&ndPaid===0?'Not approved — '+hrPeso(R2(nd*ndRate))+' if approved':(ndPaid>0?ndPaid.toFixed(2)+' h approved × '+hrPeso(ndRate):''))}
+      ${td(ut>0?ut.toFixed(2):'—', ut>0?';color:#b45309;font-weight:700':grey)}
+      ${td(hrPeso(N(x.day_pay)), ';font-weight:800')}
+      <td style="padding:5px 7px;font-size:.6rem;color:#6b7280">${esc(x.sources||'—')}</td>
     </tr>`;
-  }).join('') : '<tr><td colspan="11" style="padding:10px;color:#9ca3af;font-size:.75rem">No attendance in this cut-off</td></tr>';
+  }).join('') : '<tr><td colspan="13" style="padding:10px;color:#9ca3af;font-size:.75rem">No attendance in this cut-off</td></tr>';
 
   const dedRows = myDeds.length ? myDeds.map(d=>`<tr>
       <td style="padding:6px 8px">${esc(d.deduction_date||'—')}</td>
@@ -1048,35 +1046,36 @@ async function renderPayrollSection(s, tc){
 
       <div class="hr-section-title" style="margin-top:14px">📅 Daily breakdown — how this was computed</div>
       <div style="overflow-x:auto;overflow-y:auto;max-height:420px;border:1px solid var(--mist,#e2e5df);border-radius:8px">
-      <table style="width:100%;border-collapse:collapse;font-size:.7rem;white-space:nowrap">
+      <table style="width:100%;border-collapse:collapse;font-size:.72rem;white-space:nowrap">
         <thead><tr style="background:var(--mist-light,#f1f5f9);text-align:left">
-          <th style="padding:5px 7px">DATE</th><th style="padding:5px 7px">IN</th>
-          <th style="padding:5px 7px">OUT</th>
-          <th style="padding:5px 7px;text-align:right" title="Breaks are listed on hover">WORKED</th>
-          <th style="padding:5px 7px;text-align:right">REGULAR</th>
-          <th style="padding:5px 7px;text-align:right">OVERTIME</th>
-          <th style="padding:5px 7px;text-align:right">NIGHT DIFF</th>
-          <th style="padding:5px 7px;text-align:right">UNDERTIME</th>
+          <th style="padding:5px 7px">DATE</th><th style="padding:5px 7px">IN</th><th style="padding:5px 7px">OUT</th>
+          <th style="padding:5px 7px;text-align:right" title="Clock in → out, minus breaks">HRS</th>
+          <th style="padding:5px 7px;text-align:right">REG h</th>
+          <th style="padding:5px 7px;text-align:right">REG ₱<div style="font-size:.58rem;font-weight:400;color:#6b7280">@ ${money(rate0)}/h</div></th>
+          <th style="padding:5px 7px;text-align:right;color:#1d4ed8">OT h</th>
+          <th style="padding:5px 7px;text-align:right;color:#1d4ed8">OT ₱<div style="font-size:.58rem;font-weight:400;color:#6b7280">@ ${money(otRate)}/h (×1.25)</div></th>
+          <th style="padding:5px 7px;text-align:right;color:#6d28d9">ND h</th>
+          <th style="padding:5px 7px;text-align:right;color:#6d28d9">ND ₱<div style="font-size:.58rem;font-weight:400;color:#6b7280">@ ${money(ndRate)}/h (10%)</div></th>
+          <th style="padding:5px 7px;text-align:right;color:#b45309">UT h</th>
           <th style="padding:5px 7px;text-align:right">DAY PAY</th>
           <th style="padding:5px 7px">SRC</th>
         </tr></thead>
         <tbody>${dayRows}</tbody>
-        <tfoot><tr style="border-top:2px solid #d8ddd5;font-weight:700;vertical-align:top">
+        <tfoot><tr style="border-top:2px solid #d8ddd5;font-weight:700">
           <td colspan="3" style="padding:7px">${(br.days||[]).length} day(s)</td>
-          <td style="padding:7px;text-align:right">${totWorked.toFixed(2)} h</td>
-          <td style="padding:7px;text-align:right">${totHrs.toFixed(2)} h<div style="font-size:.62rem;color:#6b7280">${money(totRegPay)}</div></td>
-          <td style="padding:7px;text-align:right;color:#1d4ed8">${totOt.toFixed(2)} h<div style="font-size:.62rem;color:#6b7280">${totOtPaid.toFixed(2)} h paid · ${money(totOtPay)}${totOtIf>0?'<br>+ '+money(totOtIf)+' if approved':''}</div></td>
-          <td style="padding:7px;text-align:right;color:#6d28d9">${totNd>0?totNd.toFixed(2)+' h':'—'}<div style="font-size:.62rem;color:#6b7280">${totNd>0?(totNdPaid.toFixed(2)+' h paid · '+money(totNdPayPaid)+(totNdIf>0?'<br>+ '+money(totNdIf)+' pending':'')):''}</div></td>
-          <td style="padding:7px;text-align:right;color:#b45309">${totUt>0?totUt.toFixed(2)+' h':'—'}<div style="font-size:.62rem;color:#6b7280">${totUt>0?'short '+money(totUtPay):''}</div></td>
-          <td style="padding:7px;text-align:right;font-size:.85rem">${money(totPay)}<div style="font-size:.62rem;color:#6b7280;font-weight:400">${money(totRegPay)}${totOtPay>0?' + '+money(totOtPay):''}${totNdPayPaid>0?' + '+money(totNdPayPaid):''}</div></td>
+          <td style="padding:7px;text-align:right">${totWorked.toFixed(2)}</td>
+          <td style="padding:7px;text-align:right">${totHrs.toFixed(2)}</td>
+          <td style="padding:7px;text-align:right">${money(totRegPay)}</td>
+          <td style="padding:7px;text-align:right;color:#1d4ed8">${totOt.toFixed(2)}</td>
+          <td style="padding:7px;text-align:right;color:#1d4ed8" title="${totOtPaid.toFixed(2)} h approved">${money(totOtPay)}</td>
+          <td style="padding:7px;text-align:right;color:#6d28d9">${totNd>0?totNd.toFixed(2):'—'}</td>
+          <td style="padding:7px;text-align:right;color:#6d28d9" title="${totNdPaid.toFixed(2)} h approved">${totNd>0?money(totNdPayPaid):'—'}</td>
+          <td style="padding:7px;text-align:right;color:#b45309">${totUt>0?totUt.toFixed(2):'—'}</td>
+          <td style="padding:7px;text-align:right;font-size:.85rem">${money(totPay)}</td>
           <td></td></tr></tfoot>
       </table></div>
-      <div style="font-size:.66rem;color:#6b7280;margin-top:6px;line-height:1.5">
-        <b>Formulas.</b> Hourly rate ${money((br.days||[])[0]?(br.days||[])[0].hourly_rate:0)} = daily rate ÷ ${N(((br.days||[])[0]||{}).standard_hours||8).toFixed(0)} standard hours ·
-        Regular = hours × rate, capped at ${N(((br.days||[])[0]||{}).standard_hours||8).toFixed(0)} h a day ·
-        Overtime = <u>approved</u> hours beyond that × rate × 1.25 ·
-        Night differential = <u>approved</u> hours between 10:00 PM and 6:00 AM × rate × 10% ·
-        Breaks are unpaid and already excluded from worked hours · Undertime is only shown; the shortfall is already reflected in regular pay.
+      <div style="font-size:.66rem;color:#6b7280;margin-top:6px">
+        Rate ${money(rate0)}/h = daily rate ÷ ${N(((br.days||[])[0]||{}).standard_hours||8).toFixed(0)} h · REG capped at ${N(((br.days||[])[0]||{}).standard_hours||8).toFixed(0)} h/day · OT and ND pay only on <u>approved</u> hours (grey ₱0 = not yet approved; hover for the value) · breaks unpaid · DAY PAY = REG ₱ + OT ₱ + ND ₱.
       </div>
 
       <div class="hr-section-title" style="margin-top:14px">💸 Deductions</div>
