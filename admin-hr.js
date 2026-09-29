@@ -707,7 +707,8 @@ async function loadClockTab(s,tc) {
           ${logs.map(l=>{ const bg=EVENT_COLOR[l.event_type]||'#f3f4f6';
             return `<div class="hr-table-row">
               <span class="hr-td-date">${hrDate(l.log_date)}</span>
-              <span>${l.event_time?new Date(l.event_time).toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'}):'—'}</span>
+              <span>${l.event_time?new Date(l.event_time).toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'}):'—'}
+                <a href="#" onclick="openEditTimeModal('${s.id}',{id:'${l.id}',date:'${esc(l.log_date)}',event:'${esc(l.event_type)}',current:'${l.event_time?new Date(l.event_time).toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'}):''}',iso:'${esc(l.event_time||'')}'});return false" title="Correct this time" style="font-size:.7rem;text-decoration:none;margin-left:4px">✎</a></span>
               <span><span class="hr-badge-sm" style="background:${bg};color:#1a1a1a">${esc(l.event_type||'').replace(/_/g,' ')}</span></span>
               <span style="font-size:.63rem;font-weight:700;padding:2px 7px;border-radius:20px;${
   (l.attendance_source==='QR') ? 'background:#dcfce7;color:#15803d' :
@@ -774,6 +775,43 @@ function openManualClockModal(staffId, preset) {
     if(el) el.addEventListener('change',_clkRefreshNextDayHint);
   });
 }
+// Correct one existing time. Works for a kiosk tap too: the row becomes a
+// MANUAL "corrected from …" row and the original value goes to the audit.
+function openEditTimeModal(staffId, ref){
+  ref = ref || {};
+  const label = String(ref.event||'').replace(/_/g,' ').toLowerCase();
+  // current time as HH:MM for the input (from ISO when we have it, else parse the label)
+  let hhmm = '';
+  if (ref.iso) { const d=new Date(new Date(ref.iso).getTime()+8*3600*1000); hhmm = String(d.getUTCHours()).padStart(2,'0')+':'+String(d.getUTCMinutes()).padStart(2,'0'); }
+  else { const m=/(\d{1,2}):(\d{2})\s*(AM|PM)/i.exec(ref.current||''); if(m){ let H=parseInt(m[1],10)%12; if(/pm/i.test(m[3])) H+=12; hhmm=String(H).padStart(2,'0')+':'+m[2]; } }
+  const nextMorning = /\+1/.test(ref.current||'') || (ref.iso && new Date(new Date(ref.iso).getTime()+8*3600*1000).toISOString().slice(0,10) > ref.date);
+  hrModal('Correct '+label+' — '+hrDate(ref.date), `
+    <div style="font-size:.74rem;color:#475569;margin-bottom:8px">Currently <b>${esc(ref.current||'—')}</b>. Enter the correct time; the original is kept in the audit and the cell will show ✎.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="hr-edit-row"><label class="hr-edit-label">Correct time *</label><input class="hr-edit-input" id="etTime" type="time" value="${hhmm}"></div>
+      <div class="hr-edit-row"><label class="hr-edit-label">Day</label>
+        <select class="hr-edit-input" id="etDay">
+          <option value="0"${nextMorning?'':' selected'}>${hrDate(ref.date)} (shift date)</option>
+          <option value="1"${nextMorning?' selected':''}>Next morning (after midnight)</option>
+        </select></div>
+    </div>
+    <div class="hr-edit-row"><label class="hr-edit-label">Reason (required)</label>
+      <input class="hr-edit-input" id="etReason" type="text" placeholder="e.g. tapped out late, actual time per CCTV"></div>
+  `, async function(){
+    const t=document.getElementById('etTime').value, day=document.getElementById('etDay').value, reason=(document.getElementById('etReason').value||'').trim();
+    if(!t){ showToast('Enter the correct time','error'); return false; }
+    if(reason.length<3){ showToast('A reason is required','error'); return false; }
+    const calDate = day==='1' ? _clkAddDay(ref.date) : ref.date;
+    const newIso = new Date(calDate+'T'+t+':00+08:00').toISOString();
+    const payload = {userId:currentUser?.userId, new_time:newIso, reason};
+    if (ref.id) payload.id = ref.id; else Object.assign(payload,{staffId, log_date:ref.date, event_type:ref.event, which:ref.which||'last'});
+    const r=await api('editHRTimeLog', payload);
+    if(!r||!r.ok){ showToast(r&&r.error?r.error:'Could not save the correction','error'); return false; }
+    showToast('Time corrected ✅','success');
+    if(_hrSelected?.id===staffId) await loadHRTab(_hrSelected, _hrActiveTab==='payroll' ? 'payroll' : 'clock');
+  });
+}
+
 async function removeManualEntry(staffId, date, evType){
   const label = evType.replace('_',' ').toLowerCase();
   const reason = prompt('Remove the manual '+label+' on '+date+'? Reason (required):');
@@ -1057,11 +1095,11 @@ async function renderPayrollSection(s, tc){
     var grey = ';color:#9ca3af';
     // A typed-in time is shown on amber with ✎ and can be undone; a tap cannot.
     var manualStyle = 'background:#fef3c7;color:#92400e;border-radius:4px;padding:1px 5px;font-weight:700';
-    var manual = (label, evType) => `<span style="${manualStyle}" title="${esc('Entered manually: '+(x.manual_note||''))}">✎ ${label}</span> <a href="#" onclick="removeManualEntry('${s.id}','${esc(x.work_date)}','${evType}');return false" title="Remove this manual entry" style="font-size:.62rem;color:#b91c1c;text-decoration:none">✕</a>`;
+    var manual = (label, evType) => `<a href="#" onclick="openEditTimeModal('${s.id}',{date:'${esc(x.work_date)}',event:'${evType}',which:'${evType==='CLOCK_IN'?'first':'last'}',current:'${label}'});return false" style="${manualStyle};text-decoration:none" title="${esc('Entered manually: '+(x.manual_note||'')+' — click to correct')}">✎ ${label}</a> <a href="#" onclick="removeManualEntry('${s.id}','${esc(x.work_date)}','${evType}');return false" title="Remove this manual entry" style="font-size:.62rem;color:#b91c1c;text-decoration:none">✕</a>`;
     return `<tr${rowBg?' style="background:'+rowBg+'"':''}>
       <td style="padding:5px 7px">${esc(x.work_date)}${x.is_holiday?` <span title="${esc(x.holiday_name||'')}" style="font-size:.58rem;font-weight:700;background:#ffedd5;color:#c2410c;padding:1px 5px;border-radius:20px">HOL</span>`:''}</td>
-      <td style="padding:5px 7px">${x.in_manual ? manual(esc(x.clock_in||'—'),'CLOCK_IN') : esc(x.clock_in||'—')}</td>
-      <td style="padding:5px 7px">${x.clock_out ? (x.out_manual ? manual(esc(x.clock_out),'CLOCK_OUT') : esc(x.clock_out))
+      <td style="padding:5px 7px">${x.clock_in ? (x.in_manual ? manual(esc(x.clock_in),'CLOCK_IN') : `<a href="#" onclick="openEditTimeModal('${s.id}',{date:'${esc(x.work_date)}',event:'CLOCK_IN',which:'first',current:'${esc(x.clock_in)}'});return false" title="Click to correct this time" style="color:inherit;text-decoration:none;border-bottom:1px dotted #9ca3af">${esc(x.clock_in)}</a>`) : '—'}</td>
+      <td style="padding:5px 7px">${x.clock_out ? (x.out_manual ? manual(esc(x.clock_out),'CLOCK_OUT') : `<a href="#" onclick="openEditTimeModal('${s.id}',{date:'${esc(x.work_date)}',event:'CLOCK_OUT',which:'last',current:'${esc(x.clock_out)}'});return false" title="Click to correct this time" style="color:inherit;text-decoration:none;border-bottom:1px dotted #9ca3af">${esc(x.clock_out)}</a>`)
         : `<span style="color:#b45309;font-weight:700" title="No time-out was tapped — hours stop at the last tap">—</span> <a href="#" onclick="openManualClockModal('${s.id}',{date:'${esc(x.work_date)}',event:'CLOCK_OUT',taps:'${esc(('in '+(x.clock_in||'—')+(x.break_detail?' · breaks '+x.break_detail:'')+(x.break_end?' · last break end '+x.break_end:'')).replace(/'/g,''))}'});return false" style="font-size:.62rem;color:#1d4ed8;text-decoration:none;white-space:nowrap">+ add time-out</a>`}</td>
       ${x.break_manual
         ? `<td style="padding:5px 7px;text-align:right"><span style="${manualStyle}" title="${esc('Break entered manually: '+(x.manual_note||''))}">✎ ${N(x.break_mins)>0 ? hm(N(x.break_mins)) : '—'}</span></td>`
@@ -1157,7 +1195,7 @@ async function renderPayrollSection(s, tc){
           <td style="padding:7px;text-align:right;font-size:.85rem">${money(totPay)}</td></tr></tfoot>
       </table></div>
       <div style="font-size:.66rem;color:#6b7280;margin-top:6px">
-        <span style="${'background:#fef3c7;color:#92400e;border-radius:4px;padding:0 5px;font-weight:700'}">✎ amber</span> = time entered by an admin, not tapped (hover for who and why; ✕ removes it) ·
+        Click any IN / OUT time to correct it (reason required; the original stays in the audit) · <span style="${'background:#fef3c7;color:#92400e;border-radius:4px;padding:0 5px;font-weight:700'}">✎ amber</span> = entered or corrected by an admin (hover for who and why; ✕ removes a typed entry) ·
         ${rateSpans.length>1 ? 'Rate changed inside this cut-off — each day is paid at the rate in force that day (see Pay tab › Rate history)' : 'Rate '+money(rate0)+'/h = daily rate ÷ '+N(((br.days||[])[0]||{}).standard_hours||8).toFixed(0)+' h'} · REG capped at ${N(((br.days||[])[0]||{}).standard_hours||8).toFixed(0)} h/day · OT and ND pay only on <u>approved</u> hours (grey ₱0 = not yet approved; hover for the value) · breaks unpaid · DAY PAY = REG ₱ + OT ₱ + ND ₱.
       </div>
 

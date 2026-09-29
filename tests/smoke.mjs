@@ -161,6 +161,12 @@ async function shiftAwareClock() {
       log_date:'2026-09-09', event_time:'2026-09-09T02:30:00Z', notes:'sequence probe (must be refused, never written)' });
     check('manual time-out before the last tap is refused', early.ok === false && /last tap/i.test(early.error||''), early.error);
   }
+  const edAnon = await call({ action:'editHRTimeLog', id:'00000000-0000-0000-0000-000000000000', new_time:'2026-01-01T02:00:00Z', reason:'probe' });
+  check('editing a time refuses anonymous', edAnon.ok === false);
+  const edNoReason = await call({ action:'editHRTimeLog', userId: OWNER, id:'00000000-0000-0000-0000-000000000000', new_time:'2026-01-01T02:00:00Z', reason:'' });
+  check('editing a time without a reason is refused', edNoReason.ok === false && /reason/i.test(edNoReason.error||''), edNoReason.error);
+  const edMissing = await call({ action:'editHRTimeLog', userId: OWNER, id:'00000000-0000-0000-0000-000000000000', new_time:'2026-01-01T02:00:00Z', reason:'probe on a non-existent row' });
+  check('editing a non-existent time is a no-op', edMissing.ok === false && /not found/i.test(edMissing.error||''), edMissing.error);
   const rmAnon = await call({ action:'removeHRManualEntry', staffId:'x', log_date:'2026-01-01', event_type:'CLOCK_OUT', reason:'probe' });
   check('removing a manual entry refuses anonymous', rmAnon.ok === false);
   const rmNone = await call({ action:'removeHRManualEntry', userId: OWNER, staffId:'00000000-0000-0000-0000-000000000000', log_date:'2026-01-01', event_type:'CLOCK_OUT', reason:'probe on a non-existent staff id' });

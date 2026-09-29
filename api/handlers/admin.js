@@ -636,6 +636,76 @@ export async function routeAdmin(action, body, auth, req, res) {
     return res.status(200).json({ok:r.ok});
   }
 
+  // ── editHRTimeLog ───────────────────────────────────────────────────────
+  // Correct the time of ONE existing attendance event. The row is found by id
+  // (Clock-in tab) or by day + type + first/last (payroll IN/OUT cells). The
+  // corrected row becomes MANUAL with "corrected from <old>" in its note, so
+  // it shows amber ✎ like any typed time; the original value is in the audit.
+  if (action === 'editHRTimeLog') {
+    const authEt = await checkAuth(['OWNER']);
+    if (!authEt.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
+    const TENANT_HR2 = '11111111-1111-4111-8111-111111111111';
+    const who = authEt.userId || body.userId || 'UNKNOWN';
+    const reason = String(body.reason||'').trim();
+    if (reason.length < 3) return res.status(400).json({ok:false,error:'A reason is required to correct a time'});
+    const newMs = Date.parse(body.new_time);
+    if (isNaN(newMs)) return res.status(400).json({ok:false,error:'new_time required'});
+    if (newMs > Date.now() + 5*60*1000) return res.status(400).json({ok:false,error:'That time is in the future'});
+
+    // locate the row
+    let row = null;
+    if (body.id) {
+      const r0 = await supaFetch(SUPABASE_URL+'/rest/v1/hr_time_logs?id=eq.'+encodeURIComponent(String(body.id))+'&tenant_id=eq.'+TENANT_HR2+'&select=*&limit=1');
+      row = Array.isArray(r0.data) ? r0.data[0] : null;
+    } else {
+      const {staffId, log_date, event_type} = body;
+      if (!staffId || !/^\d{4}-\d{2}-\d{2}$/.test(String(log_date||'')) || !event_type) {
+        return res.status(400).json({ok:false,error:'id, or staffId + log_date + event_type, required'});
+      }
+      const order = body.which === 'first' ? 'event_time.asc' : 'event_time.desc';
+      const r0 = await supaFetch(SUPABASE_URL+'/rest/v1/hr_time_logs?tenant_id=eq.'+TENANT_HR2+'&staff_id=eq.'+encodeURIComponent(staffId)+
+        '&log_date=eq.'+log_date+'&event_type=eq.'+encodeURIComponent(event_type)+'&select=*&order='+order+'&limit=1');
+      row = Array.isArray(r0.data) ? r0.data[0] : null;
+    }
+    if (!row) return res.status(200).json({ok:false,error:'That time was not found'});
+
+    // the new time must sit on the shift date, or before 06:00 the next morning (not for a clock-in)
+    const local = new Date(newMs + 8*3600*1000);
+    const localDate = local.toISOString().slice(0,10), localHour = local.getUTCHours();
+    const nextDay = new Date(Date.parse(row.log_date+'T00:00:00Z') + 86400000).toISOString().slice(0,10);
+    if (!(localDate === row.log_date || (row.event_type !== 'CLOCK_IN' && localDate === nextDay && localHour < 6))) {
+      return res.status(400).json({ok:false,error:'Time must fall on the shift date, or before 6:00 AM the next morning for a time-out'});
+    }
+    // and keep the day's order: still after everything before it, before everything after it
+    const ex = await supaFetch(SUPABASE_URL+'/rest/v1/hr_time_logs?tenant_id=eq.'+TENANT_HR2+'&staff_id=eq.'+row.staff_id+
+      '&log_date=eq.'+row.log_date+'&id=neq.'+row.id+'&select=id,event_type,event_time&order=event_time.asc,created_at.asc');
+    const others = Array.isArray(ex.data) ? ex.data : [];
+    const oldMs = new Date(row.event_time).getTime();
+    const before = others.filter(e => new Date(e.event_time).getTime() < oldMs);
+    const after  = others.filter(e => new Date(e.event_time).getTime() > oldMs);
+    const fmt = t => { const d = new Date(new Date(t).getTime() + 8*3600*1000); const H = d.getUTCHours(), M = String(d.getUTCMinutes()).padStart(2,'0'); return ((H%12)||12)+':'+M+' '+(H<12?'AM':'PM'); };
+    const label = e => e.event_type.replace(/_/g,' ').toLowerCase()+' '+fmt(e.event_time);
+    if (before.length && newMs <= new Date(before[before.length-1].event_time).getTime()) {
+      return res.status(400).json({ok:false,error:'Must stay after '+label(before[before.length-1])});
+    }
+    if (after.length && newMs >= new Date(after[0].event_time).getTime()) {
+      return res.status(400).json({ok:false,error:'Must stay before '+label(after[0])});
+    }
+
+    const oldNote = row.notes ? String(row.notes).substring(0,200) : '';
+    const patch = {
+      event_time: new Date(newMs).toISOString(),
+      attendance_source: 'MANUAL', device: 'ADMIN_PANEL',
+      notes: '['+who+'] corrected from '+fmt(row.event_time)+(row.attendance_source && row.attendance_source!=='MANUAL' ? ' ('+row.attendance_source+' tap)' : '')+' — '+reason.substring(0,300),
+    };
+    const up = await supaFetch(SUPABASE_URL+'/rest/v1/hr_time_logs?id=eq.'+row.id, {method:'PATCH', body:JSON.stringify(patch)});
+    if (!up.ok) return res.status(500).json({ok:false,error:'Could not save the correction'});
+    await hrAudit({ action:'ATTENDANCE_TIME_CORRECTED', module:'ATTENDANCE', recordId: row.staff_id,
+      previous:{id:row.id, event_type:row.event_type, event_time:row.event_time, attendance_source:row.attendance_source, notes:oldNote},
+      next:{event_time:patch.event_time}, reason, actorCode: who, role: authEt.role, req });
+    return res.status(200).json({ok:true, from: row.event_time, to: patch.event_time});
+  }
+
   // ── removeHRManualEntry ────────────────────────────────────────────────
   // Undo a typed-in attendance row. Only MANUAL rows can be removed — a tap
   // at the kiosk is evidence and stays. The removed row is kept in the audit.

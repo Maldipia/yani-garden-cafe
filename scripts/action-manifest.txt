@@ -30,6 +30,7 @@ deleteMenuItem
 deleteOrder
 deletePromoCode
 deleteTable
+editHRTimeLog
 editOnlineOrder
 editOrderItems
 flagPaymentIntent
