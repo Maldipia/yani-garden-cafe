@@ -992,9 +992,8 @@ async function renderPayrollSection(s, tc){
       ${td(nd>0?(ndPaid>0?hrPeso(ndPay):'₱0'):'—', ndPaid>0?';color:#6d28d9;font-weight:700':grey, nd>0&&ndPaid===0?'Not approved — '+hrPeso(R2(nd*ndRate))+' if approved':(ndPaid>0?ndPaid.toFixed(2)+' h approved × '+hrPeso(ndRate):''))}
       ${td(ut>0?ut.toFixed(2):'—', ut>0?';color:#b45309;font-weight:700':grey)}
       ${td(hrPeso(N(x.day_pay)), ';font-weight:800')}
-      <td style="padding:5px 7px;font-size:.6rem;color:#6b7280">${esc(x.sources||'—')}</td>
     </tr>`;
-  }).join('') : '<tr><td colspan="13" style="padding:10px;color:#9ca3af;font-size:.75rem">No attendance in this cut-off</td></tr>';
+  }).join('') : '<tr><td colspan="12" style="padding:10px;color:#9ca3af;font-size:.75rem">No attendance in this cut-off</td></tr>';
 
   const dedRows = myDeds.length ? myDeds.map(d=>`<tr>
       <td style="padding:6px 8px">${esc(d.deduction_date||'—')}</td>
@@ -1058,7 +1057,6 @@ async function renderPayrollSection(s, tc){
           <th style="padding:5px 7px;text-align:right;color:#6d28d9">ND ₱<div style="font-size:.58rem;font-weight:400;color:#6b7280">@ ${money(ndRate)}/h (10%)</div></th>
           <th style="padding:5px 7px;text-align:right;color:#b45309">UT h</th>
           <th style="padding:5px 7px;text-align:right">DAY PAY</th>
-          <th style="padding:5px 7px">SRC</th>
         </tr></thead>
         <tbody>${dayRows}</tbody>
         <tfoot><tr style="border-top:2px solid #d8ddd5;font-weight:700">
@@ -1071,8 +1069,7 @@ async function renderPayrollSection(s, tc){
           <td style="padding:7px;text-align:right;color:#6d28d9">${totNd>0?totNd.toFixed(2):'—'}</td>
           <td style="padding:7px;text-align:right;color:#6d28d9" title="${totNdPaid.toFixed(2)} h approved">${totNd>0?money(totNdPayPaid):'—'}</td>
           <td style="padding:7px;text-align:right;color:#b45309">${totUt>0?totUt.toFixed(2):'—'}</td>
-          <td style="padding:7px;text-align:right;font-size:.85rem">${money(totPay)}</td>
-          <td></td></tr></tfoot>
+          <td style="padding:7px;text-align:right;font-size:.85rem">${money(totPay)}</td></tr></tfoot>
       </table></div>
       <div style="font-size:.66rem;color:#6b7280;margin-top:6px">
         Rate ${money(rate0)}/h = daily rate ÷ ${N(((br.days||[])[0]||{}).standard_hours||8).toFixed(0)} h · REG capped at ${N(((br.days||[])[0]||{}).standard_hours||8).toFixed(0)} h/day · OT and ND pay only on <u>approved</u> hours (grey ₱0 = not yet approved; hover for the value) · breaks unpaid · DAY PAY = REG ₱ + OT ₱ + ND ₱.
