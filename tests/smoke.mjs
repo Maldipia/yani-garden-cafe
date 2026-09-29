@@ -646,6 +646,39 @@ async function guestSurvey() {
 // menu for up to two minutes, so a best-seller toggle looked unsaved. The
 // stamp check must make every instance see a change on its next request.
 // Uses a throwaway INACTIVE item, so it never appears on the customer menu.
+// ── STOCK CONTROL: count, spoilage, sold-out wiring (read-only / refusals) ──
+async function stockControl() {
+  section('Stock control — count, spoilage, sold out');
+  const today = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
+  const sheet = await call({ action: 'invCountSheet', userId: OWNER });
+  check('count sheet readable by owner', sheet.ok === true && Array.isArray(sheet.items), sheet.error);
+  const anon = await call({ action: 'invCountSheet' });
+  check('count sheet refuses anonymous', anon.ok === false);
+  const log = await call({ action: 'invDayLog', userId: OWNER, date: today });
+  check('day log readable', log.ok === true && Array.isArray(log.rows), log.error);
+  const badDate = await call({ action: 'invDayLog', userId: OWNER, date: 'yesterday' });
+  check('day log rejects a bad date', badDate.ok === false);
+  const noReason = await call({ action: 'invRecordSpoilage', userId: OWNER, itemId: 1, qty: 1, reason: 'OOPS' });
+  check('spoilage needs a valid reason', noReason.ok === false && /reason/i.test(noReason.error || ''), noReason.error);
+  const noQty = await call({ action: 'invRecordSpoilage', userId: OWNER, itemId: 1, qty: 0, reason: 'SPOILED' });
+  check('spoilage needs a quantity', noQty.ok === false, noQty.error);
+  const empty = await call({ action: 'invSubmitCount', userId: OWNER, lines: [] });
+  check('empty count refused', empty.ok === false, empty.error);
+  // a count line with a shortfall and no reason must be refused (validated before anything changes)
+  const it = (sheet.items || []).find(x => parseFloat(x.system_qty) >= 1);
+  if (it) {
+    const r = await call({ action: 'invSubmitCount', userId: OWNER,
+      lines: [{ itemId: it.item_id, counted: parseFloat(it.system_qty) - 1, seen: parseFloat(it.system_qty) }] });
+    check('count shortfall without reason refused', r.ok === false && /reason/i.test(r.error || ''), r.error);
+  }
+  // sold-out flags only on tracked items, and they agree with the count sheet
+  const menu = await call({ action: 'getMenu' });
+  const flagged = (menu.items || []).filter(i => 'stockLeft' in i);
+  check('menu stock flags are consistent', flagged.every(i => i.soldOut === (i.stockLeft <= 0)),
+        flagged.map(i => i.code + ':' + i.stockLeft).join(','));
+  if (!sheet.moduleEnabled) check('no stock flags while module is off', flagged.length === 0);
+}
+
 async function menuCacheConsistency() {
   section('Menu cache consistency');
   const code = 'SMOKEPROBE_' + Date.now().toString(36).toUpperCase() + '0000';
@@ -699,6 +732,7 @@ await orderLookup();
 await deleteGuard();
 await customerMenuPage();
 await guestSurvey();
+await stockControl();
 await menuCacheConsistency();
 
 console.log(`\n${'─'.repeat(58)}`);
