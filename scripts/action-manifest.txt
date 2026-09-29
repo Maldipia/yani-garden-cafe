@@ -95,6 +95,8 @@ hrNightDiffDecide
 hrNightDiffReview
 hrRotateQrToken
 hrVerifyPin
+invApproveSpoilage
+invCountHistory
 invCountSheet
 invDayLog
 invRecordSpoilage

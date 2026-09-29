@@ -112,7 +112,7 @@ function _invRender() {
     document.head.appendChild(st);
   }
   var enabled = (_invCfg.module_enabled === 'true');
-  var h = '<div style="max-width:1240px;margin:0 auto;padding:14px 14px 60px">';
+  var h = '<div style="max-width:1440px;margin:0 auto;padding:14px 14px 60px">';
   h += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">';
   h += '<div><h2 style="margin:0;color:var(--forest-deep);font-size:1.25rem">Stock Control</h2>'
      + '<div style="font-size:.72rem;color:var(--timber);margin-top:1px">Track every physical stock unit, batch, expiry, usage and movement.</div></div>';
@@ -1002,286 +1002,432 @@ async function _invArchiveRecipe(id,name){
   else showToast((r&&r.error)||'Failed','error');
 }
 
-// ── COUNT TAB: closing display count + spoilage log (ready-to-sell) ─────────
-// One screen. System = what the POS says is left (after today's sales and
-// spoilage). Staff enter what is on display; a shortfall needs a reason and is
-// booked as spoilage or missing. Past dates open read-only from the log.
+// ── COUNT TAB: Display Count (ready-to-sell, per menu) ──────────────────────
+// Opening / Closing count with a Spoiled column, per-row expiry and batch,
+// spoilage log with photo and owner approval, History, and a live preview of
+// what customers see on the QR menu. Every change is a ledger row.
 var _invCntDate  = null;   // YYYY-MM-DD (Manila)
-var _invCntSheet = [];     // tracked items
-var _invCntVals  = {};     // itemId -> {counted, reason, note}
+var _invCntShift = null;   // 'OPENING' | 'CLOSING' | 'HISTORY'
+var _invCntSheet = [];     // items (tracked + not yet tracked)
+var _invCntVals  = {};     // itemId -> {counted, spoiled, spoilReason, photo, reason, touched}
 var _invCntLog   = [];     // day log rows
+var _invCntHist  = [];     // recent counts
 var _invCntBusy  = false;
 var _invCntLoaded = false;
-var INV_REASONS = { SPOILED:'Spoiled', EXPIRED:'Expired', DAMAGED:'Damaged', STAFF_MEAL:'Staff meal', COMPLIMENTARY:'Complimentary', MISSING:'Missing', FOUND:'Found (extra)', COUNTED:'Counted — matched' };
+var _invCntStarted = null; // when this screen was opened
+var _invCntAddOpen = false, _invCntAddQ = '', _invCntAddQty = {};
+var INV_REASONS = { SPOILED:'Spoiled', EXPIRED:'Expired', DAMAGED:'Damaged', STAFF_MEAL:'Staff meal', COMPLIMENTARY:'Complimentary', MISSING:'Missing', FOUND:'Found (extra)', COUNTED:'Counted' };
 var INV_SPOIL_REASONS = ['SPOILED','EXPIRED','DAMAGED','STAFF_MEAL','COMPLIMENTARY'];
 
 function _invManilaToday(){ return new Date(Date.now()+8*3600e3).toISOString().slice(0,10); }
-function _invPeso(n){ return '₱'+(_invNum(n)).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function _invPeso(n){ return '₱'+(_invNum(n)).toLocaleString('en-PH',{minimumFractionDigits:0,maximumFractionDigits:2}); }
 function _invDateLong(d){ try{ return new Date(d+'T00:00:00+08:00').toLocaleDateString('en-PH',{weekday:'short',month:'short',day:'numeric',year:'numeric',timeZone:'Asia/Manila'}); }catch(e){ return d; } }
 function _invTime(ts){ try{ return new Date(ts).toLocaleTimeString('en-PH',{hour:'numeric',minute:'2-digit',timeZone:'Asia/Manila'}); }catch(e){ return ''; } }
+function _invDay(ts){ try{ return new Date(ts).toLocaleDateString('en-PH',{month:'short',day:'numeric',timeZone:'Asia/Manila'}); }catch(e){ return ''; } }
+function _invPhotoAbove(){ return _invNum(_invCfg.spoilage_photo_above||100); }
+function _invApprovalAbove(){ return _invNum(_invCfg.spoilage_approval_above||200); }
+function _invDraftKey(){ return 'invCountDraft:'+_invCntDate+':'+_invCntShift; }
 
 async function _invCntLoad(){
   if(!_invCntDate) _invCntDate=_invManilaToday();
+  if(!_invCntShift) _invCntShift=(new Date(Date.now()+8*3600e3).getUTCHours()<15)?'OPENING':'CLOSING';
+  if(!_invCntStarted) _invCntStarted=new Date();
   var isToday=(_invCntDate===_invManilaToday());
-  var reqs=[api('invDayLog',{date:_invCntDate})];
-  if(isToday) reqs.push(api('invCountSheet',{}));
-  var res=await Promise.all(reqs);
+  var res=await Promise.all([api('invDayLog',{date:_invCntDate}), api('invCountSheet',{}), api('invCountHistory',{days:30})]);
   _invCntLog=(res[0]&&res[0].ok)?(res[0].rows||[]):[];
-  if(isToday){
-    _invCntSheet=(res[1]&&res[1].ok)?(res[1].items||[]):[]; _invCntLoaded=true;
-    _invCntVals={};
-    _invCntSheet.forEach(function(it){ _invCntVals[it.item_id]={counted:it.tracked?_invNum(it.system_qty):null,reason:'',note:''}; });
-  }
+  _invCntSheet=(res[1]&&res[1].ok)?(res[1].items||[]):[];
+  _invCntHist=(res[2]&&res[2].ok)?(res[2].counts||[]):[];
+  _invCntLoaded=true;
+  _invCntResetVals(true);
   if(_invTab==='count') _invRenderTab();
 }
-function _invCntShift(days){
+function _invCntResetVals(useDraft){
+  _invCntVals={};
+  _invCntSheet.forEach(function(it){ _invCntVals[it.item_id]={counted:it.tracked?_invNum(it.system_qty):null,spoiled:0,spoilReason:'',photo:'',reason:'',touched:false}; });
+  if(useDraft){ try{ var d=JSON.parse(localStorage.getItem(_invDraftKey())||'null');
+    if(d&&d.vals){ Object.keys(d.vals).forEach(function(k){ var it=_invCntSheet.filter(function(x){return String(x.item_id)===k;})[0];
+      if(it&&it.tracked&&Math.abs(_invNum(d.seen&&d.seen[k])-_invNum(it.system_qty))<1e-9) _invCntVals[k]=d.vals[k]; }); _invCntDraftAt=d.at; } }catch(e){} }
+}
+var _invCntDraftAt=null;
+function _invCntSaveDraft(){
+  try{ var seen={}; _invCntSheet.forEach(function(it){ seen[it.item_id]=it.system_qty; });
+    localStorage.setItem(_invDraftKey(), JSON.stringify({vals:_invCntVals,seen:seen,at:new Date().toISOString()}));
+    _invCntDraftAt=new Date().toISOString(); showToast('Draft saved on this device','success'); _invRenderTab(); }
+  catch(e){ showToast('Could not save draft on this device','error'); }
+}
+function _invCntClearDraft(){ try{ localStorage.removeItem(_invDraftKey()); }catch(e){} _invCntDraftAt=null; }
+function _invCntShiftTab(s){ _invCntShift=s; if(s!=='HISTORY'){ _invCntResetVals(true); } _invRenderTab(); }
+function _invCntMove(days){
   var d=new Date((_invCntDate||_invManilaToday())+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()+days);
   var nd=d.toISOString().slice(0,10); if(nd>_invManilaToday()) return;
   _invCntDate=nd; _invCntLoad();
 }
 function _invCntPick(v){ if(!v) return; if(v>_invManilaToday()) v=_invManilaToday(); _invCntDate=v; _invCntLoad(); }
 
-function _invCntHtml(){
-  var today=_invManilaToday(); if(!_invCntDate) _invCntDate=today;
-  var isToday=(_invCntDate===today);
-  var h='';
-  if(_invCfg.module_enabled!=='true'){
-    h+='<div style="background:#fff7e6;border:1px solid #f3d9a4;color:#8a5a0b;border-radius:10px;padding:10px 12px;font-size:.74rem;margin-bottom:10px">'
-      +'<b>Stock Control is OFF.</b> Counts and spoilage still save, but sales won’t deduct stock and the QR menu won’t show sold out until it’s turned on in ⚙️ Settings.</div>';
-  }
-  // date bar
-  h+='<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px">'
-    +'<div style="display:flex;align-items:center;gap:6px">'
-      +'<span style="font-size:.72rem;color:var(--timber);font-weight:700">Count date</span>'
-      +'<button onclick="_invCntShift(-1)" style="border:1.5px solid var(--mist);background:#fff;border-radius:8px;padding:6px 10px;cursor:pointer" aria-label="Previous day">‹</button>'
-      +'<input type="date" value="'+_invCntDate+'" max="'+today+'" onchange="_invCntPick(this.value)" style="border:1.5px solid var(--mist);border-radius:8px;padding:6px 8px;font-size:.8rem">'
-      +'<button onclick="_invCntShift(1)" '+(isToday?'disabled ':'')+'style="border:1.5px solid var(--mist);background:#fff;border-radius:8px;padding:6px 10px;cursor:pointer;'+(isToday?'opacity:.4':'')+'" aria-label="Next day">›</button>'
-      +(isToday?'':'<button onclick="_invCntPick(\''+today+'\')" style="border:none;background:none;color:var(--forest);font-weight:700;font-size:.74rem;cursor:pointer">Today</button>')
-    +'</div>'
-    +'<button onclick="_invOpenSpoilage()" style="font-size:.76rem;font-weight:700;background:#fdf0ee;color:#8a2a22;border:1.5px solid #e0b4ae;border-radius:8px;padding:8px 14px;cursor:pointer">+ Record spoilage</button>'
-  +'</div>';
-
-  // summary from the day log
-  var spoiled=0, spoiledQty=0, missing=0, found=0, counts={};
-  _invCntLog.forEach(function(r){
-    if(r.kind==='SPOILAGE' || (r.kind==='COUNT' && INV_SPOIL_REASONS.indexOf(r.reason)>=0)){ spoiled+=_invNum(r.value_menu); spoiledQty+=Math.abs(_invNum(r.qty)); }
-    if(r.reason==='MISSING') missing+=_invNum(r.value_menu);
-    if(r.reason==='FOUND') found+=1;
-    if(r.kind==='COUNT' && r.reference_id) counts[r.reference_id]=r;
-  });
-  var nCounts=Object.keys(counts).length;
-  var soldOutNow=isToday?_invCntSheet.filter(function(it){return it.tracked && _invNum(it.system_qty)<=0;}).length:null;
-  var card=function(v,l,c){ return '<div style="background:#fff;border:1px solid var(--mist-light);border-radius:10px;padding:10px 12px"><div style="font-size:1.05rem;font-weight:800;color:'+(c||'var(--forest-deep)')+'">'+v+'</div><div style="font-size:.64rem;color:var(--timber);margin-top:1px">'+l+'</div></div>'; };
-  var anyTracked=_invCntSheet.some(function(it){return it.tracked;});
-  if(anyTracked || _invCntLog.length || !isToday) h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:12px">'
-    + card(nCounts?('✓ '+nCounts+' count'+(nCounts>1?'s':'')):'Not yet','count submitted'+(nCounts?(' · last '+_invTime(counts[Object.keys(counts)[0]].performed_at)):''), nCounts?'#3b6d11':'#9a5b06')
-    + card(_invPeso(spoiled),'spoiled'+(spoiledQty?(' · '+_invFmtQty(spoiledQty)+' pcs'):'')+' (menu price)', spoiled?'#8a2a22':null)
-    + card(_invPeso(missing),'missing / unexplained', missing?'#b3261e':null)
-    + (soldOutNow!==null?card(String(soldOutNow),'sold out on QR menu now', soldOutNow?'#b3261e':null):'')
-  +'</div>';
-
-  if(isToday) h+=_invCntSheetHtml();
-  if(anyTracked || _invCntLog.length || !isToday) h+=_invCntLogHtml(isToday);
-  return h;
-}
-
-// Daily count: one simple row per tracked item. Setting up new items is a
-// separate, searchable "Add items to track" panel so the daily list stays short.
-var _invCntAddOpen = false, _invCntAddQ = '', _invCntAddQty = {};
 function _invCntCss(){
   if(document.getElementById('invCntCss')) return;
   var st=document.createElement('style'); st.id='invCntCss';
   st.textContent=''
-   +'.ic-list{background:#fff;border:1px solid var(--mist-light);border-radius:12px;overflow:hidden}'
-   +'.ic-row{display:grid;grid-template-columns:minmax(0,1fr) 70px 150px minmax(150px,190px);gap:12px;align-items:center;padding:12px 14px;border-bottom:1px solid var(--mist-light)}'
-   +'.ic-row:last-child{border-bottom:none}'
-   +'.ic-name{font-weight:800;color:var(--forest-deep);font-size:.9rem;line-height:1.25}'
-   +'.ic-sub{font-size:.66rem;color:var(--timber);margin-top:2px}'
-   +'.ic-sys{text-align:center}.ic-sys b{display:block;font-size:1.05rem;color:var(--forest-deep)}.ic-sys span{font-size:.58rem;color:var(--timber);text-transform:uppercase;letter-spacing:.4px}'
-   +'.ic-step{display:flex;align-items:center;gap:6px}'
-   +'.ic-step button{width:40px;height:40px;border:1.5px solid var(--mist);background:#fff;border-radius:10px;font-size:1.2rem;color:var(--forest);cursor:pointer}'
-   +'.ic-step input{width:58px;height:40px;text-align:center;font-weight:800;font-size:1.05rem;border:2px solid var(--forest);border-radius:10px;background:#fff}'
-   +'.ic-step input.chg{border-color:#c0762a;background:#fff6ea}'
-   +'.ic-head{display:grid;grid-template-columns:minmax(0,1fr) 70px 150px minmax(150px,190px);gap:12px;padding:8px 14px;font-size:.58rem;letter-spacing:.5px;text-transform:uppercase;color:var(--timber);font-weight:800;border-bottom:1.5px solid var(--mist-light);background:#faf7f1}'
-   +'.ic-ok{font-size:.74rem;color:#3b6d11;font-weight:700}'
-   +'.ic-diff{font-size:.74rem;font-weight:800;color:#b3261e;margin-bottom:4px}'
-   +'.ic-diff.up{color:#3b6d11}'
-   +'.ic-reason{width:100%;font-size:.78rem;padding:7px;border-radius:8px;border:1.5px solid #e0b4ae;background:#fdf0ee}'
-   +'.ic-reason.set{border-color:var(--mist);background:#fff}'
+   +'.dc-wrap{display:flex;gap:18px;align-items:flex-start}'
+   +'.dc-card{flex:1;min-width:0;background:#fbf8f3;border:1px solid #ddd3c4;border-radius:14px;overflow:hidden}'
+   +'.dc-top{background:var(--forest-deep,#1a3a2a);color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}'
+   +'.dc-top h3{margin:0;font:600 1.15rem Georgia,serif}.dc-top small{opacity:.85;font-size:.72rem}'
+   +'.dc-body{padding:14px 18px}'
+   +'.dc-bar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}'
+   +'.dc-pill{padding:7px 15px;border-radius:20px;border:1px solid #cfc5b4;font-size:.8rem;background:#fff;cursor:pointer;color:var(--forest-deep)}'
+   +'.dc-pill.on{background:var(--forest-deep,#1a3a2a);color:#fff;border-color:var(--forest-deep,#1a3a2a)}'
+   +'.dc-nav{width:32px;height:34px;border:1px solid #cfc5b4;border-radius:9px;background:#fff;color:var(--forest);cursor:pointer}'
+   +'.dc-date{border:1px solid #cfc5b4;border-radius:9px;padding:6px 10px;font-size:.84rem;font-weight:700;background:#fff}'
+   +'.dc-meta{font-size:.72rem;color:#6b6f66;margin-bottom:6px}'
+   +'.dc-scroll{overflow-x:auto}'
+   +'.dc-t{width:100%;border-collapse:collapse;min-width:900px}'
+   +'.dc-t th{font-size:.62rem;letter-spacing:.7px;color:#7a7d73;text-align:left;padding:8px 6px;border-bottom:1px solid #e3dccf;font-weight:700;text-transform:uppercase;position:sticky;top:0;background:#fbf8f3}'
+   +'.dc-t td{padding:10px 6px;border-bottom:1px solid #eee7da;font-size:.84rem;vertical-align:middle}'
+   +'.dc-nm{font-weight:700;color:#1f2a22}.dc-sub{font-size:.68rem;color:#7a7d73;margin-top:2px}'
+   +'.dc-also{display:inline-block;margin-top:4px;font-size:.62rem;background:#f3eee3;color:#6b5a3a;padding:2px 8px;border-radius:10px}'
+   +'.dc-step{display:flex;align-items:center;gap:5px}'
+   +'.dc-step button{width:30px;height:32px;border-radius:8px;border:1px solid #cfc5b4;background:#fff;font-size:1rem;color:var(--forest);cursor:pointer}'
+   +'.dc-step input{width:46px;height:32px;border-radius:8px;border:2px solid var(--forest-deep,#1a3a2a);background:#fff;font-size:.95rem;font-weight:700;text-align:center}'
+   +'.dc-step input.chg{border-color:#c0762a;background:#fff6ea}.dc-step input.sp{border-color:#b3261e;background:#fdf0ee;color:#8a2a22}.dc-step input.z{border-color:#d9d2c4;color:#9aa093}'
+   +'.dc-mini{margin-top:4px;display:flex;gap:4px;align-items:center;font-size:.66rem;color:#6b6f66}'
+   +'.dc-mini select{font-size:.66rem;padding:2px 4px;border-radius:6px;border:1px solid #e0b4ae;background:#fdf0ee;color:#8a2a22}'
+   +'.dc-mini label{cursor:pointer;color:var(--forest);text-decoration:underline}'
+   +'.dc-rsn{font-size:.72rem;border:1px solid #e0b4ae;background:#fdf0ee;color:#8a2a22;border-radius:8px;padding:5px 6px}'
+   +'.dc-ok{font-size:.72rem;color:#3b6d11}'
+   +'.dc-sum{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-top:12px}'
+   +'.dc-sc{background:#fff;border:1px solid #e3dccf;border-radius:10px;padding:10px 12px}.dc-sc b{font-size:1.2rem;display:block}.dc-sc span{font-size:.66rem;color:#7a7d73}'
+   +'.dc-h4{font:600 .95rem Georgia,serif;margin:18px 0 6px;display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}.dc-h4 small{font:400 .68rem sans-serif;color:#7a7d73}'
+   +'.dc-log{width:100%;border-collapse:collapse;min-width:760px}.dc-log th{font-size:.6rem;letter-spacing:.6px;color:#7a7d73;text-align:left;padding:7px 6px;border-bottom:1px solid #e3dccf;text-transform:uppercase}'
+   +'.dc-log td{padding:8px 6px;border-bottom:1px solid #eee7da;font-size:.8rem}'
+   +'.dc-tag{font-size:.62rem;font-weight:700;padding:2px 8px;border-radius:10px}'
+   +'.dc-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap}'
+   +'.dc-btn{padding:10px 18px;border-radius:9px;font-size:.84rem;border:1px solid #cfc5b4;background:#fff;cursor:pointer;color:var(--forest-deep)}'
+   +'.dc-btn.p{background:var(--forest-deep,#1a3a2a);color:#fff;border-color:var(--forest-deep,#1a3a2a);font-weight:700}'
+   +'.dc-btn.r{border-color:#e0b4ae;color:#8a2a22;background:#fdf0ee}'
+   +'.dc-phone{width:300px;flex:none;background:#1b1b1b;border-radius:34px;padding:11px;position:sticky;top:10px}'
+   +'.dc-scr{background:#fbf8f3;border-radius:24px;overflow:hidden;min-height:520px}'
+   +'.dc-ph{background:var(--forest-deep,#1a3a2a);color:#fff;padding:20px 14px 12px}.dc-ph b{font:600 1rem Georgia,serif;display:block}.dc-ph small{opacity:.85;font-size:.68rem}'
+   +'.dc-it{display:flex;justify-content:space-between;align-items:center;background:#fff;border:1px solid #e8e0d2;border-radius:12px;margin:8px 12px;padding:10px}'
+   +'.dc-it .t{font-weight:700;font-size:.8rem}.dc-it .p{font-size:.72rem;color:#6b6f66;margin-top:2px}'
+   +'.dc-add{width:30px;height:30px;border-radius:50%;background:var(--forest-deep,#1a3a2a);color:#fff;display:flex;align-items:center;justify-content:center;font-size:1.1rem}'
+   +'.dc-so{font-size:.6rem;font-weight:700;background:#fbe3e0;color:#a4261d;padding:4px 9px;border-radius:12px}'
+   +'.dc-left{font-size:.6rem;font-weight:700;background:#fbeed5;color:#8a5a0b;padding:3px 8px;border-radius:12px;margin-right:6px}'
    +'.ic-add-row{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--mist-light)}'
-   +'.ic-add-row:last-child{border-bottom:none}'
-   +'@media(max-width:760px){.ic-head{display:none}.ic-row{grid-template-columns:minmax(0,1fr) auto;row-gap:8px}'
-   +'.ic-sys{text-align:right}.ic-step{grid-column:1}.ic-status{grid-column:2;text-align:right}}';
+   +'.dc-t td.nw,.dc-t td .dc-sub.nw{white-space:nowrap}.dc-rsn{min-width:112px}'
+   +'@media(max-width:1180px){.dc-side{display:none}}'
+   +'@media(max-width:760px){.dc-sum{grid-template-columns:repeat(2,minmax(0,1fr))}.dc-body{padding:12px}.dc-top{padding:12px}'
+   +'.dc-t{min-width:0}.dc-t thead{display:none}.dc-t,.dc-t tbody,.dc-t tr,.dc-t td{display:block;width:auto}'
+   +'.dc-t tr{background:#fff;border:1px solid #e3dccf;border-radius:12px;margin:0 0 10px;padding:6px 12px}'
+   +'.dc-t td{border:none;padding:6px 0;display:flex;justify-content:space-between;align-items:center;gap:10px;text-align:right!important}'
+   +'.dc-t td:first-child{display:block;text-align:left!important;border-bottom:1px solid #eee7da;padding-bottom:8px}'
+   +'.dc-t td[data-l]::before{content:attr(data-l);font-size:.62rem;letter-spacing:.6px;text-transform:uppercase;color:#7a7d73;font-weight:700;text-align:left}'
+   +'.dc-t td>div{margin-left:auto}.dc-mini{justify-content:flex-end}}';
   document.head.appendChild(st);
 }
-function _invCntSheetHtml(){
+
+function _invCntHtml(){
   _invCntCss();
-  if(!_invCntLoaded) return '<div style="padding:24px;text-align:center;color:var(--timber);font-size:.78rem">Loading…</div>';
-  var tracked=_invCntSheet.filter(function(it){return it.tracked;});
-  var untracked=_invCntSheet.filter(function(it){return !it.tracked;});
+  var today=_invManilaToday(); if(!_invCntDate) _invCntDate=today;
+  if(!_invCntShift) _invCntShift='CLOSING';
+  var isToday=(_invCntDate===today);
+  var who=(currentUser&&(currentUser.displayName||currentUser.username||currentUser.role))||'';
   var h='';
-
-  if(!tracked.length){
-    h+='<div style="background:#fff;border:1px solid var(--mist-light);border-radius:12px;padding:22px 18px;text-align:center;margin-bottom:12px">'
-      +'<div style="font-size:1.6rem">🧮</div>'
-      +'<div style="font-weight:800;color:var(--forest-deep);font-size:.95rem;margin-top:4px">Nothing to count yet</div>'
-      +'<div style="font-size:.76rem;color:var(--timber);margin:4px auto 12px;max-width:420px">Pick the items you sell from the display (pies, cakes, bottled goods) and enter how many you have right now. They’ll appear here every day after that.</div>'
-      +(_invCntAddOpen?'':'<button onclick="_invCntToggleAdd(true)" style="font-size:.84rem;font-weight:800;background:var(--forest);color:#fff;border:none;border-radius:10px;padding:11px 20px;cursor:pointer">+ Add items to track</button>')
-      +'</div>';
-  } else {
-    h+='<div style="display:flex;justify-content:space-between;align-items:baseline;margin:2px 0 6px">'
-      +'<div style="font-weight:800;color:var(--forest-deep);font-size:.92rem">Today’s count <span style="font-weight:600;color:var(--timber);font-size:.7rem">· '+tracked.length+' item'+(tracked.length>1?'s':'')+'</span></div>'
-      +'<div style="font-size:.66rem;color:var(--timber)">Change only what’s different</div></div>';
-    h+='<div class="ic-list"><div class="ic-head"><div>Item</div><div style="text-align:center">System</div><div>On display</div><div>Status</div></div>';
-    tracked.forEach(function(it){
-      var v=_invCntVals[it.item_id]||{counted:_invNum(it.system_qty),reason:''};
-      var sys=_invNum(it.system_qty), diff=Math.round((_invNum(v.counted)-sys)*1000)/1000;
-      var dl=_invDaysTo(it.next_expiry);
-      var exp=it.next_expiry?(' · <span style="font-weight:700;color:'+(dl<=0?'#b3261e':(dl<=1?'#9a5b06':'var(--timber)'))+'">'
-        +(dl<0?'expired':(dl===0?'expires today':('exp '+_invDate(it.next_expiry))))+'</span>'):'';
-      var status;
-      if(diff<0){
-        status='<div class="ic-diff">'+_invFmtQty(diff)+' missing</div>'
-          +'<select class="ic-reason'+(v.reason?' set':'')+'" onchange="_invCntSet('+it.item_id+',\'reason\',this.value)">'
-          +'<option value="">Why? pick one…</option>'
-          +['SPOILED','EXPIRED','DAMAGED','STAFF_MEAL','COMPLIMENTARY','MISSING'].map(function(k){return '<option value="'+k+'"'+(v.reason===k?' selected':'')+'>'+INV_REASONS[k]+'</option>';}).join('')
-          +'</select>';
-      } else if(diff>0){ status='<div class="ic-diff up">+'+_invFmtQty(diff)+' extra</div><div style="font-size:.66rem;color:var(--timber)">will be added back</div>'; }
-      else status='<span class="ic-ok">✓ Matches</span>';
-      h+='<div class="ic-row">'
-        +'<div><div class="ic-name">'+_invEsc(it.name)+'</div>'
-          +'<div class="ic-sub">'+_invEsc(it.unit)+exp+(it.menu_names&&it.menu_names!==it.name?(' · also: '+_invEsc(it.menu_names.split(' · ').filter(function(n){return n!==it.name;}).join(', '))):'')+'</div></div>'
-        +'<div class="ic-sys"><b>'+_invFmtQty(sys)+'</b><span>system</span></div>'
-        +'<div class="ic-step"><button onclick="_invCntStep('+it.item_id+',-1)" aria-label="Less">−</button>'
-          +'<input type="number" inputmode="numeric" min="0" step="1" value="'+_invFmtQty(v.counted)+'" class="'+(diff!==0?'chg':'')+'" onchange="_invCntSet('+it.item_id+',\'counted\',this.value)" aria-label="On display">'
-          +'<button onclick="_invCntStep('+it.item_id+',1)" aria-label="More">+</button></div>'
-        +'<div class="ic-status">'+status+'</div>'
-      +'</div>';
-    });
-    h+='</div>';
-    h+='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin:10px 0 16px;flex-wrap:wrap">'
-      +(_invCntAddOpen?'<span></span>':'<button onclick="_invCntToggleAdd(true)" style="font-size:.76rem;font-weight:700;background:none;color:var(--forest);border:none;cursor:pointer;padding:6px 0">+ Add more items to track'+(untracked.length?(' ('+untracked.length+')'):'')+'</button>')
-      +'<div style="display:flex;gap:8px"><button onclick="_invCntReset()" style="font-size:.8rem;font-weight:700;background:#fff;color:var(--forest);border:1.5px solid var(--mist);border-radius:10px;padding:10px 16px;cursor:pointer">Reset</button>'
-      +'<button id="invCntSubmitBtn" onclick="_invCntSubmit()" style="font-size:.84rem;font-weight:800;background:var(--forest);color:#fff;border:none;border-radius:10px;padding:10px 22px;cursor:pointer">Submit count</button></div></div>';
+  if(_invCfg.module_enabled!=='true'){
+    h+='<div style="background:#fff7e6;border:1px solid #f3d9a4;color:#8a5a0b;border-radius:10px;padding:10px 12px;font-size:.74rem;margin-bottom:10px"><b>Stock Control is OFF.</b> Counts save, but sales won’t deduct and the QR menu won’t show sold out until it’s turned on in ⚙️ Settings.</div>';
   }
+  h+='<div class="dc-wrap"><div class="dc-card">';
+  h+='<div class="dc-top"><div><h3>Display Count</h3><small>Ready-to-sell items · per menu</small></div>'
+    +'<small>'+(who?('Counted by '+_invEsc(who)+' · '):'')+'started '+_invTime(_invCntStarted||new Date())+'</small></div>';
+  h+='<div class="dc-body">';
+  // tabs + date
+  h+='<div class="dc-bar"><div style="display:flex;gap:8px">'
+    +[['OPENING','Opening'],['CLOSING','Closing'],['HISTORY','History']].map(function(t){ return '<button class="dc-pill'+(_invCntShift===t[0]?' on':'')+'" onclick="_invCntShiftTab(\''+t[0]+'\')">'+t[1]+'</button>'; }).join('')
+    +'</div><div style="display:flex;align-items:center;gap:6px"><span style="font-size:.74rem;color:#6b6f66">Count date</span>'
+    +'<button class="dc-nav" onclick="_invCntMove(-1)" aria-label="Previous day">‹</button>'
+    +'<input class="dc-date" type="date" value="'+_invCntDate+'" max="'+today+'" onchange="_invCntPick(this.value)" aria-label="Count date">'
+    +'<button class="dc-nav" onclick="_invCntMove(1)" '+(isToday?'disabled style="opacity:.4"':'')+' aria-label="Next day">›</button></div></div>';
 
-  if(_invCntAddOpen) h+=_invCntAddHtml(untracked);
+  if(!_invCntLoaded){ return h+'<div style="padding:30px;text-align:center;color:#6b6f66">Loading…</div></div></div></div>'; }
+
+  if(_invCntShift==='HISTORY'){ h+=_invCntHistoryHtml(); }
+  else if(!isToday){
+    var done=_invCntHist.filter(function(c){ return _invDayKey(c.counted_at)===_invCntDate; });
+    h+='<div class="dc-meta">'+_invDateLong(_invCntDate)+' — past day (read-only). '+(done.length?done.map(function(c){return (c.shift==='OPENING'?'Opening':'Closing')+' count at '+_invTime(c.counted_at)+' by '+_invEsc(c.performed_by_name||'—');}).join(' · '):'No count was submitted this day.')+'</div>';
+  } else {
+    h+='<div class="dc-meta">Expected = system qty − spoiled. Diff = on display − expected. Only an unexplained diff needs a reason.</div>';
+    h+=_invCntTableHtml();
+  }
+  h+=_invCntSummaryHtml(isToday);
+  h+=_invCntLogHtml(isToday);
+  if(isToday && _invCntShift!=='HISTORY'){
+    h+='<div class="dc-foot"><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="dc-btn r" onclick="_invOpenSpoilage()">+ Record spoilage</button>'
+      +'<button class="dc-btn" onclick="_invCntToggleAdd(!_invCntAddOpen)">+ Add item to count</button></div>'
+      +'<div style="display:flex;gap:8px;align-items:center">'+(_invCntDraftAt?'<span style="font-size:.66rem;color:#6b6f66">draft '+_invTime(_invCntDraftAt)+'</span>':'')
+      +'<button class="dc-btn" onclick="_invCntSaveDraft()">Save draft</button>'
+      +'<button id="invCntSubmitBtn" class="dc-btn p" onclick="_invCntSubmit()">Submit '+(_invCntShift==='OPENING'?'opening':'closing')+' count</button></div></div>';
+    if(_invCntAddOpen) h+=_invCntAddHtml(_invCntSheet.filter(function(it){return !it.tracked;}));
+  }
+  h+='</div></div>';
+  h+=_invCntPhoneHtml();
+  h+='</div>';
+  return h;
+}
+function _invDayKey(ts){ return new Date(new Date(ts).getTime()+8*3600e3).toISOString().slice(0,10); }
+
+function _invCntRowCalc(it){
+  var v=_invCntVals[it.item_id]; var sys=_invNum(it.system_qty), sp=_invNum(v.spoiled);
+  var exp=sys-sp, diff=Math.round((_invNum(v.counted)-exp)*1000)/1000;
+  return {v:v,sys:sys,sp:sp,exp:exp,diff:diff};
+}
+function _invCntTableHtml(){
+  var tracked=_invCntSheet.filter(function(it){return it.tracked;});
+  if(!tracked.length){
+    return '<div style="background:#fff;border:1px dashed #cfc5b4;border-radius:12px;padding:22px;text-align:center;margin:8px 0">'
+      +'<div style="font-weight:700;color:#1f2a22">No items on the count yet</div>'
+      +'<div style="font-size:.76rem;color:#6b6f66;margin:4px 0 10px">Tap <b>+ Add item to count</b> below, pick an item and enter how many are on display. It stays on the count every day after.</div></div>';
+  }
+  var h='<div class="dc-scroll"><table class="dc-t"><thead><tr><th>Item</th><th>Received</th><th>Expiry</th><th style="text-align:center">System</th><th>Spoiled</th><th>On display</th><th style="text-align:center">Diff</th><th>Reason</th></tr></thead><tbody>';
+  tracked.forEach(function(it){
+    var c=_invCntRowCalc(it), v=c.v, id=it.item_id;
+    var dl=_invDaysTo(it.next_expiry);
+    var expCell=it.next_expiry?('<b style="color:'+(dl<=0?'#b3261e':(dl<=1?'#9a5b06':'#1f2a22'))+'">'+_invDate(it.next_expiry)+'</b><div class="dc-sub" style="'+(dl<=0?'color:#b3261e':'')+'">'+(dl<0?'expired':(dl===0?'expires today':(dl+' day'+(dl>1?'s':'')+' left')))+'</div>'):'<span class="dc-sub">—</span>';
+    var also=(it.menu_names||'').split(' · ').filter(function(n){return n && n!==it.name;});
+    var spMini='';
+    if(c.sp>0){
+      spMini='<div class="dc-mini"><select onchange="_invCntSetV('+id+',\'spoilReason\',this.value)"><option value="">why?</option>'
+        +INV_SPOIL_REASONS.map(function(k){return '<option value="'+k+'"'+(v.spoilReason===k?' selected':'')+'>'+INV_REASONS[k]+'</option>';}).join('')+'</select>'
+        +'<label>📷 '+(v.photo?'photo ✓':'photo')+'<input type="file" accept="image/*" capture="environment" style="display:none" onchange="_invCntPhoto('+id+',this)"></label></div>';
+    }
+    var reason;
+    if(c.diff<0){
+      reason='<select class="dc-rsn" onchange="_invCntSetV('+id+',\'reason\',this.value)"><option value="">Reason…</option>'
+        +['MISSING','SPOILED','EXPIRED','DAMAGED','STAFF_MEAL','COMPLIMENTARY'].map(function(k){return '<option value="'+k+'"'+(v.reason===k?' selected':'')+'>'+INV_REASONS[k]+'</option>';}).join('')+'</select>';
+    } else if(c.diff>0){ reason='<span class="dc-ok">Found — added back</span>'; }
+    else reason='<span class="dc-ok">✓ '+(c.sp>0?'explained':'matches')+'</span>';
+    h+='<tr>'
+      +'<td><div class="dc-nm">'+_invEsc(it.name)+'</div><div class="dc-sub">'+_invEsc(it.unit)+(it.standard_yield?(' · 1 box = '+_invFmtQty(it.standard_yield)):'')+'</div>'+(also.length?'<span class="dc-also">also: '+_invEsc(also.join(', '))+'</span>':'')+'</td>'
+      +'<td class="nw" data-l="Received"><div>'+(it.received_at?_invDay(it.received_at):'—')+'<div class="dc-sub nw">'+_invEsc(it.batch_code||'')+'</div></div></td>'
+      +'<td class="nw" data-l="Expiry"><div>'+expCell+'</div></td>'
+      +'<td data-l="System" style="text-align:center;font-size:1rem;color:#6b6f66">'+_invFmtQty(c.sys)+'</td>'
+      +'<td data-l="Spoiled"><div><div class="dc-step"><button onclick="_invCntSpoil('+id+',-1)" aria-label="Less spoiled">−</button><input type="number" min="0" step="1" value="'+_invFmtQty(c.sp)+'" class="'+(c.sp>0?'sp':'z')+'" onchange="_invCntSpoilSet('+id+',this.value)" aria-label="Spoiled"><button onclick="_invCntSpoil('+id+',1)" aria-label="More spoiled">+</button></div>'+spMini+'</div></td>'
+      +'<td data-l="On display"><div class="dc-step"><button onclick="_invCntStep('+id+',-1)" aria-label="Less">−</button><input type="number" min="0" step="1" value="'+_invFmtQty(v.counted)+'" class="'+(_invNum(v.counted)!==c.sys?'chg':'')+'" onchange="_invCntSet('+id+',\'counted\',this.value)" aria-label="On display"><button onclick="_invCntStep('+id+',1)" aria-label="More">+</button></div></td>'
+      +'<td data-l="Diff" style="text-align:center;font-weight:700;color:'+(c.diff<0?'#b3261e':'#3b6d11')+'">'+(c.diff>0?'+':'')+_invFmtQty(c.diff)+'</td>'
+      +'<td data-l="Reason">'+reason+'</td></tr>';
+  });
+  return h+'</tbody></table></div>';
+}
+function _invCntSet(id,k,val){
+  var v=_invCntVals[id]; if(!v) return;
+  if(k==='counted'){ var n=parseFloat(val); v.counted=(isNaN(n)||n<0)?0:n; v.touched=true; }
+  _invRenderTab();
+}
+function _invCntSetV(id,k,val){ var v=_invCntVals[id]; if(!v) return; v[k]=val; _invRenderTab(); }
+function _invCntStep(id,d){ var v=_invCntVals[id]; if(!v) return; v.counted=Math.max(0,_invNum(v.counted)+d); v.touched=true; _invRenderTab(); }
+function _invCntSpoilSet(id,val){
+  var it=_invCntSheet.filter(function(x){return x.item_id===id;})[0], v=_invCntVals[id]; if(!it||!v) return;
+  var before=_invNum(it.system_qty)-_invNum(v.spoiled);
+  var n=parseFloat(val); n=(isNaN(n)||n<0)?0:Math.min(n,_invNum(it.system_qty));
+  v.spoiled=n;
+  if(!v.touched || _invNum(v.counted)===before) v.counted=Math.max(0,_invNum(it.system_qty)-n);   // follow spoiled until staff type their own
+  _invRenderTab();
+}
+function _invCntSpoil(id,d){ var v=_invCntVals[id]; if(!v) return; _invCntSpoilSet(id,_invNum(v.spoiled)+d); }
+async function _invCntPhoto(id,input){
+  var f=input.files&&input.files[0]; if(!f) return;
+  showToast('Uploading photo…','info');
+  var url=await _invUploadPhoto(f);
+  if(url){ _invCntVals[id].photo=url; showToast('Photo attached','success'); _invRenderTab(); }
+}
+function _invUploadPhoto(file){
+  return new Promise(function(resolve){
+    if(file.size>5*1024*1024){ showToast('Photo too large (max 5MB)','error'); return resolve(null); }
+    var rd=new FileReader();
+    rd.onload=async function(e){
+      try{
+        var ext=(file.name.split('.').pop()||'jpg').toLowerCase(); if(['jpg','jpeg','png','webp'].indexOf(ext)<0) ext='jpg';
+        var resp=await fetch('/api/upload-image',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image:e.target.result,ext:ext,code:'SPOIL_'+Date.now()+'_'+Math.floor(Math.random()*1e4)})});
+        var j=await resp.json(); if(!resp.ok||!j.path) throw new Error(j.error||'Upload failed');
+        resolve(j.path);
+      }catch(err){ showToast('Photo upload failed: '+err.message,'error'); resolve(null); }
+    };
+    rd.readAsDataURL(file);
+  });
+}
+function _invCntReset(){ _invCntClearDraft(); _invCntResetVals(false); _invRenderTab(); }
+
+async function _invCntSubmit(){
+  if(_invCntBusy) return;
+  var lines=[], diffs=0, problem=null, spoils=0;
+  _invCntSheet.forEach(function(it){
+    if(!it.tracked || problem) return;
+    var c=_invCntRowCalc(it), v=c.v;
+    if(c.sp>0){ spoils++;
+      if(!v.spoilReason) problem='Pick why '+it.name+' was spoiled';
+      else if(c.sp*_invNum(it.menu_price)>_invPhotoAbove() && !v.photo) problem='Add a photo of the spoiled '+it.name;
+    }
+    if(Math.abs(c.diff)>1e-9){ diffs++; if(c.diff<0 && !v.reason) problem=problem||('Pick a reason for '+it.name); }
+    lines.push({itemId:it.item_id, counted:_invNum(v.counted), seen:c.sys, spoiled:c.sp, spoilReason:v.spoilReason||null, photoUrl:v.photo||null, reason:(c.diff<0?v.reason:null)||null});
+  });
+  if(problem){ showToast(problem,'error'); return; }
+  if(!lines.length){ showToast('Add an item to the count first','error'); return; }
+  var label=(_invCntShift==='OPENING'?'opening':'closing');
+  if(!confirm('Submit '+label+' count for '+lines.length+' item'+(lines.length>1?'s':'')+'?'+(spoils?('\n'+spoils+' with spoilage.'):'')+(diffs?('\n'+diffs+' with a difference.'):'')+((!spoils&&!diffs)?'\nEverything matches.':''))) return;
+  _invCntBusy=true; var b=document.getElementById('invCntSubmitBtn'); if(b){ b.disabled=true; b.textContent='Saving…'; }
+  var r=await api('invSubmitCount',{lines:lines, shift:_invCntShift});
+  _invCntBusy=false;
+  if(r&&r.ok){ _invCntClearDraft(); showToast((_invCntShift==='OPENING'?'Opening':'Closing')+' count saved','success'); await _invCntLoad(); }
+  else { showToast((r&&r.error)||'Count failed','error'); if(r&&r.stock_changed) await _invCntLoad(); else if(b){ b.disabled=false; b.textContent='Submit '+label+' count'; } }
+}
+
+function _invCntSummaryHtml(isToday){
+  var spN=0, spV=0, miN=0, miV=0;
+  _invCntLog.forEach(function(r){
+    var isSpoil=(r.kind==='SPOILAGE') || (r.kind==='COUNT' && INV_SPOIL_REASONS.indexOf(r.reason)>=0);
+    var countable=['g','ml','kg','L'].indexOf(r.unit)<0;
+    if(isSpoil){ if(countable) spN+=Math.abs(_invNum(r.qty)); spV+=_invNum(r.value_menu); }
+    if(r.reason==='MISSING'){ if(countable) miN+=Math.abs(_invNum(r.qty)); miV+=_invNum(r.value_menu); }
+  });
+  var tracked=_invCntSheet.filter(function(it){return it.tracked;});
+  var counted=tracked.length, soon=0, soldOut=0;
+  if(isToday && _invCntShift!=='HISTORY'){
+    tracked.forEach(function(it){ var c=_invCntRowCalc(it);
+      spN+=c.sp; spV+=c.sp*_invNum(it.menu_price);
+      if(c.diff<0 && c.v.reason==='MISSING'){ miN+=-c.diff; miV+=(-c.diff)*_invNum(it.menu_price); }
+      var dl=_invDaysTo(it.next_expiry); if(it.next_expiry && dl<=1) soon++;
+      if(_invNum(c.v.counted)<=0) soldOut++; });
+  } else { counted=(_invCntLog.filter(function(r){return r.kind==='COUNT';}).map(function(r){return r.item_id;}).filter(function(x,i,a){return a.indexOf(x)===i;})).length; }
+  var sc=function(b,l,c){ return '<div class="dc-sc"><b style="color:'+(c||'#1f2a22')+'">'+b+'</b><span>'+l+'</span></div>'; };
+  return '<div class="dc-sum">'
+    +sc(counted,'items counted')
+    +sc(_invFmtQty(spN)+' · '+_invPeso(spV),'spoiled '+(isToday?'today':'this day')+' (at menu price)', spN?'#8a2a22':null)
+    +sc(_invFmtQty(miN)+' · '+_invPeso(miV),'unexplained / missing', miN?'#b3261e':null)
+    +sc(isToday?soon:'—','expire within 1 day', soon?'#9a5b06':null)
+    +sc(isToday?soldOut:'—','now sold out on QR menu', soldOut?'#b3261e':null)
+  +'</div>';
+}
+
+function _invCntLogHtml(isToday){
+  var rows=_invCntLog.filter(function(r){ return !(r.kind==='COUNT' && r.reason==='COUNTED'); });
+  var tagc={SPOILED:'#efe3f7;color:#5b2a86',EXPIRED:'#fbe3e0;color:#a4261d',DAMAGED:'#fbeed5;color:#8a5a0b',STAFF_MEAL:'#e6f0f7;color:#185fa5',COMPLIMENTARY:'#e6f0f7;color:#185fa5',MISSING:'#fbe3e0;color:#a4261d',FOUND:'#e6f0da;color:#3b6d11'};
+  var h='<div class="dc-h4"><span>Spoilage log · '+_invDateLong(_invCntDate)+'</span><small>Every spoiled item removes stock and is logged — not just edited</small></div>';
+  if(!rows.length) h+='<div style="font-size:.76rem;color:#6b6f66;background:#fff;border:1px solid #e3dccf;border-radius:10px;padding:12px">No spoilage or count differences '+(isToday?'yet today':'on this day')+'.</div>';
+  else {
+    h+='<div class="dc-scroll"><table class="dc-log"><thead><tr><th>Time</th><th>Item</th><th>Batch</th><th style="text-align:right">Qty</th><th>Reason</th><th>Note</th><th>Photo</th><th>By</th><th>Status</th></tr></thead><tbody>';
+    rows.forEach(function(r){
+      var q=_invNum(r.qty), st;
+      if(r.reason==='MISSING') st='<span class="dc-tag" style="background:#fbe3e0;color:#a4261d">Unexplained</span>';
+      else if(r.reason==='FOUND') st='<span class="dc-tag" style="background:#e6f0da;color:#3b6d11">Added back</span>';
+      else if(r.needs_approval) st=(_invIsOwner()?'<button onclick="_invApproveSpoil('+r.txn_id+')" style="font-size:.66rem;font-weight:700;border:1px solid #e0c48f;background:#fbeed5;color:#8a5a0b;border-radius:10px;padding:3px 9px;cursor:pointer">Approve</button>':'<span class="dc-tag" style="background:#fbeed5;color:#8a5a0b">Needs approval</span>');
+      else if(r.approved_by_name) st='<span class="dc-tag" style="background:#e6f0da;color:#3b6d11">Approved · '+_invEsc(r.approved_by_name)+'</span>';
+      else st='<span class="dc-tag" style="background:#eef0ec;color:#5f5e5a">Recorded</span>';
+      h+='<tr><td style="white-space:nowrap">'+_invTime(r.performed_at)+'</td><td>'+_invEsc(r.item_name)+'</td><td style="color:#6b6f66">'+_invEsc(r.batch_code||'')+'</td>'
+        +'<td style="text-align:right;white-space:nowrap">'+_invFmtQty(Math.abs(q))+' '+_invEsc(r.unit)+((Math.abs(q)===1||['g','ml','kg','L'].indexOf(r.unit)>=0)?'':'s')+'</td>'
+        +'<td><span class="dc-tag" style="background:'+(tagc[r.reason]||'#eee;color:#555')+'">'+_invEsc(INV_REASONS[r.reason]||r.reason||'Waste')+'</span></td>'
+        +'<td style="color:#6b6f66">'+_invEsc(r.notes||'')+'</td>'
+        +'<td>'+(r.photo_url?'<a href="'+_invEsc(r.photo_url)+'" target="_blank" rel="noopener" style="color:var(--forest)">view</a>':'—')+'</td>'
+        +'<td>'+_invEsc(r.performed_by_name||r.performed_by||'')+'</td><td>'+st+'</td></tr>';
+    });
+    h+='</tbody></table></div>';
+  }
+  h+='<div style="font-size:.66rem;color:#6b6f66;margin-top:6px">Reasons: Spoiled · Expired · Damaged · Staff meal · Complimentary · Missing. Photo required above '+_invPeso(_invPhotoAbove())+'; owner approval above '+_invPeso(_invApprovalAbove())+'.</div>';
+  return h;
+}
+async function _invApproveSpoil(id){
+  var r=await api('invApproveSpoilage',{txnId:id});
+  if(r&&r.ok){ showToast('Approved','success'); await _invCntLoad(); } else showToast((r&&r.error)||'Failed','error');
+}
+
+function _invCntHistoryHtml(){
+  if(!_invCntHist.length) return '<div style="font-size:.78rem;color:#6b6f66;background:#fff;border:1px solid #e3dccf;border-radius:10px;padding:14px;margin:6px 0">No counts in the last 30 days.</div>';
+  var h='<div class="dc-scroll"><table class="dc-log"><thead><tr><th>Date</th><th>Count</th><th>Time</th><th>By</th><th style="text-align:right">Items</th><th style="text-align:right">Differences</th><th style="text-align:right">Spoiled</th><th style="text-align:right">Missing</th><th></th></tr></thead><tbody>';
+  _invCntHist.forEach(function(c){
+    var d=_invDayKey(c.counted_at);
+    h+='<tr><td>'+_invDateLong(d)+'</td><td>'+(c.shift==='OPENING'?'Opening':'Closing')+'</td><td>'+_invTime(c.counted_at)+'</td><td>'+_invEsc(c.performed_by_name||'—')+'</td>'
+      +'<td style="text-align:right">'+c.items+'</td><td style="text-align:right">'+c.differences+'</td>'
+      +'<td style="text-align:right;color:'+(_invNum(c.spoiled_value)?'#8a2a22':'inherit')+'">'+_invPeso(c.spoiled_value)+'</td>'
+      +'<td style="text-align:right;color:'+(_invNum(c.missing_value)?'#b3261e':'inherit')+'">'+_invPeso(c.missing_value)+'</td>'
+      +'<td><button onclick="_invCntShift=\'CLOSING\';_invCntPick(\''+d+'\')" style="font-size:.7rem;border:none;background:none;color:var(--forest);font-weight:700;cursor:pointer">Open day ›</button></td></tr>';
+  });
+  return h+'</tbody></table></div>';
+}
+
+// What customers see right now on the QR menu (tracked items)
+function _invCntPhoneHtml(){
+  var tracked=_invCntSheet.filter(function(it){return it.tracked;});
+  var h='<div class="dc-side"><div style="font-size:.66rem;letter-spacing:.6px;color:#6b6f66;font-weight:700;margin:0 0 6px 6px">CUSTOMER · QR MENU</div><div class="dc-phone"><div class="dc-scr">'
+    +'<div class="dc-ph"><b>Yani Garden Café</b><small>'+_invDateLong(_invManilaToday())+'</small></div>';
+  if(!tracked.length) h+='<div style="padding:16px;font-size:.72rem;color:#6b6f66">Items you count appear here the way customers see them.</div>';
+  tracked.forEach(function(it){
+    var left=Math.floor(_invNum(it.system_qty)), nm=(it.menu_names||it.name).split(' · ')[0];
+    h+='<div class="dc-it" style="'+(left<=0?'opacity:.55':'')+'"><div><div class="t">'+_invEsc(nm)+'</div><div class="p">'+(it.menu_price?_invPeso(it.menu_price):'')+'</div></div>'
+      +(left<=0?'<span class="dc-so">SOLD OUT</span>':(left<=3?'<div style="display:flex;align-items:center"><span class="dc-left">'+left+' left</span><div class="dc-add">+</div></div>':'<div class="dc-add">+</div>'))+'</div>';
+  });
+  h+='<div style="font-size:.64rem;color:#6b6f66;padding:6px 14px 16px;line-height:1.5">Live: updates after every sale, spoilage and submitted count. Sold-out items can’t be ordered.</div></div></div></div>';
   return h;
 }
 
-function _invCntToggleAdd(on){ _invCntAddOpen=!!on; if(!on){ _invCntAddQ=''; } _invRenderTab(); if(on) setTimeout(function(){ var s=document.getElementById('icAddSearch'); if(s) s.focus(); },30); }
+// Add an item to the count (first count = opening stock)
+function _invCntToggleAdd(on){ _invCntAddOpen=!!on; if(!on) _invCntAddQ=''; _invRenderTab(); if(on) setTimeout(function(){ var s=document.getElementById('icAddSearch'); if(s){ s.focus(); s.scrollIntoView({block:'center'}); } },30); }
 function _invCntAddHtml(untracked){
   var q=String(_invCntAddQ||'').toLowerCase().split(/\s+/).filter(Boolean);
   var list=untracked.filter(function(it){ var t=(it.name+' '+(it.menu_names||'')).toLowerCase(); return q.every(function(k){return t.indexOf(k)>=0;}); });
-  var h='<div style="background:#fff;border:1.5px solid var(--forest);border-radius:12px;margin:4px 0 16px;overflow:hidden">'
+  var h='<div style="background:#fff;border:1.5px solid var(--forest);border-radius:12px;margin:12px 0 4px;overflow:hidden">'
     +'<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:#f3f7ef">'
-      +'<div><div style="font-weight:800;color:var(--forest-deep);font-size:.9rem">Add items to track</div>'
-      +'<div style="font-size:.68rem;color:var(--timber)">Type how many are on display now, then tap Add. It joins the daily count.</div></div>'
+      +'<div><div style="font-weight:800;color:var(--forest-deep);font-size:.9rem">Add item to count</div>'
+      +'<div style="font-size:.68rem;color:var(--timber)">Type how many are on display now, then tap Add. It joins the count every day.</div></div>'
       +'<button onclick="_invCntToggleAdd(false)" style="border:none;background:none;font-size:1.2rem;color:var(--timber);cursor:pointer" aria-label="Close">✕</button></div>'
     +'<div style="padding:10px 14px;border-bottom:1px solid var(--mist-light)"><input id="icAddSearch" type="text" placeholder="🔍 Search, e.g. buco, beans, water" value="'+_invEsc(_invCntAddQ)+'" oninput="_invCntAddSearch(this.value)" style="width:100%;box-sizing:border-box;font-size:.86rem;padding:10px 12px;border:1.5px solid var(--mist);border-radius:10px"></div>'
     +'<div id="icAddList" style="max-height:52vh;overflow:auto">';
-  if(!list.length) h+='<div style="padding:16px;font-size:.76rem;color:var(--timber);text-align:center">'+(untracked.length?'No match.':'All ready-to-sell items are already tracked.')+'</div>';
+  if(!list.length) h+='<div style="padding:16px;font-size:.76rem;color:var(--timber);text-align:center">'+(untracked.length?'No match.':'All ready-to-sell items are already on the count.')+'</div>';
   list.forEach(function(it){
     var qv=_invCntAddQty[it.item_id]; qv=(qv==null?'':qv);
-    h+='<div class="ic-add-row">'
-      +'<div style="flex:1;min-width:0"><div style="font-weight:700;color:var(--forest-deep);font-size:.84rem">'+_invEsc(it.name)+'</div>'
-        +'<div style="font-size:.64rem;color:var(--timber)">count in '+_invEsc(it.unit)+(it.unit==='slice'&&it.standard_yield?(' (1 box = '+_invFmtQty(it.standard_yield)+')'):'')+'</div></div>'
+    h+='<div class="ic-add-row"><div style="flex:1;min-width:0"><div style="font-weight:700;color:var(--forest-deep);font-size:.84rem">'+_invEsc(it.name)+'</div>'
+        +'<div style="font-size:.64rem;color:var(--timber)">count in '+_invEsc(it.unit)+'s'+(it.unit==='slice'&&it.standard_yield?(' (1 box = '+_invFmtQty(it.standard_yield)+')'):'')+'</div></div>'
       +'<input type="number" inputmode="numeric" min="0" step="1" placeholder="qty" value="'+_invEsc(qv)+'" oninput="_invCntAddQty['+it.item_id+']=this.value" onkeydown="if(event.key===\'Enter\')_invCntStart('+it.item_id+')" style="width:70px;height:38px;text-align:center;font-weight:800;font-size:.95rem;border:1.5px solid var(--mist);border-radius:10px">'
-      +'<button onclick="_invCntStart('+it.item_id+')" style="height:38px;font-size:.78rem;font-weight:800;background:var(--forest);color:#fff;border:none;border-radius:10px;padding:0 14px;cursor:pointer">Add</button>'
-    +'</div>';
+      +'<button onclick="_invCntStart('+it.item_id+')" style="height:38px;font-size:.78rem;font-weight:800;background:var(--forest);color:#fff;border:none;border-radius:10px;padding:0 14px;cursor:pointer">Add</button></div>';
   });
   return h+'</div></div>';
 }
 function _invCntAddSearch(v){
   _invCntAddQ=v;
-  var untracked=_invCntSheet.filter(function(it){return !it.tracked;});
-  var tmp=document.createElement('div'); tmp.innerHTML=_invCntAddHtml(untracked);
+  var tmp=document.createElement('div'); tmp.innerHTML=_invCntAddHtml(_invCntSheet.filter(function(it){return !it.tracked;}));
   var nl=tmp.querySelector('#icAddList'), ol=document.getElementById('icAddList');
-  if(nl&&ol) ol.innerHTML=nl.innerHTML;   // keep focus in the search box
+  if(nl&&ol) ol.innerHTML=nl.innerHTML;
 }
 async function _invCntStart(id){
   var it=_invCntSheet.filter(function(x){return x.item_id===id;})[0]; if(!it) return;
   var q=parseFloat(_invCntAddQty[id]);
   if(!(q>0)){ showToast('Enter how many '+it.name+' are on display','error'); return; }
-  var r=await api('invSubmitCount',{lines:[{itemId:id,counted:q,seen:null}]});
-  if(r&&r.ok){ showToast(it.name+' added · '+_invFmtQty(q)+' '+it.unit,'success'); delete _invCntAddQty[id]; await _invCntLoad(); }
+  var r=await api('invSubmitCount',{lines:[{itemId:id,counted:q,seen:null}], shift:(_invCntShift==='OPENING'?'OPENING':'CLOSING')});
+  if(r&&r.ok){ showToast(it.name+' added · '+_invFmtQty(q)+' '+it.unit+(q===1?'':'s'),'success'); delete _invCntAddQty[id]; await _invCntLoad(); }
   else showToast((r&&r.error)||'Failed','error');
-}
-
-function _invCntSet(id,k,val){
-  var v=_invCntVals[id]; if(!v) return;
-  if(k==='counted'){ var n=parseFloat(val); var it0=_invCntSheet.filter(function(x){return x.item_id===id;})[0];
-    v.counted=(val===''||isNaN(n))?((it0&&!it0.tracked)?null:0):Math.max(0,n); }
-  else v[k]=val;
-  _invRenderTab();
-}
-function _invCntStep(id,d){ var v=_invCntVals[id]; if(!v) return; var n=Math.max(0,_invNum(v.counted)+d); var it0=_invCntSheet.filter(function(x){return x.item_id===id;})[0]; v.counted=(it0&&!it0.tracked&&n===0)?null:n; _invRenderTab(); }
-function _invCntReset(){ _invCntSheet.forEach(function(it){ _invCntVals[it.item_id]={counted:it.tracked?_invNum(it.system_qty):null,reason:'',note:''}; }); _invRenderTab(); }
-async function _invCntSubmit(){
-  if(_invCntBusy) return;
-  var lines=[], diffs=0, missingReason=null, started=0;
-  _invCntSheet.forEach(function(it){
-    var v=_invCntVals[it.item_id];
-    if(!it.tracked) return;
-    var d=_invNum(v.counted)-_invNum(it.system_qty);
-    if(Math.abs(d)>1e-9) diffs++;
-    if(d<-1e-9 && !v.reason && !missingReason) missingReason=it.name;
-    lines.push({itemId:it.item_id, counted:_invNum(v.counted), seen:_invNum(it.system_qty), reason:(d<0?v.reason:null)||null, note:v.note||''});
-  });
-  if(missingReason){ showToast('Pick a reason for '+missingReason,'error'); return; }
-  if(!lines.length){ showToast('Enter at least one count','error'); return; }
-  if(!confirm('Submit count for '+lines.length+' item'+(lines.length>1?'s':'')+'?'+(diffs?('\n'+diffs+' differ from the system and will be recorded.'):'')+(started?('\n'+started+' new item'+(started>1?'s':'')+' will start tracking (opening stock).'):'')+((!diffs&&!started)?'\nEverything matches.':''))) return;
-  _invCntBusy=true; var b=document.getElementById('invCntSubmitBtn'); if(b){ b.disabled=true; b.textContent='Saving…'; }
-  var r=await api('invSubmitCount',{lines:lines});
-  _invCntBusy=false;
-  if(r&&r.ok){ showToast('Count saved'+(r.started?(' · '+r.started+' now tracked'):'')+(r.differences?(' · '+r.differences+' difference'+(r.differences>1?'s':'')):''),'success'); await _invCntLoad(); }
-  else { showToast((r&&r.error)||'Count failed','error'); if(r&&r.stock_changed) await _invCntLoad(); else if(b){ b.disabled=false; b.textContent='Submit count'; } }
-}
-
-function _invCntLogHtml(isToday){
-  var rows=_invCntLog.filter(function(r){ return !(r.kind==='COUNT' && r.reason==='COUNTED'); });
-  var counted=_invCntLog.filter(function(r){ return r.kind==='COUNT'; });
-  var th='position:sticky;top:0;background:var(--cream,#fbf8f3);z-index:1;font-size:.6rem;letter-spacing:.5px;color:var(--timber);text-transform:uppercase;text-align:left;padding:7px 8px;border-bottom:1.5px solid var(--mist-light)';
-  var tagc={SPOILED:'#efe3f7;color:#5b2a86',EXPIRED:'#fbe3e0;color:#a4261d',DAMAGED:'#fbeed5;color:#8a5a0b',STAFF_MEAL:'#e6f0f7;color:#185fa5',COMPLIMENTARY:'#e6f0f7;color:#185fa5',MISSING:'#fbe3e0;color:#a4261d',FOUND:'#e6f0da;color:#3b6d11'};
-  var h='<div style="display:flex;justify-content:space-between;align-items:baseline;margin:6px 0 6px"><div style="font-weight:800;color:var(--forest-deep);font-size:.9rem">Spoilage and count log · '+_invDateLong(_invCntDate)+'</div>'
-    +'<div style="font-size:.64rem;color:var(--timber)">'+(counted.length?(new Set(counted.map(function(r){return r.reference_id;}))).size+' count(s) · ':'')+rows.length+' entr'+(rows.length===1?'y':'ies')+'</div></div>';
-  if(!rows.length){ return h+'<div style="font-size:.74rem;color:var(--timber);background:#fff;border:1px solid var(--mist-light);border-radius:10px;padding:14px">No spoilage or count differences '+(isToday?'yet today':'on this day')+'.</div>'; }
-  h+='<div style="background:#fff;border:1px solid var(--mist-light);border-radius:12px;overflow:auto;max-height:50vh"><table style="width:100%;border-collapse:collapse;min-width:640px"><thead><tr>'
-    +'<th style="'+th+'">Time</th><th style="'+th+'">Item</th><th style="'+th+';text-align:right">Qty</th><th style="'+th+'">Reason</th><th style="'+th+'">Note</th><th style="'+th+'">By</th><th style="'+th+';text-align:right">Value</th></tr></thead><tbody>';
-  rows.forEach(function(r){
-    var q=_invNum(r.qty);
-    h+='<tr style="border-bottom:1px solid var(--mist-light);font-size:.74rem">'
-      +'<td style="padding:7px 8px;white-space:nowrap">'+_invTime(r.performed_at)+'<div style="font-size:.6rem;color:var(--timber)">'+(r.kind==='COUNT'?'count':'spoilage')+'</div></td>'
-      +'<td style="padding:7px 8px;font-weight:700;color:var(--forest-deep)">'+_invEsc(r.item_name)+'</td>'
-      +'<td style="padding:7px 8px;text-align:right;white-space:nowrap">'+(q>0?'+':'')+_invFmtQty(q)+' '+_invEsc(r.unit)+'</td>'
-      +'<td style="padding:7px 8px"><span style="font-size:.62rem;font-weight:800;padding:2px 8px;border-radius:10px;background:'+(tagc[r.reason]||'#eee;color:#555')+'">'+_invEsc(INV_REASONS[r.reason]||r.reason||'Waste')+'</span></td>'
-      +'<td style="padding:7px 8px;color:var(--timber)">'+_invEsc(r.notes||'')+(r.photo_url?' <a href="'+_invEsc(r.photo_url)+'" target="_blank" rel="noopener">photo</a>':'')+'</td>'
-      +'<td style="padding:7px 8px">'+_invEsc(r.performed_by_name||r.performed_by||'')+'</td>'
-      +'<td style="padding:7px 8px;text-align:right;white-space:nowrap">'+(r.value_menu>0?_invPeso(r.value_menu):(r.value_cost>0?_invPeso(r.value_cost)+' <span style="font-size:.6rem;color:var(--timber)">cost</span>':'—'))+'</td></tr>';
-  });
-  h+='</tbody></table></div>';
-  return h;
 }
 
 // Record spoilage any time (not only during the count)
 async function _invOpenSpoilage(){
-  if(!_invCntSheet.length && _invCntDate===_invManilaToday()){ var s=await api('invCountSheet',{}); _invCntSheet=(s&&s.ok)?(s.items||[]):[]; }
-  if(!_invCntSheet.filter(function(it){return it.tracked;}).length){ showToast('Count or receive an item first — spoilage needs stock','error'); return; }
-  var opts=_invCntSheet.filter(function(it){return it.tracked;}).map(function(it){ return '<option value="'+it.item_id+'" data-unit="'+_invEsc(it.unit)+'" data-max="'+_invNum(it.system_qty)+'">'+_invEsc(it.name)+' — '+_invFmtQty(it.system_qty)+' '+_invEsc(it.unit)+' left</option>'; }).join('');
+  var tracked=_invCntSheet.filter(function(it){return it.tracked;});
+  if(!tracked.length){ showToast('Add an item to the count first — spoilage needs stock','error'); return; }
+  var opts='<option value="">Pick item…</option>'+tracked.map(function(it){ return '<option value="'+it.item_id+'">'+_invEsc(it.name)+' — '+_invFmtQty(it.system_qty)+' '+_invEsc(it.unit)+' left</option>'; }).join('');
   var ropts=INV_SPOIL_REASONS.map(function(k){ return '<option value="'+k+'">'+INV_REASONS[k]+'</option>'; }).join('');
   var body=_invField('Item',_invSelect('spItem',opts))
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
       +'<div>'+_invField('Quantity',_invInput('spQty','number','1','1'))+'</div>'
       +'<div>'+_invField('Reason',_invSelect('spReason','<option value="">Pick…</option>'+ropts))+'</div></div>'
     +_invField('Note',_invInput('spNote','text','e.g. dropped while plating'))
-    +'<div style="font-size:.66rem;color:var(--timber);margin-top:8px">Stock goes down right away. If it reaches 0, the item shows Sold out on the QR menu.</div>';
+    +_invField('Photo','<input id="spPhoto" type="file" accept="image/*" capture="environment" style="width:100%;margin-top:3px;font-size:.8rem">')
+    +'<div style="font-size:.66rem;color:var(--timber);margin-top:8px">Photo required above '+_invPeso(_invPhotoAbove())+'. Above '+_invPeso(_invApprovalAbove())+' it waits for owner approval. Stock goes down right away.</div>';
   _invModal('Record Spoilage', body, 'Record spoilage', async function(){
     var id=+(document.getElementById('spItem')||{}).value, qty=parseFloat((document.getElementById('spQty')||{}).value), reason=(document.getElementById('spReason')||{}).value, note=(document.getElementById('spNote')||{}).value||'';
+    var file=(document.getElementById('spPhoto')||{}).files; file=file&&file[0];
     if(!id){ showToast('Pick an item','error'); return; }
     if(!(qty>0)){ showToast('Enter a quantity','error'); return; }
     if(!reason){ showToast('Pick a reason','error'); return; }
-    var r=await api('invRecordSpoilage',{itemId:id,qty:qty,reason:reason,notes:note});
+    var it=tracked.filter(function(x){return x.item_id===id;})[0];
+    if(it && qty*_invNum(it.menu_price)>_invPhotoAbove() && !file){ showToast('Add a photo — worth '+_invPeso(qty*_invNum(it.menu_price)),'error'); return; }
+    var btn=document.getElementById('invModalSubmit'); if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
+    var photo=null; if(file){ photo=await _invUploadPhoto(file); if(!photo){ if(btn){ btn.disabled=false; btn.textContent='Record spoilage'; } return; } }
+    var r=await api('invRecordSpoilage',{itemId:id,qty:qty,reason:reason,notes:note,photoUrl:photo});
     if(r&&r.ok){ showToast('Spoilage recorded · '+_invFmtQty(r.remaining)+' left','success'); _invCloseModal(); _invCntDate=_invManilaToday(); await _invCntLoad(); await _invLoadStock(); }
-    else showToast((r&&r.error)||'Failed','error');
+    else { showToast((r&&r.error)||'Failed','error'); if(btn){ btn.disabled=false; btn.textContent='Record spoilage'; } }
   });
 }

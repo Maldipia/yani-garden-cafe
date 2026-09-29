@@ -27,7 +27,7 @@ const INV_ACTIONS = new Set([
   // reports
   'invDashboard','invLowStock','invExpiringSoon','invTransactions',
   // display count + spoilage (ready-to-sell, per item)
-  'invCountSheet','invSubmitCount','invRecordSpoilage','invDayLog',
+  'invCountSheet','invSubmitCount','invRecordSpoilage','invDayLog','invApproveSpoilage','invCountHistory',
 ]);
 
 const SPOIL_REASONS = ['SPOILED','EXPIRED','DAMAGED','STAFF_MEAL','COMPLIMENTARY'];
@@ -476,9 +476,18 @@ export async function routeInventory(action, body, auth, req, res) {
       if (counted !== null && !(counted >= 0)) return bad(res, 'Counts cannot be negative');
       const reason = l.reason ? String(l.reason).toUpperCase() : null;
       if (reason && !COUNT_REASONS.includes(reason)) return bad(res, 'Unknown reason');
-      clean.push({ item_id: itemId, counted, seen, reason, note: str(l.note, 200) });
+      const spoiled = num(l.spoiled);
+      if (spoiled !== null && !(spoiled >= 0)) return bad(res, 'Spoiled cannot be negative');
+      const spoilReason = l.spoilReason ? String(l.spoilReason).toUpperCase() : null;
+      if (spoilReason && !SPOIL_REASONS.includes(spoilReason)) return bad(res, 'Unknown spoilage reason');
+      const photo = str(l.photoUrl, 500);
+      if (photo && !/^https:\/\//.test(photo)) return bad(res, 'Photo must be an uploaded image link');
+      clean.push({ item_id: itemId, counted, seen, spoiled: spoiled || 0, spoil_reason: spoilReason,
+                   photo: photo || null, reason, note: str(l.note, 200) });
     }
-    const r = await rpc('inv_submit_count', { p_lines: clean, p_actor: actor });
+    const shift = String(body.shift || 'CLOSING').toUpperCase();
+    if (!['OPENING','CLOSING'].includes(shift)) return bad(res, 'shift must be OPENING or CLOSING');
+    const r = await rpc('inv_submit_count', { p_lines: clean, p_actor: actor, p_shift: shift });
     return rpcResult(res, r, 'Count failed');
   }
 
@@ -495,6 +504,21 @@ export async function routeInventory(action, body, auth, req, res) {
       p_notes: str(body.notes, 300), p_actor: actor, p_photo: photo || null,
     });
     return rpcResult(res, r, 'Spoilage failed');
+  }
+
+  if (action === 'invApproveSpoilage') {
+    if (!isOwner) return res.status(403).json({ ok: false, error: 'OWNER only' });
+    const id = int(body.txnId);
+    if (!id) return bad(res, 'txnId required');
+    const r = await rpc('inv_approve_spoilage', { p_txn_id: id, p_actor: actor });
+    return rpcResult(res, r, 'Approve failed');
+  }
+
+  if (action === 'invCountHistory') {
+    const days = Math.min(Math.max(int(body.days) || 14, 1), 90);
+    const r = await rpc('inv_count_history', { p_days: days });
+    if (!r.ok) return boom(res, 'Failed to load history');
+    return res.status(200).json({ ok: true, counts: r.data || [] });
   }
 
   if (action === 'invDayLog') {
