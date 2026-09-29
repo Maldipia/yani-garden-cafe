@@ -452,7 +452,7 @@ export default async function handler(req, res) {
       const itemsToInsert = orderItems.map(item => ({
         order_id: order.id,
         order_ref: orderRef,
-        menu_item_id: item.id || item.code || item.item_code || null,   // menu item code — inventory deducts by it
+        menu_item_id: item.code || item.item_code || item.id || null,   // menu item code — inventory deducts by it
         item_name: item.name,
         size: item.size || null,
         unit_price: parseFloat(item.price || item.unitPrice || 0),

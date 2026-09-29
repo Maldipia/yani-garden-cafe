@@ -124,7 +124,9 @@ export async function routeOrders(action, body, auth, req, res) {
             avR.data.forEach(a => { byCode[a.menu_item_code] = a; have[a.inv_item_id] = parseFloat(a.item_available) || 0; });
             for (const it of items) {
               const a = byCode[it.code]; if (!a) continue;
-              const q = Math.max(1, parseInt(it.qty) || 1) * (parseFloat(a.portions_per_sale) || 1);
+              // a WHOLE pie/cake uses all its portions (1 whole = 8 slices), same as the deduction
+              const wm = String(it.size || '').toUpperCase() === 'WHOLE' ? (parseFloat(a.whole_mult) || 1) : 1;
+              const q = Math.max(1, parseInt(it.qty) || 1) * (parseFloat(a.portions_per_sale) || 1) * wm;
               need[a.inv_item_id] = (need[a.inv_item_id] || 0) + q;
               if (need[a.inv_item_id] > have[a.inv_item_id] + 1e-9) {
                 const nm = (menuMap[it.code] && menuMap[it.code].name) || it.code;

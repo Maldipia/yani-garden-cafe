@@ -112,6 +112,13 @@ BEGIN
   EXCEPTION WHEN OTHERS THEN r := r || jsonb_build_object('append_only', 'blocked');
   END;
 
+
+  -- audit guards: reversal of a reversal refused; + Add refuses a foreign unit
+  x := inv_reverse_movement((SELECT min(t.id) FROM inv_stock_transactions t JOIN inv_stock_units su ON su.id=t.stock_unit_id WHERE su.item_id=cake AND t.movement_type='WASTE'), 'test', 'USR_001');
+  x := inv_reverse_movement((SELECT max(t.id) FROM inv_stock_transactions t WHERE t.parent_txn_id IS NOT NULL), 'test', 'USR_001');
+  r := r || jsonb_build_object('reverse_reversal_refused', NOT (x->>'ok')::boolean); ok := ok AND NOT (x->>'ok')::boolean;
+  x := inv_menu_add(NULL, cake, 1, 1, 0, 'USR_001', NULL);
+  r := r || jsonb_build_object('foreign_unit_refused', x->>'code'); ok := ok AND x->>'code' = 'unit_not_allowed';
   r := r || jsonb_build_object('ledger_check', (SELECT COALESCE(jsonb_agg(to_jsonb(c)),'[]') FROM inv_ledger_check() c));
   ok := ok AND NOT EXISTS (SELECT 1 FROM inv_ledger_check());
   RAISE EXCEPTION 'INVTEST %', jsonb_build_object('pass', ok, 'checks', r)::text;

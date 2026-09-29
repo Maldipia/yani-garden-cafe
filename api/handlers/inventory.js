@@ -699,8 +699,9 @@ export async function routeInventory(action, body, auth, req, res) {
     // only the three inventory columns are touched; the add-on itself stays as the menu team set it
     const r = await supa('PATCH', 'menu_addons',
       { inv_item_id: invItemId || null, inv_qty: invItemId ? qty : null, inv_unit_id: invItemId ? unitId : null },
-      { addon_code: `eq.${code}` });
+      { addon_code: `eq.${code}` }, 'return=representation');
     if (!r.ok) return boom(res, 'Failed to save add-on mapping');
+    if (Array.isArray(r.data) && !r.data.length) return bad(res, 'Add-on not found');
     return res.status(200).json({ ok: true, addonCode: code });
   }
 

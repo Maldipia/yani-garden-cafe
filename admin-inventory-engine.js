@@ -274,7 +274,7 @@ async function _ieOpenMove(id){
     +(m.notes?_ieKv('Notes', _invEsc(m.notes)):'')
     +(raw.approved_by?_ieKv('Approved', _invEsc(raw.approved_by)+' · '+_ieWhen(raw.approved_at)):'')
     +'</div>';
-  if(r.photo_url) h+='<a href="'+_invEsc(r.photo_url)+'" target="_blank" rel="noopener"><img src="'+_invEsc(r.photo_url)+'" alt="Photo" style="margin-top:10px;max-width:100%;max-height:220px;border-radius:10px;border:1px solid var(--mist)"></a>';
+  if(r.photo_url && /^https:\/\//i.test(r.photo_url)) h+='<a href="'+_invEsc(r.photo_url)+'" target="_blank" rel="noopener"><img src="'+_invEsc(r.photo_url)+'" alt="Photo" style="margin-top:10px;max-width:100%;max-height:220px;border-radius:10px;border:1px solid var(--mist)"></a>';
   if(b.batch||b.stock_unit) h+='<div class="invsec" style="margin-top:14px">Batch</div>'
     +_ieKv('Received', _invDate(b.received))+_ieKv('Expiry', _invDate(b.expiry))+_ieKv('Original / remaining now', _ieQ(b.original)+' / '+_ieQ(b.remaining))+_ieKv('Status', _invEsc(b.status||''));
   var ss=r.same_source||[];
@@ -500,28 +500,29 @@ async function _ieSubmitWaste(){
 function _ieAddonsHtml(){
   if(!_ieAddons.length) return '';
   var h='<div style="margin-top:16px">'+_ieBox('➕ Add-ons use stock too <span style="font-weight:600;color:var(--timber);font-size:.7rem">— layered on top of the drink\'s size recipe</span>',
-    _ieAddons.map(function(a){
+    _ieAddons.map(function(a,ai){
       var it=a.inv_item_id? _ieItemById(a.inv_item_id) : null;
       return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 0;border-top:1px solid var(--mist-light)">'
         +'<div><div style="font-size:.8rem;font-weight:700;color:var(--forest-deep)">'+_invEsc(a.name)+(a.is_active===false?' <span style="color:var(--timber);font-weight:600">(hidden)</span>':'')+'</div>'
         +'<div style="font-size:.68rem;color:'+(it?'#15803d':'var(--timber)')+'">'+(it? 'uses '+_ieQ(a.inv_qty)+' '+_invEsc(_ieUnitName(a.inv_unit_id))+' '+_invEsc(it.name) : 'not linked — selling it deducts nothing')+'</div></div>'
-        +(_invIsAdmin()?_ieBtn(it?'Change':'Link','_ieAddonForm(\''+_invEsc(a.addon_code).replace(/'/g,'')+'\')'):'')+'</div>';
+        +(_invIsAdmin()?_ieBtn(it?'Change':'Link','_ieAddonForm('+ai+')'):'')+'</div>';
     }).join(''))+'</div>';
   return h;
 }
-function _ieAddonForm(code){
-  var a=_ieAddons.filter(function(x){ return x.addon_code===code; })[0]; if(!a) return;
+function _ieAddonForm(ai){
+  var a=_ieAddons[ai]; if(!a) return;
   var ing=_ieItems().filter(function(it){ return it.item_type==='RAW_MATERIAL'||it.item_type==='PREP'||it.item_type==='PURCHASED_READY'; });
   var h='<div style="font-size:1rem;font-weight:800;color:var(--forest-deep);margin-right:34px">Add-on: '+_invEsc(a.name)+'</div>'
     +'<div style="font-size:.7rem;color:var(--timber);margin-bottom:6px">Each time it is sold, this much is taken from stock (on top of the drink\'s recipe).</div>'
     +'<label class="ie-lbl">Uses</label><select id="ieAdItem" class="ie-in"><option value="">— nothing (not linked) —</option>'+ing.map(function(it){ return '<option value="'+it.id+'"'+(a.inv_item_id===it.id?' selected':'')+'>'+_invEsc(it.name)+'</option>'; }).join('')+'</select>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div><label class="ie-lbl">Quantity</label><input id="ieAdQty" type="number" step="any" class="ie-in" value="'+(a.inv_qty!=null?_invEsc(a.inv_qty):'')+'" placeholder="e.g. 18"></div>'
     +'<div><label class="ie-lbl">Unit</label><select id="ieAdUnit" class="ie-in">'+_invRef.units.map(function(u){ return '<option value="'+u.id+'"'+(a.inv_unit_id===u.id?' selected':'')+'>'+_invEsc(u.name)+'</option>'; }).join('')+'</select></div></div>'
-    +'<button onclick="_ieSaveAddon(\''+_invEsc(code).replace(/'/g,'')+'\')" style="width:100%;margin-top:14px;font-size:.86rem;font-weight:800;background:var(--forest);color:#fff;border:none;border-radius:10px;padding:11px;cursor:pointer">Save</button>';
+    +'<button onclick="_ieSaveAddon('+ai+')" style="width:100%;margin-top:14px;font-size:.86rem;font-weight:800;background:var(--forest);color:#fff;border:none;border-radius:10px;padding:11px;cursor:pointer">Save</button>';
   _ieModal(h);
   var s=document.getElementById('ieAdItem'); if(s && s.options.length>15) _invSearchable(s);
 }
-async function _ieSaveAddon(code){
+async function _ieSaveAddon(ai){
+  var code=(_ieAddons[ai]||{}).addon_code; if(!code) return;
   var itemId=+(document.getElementById('ieAdItem')||{}).value||null, qty=parseFloat((document.getElementById('ieAdQty')||{}).value), unit=+(document.getElementById('ieAdUnit')||{}).value;
   if(itemId && !(qty>0)){ showToast('Enter how much it uses','error'); return; }
   var r=await api('invSaveAddonMap',{addonCode:code,invItemId:itemId,invQty:itemId?qty:null,invUnitId:itemId?unit:null});
@@ -585,7 +586,7 @@ function _ieMenuHtml(){
         return '<div class="invsec">'+_invEsc(c)+'</div>'+groups[c].map(function(x){
           return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;border-top:1px solid var(--mist-light)">'
             +'<div style="font-size:.8rem;color:var(--forest-deep);min-width:0">'+_invEsc(x.name)+' <span style="color:var(--timber);font-size:.68rem">'+_iePeso(x.price)+'</span></div>'
-            +'<input type="number" min="0" step="any" inputmode="decimal" placeholder="qty" value="'+_invEsc(_ieMenuNew[x.menu_code]||'')+'" oninput="_ieMenuNew[\''+_invEsc(x.menu_code)+'\']=this.value;_ieMenuNewCount()" class="ie-in" style="width:90px;margin:0;padding:7px;text-align:right"></div>';
+            +'<input type="number" min="0" step="any" inputmode="decimal" placeholder="qty" value="'+_invEsc(_ieMenuNew[x.menu_code]||'')+'" data-code="'+_invEsc(x.menu_code)+'" oninput="_ieMenuNew[this.dataset.code]=this.value;_ieMenuNewCount()" class="ie-in" style="width:90px;margin:0;padding:7px;text-align:right"></div>';
         }).join('');
       }).join('') : _ieEmpty('Every non-drink menu item is already tracked.'))
      +(nw.length?'<button id="ieMenuStart" onclick="_ieMenuStartAll()" style="width:100%;margin-top:12px;font-size:.86rem;font-weight:800;background:var(--forest);color:#fff;border:none;border-radius:10px;padding:11px;cursor:pointer">Start tracking '+(entered?entered+' item'+(entered>1?'s':''):'entered items')+'</button>':''))+'</div>';
