@@ -165,3 +165,6 @@ invResolveException
 invReverseMovement
 invListAddons
 invSaveAddonMap
+invMenuStock
+invMenuAdd
+invMenuSetCount

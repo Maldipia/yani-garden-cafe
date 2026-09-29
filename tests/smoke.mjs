@@ -709,6 +709,14 @@ async function stockControl() {
   check('reversal needs a reason', noRev.ok === false && /reason/i.test(noRev.error || ''), noRev.error);
   const badWaste = await call({ action: 'invRecordSpoilage', userId: OWNER, itemId: 1, qty: 1, reason: 'PHYSICAL_VARIANCE' });
   check('waste refuses a count-only reason', badWaste.ok === false, badWaste.error);
+  const ms = await call({ action: 'invMenuStock', userId: OWNER });
+  check('menu stock list loads', ms.ok === true && Array.isArray(ms.rows) && ms.rows.length > 0, ms.error);
+  check('menu stock never lists Best With', !(ms.rows || []).some(r => /^best with$/i.test(r.category || '')));
+  check('menu stock available is never negative', (ms.rows || []).filter(r => r.kind === 'TRACKED').every(r => parseFloat(r.available) >= 0));
+  const noQty2 = await call({ action: 'invMenuAdd', userId: OWNER, itemId: 1, qty: 0 });
+  check('menu add needs a quantity', noQty2.ok === false, noQty2.error);
+  const badFix = await call({ action: 'invMenuSetCount', userId: OWNER, itemId: 1, actual: -1 });
+  check('fix count refuses a negative number', badFix.ok === false, badFix.error);
   const legacy = await call({ action: 'adjustInventory', userId: OWNER, itemCode: 'H001', adjustment: 1 });
   check('legacy inventory list is read-only', legacy.ok === false && /retired/i.test(legacy.error || ''), legacy.error);
 }

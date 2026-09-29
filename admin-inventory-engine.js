@@ -48,7 +48,7 @@ function _ieCss(){
     +'.ie-2col{display:grid;grid-template-columns:1fr 1fr;gap:12px}'
     +'.ie-tbl{width:100%;border-collapse:collapse;font-size:.74rem}.ie-tbl th{position:sticky;top:0;background:var(--forest-deep);color:#fff;text-align:left;padding:7px 9px;font-size:.62rem;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;z-index:1}'
     +'.ie-tbl td{padding:7px 9px;border-top:1px solid var(--mist-light);vertical-align:top}.ie-tbl tr.ie-click{cursor:pointer}.ie-tbl tr.ie-click:hover td{background:#eef5f0}'
-    +'.ie-num{text-align:right;white-space:nowrap}.ie-wrap{background:#fff;border:1px solid var(--mist);border-radius:10px;overflow:auto;max-height:calc(100vh - 300px)}'
+    +'.ie-num,.ie-tbl th.ie-num{text-align:right;white-space:nowrap}.ie-wrap{background:#fff;border:1px solid var(--mist);border-radius:10px;overflow:auto;max-height:calc(100vh - 300px)}'
     +'.ie-in{width:100%;box-sizing:border-box;margin-top:3px;font-size:.84rem;padding:9px;border:1.5px solid var(--mist);border-radius:8px;background:#fff}'
     +'.ie-lbl{font-size:.72rem;font-weight:700;color:var(--forest-deep);display:block;margin-top:10px}'
     +'.ie-chip{font-size:.74rem;font-weight:700;border-radius:20px;padding:7px 12px;cursor:pointer;border:1.5px solid var(--mist);background:#fff;color:var(--forest)}'
@@ -81,6 +81,7 @@ async function _ieLoadTab(t){
   else if(t==='waste'){ var s3=await api('invCurrentStock',{}); _ieStock=(s3&&s3.ok)?(s3.rows||[]):[];
     var w=await api('invMovements',{limit:300,from:new Date(Date.now()-7*864e5).toISOString()});
     _ieWasteRecent=((w&&w.ok)?(w.rows||[]):[]).filter(function(m){ return ['WASTE','SPOILAGE','BREAKAGE','STAFF MEAL','COMPLIMENTARY'].indexOf(m.movement_type)>=0; }); }
+  else if(t==='menu'){ await _ieLoadMenu(); }
   else if(t==='recipes'){ await _ieLoadAllItems(); var a=await api('invListAddons',{}); _ieAddons=(a&&a.ok)?(a.addons||[]):[]; }
   if(_invTab===t) _invRenderTab();
 }
@@ -93,7 +94,7 @@ function _ieDashHtml(){
   var today=_invManilaToday();
   h+='<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px">'
     +'<input type="date" value="'+_invEsc(d.date||today)+'" max="'+today+'" onchange="_ieDashDate=this.value;_ieDash=null;_invRenderTab();_ieLoadTab(\'dash\')" class="ie-in" style="width:auto;margin:0;padding:7px">'
-    +'<div style="flex:1"></div>'+_ieBtn('📥 Receive','_invSetTab(\'receive\')',true)+_ieBtn('🗑️ Waste','_invSetTab(\'waste\')')+_ieBtn('🧮 Count','_invSetTab(\'count\')')+'</div>';
+    +'<div style="flex:1"></div>'+_ieBtn('📥 Receive','_invSetTab(\'receive\')',true)+_ieBtn('🗑️ Waste','_invSetTab(\'waste\')')+_ieBtn('🍰 Menu Stock','_invSetTab(\'menu\')')+'</div>';
   var fc = d.food_cost_pct==null ? '—' : d.food_cost_pct+'%';
   h+='<div class="ie-cards">'
     +_ieCard('Inventory value', _iePeso(d.inventory_value), null, 'at actual batch cost', '_invSetTab(\'current\')')
@@ -525,4 +526,166 @@ async function _ieSaveAddon(code){
   if(itemId && !(qty>0)){ showToast('Enter how much it uses','error'); return; }
   var r=await api('invSaveAddonMap',{addonCode:code,invItemId:itemId,invQty:itemId?qty:null,invUnitId:itemId?unit:null});
   if(r&&r.ok){ showToast('Add-on saved','success'); _ieCloseModal(); _ieLoadTab('recipes'); } else showToast((r&&r.error)||'Failed','error');
+}
+
+// ══ MENU STOCK — one list, no opening/closing ═════════════════════════════
+// Every menu item: what's available now + today's movement. Sales deduct on
+// their own; staff only Add, Waste, or Fix the count. Each is a ledger movement.
+var _ieMenu = [], _ieMenuQ = '', _ieMenuMoves = [], _ieMenuNew = {}, _ieMenuShowRecipe = false, _ieMenuLoaded = false;
+async function _ieLoadMenu(){
+  var r=await api('invMenuStock',{}); _ieMenu=(r&&r.ok)?(r.rows||[]):[]; _ieMenuLoaded=true;
+  var from=new Date(new Date(_invManilaToday()+'T00:00:00+08:00')).toISOString();
+  var m=await api('invMovements',{from:from,limit:300});
+  var ids={}; _ieMenu.forEach(function(x){ if(x.kind==='TRACKED') ids[x.item_id]=1; });
+  _ieMenuMoves=((m&&m.ok)?(m.rows||[]):[]).filter(function(x){ return ids[x.item_id] && _invNum(x.qty)!==0; });
+}
+function _ieMenuMatch(x){ var q=_ieMenuQ.trim().toLowerCase(); return !q || ((x.name||'')+' '+(x.menus||'')+' '+(x.category||'')).toLowerCase().indexOf(q)>=0; }
+function _ieMenuHtml(){
+  _ieCss();
+  if(!_ieMenuLoaded) return _ieLoading();
+  var tr=_ieMenu.filter(function(x){ return x.kind==='TRACKED' && _ieMenuMatch(x); });
+  var nw=_ieMenu.filter(function(x){ return x.kind==='NEW' && _ieMenuMatch(x); });
+  var rc=_ieMenu.filter(function(x){ return x.kind==='RECIPE' && _ieMenuMatch(x); });
+  var h='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">'
+    +'<input id="ieMenuQ" value="'+_invEsc(_ieMenuQ)+'" oninput="_ieMenuQ=this.value;_ieMenuRerender()" placeholder="🔍 Search menu…" class="ie-in" style="flex:1;min-width:200px;margin:0;padding:8px 10px">'
+    +'<div style="font-size:.72rem;color:var(--timber)">'+_invDateLong(_invManilaToday())+' · sales deduct automatically</div></div>';
+  // tracked
+  h+='<div class="ie-wrap ie-desk" style="max-height:none"><table class="ie-tbl" style="min-width:760px"><thead><tr><th>Menu item</th><th class="ie-num">Available</th><th class="ie-num">Added today</th><th class="ie-num">Sold today</th><th class="ie-num">Wasted</th><th class="ie-num">Fixed</th><th style="text-align:right">Actions</th></tr></thead><tbody>';
+  if(!tr.length) h+='<tr><td colspan="7" style="padding:18px;color:var(--timber);text-align:center">No menu item is tracked yet. Type a quantity below to start.</td></tr>';
+  tr.forEach(function(x){
+    var av=_invNum(x.available), low=av<=0?'#b91c1c':av<=3?'#b45309':'var(--forest-deep)';
+    h+='<tr><td><div onclick="_ieOpenItem('+x.item_id+',\'history\')" style="cursor:pointer;font-weight:700;color:var(--forest-deep)">'+_invEsc(x.name)+(x.open_shortages>0?' <span title="sold more than recorded" style="color:#b91c1c">⚠️</span>':'')+'</div>'
+      +'<div style="font-size:.62rem;color:var(--timber)">'+_invEsc(x.category||'')+(x.menus&&x.menus!==x.name?' · '+_invEsc(x.menus):'')+(x.next_expiry?' · exp '+_invDate(x.next_expiry):'')+'</div></td>'
+      +'<td class="ie-num" style="font-size:1.05rem;font-weight:800;color:'+low+'">'+_ieQ(av)+' <span style="font-size:.68rem;font-weight:600;color:var(--timber)">'+_invEsc(x.unit)+'</span>'+(av<=0?'<div style="font-size:.6rem;font-weight:800;color:#b91c1c">SOLD OUT</div>':'')+'</td>'
+      +'<td class="ie-num" style="color:#15803d">'+(_invNum(x.added)?'+'+_ieQ(x.added):'—')+'</td>'
+      +'<td class="ie-num" style="color:#1d4ed8">'+(_invNum(x.sold)?_ieQ(x.sold):'—')+'</td>'
+      +'<td class="ie-num" style="color:#b91c1c">'+(_invNum(x.wasted)?_ieQ(x.wasted):'—')+'</td>'
+      +'<td class="ie-num" style="color:#c2410c">'+(_invNum(x.fixed)?_ieSigned(x.fixed):'—')+'</td>'
+      +'<td style="text-align:right;white-space:nowrap">'+_ieBtn('+ Add','_ieMenuAddForm('+x.item_id+')',true,'padding:6px 10px')+' '
+      +_ieBtn('Waste','_ieMenuWasteForm('+x.item_id+')',false,'padding:6px 10px;border-color:#b91c1c;color:#b91c1c')+' '
+      +_ieBtn('Fix','_ieMenuFixForm('+x.item_id+')',false,'padding:6px 10px')+'</td></tr>';
+  });
+  h+='</tbody></table></div>';
+  // phone cards
+  h+='<div class="ie-mcards">';
+  tr.forEach(function(x){
+    var av=_invNum(x.available);
+    h+='<div style="background:#fff;border:1px solid var(--mist);border-radius:12px;padding:11px 12px;margin-bottom:8px">'
+      +'<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><div onclick="_ieOpenItem('+x.item_id+',\'history\')" style="cursor:pointer;min-width:0"><div style="font-size:.9rem;font-weight:800;color:var(--forest-deep)">'+_invEsc(x.name)+'</div>'
+      +'<div style="font-size:.64rem;color:var(--timber)">'+_invEsc(x.category||'')+' · today: '+(_invNum(x.added)?'+'+_ieQ(x.added)+' added · ':'')+_ieQ(x.sold)+' sold'+(_invNum(x.wasted)?' · '+_ieQ(x.wasted)+' wasted':'')+'</div></div>'
+      +'<div style="text-align:right"><div style="font-size:1.3rem;font-weight:800;color:'+(av<=0?'#b91c1c':'var(--forest-deep)')+'">'+_ieQ(av)+'</div><div style="font-size:.6rem;color:var(--timber)">'+(av<=0?'SOLD OUT':_invEsc(x.unit)+' left')+'</div></div></div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:8px">'+_ieBtn('+ Add','_ieMenuAddForm('+x.item_id+')',true)+_ieBtn('Waste','_ieMenuWasteForm('+x.item_id+')',false,'border-color:#b91c1c;color:#b91c1c')+_ieBtn('Fix','_ieMenuFixForm('+x.item_id+')')+'</div></div>';
+  });
+  h+='</div>';
+  // not tracked yet
+  var groups={}; nw.forEach(function(x){ var c=x.category||'OTHER'; (groups[c]=groups[c]||[]).push(x); });
+  var entered=Object.keys(_ieMenuNew).filter(function(k){ return _invNum(_ieMenuNew[k])>0; }).length;
+  h+='<div style="margin-top:14px">'+_ieBox('Not tracked yet <span style="font-weight:600;color:var(--timber);font-size:.7rem">— type how many are available to start counting down on each sale</span>',
+     (nw.length? Object.keys(groups).map(function(c){
+        return '<div class="invsec">'+_invEsc(c)+'</div>'+groups[c].map(function(x){
+          return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;border-top:1px solid var(--mist-light)">'
+            +'<div style="font-size:.8rem;color:var(--forest-deep);min-width:0">'+_invEsc(x.name)+' <span style="color:var(--timber);font-size:.68rem">'+_iePeso(x.price)+'</span></div>'
+            +'<input type="number" min="0" step="any" inputmode="decimal" placeholder="qty" value="'+_invEsc(_ieMenuNew[x.menu_code]||'')+'" oninput="_ieMenuNew[\''+_invEsc(x.menu_code)+'\']=this.value;_ieMenuNewCount()" class="ie-in" style="width:90px;margin:0;padding:7px;text-align:right"></div>';
+        }).join('');
+      }).join('') : _ieEmpty('Every non-drink menu item is already tracked.'))
+     +(nw.length?'<button id="ieMenuStart" onclick="_ieMenuStartAll()" style="width:100%;margin-top:12px;font-size:.86rem;font-weight:800;background:var(--forest);color:#fff;border:none;border-radius:10px;padding:11px;cursor:pointer">Start tracking '+(entered?entered+' item'+(entered>1?'s':''):'entered items')+'</button>':''))+'</div>';
+  // recipe items
+  h+=_ieBox('Made to order ('+rc.length+') <span style="font-weight:600;color:var(--timber);font-size:.7rem">— drinks made from a recipe; no count, their ingredients are tracked</span>',
+     _ieMenuShowRecipe? rc.map(function(x){ return '<div style="font-size:.76rem;padding:4px 0;border-top:1px solid var(--mist-light)">'+_invEsc(x.name)+'</div>'; }).join('') : '',
+     _ieBtn(_ieMenuShowRecipe?'Hide':'Show','_ieMenuShowRecipe=!_ieMenuShowRecipe;_ieMenuRerender()'));
+  // today's movements
+  h+=_ieBox('🧾 Today\'s menu movements', _ieMenuMoves.length? _ieMenuMoves.slice(0,60).map(_ieMoveLine).join('') : _ieEmpty('No movement yet today.'), _ieBtn('All history','_invSetTab(\'moves\')'));
+  return h;
+}
+function _ieMenuRerender(){ var q=document.getElementById('ieMenuQ'); var pos=q?q.selectionStart:null; _invRenderTab(); var q2=document.getElementById('ieMenuQ'); if(q2&&pos!==null){ q2.focus(); q2.setSelectionRange(pos,pos); } }
+function _ieMenuNewCount(){ var b=document.getElementById('ieMenuStart'); if(!b) return; var n=Object.keys(_ieMenuNew).filter(function(k){ return _invNum(_ieMenuNew[k])>0; }).length; b.textContent='Start tracking '+(n?n+' item'+(n>1?'s':''):'entered items'); }
+async function _ieMenuStartAll(){
+  var codes=Object.keys(_ieMenuNew).filter(function(k){ return _invNum(_ieMenuNew[k])>0; });
+  if(!codes.length){ showToast('Type a quantity next to at least one item','error'); return; }
+  var b=document.getElementById('ieMenuStart'); if(b){ b.disabled=true; b.textContent='Saving…'; }
+  var ok=0, fail=[];
+  for(var i=0;i<codes.length;i++){
+    var r=await api('invMenuAdd',{menuCode:codes[i],qty:parseFloat(_ieMenuNew[codes[i]])});
+    if(r&&r.ok){ ok++; delete _ieMenuNew[codes[i]]; } else fail.push((r&&r.error)||codes[i]);
+  }
+  showToast(ok+' item'+(ok!==1?'s':'')+' now tracked'+(fail.length?' · '+fail.length+' failed: '+fail[0]:''), fail.length?'error':'success');
+  await _ieLoadMenu(); _invRenderTab();
+}
+function _ieMenuRow(id){ return _ieMenu.filter(function(x){ return x.kind==='TRACKED' && x.item_id===id; })[0]; }
+function _ieMenuAddForm(id){
+  var x=_ieMenuRow(id); if(!x) return;
+  var units='<option value="'+x.base_unit_id+'">'+_invEsc(x.unit)+'</option>'+(x.purchase_unit_id&&x.purchase_unit_id!==x.base_unit_id?'<option value="'+x.purchase_unit_id+'">'+_invEsc(x.purchase_unit)+' (= '+_ieQ(x.purchase_to_stock)+' '+_invEsc(x.unit)+')</option>':'');
+  _ieModal('<div style="font-size:1rem;font-weight:800;color:var(--forest-deep);margin-right:34px">+ Add: '+_invEsc(x.name)+'</div>'
+    +'<div style="font-size:.72rem;color:var(--timber)">Now available: <b>'+_ieQ(x.available)+' '+_invEsc(x.unit)+'</b></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div><label class="ie-lbl">How many?</label><input id="ieMaQty" type="number" min="0" step="any" inputmode="decimal" class="ie-in" oninput="_ieMaPrev('+id+')"></div>'
+    +'<div><label class="ie-lbl">Unit</label><select id="ieMaUnit" class="ie-in" onchange="_ieMaPrev('+id+')">'+units+'</select></div></div>'
+    +'<label class="ie-lbl" id="ieMaCostL">Cost per '+_invEsc(x.unit)+' ₱ (optional)</label><input id="ieMaCost" type="number" min="0" step="any" inputmode="decimal" class="ie-in" oninput="_ieMaPrev('+id+')">'
+    +'<label class="ie-lbl">Note</label><input id="ieMaNote" class="ie-in" placeholder="e.g. fresh batch from supplier">'
+    +'<div id="ieMaPrev" style="margin-top:10px;font-size:.84rem;font-weight:800;color:#14532d"></div>'
+    +'<button id="ieMaBtn" onclick="_ieMenuAdd('+id+')" style="width:100%;margin-top:12px;font-size:.9rem;font-weight:800;background:var(--forest);color:#fff;border:none;border-radius:10px;padding:12px;cursor:pointer">Add</button>');
+  setTimeout(function(){ var q=document.getElementById('ieMaQty'); if(q) q.focus(); },30);
+}
+function _ieMaPrev(id){
+  var x=_ieMenuRow(id), q=parseFloat((document.getElementById('ieMaQty')||{}).value)||0, u=+(document.getElementById('ieMaUnit')||{}).value, c=parseFloat((document.getElementById('ieMaCost')||{}).value);
+  var isPu = x.purchase_unit_id && u===x.purchase_unit_id && u!==x.base_unit_id;
+  var add = isPu ? q*_invNum(x.purchase_to_stock) : q;
+  var L=document.getElementById('ieMaCostL'); if(L) L.textContent='Cost per '+(isPu?x.purchase_unit:x.unit)+' ₱ (optional)';
+  var p=document.getElementById('ieMaPrev'); if(p) p.innerHTML = q>0 ? (isPu? _ieQ(q)+' '+_invEsc(x.purchase_unit)+' × '+_ieQ(x.purchase_to_stock)+' = +'+_ieQ(add)+' '+_invEsc(x.unit) : '+'+_ieQ(add)+' '+_invEsc(x.unit))+' → <span style="color:var(--forest-deep)">'+_ieQ(_invNum(x.available)+add)+' available</span>'+(c>0?'<div style="font-weight:600;font-size:.72rem">'+_iePeso(isPu?c/_invNum(x.purchase_to_stock):c)+' per '+_invEsc(x.unit)+'</div>':'') : '';
+}
+async function _ieMenuAdd(id){
+  var b=document.getElementById('ieMaBtn'); if(b&&b.disabled) return;
+  var q=parseFloat((document.getElementById('ieMaQty')||{}).value);
+  if(!(q>0)){ showToast('Enter how many','error'); return; }
+  if(b){ b.disabled=true; b.textContent='Adding…'; }
+  var r=await api('invMenuAdd',{itemId:id,qty:q,unitId:+(document.getElementById('ieMaUnit')||{}).value,unitCost:parseFloat((document.getElementById('ieMaCost')||{}).value)||null,note:(document.getElementById('ieMaNote')||{}).value||''});
+  if(r&&r.ok){ showToast('Added +'+_ieQ(r.qty_received)+' · now '+_ieQ(r.available),'success'); _ieCloseModal(); await _ieLoadMenu(); _invRenderTab(); }
+  else { if(b){ b.disabled=false; b.textContent='Add'; } showToast((r&&r.error)||'Failed','error'); }
+}
+function _ieMenuWasteForm(id){
+  var x=_ieMenuRow(id); if(!x) return; _ieWsReason=''; _ieWsPhoto='';
+  _ieModal('<div style="font-size:1rem;font-weight:800;color:#b91c1c;margin-right:34px">Waste: '+_invEsc(x.name)+'</div>'
+    +'<div style="font-size:.72rem;color:var(--timber)">Available: <b>'+_ieQ(x.available)+' '+_invEsc(x.unit)+'</b></div>'
+    +'<label class="ie-lbl">How many?</label><input id="ieMwQty" type="number" min="0" step="any" inputmode="decimal" class="ie-in">'
+    +'<label class="ie-lbl">Why?</label><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">'
+    +IE_WASTE_REASONS.map(function(z){ return '<button class="ie-chip" onclick="_ieWsReason=\''+z[0]+'\';this.parentNode.querySelectorAll(\'.ie-chip\').forEach(function(b){b.classList.remove(\'on\')});this.classList.add(\'on\')">'+z[1]+'</button>'; }).join('')+'</div>'
+    +'<label class="ie-lbl">Note</label><input id="ieMwNote" class="ie-in" placeholder="what happened">'
+    +'<label class="ie-lbl">Photo <span style="font-weight:600;color:var(--timber)">(needed when over ₱'+_invPhotoAbove()+' at menu price)</span></label>'
+    +'<input type="file" accept="image/*" capture="environment" onchange="_ieWsPhotoPick(this)" class="ie-in" style="padding:6px"><div id="ieWsPhotoOk" style="font-size:.7rem;color:#15803d;margin-top:3px"></div>'
+    +'<button id="ieMwBtn" onclick="_ieMenuWaste('+id+')" style="width:100%;margin-top:12px;font-size:.9rem;font-weight:800;background:#b91c1c;color:#fff;border:none;border-radius:10px;padding:12px;cursor:pointer">Record waste</button>');
+}
+async function _ieMenuWaste(id){
+  var x=_ieMenuRow(id), b=document.getElementById('ieMwBtn'); if(b&&b.disabled) return;
+  var q=parseFloat((document.getElementById('ieMwQty')||{}).value);
+  if(!(q>0)){ showToast('Enter how many','error'); return; }
+  if(q>_invNum(x.available)+1e-9){ showToast('Only '+_ieQ(x.available)+' available','error'); return; }
+  if(!_ieWsReason){ showToast('Pick why','error'); return; }
+  if(b){ b.disabled=true; b.textContent='Saving…'; }
+  var r=await api('invRecordSpoilage',{itemId:id,qty:q,reason:_ieWsReason,notes:(document.getElementById('ieMwNote')||{}).value||'',photoUrl:_ieWsPhoto||null});
+  if(r&&r.ok){ showToast('Waste recorded · '+_ieQ(r.remaining)+' left','success'); _ieCloseModal(); await _ieLoadMenu(); _invRenderTab(); }
+  else { if(b){ b.disabled=false; b.textContent='Record waste'; } showToast((r&&r.error)||'Failed','error'); }
+}
+function _ieMenuFixForm(id){
+  var x=_ieMenuRow(id); if(!x) return;
+  _ieModal('<div style="font-size:1rem;font-weight:800;color:var(--forest-deep);margin-right:34px">Fix count: '+_invEsc(x.name)+'</div>'
+    +'<div style="font-size:.72rem;color:var(--timber)">The system says <b>'+_ieQ(x.available)+' '+_invEsc(x.unit)+'</b>. Enter what is really there — the difference is recorded with your name.</div>'
+    +'<label class="ie-lbl">Really there</label><input id="ieMfQty" type="number" min="0" step="any" inputmode="decimal" class="ie-in" oninput="_ieMfPrev('+id+')">'
+    +'<div id="ieMfPrev" style="margin-top:6px;font-size:.8rem;font-weight:800"></div>'
+    +'<label class="ie-lbl">Note</label><input id="ieMfNote" class="ie-in" placeholder="e.g. 2 given to staff, not recorded">'
+    +'<button id="ieMfBtn" onclick="_ieMenuFix('+id+')" style="width:100%;margin-top:12px;font-size:.9rem;font-weight:800;background:var(--forest);color:#fff;border:none;border-radius:10px;padding:12px;cursor:pointer">Save count</button>');
+  setTimeout(function(){ var q=document.getElementById('ieMfQty'); if(q) q.focus(); },30);
+}
+function _ieMfPrev(id){
+  var x=_ieMenuRow(id), v=(document.getElementById('ieMfQty')||{}).value, p=document.getElementById('ieMfPrev'); if(!p) return;
+  if(v===''){ p.textContent=''; return; }
+  var d=parseFloat(v)-_invNum(x.available);
+  p.innerHTML = Math.abs(d)<1e-9 ? '<span style="color:#15803d">Matches ✓</span>' : '<span style="color:'+(d<0?'#b91c1c':'#15803d')+'">'+(d<0?'Missing ':'Extra ')+_ieQ(Math.abs(d))+' '+_invEsc(x.unit)+'</span>';
+}
+async function _ieMenuFix(id){
+  var b=document.getElementById('ieMfBtn'); if(b&&b.disabled) return;
+  var v=(document.getElementById('ieMfQty')||{}).value;
+  if(v===''||!(parseFloat(v)>=0)){ showToast('Enter what is really there','error'); return; }
+  if(b){ b.disabled=true; b.textContent='Saving…'; }
+  var r=await api('invMenuSetCount',{itemId:id,actual:parseFloat(v),note:(document.getElementById('ieMfNote')||{}).value||''});
+  if(r&&r.ok){ showToast('Count saved · '+_ieQ(r.available)+' available','success'); _ieCloseModal(); await _ieLoadMenu(); _invRenderTab(); }
+  else { if(b){ b.disabled=false; b.textContent='Save count'; } showToast((r&&r.error)||'Failed','error'); }
 }

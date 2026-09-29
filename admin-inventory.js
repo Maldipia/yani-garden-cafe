@@ -9,7 +9,7 @@ var _invRef   = { units: [], locations: [], suppliers: [], itemTypes: [] };
 var _invItems = [];
 var _invUnits2 = [];           // stock units
 var _invDash  = null;
-var _invTab   = 'dash';    // today at a glance first
+var _invTab   = 'menu';    // menu stock first
 var _invItemFilter = 'ALL';
 // stock filters
 var _invSearch = '';
@@ -122,7 +122,7 @@ function _invRender() {
   h += '</div>';
   // tabs
   h += '<div style="display:flex;gap:2px;border-bottom:2px solid var(--mist-light);margin:10px 0 14px;overflow-x:auto;-webkit-overflow-scrolling:touch">';
-  [['dash','📈 Dashboard'],['current','📦 Current Stock'],['receive','📥 Receive'],['waste','🗑️ Waste'],['count','🧮 Count'],['moves','🧾 Movements'],['stock','🧱 Batches'],['recipes','📖 Recipes'],['items','🏷️ Items'],['settings','⚙️ Settings']].forEach(function(t){
+  [['menu','🍰 Menu Stock'],['dash','📈 Dashboard'],['current','📦 Current Stock'],['receive','📥 Receive'],['waste','🗑️ Waste'],['moves','🧾 Movements'],['stock','🧱 Batches'],['recipes','📖 Recipes'],['items','🏷️ Items'],['settings','⚙️ Settings']].forEach(function(t){
     var on=_invTab===t[0];
     h += '<button onclick="_invSetTab(\''+t[0]+'\')" style="background:none;border:none;cursor:pointer;padding:7px 12px;font-size:.8rem;font-weight:700;white-space:nowrap;flex-shrink:0;'
        + (on?'color:var(--forest-deep);border-bottom:3px solid var(--gold);margin-bottom:-2px':'color:var(--timber)')+'">'+t[1]+'</button>';
@@ -135,7 +135,8 @@ function _invRender() {
 function _invSetTab(t){ _invTab=t; _invRender(); if(t==='count') _invCntLoad(); else if(typeof _ieLoadTab==='function') _ieLoadTab(t); }
 function _invRenderTab(){
   var b=document.getElementById('invTabBody'); if(!b) return;
-  if (_invTab==='dash') b.innerHTML=_ieDashHtml();
+  if (_invTab==='menu') b.innerHTML=_ieMenuHtml();
+  else if (_invTab==='dash') b.innerHTML=_ieDashHtml();
   else if (_invTab==='current') b.innerHTML=_ieCurrentHtml();
   else if (_invTab==='moves') b.innerHTML=_ieMovesHtml();
   else if (_invTab==='receive') b.innerHTML=_ieReceiveHtml();

@@ -32,6 +32,8 @@ const INV_ACTIONS = new Set([
   // engine: current stock, ledger, audit, explain, dashboard, exceptions, corrections, add-on mapping
   'invCurrentStock','invMovements','invMovementDetail','invItemDetail','invExplainStock','invDashboardV2',
   'invExceptions','invResolveException','invReverseMovement','invLedgerCheck','invListAddons','invSaveAddonMap',
+  // menu stock: one list, add / waste / fix count
+  'invMenuStock','invMenuAdd','invMenuSetCount',
 ]);
 
 const SPOIL_REASONS = ['SPOILED','EXPIRED','DAMAGED','STAFF_MEAL','COMPLIMENTARY'];
@@ -568,6 +570,34 @@ export async function routeInventory(action, body, auth, req, res) {
     const r = await rpc('inv_day_log', { p_date: d });
     if (!r.ok) return boom(res, 'Failed to load log');
     return res.status(200).json({ ok: true, date: d, rows: r.data || [] });
+  }
+
+  // ══ MENU STOCK (one list per menu item — no opening/closing shifts) ═══════
+  if (action === 'invMenuStock') {
+    const d = String(body.date || '').slice(0, 10);
+    const r = await rpc('inv_menu_stock', { p_date: /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null });
+    if (!r.ok) return boom(res, 'Failed to load menu stock');
+    return res.status(200).json({ ok: true, rows: r.data || [], moduleEnabled: await moduleOn() });
+  }
+
+  if (action === 'invMenuAdd') {
+    const qty = num(body.qty);
+    if (!(qty > 0)) return bad(res, 'Enter how many');
+    const itemId = int(body.itemId), code = str(body.menuCode, 60);
+    if (!itemId && !code) return bad(res, 'Pick an item');
+    const cost = num(body.unitCost);
+    if (cost !== null && cost < 0) return bad(res, 'Cost cannot be negative');
+    const r = await rpc('inv_menu_add', { p_menu_code: itemId ? null : code, p_item_id: itemId || null, p_qty: qty,
+      p_unit_id: int(body.unitId), p_unit_cost: cost, p_actor: actor, p_note: str(body.note, 300) });
+    return rpcResult(res, r, 'Could not add stock');
+  }
+
+  if (action === 'invMenuSetCount') {
+    const itemId = int(body.itemId), actual = num(body.actual);
+    if (!itemId) return bad(res, 'Pick an item');
+    if (actual === null || !(actual >= 0)) return bad(res, 'Enter what is really there');
+    const r = await rpc('inv_menu_set_count', { p_item_id: itemId, p_actual: actual, p_actor: actor, p_note: str(body.note, 300) });
+    return rpcResult(res, r, 'Could not fix the count');
   }
 
   // ══ ENGINE: CURRENT STOCK · LEDGER · AUDIT · EXPLAIN · DASHBOARD ═══════════
