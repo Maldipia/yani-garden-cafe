@@ -473,7 +473,7 @@ export async function routeInventory(action, body, auth, req, res) {
     for (const l of lines) {
       const itemId = int(l.itemId), counted = num(l.counted), seen = num(l.seen);
       if (!itemId) return bad(res, 'Each line needs an item');
-      if (counted === null || !(counted >= 0)) return bad(res, 'Enter the count for every item');
+      if (counted !== null && !(counted >= 0)) return bad(res, 'Counts cannot be negative');
       const reason = l.reason ? String(l.reason).toUpperCase() : null;
       if (reason && !COUNT_REASONS.includes(reason)) return bad(res, 'Unknown reason');
       clean.push({ item_id: itemId, counted, seen, reason, note: str(l.note, 200) });

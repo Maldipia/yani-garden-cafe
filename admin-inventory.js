@@ -9,7 +9,7 @@ var _invRef   = { units: [], locations: [], suppliers: [], itemTypes: [] };
 var _invItems = [];
 var _invUnits2 = [];           // stock units
 var _invDash  = null;
-var _invTab   = 'stock';
+var _invTab   = 'count';   // daily screen first
 var _invItemFilter = 'ALL';
 // stock filters
 var _invSearch = '';
@@ -74,6 +74,7 @@ async function initInventory() {
   v.innerHTML = '<div style="padding:32px;text-align:center;color:var(--timber)">Loading Stock Control…</div>';
   await _invLoadAll();
   _invRender();
+  if(_invTab==='count') _invCntLoad();
 }
 
 async function _invLoadAll() {
@@ -1029,7 +1030,7 @@ async function _invCntLoad(){
   if(isToday){
     _invCntSheet=(res[1]&&res[1].ok)?(res[1].items||[]):[]; _invCntLoaded=true;
     _invCntVals={};
-    _invCntSheet.forEach(function(it){ _invCntVals[it.item_id]={counted:_invNum(it.system_qty),reason:'',note:''}; });
+    _invCntSheet.forEach(function(it){ _invCntVals[it.item_id]={counted:it.tracked?_invNum(it.system_qty):null,reason:'',note:''}; });
   }
   if(_invTab==='count') _invRenderTab();
 }
@@ -1069,7 +1070,7 @@ function _invCntHtml(){
     if(r.kind==='COUNT' && r.reference_id) counts[r.reference_id]=r;
   });
   var nCounts=Object.keys(counts).length;
-  var soldOutNow=isToday?_invCntSheet.filter(function(it){return _invNum(it.system_qty)<=0;}).length:null;
+  var soldOutNow=isToday?_invCntSheet.filter(function(it){return it.tracked && _invNum(it.system_qty)<=0;}).length:null;
   var card=function(v,l,c){ return '<div style="background:#fff;border:1px solid var(--mist-light);border-radius:10px;padding:10px 12px"><div style="font-size:1.05rem;font-weight:800;color:'+(c||'var(--forest-deep)')+'">'+v+'</div><div style="font-size:.64rem;color:var(--timber);margin-top:1px">'+l+'</div></div>'; };
   h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:12px">'
     + card(nCounts?('✓ '+nCounts+' count'+(nCounts>1?'s':'')):'Not yet','count submitted'+(nCounts?(' · last '+_invTime(counts[Object.keys(counts)[0]].performed_at)):''), nCounts?'#3b6d11':'#9a5b06')
@@ -1087,9 +1088,8 @@ function _invCntSheetHtml(){
   if(!_invCntLoaded) return '<div style="padding:24px;text-align:center;color:var(--timber);font-size:.78rem">Loading count sheet…</div>';
   if(!_invCntSheet.length){
     return '<div style="background:#fff;border:1px dashed var(--mist);border-radius:10px;padding:22px;text-align:center;color:var(--timber);font-size:.78rem;margin-bottom:14px">'
-      +'<div style="font-weight:800;color:var(--forest-deep);margin-bottom:4px">No items to count yet</div>'
-      +'An item appears here after its first delivery is received (📊 Stock → Receive, or 📦 Receive on a purchase). '
-      +'Ready-to-sell items only — pastries, cakes, bottled and packed goods.</div>';
+      +'<div style="font-weight:800;color:var(--forest-deep);margin-bottom:4px">No ready-to-sell items linked to the menu</div>'
+      +'Link a menu item to a ready-to-sell stock item in 🏷️ Items to count it here.</div>';
   }
   var th='position:sticky;top:0;background:var(--cream,#fbf8f3);z-index:1;font-size:.6rem;letter-spacing:.5px;color:var(--timber);text-transform:uppercase;text-align:left;padding:8px;border-bottom:1.5px solid var(--mist-light)';
   var h='<div style="font-size:.68rem;color:var(--timber);margin-bottom:6px">System = received − sold − spoiled. Enter what is on display; only a difference needs a reason.</div>';
@@ -1097,7 +1097,30 @@ function _invCntSheetHtml(){
     +'<table style="width:100%;border-collapse:collapse;min-width:720px"><thead><tr>'
     +'<th style="'+th+'">Item</th><th style="'+th+'">Expiry</th><th style="'+th+';text-align:center">System</th><th style="'+th+'">On display</th><th style="'+th+';text-align:center">Diff</th><th style="'+th+'">Reason</th>'
     +'</tr></thead><tbody>';
+  var firstNew=true;
   _invCntSheet.forEach(function(it){
+    if(!it.tracked){
+      if(firstNew){ firstNew=false;
+        h+='<tr><td colspan="6" style="padding:12px 8px 6px;background:#f7f3ea;border-bottom:1px solid var(--mist-light)">'
+          +'<div style="font-weight:800;color:var(--forest-deep);font-size:.78rem">Not tracked yet</div>'
+          +'<div style="font-size:.66rem;color:var(--timber)">Enter how many are on display now to start tracking (this is the opening stock). Leave blank to skip.</div></td></tr>'; }
+      var nv=_invCntVals[it.item_id]||{counted:null};
+      var has=(nv.counted!==null && nv.counted!=='' && _invNum(nv.counted)>0);
+      h+='<tr style="border-bottom:1px solid var(--mist-light);'+(has?'':'opacity:.8')+'">'
+        +'<td style="padding:9px 8px"><div style="font-weight:700;color:var(--forest-deep);font-size:.82rem">'+_invEsc(it.name)+'</div>'
+          +'<div style="font-size:.62rem;color:var(--timber)">'+_invEsc(it.unit)+(it.standard_yield?(' · 1 box = '+_invFmtQty(it.standard_yield)):'')+'</div>'
+          +(it.menu_names?'<div style="font-size:.6rem;color:#6b5a3a;background:#f3eee3;display:inline-block;border-radius:8px;padding:1px 7px;margin-top:3px">sold as: '+_invEsc(it.menu_names)+'</div>':'')+'</td>'
+        +'<td style="padding:9px 8px;font-size:.74rem;color:var(--timber)">—</td>'
+        +'<td style="padding:9px 8px;text-align:center;color:var(--timber)">—</td>'
+        +'<td style="padding:9px 8px"><div style="display:flex;align-items:center;gap:4px">'
+          +'<button onclick="_invCntStep('+it.item_id+',-1)" style="width:30px;height:32px;border:1.5px solid var(--mist);background:#fff;border-radius:8px;font-size:1rem;cursor:pointer;color:var(--forest)" aria-label="Less">−</button>'
+          +'<input type="number" min="0" step="1" placeholder="—" value="'+(nv.counted===null?'':_invFmtQty(nv.counted))+'" onchange="_invCntSet('+it.item_id+',\'counted\',this.value)" style="width:56px;height:32px;text-align:center;font-weight:800;font-size:.9rem;border:1.5px dashed '+(has?'var(--forest)':'var(--mist)')+';background:#fff;border-radius:8px">'
+          +'<button onclick="_invCntStep('+it.item_id+',1)" style="width:30px;height:32px;border:1.5px solid var(--mist);background:#fff;border-radius:8px;font-size:1rem;cursor:pointer;color:var(--forest)" aria-label="More">+</button>'
+        +'</div></td>'
+        +'<td style="padding:9px 8px;text-align:center;color:var(--timber)">—</td>'
+        +'<td style="padding:9px 8px">'+(has?'<span style="font-size:.7rem;color:#185fa5;font-weight:700">Starts tracking</span>':'<span style="font-size:.68rem;color:var(--timber)">skip</span>')+'</td></tr>';
+      return;
+    }
     var v=_invCntVals[it.item_id]||{counted:_invNum(it.system_qty),reason:'',note:''};
     var sys=_invNum(it.system_qty), diff=Math.round((_invNum(v.counted)-sys)*1000)/1000;
     var dl=_invDaysTo(it.next_expiry);
@@ -1135,27 +1158,31 @@ function _invCntSheetHtml(){
 }
 function _invCntSet(id,k,val){
   var v=_invCntVals[id]; if(!v) return;
-  if(k==='counted'){ var n=parseFloat(val); v.counted=(isNaN(n)||n<0)?0:n; }
+  if(k==='counted'){ var n=parseFloat(val); var it0=_invCntSheet.filter(function(x){return x.item_id===id;})[0];
+    v.counted=(val===''||isNaN(n))?((it0&&!it0.tracked)?null:0):Math.max(0,n); }
   else v[k]=val;
   _invRenderTab();
 }
-function _invCntStep(id,d){ var v=_invCntVals[id]; if(!v) return; v.counted=Math.max(0,_invNum(v.counted)+d); _invRenderTab(); }
-function _invCntReset(){ _invCntSheet.forEach(function(it){ _invCntVals[it.item_id]={counted:_invNum(it.system_qty),reason:'',note:''}; }); _invRenderTab(); }
+function _invCntStep(id,d){ var v=_invCntVals[id]; if(!v) return; var n=Math.max(0,_invNum(v.counted)+d); var it0=_invCntSheet.filter(function(x){return x.item_id===id;})[0]; v.counted=(it0&&!it0.tracked&&n===0)?null:n; _invRenderTab(); }
+function _invCntReset(){ _invCntSheet.forEach(function(it){ _invCntVals[it.item_id]={counted:it.tracked?_invNum(it.system_qty):null,reason:'',note:''}; }); _invRenderTab(); }
 async function _invCntSubmit(){
   if(_invCntBusy) return;
-  var lines=[], diffs=0, missingReason=null;
+  var lines=[], diffs=0, missingReason=null, started=0;
   _invCntSheet.forEach(function(it){
-    var v=_invCntVals[it.item_id]; var d=_invNum(v.counted)-_invNum(it.system_qty);
+    var v=_invCntVals[it.item_id];
+    if(!it.tracked){ if(v.counted!==null && _invNum(v.counted)>0){ started++; lines.push({itemId:it.item_id, counted:_invNum(v.counted), seen:null, reason:null, note:''}); } return; }
+    var d=_invNum(v.counted)-_invNum(it.system_qty);
     if(Math.abs(d)>1e-9) diffs++;
     if(d<-1e-9 && !v.reason && !missingReason) missingReason=it.name;
     lines.push({itemId:it.item_id, counted:_invNum(v.counted), seen:_invNum(it.system_qty), reason:(d<0?v.reason:null)||null, note:v.note||''});
   });
   if(missingReason){ showToast('Pick a reason for '+missingReason,'error'); return; }
-  if(!confirm('Submit count for '+lines.length+' item'+(lines.length>1?'s':'')+'?'+(diffs?('\n'+diffs+' differ from the system and will be recorded.'):'\nEverything matches.'))) return;
+  if(!lines.length){ showToast('Enter at least one count','error'); return; }
+  if(!confirm('Submit count for '+lines.length+' item'+(lines.length>1?'s':'')+'?'+(diffs?('\n'+diffs+' differ from the system and will be recorded.'):'')+(started?('\n'+started+' new item'+(started>1?'s':'')+' will start tracking (opening stock).'):'')+((!diffs&&!started)?'\nEverything matches.':''))) return;
   _invCntBusy=true; var b=document.getElementById('invCntSubmitBtn'); if(b){ b.disabled=true; b.textContent='Saving…'; }
   var r=await api('invSubmitCount',{lines:lines});
   _invCntBusy=false;
-  if(r&&r.ok){ showToast('Count saved'+(r.differences?(' · '+r.differences+' difference'+(r.differences>1?'s':'')):' · all match'),'success'); await _invCntLoad(); }
+  if(r&&r.ok){ showToast('Count saved'+(r.started?(' · '+r.started+' now tracked'):'')+(r.differences?(' · '+r.differences+' difference'+(r.differences>1?'s':'')):''),'success'); await _invCntLoad(); }
   else { showToast((r&&r.error)||'Count failed','error'); if(r&&r.stock_changed) await _invCntLoad(); else if(b){ b.disabled=false; b.textContent='Submit count'; } }
 }
 
@@ -1187,8 +1214,8 @@ function _invCntLogHtml(isToday){
 // Record spoilage any time (not only during the count)
 async function _invOpenSpoilage(){
   if(!_invCntSheet.length && _invCntDate===_invManilaToday()){ var s=await api('invCountSheet',{}); _invCntSheet=(s&&s.ok)?(s.items||[]):[]; }
-  if(!_invCntSheet.length){ showToast('Receive stock for an item first','error'); return; }
-  var opts=_invCntSheet.map(function(it){ return '<option value="'+it.item_id+'" data-unit="'+_invEsc(it.unit)+'" data-max="'+_invNum(it.system_qty)+'">'+_invEsc(it.name)+' — '+_invFmtQty(it.system_qty)+' '+_invEsc(it.unit)+' left</option>'; }).join('');
+  if(!_invCntSheet.filter(function(it){return it.tracked;}).length){ showToast('Count or receive an item first — spoilage needs stock','error'); return; }
+  var opts=_invCntSheet.filter(function(it){return it.tracked;}).map(function(it){ return '<option value="'+it.item_id+'" data-unit="'+_invEsc(it.unit)+'" data-max="'+_invNum(it.system_qty)+'">'+_invEsc(it.name)+' — '+_invFmtQty(it.system_qty)+' '+_invEsc(it.unit)+' left</option>'; }).join('');
   var ropts=INV_SPOIL_REASONS.map(function(k){ return '<option value="'+k+'">'+INV_REASONS[k]+'</option>'; }).join('');
   var body=_invField('Item',_invSelect('spItem',opts))
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
