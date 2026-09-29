@@ -982,18 +982,18 @@ async function renderPayrollSection(s, tc){
       <td style="padding:5px 7px;vertical-align:top">${esc(x.clock_in||'—')}</td>
       <td style="padding:5px 7px;vertical-align:top">${x.clock_out ? esc(x.clock_out)
         : `<span style="color:#b45309;font-weight:700" title="No time-out was tapped — hours stop at the last tap">—</span> <a href="#" onclick="openManualClockModal('${s.id}',{date:'${esc(x.work_date)}',event:'CLOCK_OUT'});return false" style="font-size:.62rem;color:#1d4ed8;text-decoration:none;white-space:nowrap">+ add time-out</a>`}</td>
-      ${cell(worked.toFixed(2)+' h', N(x.break_mins)>0 ? 'less '+(N(x.break_count)>1?N(x.break_count)+' breaks · ':'break ')+Math.round(N(x.break_mins))+'m' : 'no break tapped', '', 'Clock in → clock out, minus tapped breaks'+(x.break_detail?': '+x.break_detail:''))}
-      ${cell('<b>'+reg.toFixed(2)+' h</b>', hrPeso(regPay)+' = '+reg.toFixed(2)+' × '+hrPeso(rate), '', 'Regular hours are capped at '+N(x.standard_hours||8).toFixed(0)+' h a day')}
+      ${cell(worked.toFixed(2)+' h', N(x.break_mins)>0 ? '−'+Math.round(N(x.break_mins))+'m break'+(N(x.break_count)>1?'s':'') : 'no break', '', 'Clock in → clock out, minus tapped breaks'+(x.break_detail?': '+x.break_detail:''))}
+      ${cell('<b>'+reg.toFixed(2)+' h</b>', hrPeso(regPay), '', reg.toFixed(2)+' h × '+hrPeso(rate)+' — regular hours are capped at '+N(x.standard_hours||8).toFixed(0)+' h a day')}
       ${ot>0
-        ? cell(ot.toFixed(2)+' h worked', otPaid>0 ? '<b style="color:#1d4ed8">'+hrPeso(otPay)+'</b> = '+otPaid.toFixed(2)+' × '+hrPeso(rate)+' × 1.25' : '<span style="color:#9ca3af">₱0 · '+hrPeso(otIf)+' if approved</span>', otPaid>0?'#1d4ed8':'#6b7280', 'Overtime = approved hours × hourly rate × 1.25')
+        ? cell(ot.toFixed(2)+' h', otPaid>0 ? '<b style="color:#1d4ed8">'+hrPeso(otPay)+'</b> · '+otPaid.toFixed(2)+' h paid' : '<span style="color:#9ca3af">₱0 · '+hrPeso(otIf)+' if approved</span>', otPaid>0?'#1d4ed8':'#6b7280', (otPaid>0 ? otPaid.toFixed(2)+' h × '+hrPeso(rate)+' × 1.25 = '+hrPeso(otPay)+'. ' : '')+'Overtime = approved hours × hourly rate × 1.25')
         : cell('—','', '#9ca3af','')}
       ${nd>0
-        ? cell(nd.toFixed(2)+' h', ndPaid>0 ? '<b style="color:#6d28d9">'+hrPeso(ndPay)+' ✓</b> = '+ndPaid.toFixed(2)+' × '+hrPeso(rate)+' × 10%' : '<span style="color:#9ca3af">₱0 · '+hrPeso(ndIf)+' pending</span>', ndPaid>0?'#6d28d9':'#6b7280', 'Night differential = approved hours between 10:00 PM and 6:00 AM × hourly rate × 10%')
+        ? cell(nd.toFixed(2)+' h', ndPaid>0 ? '<b style="color:#6d28d9">'+hrPeso(ndPay)+' ✓</b>' : '<span style="color:#9ca3af">'+hrPeso(ndIf)+' pending</span>', ndPaid>0?'#6d28d9':'#6b7280', nd.toFixed(2)+' h × '+hrPeso(rate)+' × 10% = '+hrPeso(ndPaid>0?ndPay:ndIf)+'. Night differential = approved hours between 10:00 PM and 6:00 AM × hourly rate × 10%')
         : cell('—','', '#9ca3af','')}
       ${ut>0
-        ? cell('<b>'+ut.toFixed(2)+' h</b>', 'short '+hrPeso(utPay), '#b45309', 'Hours short of the standard day — already reflected in the lower regular pay')
+        ? cell('<b>'+ut.toFixed(2)+' h</b>', '−'+hrPeso(utPay), '#b45309', ut.toFixed(2)+' h × '+hrPeso(rate)+' — hours short of the standard day, already reflected in the lower regular pay')
         : cell('—','', '#9ca3af','')}
-      <td style="padding:5px 7px;text-align:right;vertical-align:top;font-weight:800;white-space:nowrap" title="Regular + approved OT + approved night diff">${hrPeso(N(x.day_pay))}${sub(hrPeso(regPay)+(otPay>0?' + '+hrPeso(otPay):'')+(ndPay>0?' + '+hrPeso(ndPay):''))}</td>
+      <td style="padding:5px 7px;text-align:right;vertical-align:top;font-weight:800;white-space:nowrap" title="Regular + approved OT + approved night diff">${hrPeso(N(x.day_pay))}${(otPay>0||ndPay>0)?sub(hrPeso(regPay)+(otPay>0?' + '+hrPeso(otPay):'')+(ndPay>0?' + '+hrPeso(ndPay):'')):''}</td>
       <td style="padding:5px 7px;font-size:.6rem;color:#6b7280;vertical-align:top">${esc(x.sources||'—')}</td>
     </tr>`;
   }).join('') : '<tr><td colspan="11" style="padding:10px;color:#9ca3af;font-size:.75rem">No attendance in this cut-off</td></tr>';
