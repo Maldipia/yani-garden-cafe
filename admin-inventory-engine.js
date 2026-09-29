@@ -576,10 +576,20 @@ function _ieMenuRowHtml(x){
     +'<div class="ms-act"><input type="number" min="0" step="any" inputmode="decimal" placeholder="qty" value="'+_invEsc(_ieMenuNew[x.menu_code]||'')+'" data-code="'+_invEsc(x.menu_code)+'" oninput="_ieMenuNew[this.dataset.code]=this.value;_ieMenuNewCount()" class="ie-in" style="width:92px;margin:0;padding:7px;text-align:right"></div></div>';
 }
 function _ieMenuCostLine(x){
-  var c=_invNum(x.unit_cost), p=_invNum(x.price);
+  var c=_invNum(x.unit_cost), mcs=(x.menu_costs||[]).filter(function(m){ return _invNum(m.cost)>0; });
+  var stock = c>0 ? _invEsc(x.unit)+' ₱'+_ieQ(c) : '';
+  function mg(price,cost){ var p=_invNum(price); if(!(p>0)) return ''; var m=Math.round((p-cost)/p*100); return ' · <span style="color:'+(m<50?'#b45309':'#15803d')+'">'+m+'% margin</span>'; }
+  if(mcs.length){
+    // serving cost from Menu Costing (e.g. slice ₱50 + scoop ice cream ₱20 = ₱70)
+    return mcs.map(function(m){
+      return (mcs.length>1?_invEsc(m.name)+': ':'')+'Serving cost <b style="color:var(--forest-deep)">'+_iePeso(m.cost)+'</b>'
+        +(stock?' <span style="color:var(--timber)">('+stock+' + extras)</span>':'')+' · sells '+_iePeso(m.price)+mg(m.price,_invNum(m.cost));
+    }).join('<br>');
+  }
+  var p=_invNum(x.price);
   if(!(c>0)) return '<span style="color:#b45309;font-weight:700">Cost not set</span>'+(_invIsAdmin()?' · <a href="javascript:void 0" onclick="event.stopPropagation();_ieMenuCostForm('+x.item_id+')" style="color:var(--forest);font-weight:700">Set cost</a>':'')+(p?' · sells '+_iePeso(p):'');
-  var m=p>0?Math.round((p-c)/p*100):null;
-  return 'Cost <b style="color:var(--forest-deep)">'+_iePeso(c)+'</b>/'+_invEsc(x.unit)+(p?' · sells '+_iePeso(p)+(m!==null?' · <span style="color:'+(m<50?'#b45309':'#15803d')+'">'+m+'% margin</span>':''):'');
+  return 'Cost <b style="color:var(--forest-deep)">'+_iePeso(c)+'</b>/'+_invEsc(x.unit)+(p?' · sells '+_iePeso(p)+mg(p,c):'')
+    +' <span style="color:var(--timber)">· add toppings/sides in Menu Costing</span>';
 }
 function _ieMenuCostForm(id){
   var x=_ieMenuRow(id); if(!x) return;
