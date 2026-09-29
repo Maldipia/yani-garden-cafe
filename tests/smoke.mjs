@@ -134,6 +134,26 @@ async function authorisation() {
         noReason.error);
 }
 
+// ── 2b. SHIFT-AWARE CLOCK STATE ────────────────────────────────────────────
+// A shift that crosses midnight is one shift. The status call must say which
+// shift a tap will be filed under, and manual entries on the wrong day are
+// refused before anything is written.
+async function shiftAwareClock() {
+  section('Clock state is shift-aware');
+  const st = await call({ action:'hrGetClockStatus', staffCode:'USR_011' });
+  check('status returns a state', st.ok === true && ['IN','OUT','ON_BREAK','ON_BROKEN'].includes(st.state), JSON.stringify(st).slice(0,80));
+  check('status names the shift date', /^\d{4}-\d{2}-\d{2}$/.test(String(st.shiftDate||'')), String(st.shiftDate));
+  check('status says whether that is yesterday', typeof st.shiftIsYesterday === 'boolean');
+  const phHour = new Date(Date.now() + 8*3600*1000).getUTCHours();
+  if (phHour >= 6) check('after 06:00 the live shift is today', st.shiftIsYesterday === false);
+  const wrongDay = await call({ action:'addHRTimeLog', userId: OWNER, staffId:'x', event_type:'CLOCK_OUT',
+    log_date:'2026-01-01', event_time:'2026-01-02T02:00:00Z', notes:'wrong-day probe (never written)' });
+  check('manual time-out on the wrong day is refused', wrongDay.ok === false && /shift date|6:00/i.test(wrongDay.error||''), wrongDay.error);
+  const staff = await call({ action:'getHRStaff', userId: OWNER });
+  const states = (staff.staff||[]).map(s => s.clock_state);
+  check('HR list carries a clock state for every staff', states.length > 0 && states.every(x => ['IN','BREAK','OUT'].includes(x)), states.join(','));
+}
+
 // ── 3. OWNER ACCESS ────────────────────────────────────────────────────────
 async function ownerAccess() {
   section('Owner can still reach everything');
@@ -608,6 +628,7 @@ const t0 = Date.now();
 console.log(`\nYANI POS regression suite → ${BASE}`);
 await publicSurfaces();
 await authorisation();
+  await shiftAwareClock();
 await ownerAccess();
 await payrollMath();
 await pages();

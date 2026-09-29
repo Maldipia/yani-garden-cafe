@@ -665,20 +665,22 @@ async function loadClockTab(s,tc) {
     </div>`;
 }
 
-function openManualClockModal(staffId) {
+function openManualClockModal(staffId, preset) {
   const now=new Date();
+  preset = preset || {};
+  const presetDate = /^\d{4}-\d{2}-\d{2}$/.test(preset.date||'') ? preset.date : now.toISOString().split('T')[0];
+  const presetEv = preset.event || 'CLOCK_IN';
+  const presetTime = preset.date ? '' : now.toTimeString().slice(0,5);
+  const opt = (v,l)=>`<option value="${v}"${presetEv===v?' selected':''}>${l}</option>`;
   hrModal('Manual Clock Entry',`
     <div class="hr-edit-row"><label class="hr-edit-label">Event type *</label>
       <select class="hr-edit-input" id="clkEvent">
-        <option value="CLOCK_IN">Clock In</option>
-        <option value="CLOCK_OUT">Clock Out</option>
-        <option value="BREAK_START">Break Start</option>
-        <option value="BREAK_END">Break End</option>
+        ${opt('CLOCK_IN','Clock In')}${opt('CLOCK_OUT','Clock Out')}${opt('BREAK_START','Break Start')}${opt('BREAK_END','Break End')}
       </select>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <div class="hr-edit-row"><label class="hr-edit-label">Shift date *</label><input class="hr-edit-input" id="clkDate" type="date" value="${now.toISOString().split('T')[0]}"></div>
-      <div class="hr-edit-row"><label class="hr-edit-label">Time *</label><input class="hr-edit-input" id="clkTime" type="time" value="${now.toTimeString().slice(0,5)}"></div>
+      <div class="hr-edit-row"><label class="hr-edit-label">Shift date *</label><input class="hr-edit-input" id="clkDate" type="date" value="${presetDate}"></div>
+      <div class="hr-edit-row"><label class="hr-edit-label">Time *</label><input class="hr-edit-input" id="clkTime" type="time" value="${presetTime}"></div>
     </div>
     <div id="clkNextDay" style="display:none;font-size:.7rem;color:#b45309;background:#fef3c7;border-radius:6px;padding:6px 10px;margin:-4px 0 8px">
       🌙 Before 6:00 AM — this will be filed as the end of the <b id="clkNextDayLbl"></b> shift (early the next morning).
@@ -705,7 +707,7 @@ function openManualClockModal(staffId) {
     });
     if(!r||!r.ok){showToast(r&&r.error?r.error:'Could not save the entry','error');return false;}
     showToast('Clock entry saved ✅','success');
-    if(_hrSelected?.id===staffId) await loadHRTab(_hrSelected,'clock');
+    if(_hrSelected?.id===staffId) await loadHRTab(_hrSelected, _hrActiveTab==='payroll' ? 'payroll' : 'clock');
   });
   setTimeout(_clkRefreshNextDayHint,0);
   ['clkEvent','clkDate','clkTime'].forEach(function(id){
@@ -977,7 +979,8 @@ async function renderPayrollSection(s, tc){
       <td style="padding:5px 7px">${esc(x.work_date)}${x.is_holiday?` <span title="${esc(x.holiday_name||'')}" style="font-size:.58rem;font-weight:700;background:#ffedd5;color:#c2410c;padding:1px 5px;border-radius:20px">HOL</span>`:''}</td>
       <td style="padding:5px 7px">${esc(x.clock_in||'—')}</td>
       <td style="padding:5px 7px">${esc(brk)}</td>
-      <td style="padding:5px 7px">${esc(x.clock_out||'—')}</td>
+      <td style="padding:5px 7px">${x.clock_out ? esc(x.clock_out)
+        : `<span style="color:#b45309;font-weight:700" title="No time-out was tapped — hours stop at the last tap">—</span> <a href="#" onclick="openManualClockModal('${s.id}',{date:'${esc(x.work_date)}',event:'CLOCK_OUT'});return false" style="font-size:.62rem;color:#1d4ed8;text-decoration:none;white-space:nowrap">+ add time-out</a>`}</td>
       <td style="padding:5px 7px;text-align:right">${parseFloat(x.regular_hours||0).toFixed(2)}</td>
       <td style="padding:5px 7px;text-align:right${ot>0?';color:#1d4ed8;font-weight:700':''}">${ot>0?ot.toFixed(2):'—'}</td>
       <td style="padding:5px 7px;text-align:right${ut>0?';color:#b45309;font-weight:700':''}">${ut>0?ut.toFixed(2):'—'}</td>
