@@ -486,6 +486,11 @@ export async function routeAdmin(action, body, auth, req, res) {
       return res.status(400).json({ok:false,
         error:'Time must fall on the shift date, or before 6:00 AM the next morning for a time-out'});
     }
+    // A time that has not happened yet cannot be attendance. It also becomes
+    // the staff member's "last tap", which flips the kiosk to OUT mid-shift.
+    if (evMs > Date.now() + 5*60*1000) {
+      return res.status(400).json({ok:false,error:'That time is in the future — enter it after the shift ends'});
+    }
     const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_time_logs',
       {method:'POST',headers:{Prefer:'return=representation'},
        body:JSON.stringify({tenant_id:TENANT_HR2,staff_id:staffId,
@@ -501,6 +506,33 @@ export async function routeAdmin(action, body, auth, req, res) {
         reason, actorCode: who, role: authT.role, req });
     }
     return res.status(200).json({ok:r.ok});
+  }
+
+  // ── removeHRManualEntry ────────────────────────────────────────────────
+  // Undo a typed-in attendance row. Only MANUAL rows can be removed — a tap
+  // at the kiosk is evidence and stays. The removed row is kept in the audit.
+  if (action === 'removeHRManualEntry') {
+    const authRm = await checkAuth(['OWNER']);
+    if (!authRm.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
+    const TENANT_HR2 = '11111111-1111-4111-8111-111111111111';
+    const {staffId, log_date, event_type} = body;
+    const reason = String(body.reason||'').trim();
+    if (!staffId || !/^\d{4}-\d{2}-\d{2}$/.test(String(log_date||'')) || !event_type) {
+      return res.status(400).json({ok:false,error:'staffId, log_date and event_type required'});
+    }
+    if (reason.length < 3) return res.status(400).json({ok:false,error:'A reason is required'});
+    const q = SUPABASE_URL+'/rest/v1/hr_time_logs?tenant_id=eq.'+TENANT_HR2+'&staff_id=eq.'+encodeURIComponent(staffId)+
+      '&log_date=eq.'+log_date+'&event_type=eq.'+encodeURIComponent(event_type)+'&attendance_source=eq.MANUAL';
+    const before = await supaFetch(q+'&select=id,event_type,event_time,notes');
+    const rows = Array.isArray(before.data) ? before.data : [];
+    if (!rows.length) return res.status(200).json({ok:false,error:'No manual entry found for that day'});
+    const del = await supaFetch(q, {method:'DELETE'});
+    if (!del.ok) return res.status(500).json({ok:false,error:'Could not remove'});
+    const who = authRm.userId || body.userId || 'UNKNOWN';
+    await hrAudit({ action:'ATTENDANCE_MANUAL_ENTRY_REMOVED', module:'ATTENDANCE',
+      recordId: staffId, previous:{rows}, next:{log_date, event_type},
+      reason, actorCode: who, role: authRm.role, req });
+    return res.status(200).json({ok:true, removed: rows.length});
   }
 
   // ── hrLookupStaff — for clock-in page ────────────────────────────────────

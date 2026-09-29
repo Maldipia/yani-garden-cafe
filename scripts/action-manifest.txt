@@ -107,6 +107,7 @@ redeemPoints
 registerForRewards
 rejectCardLoad
 rejectPayment
+removeHRManualEntry
 requestCardLoad
 requestReceipt
 resendReceipt

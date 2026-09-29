@@ -715,6 +715,16 @@ function openManualClockModal(staffId, preset) {
     if(el) el.addEventListener('change',_clkRefreshNextDayHint);
   });
 }
+async function removeManualEntry(staffId, date, evType){
+  const label = evType.replace('_',' ').toLowerCase();
+  const reason = prompt('Remove the manual '+label+' on '+date+'? Reason (required):');
+  if(reason===null) return;
+  if(reason.trim().length<3){ showToast('A reason is required','error'); return; }
+  const r=await api('removeHRManualEntry',{userId:currentUser?.userId,staffId,log_date:date,event_type:evType,reason:reason.trim()});
+  if(!r||!r.ok){ showToast(r&&r.error?r.error:'Could not remove','error'); return; }
+  showToast('Manual entry removed','success');
+  if(_hrSelected?.id===staffId) await loadHRTab(_hrSelected, _hrActiveTab==='payroll' ? 'payroll' : 'clock');
+}
 function _clkIsNextMorning(eventType,time){
   return eventType!=='CLOCK_IN' && /^\d{2}:\d{2}/.test(time||'') && parseInt(time.slice(0,2),10) < 6;
 }
@@ -979,12 +989,17 @@ async function renderPayrollSection(s, tc){
     var rowBg = x.is_holiday ? '#fff7ed' : '';
     var td = (v, style, title) => `<td style="padding:5px 7px;text-align:right${style||''}"${title?` title="${esc(title)}"`:''}>${v}</td>`;
     var grey = ';color:#9ca3af';
+    // A typed-in time is shown on amber with ✎ and can be undone; a tap cannot.
+    var manualStyle = 'background:#fef3c7;color:#92400e;border-radius:4px;padding:1px 5px;font-weight:700';
+    var manual = (label, evType) => `<span style="${manualStyle}" title="${esc('Entered manually: '+(x.manual_note||''))}">✎ ${label}</span> <a href="#" onclick="removeManualEntry('${s.id}','${esc(x.work_date)}','${evType}');return false" title="Remove this manual entry" style="font-size:.62rem;color:#b91c1c;text-decoration:none">✕</a>`;
     return `<tr${rowBg?' style="background:'+rowBg+'"':''}>
       <td style="padding:5px 7px">${esc(x.work_date)}${x.is_holiday?` <span title="${esc(x.holiday_name||'')}" style="font-size:.58rem;font-weight:700;background:#ffedd5;color:#c2410c;padding:1px 5px;border-radius:20px">HOL</span>`:''}</td>
-      <td style="padding:5px 7px">${esc(x.clock_in||'—')}</td>
-      <td style="padding:5px 7px">${x.clock_out ? esc(x.clock_out)
+      <td style="padding:5px 7px">${x.in_manual ? manual(esc(x.clock_in||'—'),'CLOCK_IN') : esc(x.clock_in||'—')}</td>
+      <td style="padding:5px 7px">${x.clock_out ? (x.out_manual ? manual(esc(x.clock_out),'CLOCK_OUT') : esc(x.clock_out))
         : `<span style="color:#b45309;font-weight:700" title="No time-out was tapped — hours stop at the last tap">—</span> <a href="#" onclick="openManualClockModal('${s.id}',{date:'${esc(x.work_date)}',event:'CLOCK_OUT'});return false" style="font-size:.62rem;color:#1d4ed8;text-decoration:none;white-space:nowrap">+ add time-out</a>`}</td>
-      ${td(N(x.break_mins)>0 ? hm(N(x.break_mins)) : '—', N(x.break_mins)>0?'':grey, x.break_detail ? 'Breaks: '+x.break_detail+(N(x.break_count)>1?' ('+N(x.break_count)+' breaks)':'') : 'No break tapped')}
+      ${x.break_manual
+        ? `<td style="padding:5px 7px;text-align:right"><span style="${manualStyle}" title="${esc('Break entered manually: '+(x.manual_note||''))}">✎ ${N(x.break_mins)>0 ? hm(N(x.break_mins)) : '—'}</span></td>`
+        : td(N(x.break_mins)>0 ? hm(N(x.break_mins)) : '—', N(x.break_mins)>0?'':grey, x.break_detail ? 'Breaks: '+x.break_detail+(N(x.break_count)>1?' ('+N(x.break_count)+' breaks)':'') : 'No break tapped')}
       ${td(worked.toFixed(2), '', 'Clock in → out minus breaks')}
       ${td(reg.toFixed(2), ';font-weight:700')}
       ${td(hrPeso(regPay), '')}
@@ -1076,6 +1091,7 @@ async function renderPayrollSection(s, tc){
           <td style="padding:7px;text-align:right;font-size:.85rem">${money(totPay)}</td></tr></tfoot>
       </table></div>
       <div style="font-size:.66rem;color:#6b7280;margin-top:6px">
+        <span style="${'background:#fef3c7;color:#92400e;border-radius:4px;padding:0 5px;font-weight:700'}">✎ amber</span> = time entered by an admin, not tapped (hover for who and why; ✕ removes it) ·
         Rate ${money(rate0)}/h = daily rate ÷ ${N(((br.days||[])[0]||{}).standard_hours||8).toFixed(0)} h · REG capped at ${N(((br.days||[])[0]||{}).standard_hours||8).toFixed(0)} h/day · OT and ND pay only on <u>approved</u> hours (grey ₱0 = not yet approved; hover for the value) · breaks unpaid · DAY PAY = REG ₱ + OT ₱ + ND ₱.
       </div>
 

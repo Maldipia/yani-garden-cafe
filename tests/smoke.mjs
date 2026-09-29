@@ -149,6 +149,14 @@ async function shiftAwareClock() {
   const wrongDay = await call({ action:'addHRTimeLog', userId: OWNER, staffId:'x', event_type:'CLOCK_OUT',
     log_date:'2026-01-01', event_time:'2026-01-02T02:00:00Z', notes:'wrong-day probe (never written)' });
   check('manual time-out on the wrong day is refused', wrongDay.ok === false && /shift date|6:00/i.test(wrongDay.error||''), wrongDay.error);
+  const futureDay = new Date(Date.now() + 8*3600*1000 + 2*86400000).toISOString().slice(0,10);
+  const future = await call({ action:'addHRTimeLog', userId: OWNER, staffId:'x', event_type:'CLOCK_OUT',
+    log_date: futureDay, event_time: new Date(Date.now() + 2*86400000).toISOString(), notes:'future probe (never written)' });
+  check('manual time in the future is refused', future.ok === false && /future/i.test(future.error||''), future.error);
+  const rmAnon = await call({ action:'removeHRManualEntry', staffId:'x', log_date:'2026-01-01', event_type:'CLOCK_OUT', reason:'probe' });
+  check('removing a manual entry refuses anonymous', rmAnon.ok === false);
+  const rmNone = await call({ action:'removeHRManualEntry', userId: OWNER, staffId:'00000000-0000-0000-0000-000000000000', log_date:'2026-01-01', event_type:'CLOCK_OUT', reason:'probe on a non-existent staff id' });
+  check('removing a manual entry that does not exist is a no-op', rmNone.ok === false && /No manual entry/i.test(rmNone.error||''), rmNone.error);
   const staff = await call({ action:'getHRStaff', userId: OWNER });
   const states = (staff.staff||[]).map(s => s.clock_state);
   check('HR list carries a clock state for every staff', states.length > 0 && states.every(x => ['IN','BREAK','OUT'].includes(x)), states.join(','));
