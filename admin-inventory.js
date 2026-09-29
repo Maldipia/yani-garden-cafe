@@ -1072,7 +1072,8 @@ function _invCntHtml(){
   var nCounts=Object.keys(counts).length;
   var soldOutNow=isToday?_invCntSheet.filter(function(it){return it.tracked && _invNum(it.system_qty)<=0;}).length:null;
   var card=function(v,l,c){ return '<div style="background:#fff;border:1px solid var(--mist-light);border-radius:10px;padding:10px 12px"><div style="font-size:1.05rem;font-weight:800;color:'+(c||'var(--forest-deep)')+'">'+v+'</div><div style="font-size:.64rem;color:var(--timber);margin-top:1px">'+l+'</div></div>'; };
-  h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:12px">'
+  var anyTracked=_invCntSheet.some(function(it){return it.tracked;});
+  if(anyTracked || _invCntLog.length || !isToday) h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:12px">'
     + card(nCounts?('✓ '+nCounts+' count'+(nCounts>1?'s':'')):'Not yet','count submitted'+(nCounts?(' · last '+_invTime(counts[Object.keys(counts)[0]].performed_at)):''), nCounts?'#3b6d11':'#9a5b06')
     + card(_invPeso(spoiled),'spoiled'+(spoiledQty?(' · '+_invFmtQty(spoiledQty)+' pcs'):'')+' (menu price)', spoiled?'#8a2a22':null)
     + card(_invPeso(missing),'missing / unexplained', missing?'#b3261e':null)
@@ -1080,82 +1081,133 @@ function _invCntHtml(){
   +'</div>';
 
   if(isToday) h+=_invCntSheetHtml();
-  h+=_invCntLogHtml(isToday);
+  if(anyTracked || _invCntLog.length || !isToday) h+=_invCntLogHtml(isToday);
   return h;
 }
 
+// Daily count: one simple row per tracked item. Setting up new items is a
+// separate, searchable "Add items to track" panel so the daily list stays short.
+var _invCntAddOpen = false, _invCntAddQ = '', _invCntAddQty = {};
+function _invCntCss(){
+  if(document.getElementById('invCntCss')) return;
+  var st=document.createElement('style'); st.id='invCntCss';
+  st.textContent=''
+   +'.ic-list{background:#fff;border:1px solid var(--mist-light);border-radius:12px;overflow:hidden}'
+   +'.ic-row{display:grid;grid-template-columns:minmax(0,1fr) 70px 150px minmax(150px,190px);gap:12px;align-items:center;padding:12px 14px;border-bottom:1px solid var(--mist-light)}'
+   +'.ic-row:last-child{border-bottom:none}'
+   +'.ic-name{font-weight:800;color:var(--forest-deep);font-size:.9rem;line-height:1.25}'
+   +'.ic-sub{font-size:.66rem;color:var(--timber);margin-top:2px}'
+   +'.ic-sys{text-align:center}.ic-sys b{display:block;font-size:1.05rem;color:var(--forest-deep)}.ic-sys span{font-size:.58rem;color:var(--timber);text-transform:uppercase;letter-spacing:.4px}'
+   +'.ic-step{display:flex;align-items:center;gap:6px}'
+   +'.ic-step button{width:40px;height:40px;border:1.5px solid var(--mist);background:#fff;border-radius:10px;font-size:1.2rem;color:var(--forest);cursor:pointer}'
+   +'.ic-step input{width:58px;height:40px;text-align:center;font-weight:800;font-size:1.05rem;border:2px solid var(--forest);border-radius:10px;background:#fff}'
+   +'.ic-step input.chg{border-color:#c0762a;background:#fff6ea}'
+   +'.ic-head{display:grid;grid-template-columns:minmax(0,1fr) 70px 150px minmax(150px,190px);gap:12px;padding:8px 14px;font-size:.58rem;letter-spacing:.5px;text-transform:uppercase;color:var(--timber);font-weight:800;border-bottom:1.5px solid var(--mist-light);background:#faf7f1}'
+   +'.ic-ok{font-size:.74rem;color:#3b6d11;font-weight:700}'
+   +'.ic-diff{font-size:.74rem;font-weight:800;color:#b3261e;margin-bottom:4px}'
+   +'.ic-diff.up{color:#3b6d11}'
+   +'.ic-reason{width:100%;font-size:.78rem;padding:7px;border-radius:8px;border:1.5px solid #e0b4ae;background:#fdf0ee}'
+   +'.ic-reason.set{border-color:var(--mist);background:#fff}'
+   +'.ic-add-row{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--mist-light)}'
+   +'.ic-add-row:last-child{border-bottom:none}'
+   +'@media(max-width:760px){.ic-head{display:none}.ic-row{grid-template-columns:minmax(0,1fr) auto;row-gap:8px}'
+   +'.ic-sys{text-align:right}.ic-step{grid-column:1}.ic-status{grid-column:2;text-align:right}}';
+  document.head.appendChild(st);
+}
 function _invCntSheetHtml(){
-  if(!_invCntLoaded) return '<div style="padding:24px;text-align:center;color:var(--timber);font-size:.78rem">Loading count sheet…</div>';
-  if(!_invCntSheet.length){
-    return '<div style="background:#fff;border:1px dashed var(--mist);border-radius:10px;padding:22px;text-align:center;color:var(--timber);font-size:.78rem;margin-bottom:14px">'
-      +'<div style="font-weight:800;color:var(--forest-deep);margin-bottom:4px">No ready-to-sell items linked to the menu</div>'
-      +'Link a menu item to a ready-to-sell stock item in 🏷️ Items to count it here.</div>';
+  _invCntCss();
+  if(!_invCntLoaded) return '<div style="padding:24px;text-align:center;color:var(--timber);font-size:.78rem">Loading…</div>';
+  var tracked=_invCntSheet.filter(function(it){return it.tracked;});
+  var untracked=_invCntSheet.filter(function(it){return !it.tracked;});
+  var h='';
+
+  if(!tracked.length){
+    h+='<div style="background:#fff;border:1px solid var(--mist-light);border-radius:12px;padding:22px 18px;text-align:center;margin-bottom:12px">'
+      +'<div style="font-size:1.6rem">🧮</div>'
+      +'<div style="font-weight:800;color:var(--forest-deep);font-size:.95rem;margin-top:4px">Nothing to count yet</div>'
+      +'<div style="font-size:.76rem;color:var(--timber);margin:4px auto 12px;max-width:420px">Pick the items you sell from the display (pies, cakes, bottled goods) and enter how many you have right now. They’ll appear here every day after that.</div>'
+      +(_invCntAddOpen?'':'<button onclick="_invCntToggleAdd(true)" style="font-size:.84rem;font-weight:800;background:var(--forest);color:#fff;border:none;border-radius:10px;padding:11px 20px;cursor:pointer">+ Add items to track</button>')
+      +'</div>';
+  } else {
+    h+='<div style="display:flex;justify-content:space-between;align-items:baseline;margin:2px 0 6px">'
+      +'<div style="font-weight:800;color:var(--forest-deep);font-size:.92rem">Today’s count <span style="font-weight:600;color:var(--timber);font-size:.7rem">· '+tracked.length+' item'+(tracked.length>1?'s':'')+'</span></div>'
+      +'<div style="font-size:.66rem;color:var(--timber)">Change only what’s different</div></div>';
+    h+='<div class="ic-list"><div class="ic-head"><div>Item</div><div style="text-align:center">System</div><div>On display</div><div>Status</div></div>';
+    tracked.forEach(function(it){
+      var v=_invCntVals[it.item_id]||{counted:_invNum(it.system_qty),reason:''};
+      var sys=_invNum(it.system_qty), diff=Math.round((_invNum(v.counted)-sys)*1000)/1000;
+      var dl=_invDaysTo(it.next_expiry);
+      var exp=it.next_expiry?(' · <span style="font-weight:700;color:'+(dl<=0?'#b3261e':(dl<=1?'#9a5b06':'var(--timber)'))+'">'
+        +(dl<0?'expired':(dl===0?'expires today':('exp '+_invDate(it.next_expiry))))+'</span>'):'';
+      var status;
+      if(diff<0){
+        status='<div class="ic-diff">'+_invFmtQty(diff)+' missing</div>'
+          +'<select class="ic-reason'+(v.reason?' set':'')+'" onchange="_invCntSet('+it.item_id+',\'reason\',this.value)">'
+          +'<option value="">Why? pick one…</option>'
+          +['SPOILED','EXPIRED','DAMAGED','STAFF_MEAL','COMPLIMENTARY','MISSING'].map(function(k){return '<option value="'+k+'"'+(v.reason===k?' selected':'')+'>'+INV_REASONS[k]+'</option>';}).join('')
+          +'</select>';
+      } else if(diff>0){ status='<div class="ic-diff up">+'+_invFmtQty(diff)+' extra</div><div style="font-size:.66rem;color:var(--timber)">will be added back</div>'; }
+      else status='<span class="ic-ok">✓ Matches</span>';
+      h+='<div class="ic-row">'
+        +'<div><div class="ic-name">'+_invEsc(it.name)+'</div>'
+          +'<div class="ic-sub">'+_invEsc(it.unit)+exp+(it.menu_names&&it.menu_names!==it.name?(' · also: '+_invEsc(it.menu_names.split(' · ').filter(function(n){return n!==it.name;}).join(', '))):'')+'</div></div>'
+        +'<div class="ic-sys"><b>'+_invFmtQty(sys)+'</b><span>system</span></div>'
+        +'<div class="ic-step"><button onclick="_invCntStep('+it.item_id+',-1)" aria-label="Less">−</button>'
+          +'<input type="number" inputmode="numeric" min="0" step="1" value="'+_invFmtQty(v.counted)+'" class="'+(diff!==0?'chg':'')+'" onchange="_invCntSet('+it.item_id+',\'counted\',this.value)" aria-label="On display">'
+          +'<button onclick="_invCntStep('+it.item_id+',1)" aria-label="More">+</button></div>'
+        +'<div class="ic-status">'+status+'</div>'
+      +'</div>';
+    });
+    h+='</div>';
+    h+='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin:10px 0 16px;flex-wrap:wrap">'
+      +(_invCntAddOpen?'<span></span>':'<button onclick="_invCntToggleAdd(true)" style="font-size:.76rem;font-weight:700;background:none;color:var(--forest);border:none;cursor:pointer;padding:6px 0">+ Add more items to track'+(untracked.length?(' ('+untracked.length+')'):'')+'</button>')
+      +'<div style="display:flex;gap:8px"><button onclick="_invCntReset()" style="font-size:.8rem;font-weight:700;background:#fff;color:var(--forest);border:1.5px solid var(--mist);border-radius:10px;padding:10px 16px;cursor:pointer">Reset</button>'
+      +'<button id="invCntSubmitBtn" onclick="_invCntSubmit()" style="font-size:.84rem;font-weight:800;background:var(--forest);color:#fff;border:none;border-radius:10px;padding:10px 22px;cursor:pointer">Submit count</button></div></div>';
   }
-  var th='position:sticky;top:0;background:var(--cream,#fbf8f3);z-index:1;font-size:.6rem;letter-spacing:.5px;color:var(--timber);text-transform:uppercase;text-align:left;padding:8px;border-bottom:1.5px solid var(--mist-light)';
-  var h='<div style="font-size:.68rem;color:var(--timber);margin-bottom:6px">System = received − sold − spoiled. Enter what is on display; only a difference needs a reason.</div>';
-  h+='<div style="background:#fff;border:1px solid var(--mist-light);border-radius:12px;overflow:auto;max-height:62vh">'
-    +'<table style="width:100%;border-collapse:collapse;min-width:720px"><thead><tr>'
-    +'<th style="'+th+'">Item</th><th style="'+th+'">Expiry</th><th style="'+th+';text-align:center">System</th><th style="'+th+'">On display</th><th style="'+th+';text-align:center">Diff</th><th style="'+th+'">Reason</th>'
-    +'</tr></thead><tbody>';
-  var firstNew=true;
-  _invCntSheet.forEach(function(it){
-    if(!it.tracked){
-      if(firstNew){ firstNew=false;
-        h+='<tr><td colspan="6" style="padding:12px 8px 6px;background:#f7f3ea;border-bottom:1px solid var(--mist-light)">'
-          +'<div style="font-weight:800;color:var(--forest-deep);font-size:.78rem">Not tracked yet</div>'
-          +'<div style="font-size:.66rem;color:var(--timber)">Enter how many are on display now to start tracking (this is the opening stock). Leave blank to skip.</div></td></tr>'; }
-      var nv=_invCntVals[it.item_id]||{counted:null};
-      var has=(nv.counted!==null && nv.counted!=='' && _invNum(nv.counted)>0);
-      h+='<tr style="border-bottom:1px solid var(--mist-light);'+(has?'':'opacity:.8')+'">'
-        +'<td style="padding:9px 8px"><div style="font-weight:700;color:var(--forest-deep);font-size:.82rem">'+_invEsc(it.name)+'</div>'
-          +'<div style="font-size:.62rem;color:var(--timber)">'+_invEsc(it.unit)+(it.standard_yield?(' · 1 box = '+_invFmtQty(it.standard_yield)):'')+'</div>'
-          +(it.menu_names?'<div style="font-size:.6rem;color:#6b5a3a;background:#f3eee3;display:inline-block;border-radius:8px;padding:1px 7px;margin-top:3px">sold as: '+_invEsc(it.menu_names)+'</div>':'')+'</td>'
-        +'<td style="padding:9px 8px;font-size:.74rem;color:var(--timber)">—</td>'
-        +'<td style="padding:9px 8px;text-align:center;color:var(--timber)">—</td>'
-        +'<td style="padding:9px 8px"><div style="display:flex;align-items:center;gap:4px">'
-          +'<button onclick="_invCntStep('+it.item_id+',-1)" style="width:30px;height:32px;border:1.5px solid var(--mist);background:#fff;border-radius:8px;font-size:1rem;cursor:pointer;color:var(--forest)" aria-label="Less">−</button>'
-          +'<input type="number" min="0" step="1" placeholder="—" value="'+(nv.counted===null?'':_invFmtQty(nv.counted))+'" onchange="_invCntSet('+it.item_id+',\'counted\',this.value)" style="width:56px;height:32px;text-align:center;font-weight:800;font-size:.9rem;border:1.5px dashed '+(has?'var(--forest)':'var(--mist)')+';background:#fff;border-radius:8px">'
-          +'<button onclick="_invCntStep('+it.item_id+',1)" style="width:30px;height:32px;border:1.5px solid var(--mist);background:#fff;border-radius:8px;font-size:1rem;cursor:pointer;color:var(--forest)" aria-label="More">+</button>'
-        +'</div></td>'
-        +'<td style="padding:9px 8px;text-align:center;color:var(--timber)">—</td>'
-        +'<td style="padding:9px 8px">'+(has?'<span style="font-size:.7rem;color:#185fa5;font-weight:700">Starts tracking</span>':'<span style="font-size:.68rem;color:var(--timber)">skip</span>')+'</td></tr>';
-      return;
-    }
-    var v=_invCntVals[it.item_id]||{counted:_invNum(it.system_qty),reason:'',note:''};
-    var sys=_invNum(it.system_qty), diff=Math.round((_invNum(v.counted)-sys)*1000)/1000;
-    var dl=_invDaysTo(it.next_expiry);
-    var exp=!it.next_expiry?'<span style="color:var(--timber)">—</span>'
-      : '<span style="font-weight:700;color:'+(dl<=0?'#b3261e':(dl<=1?'#9a5b06':'var(--forest-deep)'))+'">'+_invDate(it.next_expiry)+'</span>'
-        +'<div style="font-size:.62rem;color:'+(dl<=0?'#b3261e':'var(--timber)')+'">'+(dl<0?'expired':(dl===0?'expires today':(dl+' day'+(dl>1?'s':'')+' left')))+'</div>';
-    var chg=(diff!==0);
-    var reason='';
-    if(diff<0){
-      reason='<select onchange="_invCntSet('+it.item_id+',\'reason\',this.value)" style="font-size:.74rem;padding:6px;border-radius:8px;border:1.5px solid '+(v.reason?'var(--mist)':'#e0b4ae')+';background:'+(v.reason?'#fff':'#fdf0ee')+'">'
-        +'<option value="">Pick reason…</option>'
-        +['SPOILED','EXPIRED','DAMAGED','STAFF_MEAL','COMPLIMENTARY','MISSING'].map(function(k){return '<option value="'+k+'"'+(v.reason===k?' selected':'')+'>'+INV_REASONS[k]+'</option>';}).join('')
-        +'</select>';
-    } else if(diff>0){ reason='<span style="font-size:.7rem;color:#3b6d11;font-weight:700">Found — added back</span>'; }
-    else { reason='<span style="font-size:.7rem;color:#3b6d11">✓ matches</span>'; }
-    h+='<tr style="border-bottom:1px solid var(--mist-light)">'
-      +'<td style="padding:9px 8px"><div style="font-weight:700;color:var(--forest-deep);font-size:.82rem">'+_invEsc(it.name)+'</div>'
-        +'<div style="font-size:.62rem;color:var(--timber)">'+_invEsc(it.unit)+(it.standard_yield?(' · 1 box = '+_invFmtQty(it.standard_yield)):'')+'</div>'
-        +(it.menu_names?'<div style="font-size:.6rem;color:#6b5a3a;background:#f3eee3;display:inline-block;border-radius:8px;padding:1px 7px;margin-top:3px">sold as: '+_invEsc(it.menu_names)+'</div>':'')+'</td>'
-      +'<td style="padding:9px 8px;font-size:.74rem">'+exp+'</td>'
-      +'<td style="padding:9px 8px;text-align:center;font-size:.9rem;color:var(--timber)">'+_invFmtQty(sys)+'</td>'
-      +'<td style="padding:9px 8px"><div style="display:flex;align-items:center;gap:4px">'
-        +'<button onclick="_invCntStep('+it.item_id+',-1)" style="width:30px;height:32px;border:1.5px solid var(--mist);background:#fff;border-radius:8px;font-size:1rem;cursor:pointer;color:var(--forest)" aria-label="Less">−</button>'
-        +'<input type="number" min="0" step="1" value="'+_invFmtQty(v.counted)+'" onchange="_invCntSet('+it.item_id+',\'counted\',this.value)" style="width:56px;height:32px;text-align:center;font-weight:800;font-size:.9rem;border:2px solid '+(chg?'#c0762a':'var(--forest)')+';background:'+(chg?'#fff6ea':'#fff')+';border-radius:8px">'
-        +'<button onclick="_invCntStep('+it.item_id+',1)" style="width:30px;height:32px;border:1.5px solid var(--mist);background:#fff;border-radius:8px;font-size:1rem;cursor:pointer;color:var(--forest)" aria-label="More">+</button>'
-      +'</div></td>'
-      +'<td style="padding:9px 8px;text-align:center;font-weight:800;color:'+(diff<0?'#b3261e':(diff>0?'#3b6d11':'#9aa093'))+'">'+(diff>0?'+':'')+_invFmtQty(diff)+'</td>'
-      +'<td style="padding:9px 8px">'+reason+'</td></tr>';
-  });
-  h+='</tbody></table></div>';
-  h+='<div style="display:flex;justify-content:flex-end;gap:8px;margin:10px 0 18px">'
-    +'<button onclick="_invCntReset()" style="font-size:.78rem;font-weight:700;background:#fff;color:var(--forest);border:1.5px solid var(--mist);border-radius:8px;padding:9px 14px;cursor:pointer">Reset</button>'
-    +'<button id="invCntSubmitBtn" onclick="_invCntSubmit()" style="font-size:.8rem;font-weight:800;background:var(--forest);color:#fff;border:none;border-radius:8px;padding:9px 18px;cursor:pointer">Submit count</button></div>';
+
+  if(_invCntAddOpen) h+=_invCntAddHtml(untracked);
   return h;
 }
+
+function _invCntToggleAdd(on){ _invCntAddOpen=!!on; if(!on){ _invCntAddQ=''; } _invRenderTab(); if(on) setTimeout(function(){ var s=document.getElementById('icAddSearch'); if(s) s.focus(); },30); }
+function _invCntAddHtml(untracked){
+  var q=String(_invCntAddQ||'').toLowerCase().split(/\s+/).filter(Boolean);
+  var list=untracked.filter(function(it){ var t=(it.name+' '+(it.menu_names||'')).toLowerCase(); return q.every(function(k){return t.indexOf(k)>=0;}); });
+  var h='<div style="background:#fff;border:1.5px solid var(--forest);border-radius:12px;margin:4px 0 16px;overflow:hidden">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:#f3f7ef">'
+      +'<div><div style="font-weight:800;color:var(--forest-deep);font-size:.9rem">Add items to track</div>'
+      +'<div style="font-size:.68rem;color:var(--timber)">Type how many are on display now, then tap Add. It joins the daily count.</div></div>'
+      +'<button onclick="_invCntToggleAdd(false)" style="border:none;background:none;font-size:1.2rem;color:var(--timber);cursor:pointer" aria-label="Close">✕</button></div>'
+    +'<div style="padding:10px 14px;border-bottom:1px solid var(--mist-light)"><input id="icAddSearch" type="text" placeholder="🔍 Search, e.g. buco, beans, water" value="'+_invEsc(_invCntAddQ)+'" oninput="_invCntAddSearch(this.value)" style="width:100%;box-sizing:border-box;font-size:.86rem;padding:10px 12px;border:1.5px solid var(--mist);border-radius:10px"></div>'
+    +'<div id="icAddList" style="max-height:52vh;overflow:auto">';
+  if(!list.length) h+='<div style="padding:16px;font-size:.76rem;color:var(--timber);text-align:center">'+(untracked.length?'No match.':'All ready-to-sell items are already tracked.')+'</div>';
+  list.forEach(function(it){
+    var qv=_invCntAddQty[it.item_id]; qv=(qv==null?'':qv);
+    h+='<div class="ic-add-row">'
+      +'<div style="flex:1;min-width:0"><div style="font-weight:700;color:var(--forest-deep);font-size:.84rem">'+_invEsc(it.name)+'</div>'
+        +'<div style="font-size:.64rem;color:var(--timber)">count in '+_invEsc(it.unit)+(it.unit==='slice'&&it.standard_yield?(' (1 box = '+_invFmtQty(it.standard_yield)+')'):'')+'</div></div>'
+      +'<input type="number" inputmode="numeric" min="0" step="1" placeholder="qty" value="'+_invEsc(qv)+'" oninput="_invCntAddQty['+it.item_id+']=this.value" onkeydown="if(event.key===\'Enter\')_invCntStart('+it.item_id+')" style="width:70px;height:38px;text-align:center;font-weight:800;font-size:.95rem;border:1.5px solid var(--mist);border-radius:10px">'
+      +'<button onclick="_invCntStart('+it.item_id+')" style="height:38px;font-size:.78rem;font-weight:800;background:var(--forest);color:#fff;border:none;border-radius:10px;padding:0 14px;cursor:pointer">Add</button>'
+    +'</div>';
+  });
+  return h+'</div></div>';
+}
+function _invCntAddSearch(v){
+  _invCntAddQ=v;
+  var untracked=_invCntSheet.filter(function(it){return !it.tracked;});
+  var tmp=document.createElement('div'); tmp.innerHTML=_invCntAddHtml(untracked);
+  var nl=tmp.querySelector('#icAddList'), ol=document.getElementById('icAddList');
+  if(nl&&ol) ol.innerHTML=nl.innerHTML;   // keep focus in the search box
+}
+async function _invCntStart(id){
+  var it=_invCntSheet.filter(function(x){return x.item_id===id;})[0]; if(!it) return;
+  var q=parseFloat(_invCntAddQty[id]);
+  if(!(q>0)){ showToast('Enter how many '+it.name+' are on display','error'); return; }
+  var r=await api('invSubmitCount',{lines:[{itemId:id,counted:q,seen:null}]});
+  if(r&&r.ok){ showToast(it.name+' added · '+_invFmtQty(q)+' '+it.unit,'success'); delete _invCntAddQty[id]; await _invCntLoad(); }
+  else showToast((r&&r.error)||'Failed','error');
+}
+
 function _invCntSet(id,k,val){
   var v=_invCntVals[id]; if(!v) return;
   if(k==='counted'){ var n=parseFloat(val); var it0=_invCntSheet.filter(function(x){return x.item_id===id;})[0];
@@ -1170,7 +1222,7 @@ async function _invCntSubmit(){
   var lines=[], diffs=0, missingReason=null, started=0;
   _invCntSheet.forEach(function(it){
     var v=_invCntVals[it.item_id];
-    if(!it.tracked){ if(v.counted!==null && _invNum(v.counted)>0){ started++; lines.push({itemId:it.item_id, counted:_invNum(v.counted), seen:null, reason:null, note:''}); } return; }
+    if(!it.tracked) return;
     var d=_invNum(v.counted)-_invNum(it.system_qty);
     if(Math.abs(d)>1e-9) diffs++;
     if(d<-1e-9 && !v.reason && !missingReason) missingReason=it.name;
