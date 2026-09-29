@@ -244,6 +244,12 @@ async function payrollMath() {
           n(row.approved_ot_hours) <= n(row.actual_ot_hours) + 0.001,
           `${row.approved_ot_hours} > ${row.actual_ot_hours}`);
 
+    // An approval taken before a time correction must not pay more than the corrected times support.
+    const overPaid = dd.filter(d => parseFloat(d.ot_paid_hours||0) > parseFloat(d.ot_hours||0) + 0.001
+                                 || parseFloat(d.nd_paid_hours||0) > parseFloat(d.night_hours||0) + 0.001);
+    check(`${who}: no day pays OT/ND beyond its actual hours`, overPaid.length === 0,
+          overPaid.map(d => d.work_date).join(','));
+
     check(`${who}: net is not negative`, n(row.net_pay) >= 0, `${row.net_pay}`);
 
     // daily breakdown must reconcile to the header it is evidence for

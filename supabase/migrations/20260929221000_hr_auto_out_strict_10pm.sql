@@ -1,17 +1,21 @@
--- Owner policy (2026-09-29, revised): a past shift with no time-out ends at
--- exactly 10:00 PM on its shift date (taps after 10 PM do not extend it), and
--- every manually entered time-out in September is set to 10:00 PM.
--- PENDING: not yet applied — Supabase connection needs re-authorisation.
--- (hr_daily_hours body: same as 20260929215000 with
---   v_assumed := (p_date + TIME '22:00') AT TIME ZONE 'Asia/Manila';
---  i.e. no GREATEST(..., v_last).)
-
-UPDATE hr_time_logs t
-   SET event_time = (t.log_date + TIME '22:00') AT TIME ZONE 'Asia/Manila',
-       notes = COALESCE(t.notes,'') || ' | set to 10:00 PM by owner policy 2026-09-29 (was '
-               || to_char(t.event_time AT TIME ZONE 'Asia/Manila','MM-DD HH12:MI AM') || ')'
- FROM hr_staff_master m
- WHERE m.id = t.staff_id AND m.staff_code <> 'USR_001'
-   AND t.attendance_source = 'MANUAL' AND t.event_type = 'CLOCK_OUT'
-   AND t.log_date >= '2026-09-01'
-   AND t.event_time <> (t.log_date + TIME '22:00') AT TIME ZONE 'Asia/Manila';
+-- RECORD ONLY — applied live on 2026-09-29; intentionally no statements here.
+--
+-- 1) Strict 10:00 PM auto time-out (hr_daily_hours) landed in
+--    20260929223000_hr_rate_group_rounding_and_strict_10pm.sql.
+--
+-- 2) Data correction, owner rule (2026-09-29): "only put 10pm if the system
+--    didn't detect the time — but if there is, put it". Kiosk (QR) scans are
+--    authoritative and were not touched. Gerald's (USR_014) manually typed
+--    September time-outs were set to 10:00 PM on the shift date:
+--      Sep 5, 6, 7, 8, 10, 25, 28  -> 10:00 PM
+--      Sep 23 -> 10:35 PM: the kiosk recorded a break 10:15-10:35 PM, so the
+--                time-out cannot precede the last real scan.
+--    Originals are in hr_time_logs_manual_out_fix_20260929 (RLS on, no
+--    anon/authenticated access); each change has an hr_audit_log row
+--    ATTENDANCE_MANUAL_OUT_TO_10PM with previous and new time.
+--    Afterwards the owner re-entered Sep 5 and Sep 6 as 11:59 PM through the
+--    admin panel (audit ATTENDANCE_TIME_CORRECTED 23:01); those were left as is.
+--
+-- Not re-runnable on purpose: replaying the UPDATE would overwrite the
+-- owner's later edits.
+SELECT 1;
