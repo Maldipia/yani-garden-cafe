@@ -1485,17 +1485,17 @@ async function printEmployeePayslip(){
   const groups=[];
   days.forEach(x=>{ const rate=N(x.hourly_rate); let g=groups.find(g=>g.rate===rate);
     if(!g){ g={rate,daily:R2(rate*std),days:0,hrs:0,pay:0,full:true}; groups.push(g); }
-    g.days++; g.hrs+=N(x.regular_hours); g.pay+=R2(N(x.regular_hours)*rate);
+    g.days++; g.hrs=R2(g.hrs+N(x.regular_hours));
     if(N(x.regular_hours)<std) g.full=false; });
   const lines=[];
-  groups.forEach(g=>lines.push(['Basic pay', g.full ? `${g.days} day${g.days>1?'s':''} × ${P(g.daily)}/day` : `${H(g.hrs)} hrs × ${P(g.rate)}/hr`, g.pay]));
-  // amounts are sums of the per-day rounded amounts, exactly as payroll computes them
+  // same rule as payroll: hours at one rate × that rate, rounded once
+  groups.forEach(g=>lines.push(['Basic pay', g.full ? `${g.days} day${g.days>1?'s':''} × ${P(g.daily)}/day` : `${H(g.hrs)} hrs × ${P(g.rate)}/hr`, R2(g.hrs*g.rate)]));
   const otByRate={}, ndByRate={};
   days.forEach(x=>{ const r=N(x.hourly_rate);
-    if(N(x.ot_paid_hours)>0){ const o=otByRate[r]||(otByRate[r]={h:0,p:0}); o.h+=N(x.ot_paid_hours); o.p+=R2(N(x.ot_paid_hours)*r*1.25); }
-    if(N(x.nd_paid_hours)>0){ const o=ndByRate[r]||(ndByRate[r]={h:0,p:0}); o.h+=N(x.nd_paid_hours); o.p+=R2(N(x.nd_paid_hours)*r*0.10); } });
-  Object.keys(otByRate).forEach(r=>lines.push(['Overtime', `${H(otByRate[r].h)} hrs × ${P(R2(r*1.25))}/hr`, R2(otByRate[r].p)]));
-  Object.keys(ndByRate).forEach(r=>lines.push(['Night differential', `${H(ndByRate[r].h)} hrs × ${P(R2(r*0.10))}/hr`, R2(ndByRate[r].p)]));
+    if(N(x.ot_paid_hours)>0){ otByRate[r]=R2((otByRate[r]||0)+N(x.ot_paid_hours)); }
+    if(N(x.nd_paid_hours)>0){ ndByRate[r]=R2((ndByRate[r]||0)+N(x.nd_paid_hours)); } });
+  Object.keys(otByRate).forEach(r=>lines.push(['Overtime', `${H(otByRate[r])} hrs × ${P(r)} × 1.25`, R2(otByRate[r]*r*1.25)]));
+  Object.keys(ndByRate).forEach(r=>lines.push(['Night differential', `${H(ndByRate[r])} hrs × ${P(r)} × 10%`, R2(ndByRate[r]*r*0.10)]));
   [['Holiday premium',row.holiday_pay],['Rest-day premium',row.rest_day_pay],['Allowances',row.allowances],['Incentives',row.incentives],['Service charge share',row.tips_share]]
     .forEach(([l,v])=>{ if(N(v)>0) lines.push([l,'',N(v)]); });
 

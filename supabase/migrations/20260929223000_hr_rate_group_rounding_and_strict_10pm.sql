@@ -1,0 +1,9 @@
+-- Applied to production 2026-09-29:
+-- 1. hr_daily_hours: a past day with no time-out ends at exactly 10:00 PM
+--    (v_assumed := (p_date + TIME '22:00') AT TIME ZONE 'Asia/Manila').
+-- 2. hr_compute_payroll: pay is computed per rate group — total hours at one
+--    rate × that rate, rounded once (× 1.25 for OT, × 10% for ND) — instead of
+--    rounding each day, so the employee payslip's "hrs × rate" lines equal
+--    the stored amounts to the centavo.
+-- (Done via in-place replace of the live function definitions; see
+--  20260929210000 / 20260929214000 for the full bodies these patch.)

@@ -229,12 +229,15 @@ async function payrollMath() {
     // a cut-off), so the header must equal the sum of the per-day amounts.
     const dailyR = await call({ action:'hrPayrollDaily', userId: OWNER, cutoffId: cut.id, staffId: row.staff_id });
     const dd = (dailyR.days || []);
-    const sumRegPay = n(dd.reduce((a, d) => a + n(parseFloat(d.regular_hours||0) * parseFloat(d.hourly_rate||0)), 0));
-    const sumOtPay  = n(dd.reduce((a, d) => a + n(parseFloat(d.ot_paid_hours||0) * parseFloat(d.hourly_rate||0) * 1.25), 0));
-    const sumNdPay  = n(dd.reduce((a, d) => a + n(parseFloat(d.nd_paid_hours||0) * parseFloat(d.hourly_rate||0) * 0.10), 0));
-    check(`${who}: regular pay = Σ day hours × day rate`, n(row.regular_pay) === sumRegPay, `${n(row.regular_pay)} vs ${sumRegPay}`);
-    check(`${who}: OT pay = Σ approved OT × day rate × 1.25`, n(row.overtime_pay) === sumOtPay, `${n(row.overtime_pay)} vs ${sumOtPay}`);
-    check(`${who}: ND pay = Σ approved ND × day rate × 10%`, n(row.night_diff_pay) === sumNdPay, `${n(row.night_diff_pay)} vs ${sumNdPay}`);
+    // Pay = for each rate in the cut-off, (hours at that rate × rate) rounded once — what the payslip prints.
+    const byRate = {};
+    dd.forEach(d => { const r = parseFloat(d.hourly_rate||0); const g = byRate[r] || (byRate[r] = {reg:0, ot:0, nd:0});
+      g.reg += parseFloat(d.regular_hours||0); g.ot += parseFloat(d.ot_paid_hours||0); g.nd += parseFloat(d.nd_paid_hours||0); });
+    const grp = f => n(Object.entries(byRate).reduce((a, [r, g]) => a + n(f(g) * parseFloat(r)), 0));
+    const sumRegPay = grp(g => n(g.reg)), sumOtPay = grp(g => n(g.ot) * 1.25), sumNdPay = grp(g => n(g.nd) * 0.10);
+    check(`${who}: regular pay = Σ rate groups (hours × rate)`, Math.abs(n(row.regular_pay) - sumRegPay) < 0.005, `${n(row.regular_pay)} vs ${sumRegPay}`);
+    check(`${who}: OT pay = Σ rate groups (approved OT × rate × 1.25)`, Math.abs(n(row.overtime_pay) - sumOtPay) < 0.005, `${n(row.overtime_pay)} vs ${sumOtPay}`);
+    check(`${who}: ND pay = Σ rate groups (approved ND × rate × 10%)`, Math.abs(n(row.night_diff_pay) - sumNdPay) < 0.005, `${n(row.night_diff_pay)} vs ${sumNdPay}`);
     check(`${who}: every day carries a rate`, dd.length === 0 || dd.every(d => parseFloat(d.hourly_rate||0) > 0 || parseFloat(d.regular_hours||0) === 0));
 
     check(`${who}: paid OT never exceeds worked OT`,
@@ -250,8 +253,8 @@ async function payrollMath() {
       const sumPay = n((daily.days || []).reduce((a, d) => a + parseFloat(d.day_pay || 0), 0));
       check(`${who}: daily hours match header`,
             sumReg === n(row.approved_regular_hours), `${sumReg} vs ${n(row.approved_regular_hours)}`);
-      check(`${who}: daily pay matches basic + OT + night diff`,
-            sumPay === n(n(row.regular_pay) + n(row.overtime_pay) + n(row.night_diff_pay)),
+      check(`${who}: daily pay matches basic + OT + night diff (within day rounding)`,
+            Math.abs(sumPay - n(n(row.regular_pay) + n(row.overtime_pay) + n(row.night_diff_pay))) <= 0.01 * Math.max(1, (daily.days||[]).length),
             `${sumPay} vs ${n(n(row.regular_pay) + n(row.overtime_pay) + n(row.night_diff_pay))}`);
       const sumNdPaid = n((daily.days || []).reduce((a, d) => a + parseFloat(d.nd_paid_hours || 0), 0));
       check(`${who}: night diff paid only on approved hours`,
