@@ -27,7 +27,7 @@ const INV_ACTIONS = new Set([
   // reports
   'invDashboard','invLowStock','invExpiringSoon','invTransactions',
   // display count + spoilage (ready-to-sell, per item)
-  'invCountSheet','invSubmitCount','invRecordSpoilage','invDayLog','invApproveSpoilage','invCountHistory',
+  'invCountSheet','invSubmitCount','invRecordSpoilage','invDayLog','invApproveSpoilage','invCountHistory','invStartMenuCount',
 ]);
 
 const SPOIL_REASONS = ['SPOILED','EXPIRED','DAMAGED','STAFF_MEAL','COMPLIMENTARY'];
@@ -504,6 +504,16 @@ export async function routeInventory(action, body, auth, req, res) {
       p_notes: str(body.notes, 300), p_actor: actor, p_photo: photo || null,
     });
     return rpcResult(res, r, 'Spoilage failed');
+  }
+
+  if (action === 'invStartMenuCount') {
+    const code = str(body.menuCode, 60), qty = num(body.qty);
+    if (!code) return bad(res, 'menuCode required');
+    if (!(qty > 0)) return bad(res, 'Enter how many are on display');
+    const shift = String(body.shift || 'CLOSING').toUpperCase();
+    if (!['OPENING','CLOSING'].includes(shift)) return bad(res, 'shift must be OPENING or CLOSING');
+    const r = await rpc('inv_start_menu_count', { p_menu_code: code, p_qty: qty, p_actor: actor, p_shift: shift });
+    return rpcResult(res, r, 'Could not add item');
   }
 
   if (action === 'invApproveSpoilage') {

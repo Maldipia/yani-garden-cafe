@@ -1368,39 +1368,61 @@ function _invCntPhoneHtml(){
 
 // Add an item to the count (first count = opening stock)
 function _invCntToggleAdd(on){ _invCntAddOpen=!!on; if(!on) _invCntAddQ=''; _invRenderTab(); if(on) setTimeout(function(){ var s=document.getElementById('icAddSearch'); if(s){ s.focus(); s.scrollIntoView({block:'center'}); } },30); }
+function _invCntAddKey(it){ return it.menu_code || ('I'+it.item_id); }
 function _invCntAddHtml(untracked){
   var q=String(_invCntAddQ||'').toLowerCase().split(/\s+/).filter(Boolean);
-  var list=untracked.filter(function(it){ var t=(it.name+' '+(it.menu_names||'')).toLowerCase(); return q.every(function(k){return t.indexOf(k)>=0;}); });
+  var list=untracked.filter(function(it){ var t=(it.name+' '+(it.menu_names||'')+' '+(it.category||'')).toLowerCase(); return q.every(function(k){return t.indexOf(k)>=0;}); });
+  var entered=Object.keys(_invCntAddQty).filter(function(k){ return _invNum(_invCntAddQty[k])>0; }).length;
   var h='<div style="background:#fff;border:1.5px solid var(--forest);border-radius:12px;margin:12px 0 4px;overflow:hidden">'
-    +'<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:#f3f7ef">'
-      +'<div><div style="font-weight:800;color:var(--forest-deep);font-size:.9rem">Add item to count</div>'
-      +'<div style="font-size:.68rem;color:var(--timber)">Type how many are on display now, then tap Add. It joins the count every day.</div></div>'
-      +'<button onclick="_invCntToggleAdd(false)" style="border:none;background:none;font-size:1.2rem;color:var(--timber);cursor:pointer" aria-label="Close">✕</button></div>'
-    +'<div style="padding:10px 14px;border-bottom:1px solid var(--mist-light)"><input id="icAddSearch" type="text" placeholder="🔍 Search, e.g. buco, beans, water" value="'+_invEsc(_invCntAddQ)+'" oninput="_invCntAddSearch(this.value)" style="width:100%;box-sizing:border-box;font-size:.86rem;padding:10px 12px;border:1.5px solid var(--mist);border-radius:10px"></div>'
-    +'<div id="icAddList" style="max-height:52vh;overflow:auto">';
-  if(!list.length) h+='<div style="padding:16px;font-size:.76rem;color:var(--timber);text-align:center">'+(untracked.length?'No match.':'All ready-to-sell items are already on the count.')+'</div>';
+    +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;background:#f3f7ef;flex-wrap:wrap">'
+      +'<div><div style="font-weight:800;color:var(--forest-deep);font-size:.9rem">Add menu items to the count <span style="font-weight:600;color:var(--timber);font-size:.72rem">· '+untracked.length+' not counted yet</span></div>'
+      +'<div style="font-size:.68rem;color:var(--timber)">Every menu item except Best With sets. Type how many are on display now, then Add. Blank = skip.</div></div>'
+      +'<div style="display:flex;gap:8px;align-items:center"><button id="icAddAllBtn" onclick="_invCntAddAll()" style="font-size:.76rem;font-weight:800;background:var(--forest);color:#fff;border:none;border-radius:10px;padding:9px 14px;cursor:pointer">Add all entered'+(entered?(' ('+entered+')'):'')+'</button>'
+      +'<button onclick="_invCntToggleAdd(false)" style="border:none;background:none;font-size:1.2rem;color:var(--timber);cursor:pointer" aria-label="Close">✕</button></div></div>'
+    +'<div style="padding:10px 14px;border-bottom:1px solid var(--mist-light)"><input id="icAddSearch" type="text" placeholder="🔍 Search, e.g. buco, latte, beans, pastry" value="'+_invEsc(_invCntAddQ)+'" oninput="_invCntAddSearch(this.value)" style="width:100%;box-sizing:border-box;font-size:.86rem;padding:10px 12px;border:1.5px solid var(--mist);border-radius:10px"></div>'
+    +'<div id="icAddList" style="max-height:56vh;overflow:auto">';
+  if(!list.length) h+='<div style="padding:16px;font-size:.76rem;color:var(--timber);text-align:center">'+(untracked.length?'No match.':'Every menu item is already on the count.')+'</div>';
+  var lastCat=null;
   list.forEach(function(it){
-    var qv=_invCntAddQty[it.item_id]; qv=(qv==null?'':qv);
-    h+='<div class="ic-add-row"><div style="flex:1;min-width:0"><div style="font-weight:700;color:var(--forest-deep);font-size:.84rem">'+_invEsc(it.name)+'</div>'
-        +'<div style="font-size:.64rem;color:var(--timber)">count in '+_invEsc(it.unit)+'s'+(it.unit==='slice'&&it.standard_yield?(' (1 box = '+_invFmtQty(it.standard_yield)+')'):'')+'</div></div>'
-      +'<input type="number" inputmode="numeric" min="0" step="1" placeholder="qty" value="'+_invEsc(qv)+'" oninput="_invCntAddQty['+it.item_id+']=this.value" onkeydown="if(event.key===\'Enter\')_invCntStart('+it.item_id+')" style="width:70px;height:38px;text-align:center;font-weight:800;font-size:.95rem;border:1.5px solid var(--mist);border-radius:10px">'
-      +'<button onclick="_invCntStart('+it.item_id+')" style="height:38px;font-size:.78rem;font-weight:800;background:var(--forest);color:#fff;border:none;border-radius:10px;padding:0 14px;cursor:pointer">Add</button></div>';
+    var key=_invCntAddKey(it), qv=_invCntAddQty[key]; qv=(qv==null?'':qv);
+    if((it.category||'OTHER')!==lastCat){ lastCat=it.category||'OTHER'; h+='<div style="padding:7px 14px;background:#faf7f1;font-size:.62rem;font-weight:800;letter-spacing:.6px;color:var(--timber);text-transform:uppercase;border-bottom:1px solid var(--mist-light)">'+_invEsc(lastCat)+'</div>'; }
+    h+='<div class="ic-add-row"><div style="flex:1;min-width:0"><div style="font-weight:700;color:var(--forest-deep);font-size:.84rem">'+_invEsc(it.menu_names||it.name)+'</div>'
+        +'<div style="font-size:.64rem;color:var(--timber)">'+(it.menu_price?_invPeso(it.menu_price)+' · ':'')+'count in '+_invEsc(it.unit)+'s'+(it.unit==='slice'&&it.standard_yield?(' (1 box = '+_invFmtQty(it.standard_yield)+')'):'')+'</div></div>'
+      +'<input type="number" inputmode="numeric" min="0" step="1" placeholder="qty" value="'+_invEsc(qv)+'" oninput="_invCntAddQty[\''+key+'\']=this.value;_invCntAddCount()" onkeydown="if(event.key===\'Enter\')_invCntStartKey(\''+key+'\')" style="width:70px;height:38px;text-align:center;font-weight:800;font-size:.95rem;border:1.5px solid var(--mist);border-radius:10px">'
+      +'<button onclick="_invCntStartKey(\''+key+'\')" style="height:38px;font-size:.78rem;font-weight:800;background:#fff;color:var(--forest);border:1.5px solid var(--forest);border-radius:10px;padding:0 14px;cursor:pointer">Add</button></div>';
   });
   return h+'</div></div>';
 }
+function _invCntAddCount(){ var b=document.getElementById('icAddAllBtn'); if(!b) return; var n=Object.keys(_invCntAddQty).filter(function(k){ return _invNum(_invCntAddQty[k])>0; }).length; b.textContent='Add all entered'+(n?(' ('+n+')'):''); }
 function _invCntAddSearch(v){
   _invCntAddQ=v;
   var tmp=document.createElement('div'); tmp.innerHTML=_invCntAddHtml(_invCntSheet.filter(function(it){return !it.tracked;}));
   var nl=tmp.querySelector('#icAddList'), ol=document.getElementById('icAddList');
   if(nl&&ol) ol.innerHTML=nl.innerHTML;
 }
-async function _invCntStart(id){
-  var it=_invCntSheet.filter(function(x){return x.item_id===id;})[0]; if(!it) return;
-  var q=parseFloat(_invCntAddQty[id]);
-  if(!(q>0)){ showToast('Enter how many '+it.name+' are on display','error'); return; }
-  var r=await api('invSubmitCount',{lines:[{itemId:id,counted:q,seen:null}], shift:(_invCntShift==='OPENING'?'OPENING':'CLOSING')});
-  if(r&&r.ok){ showToast(it.name+' added · '+_invFmtQty(q)+' '+it.unit+(q===1?'':'s'),'success'); delete _invCntAddQty[id]; await _invCntLoad(); }
-  else showToast((r&&r.error)||'Failed','error');
+function _invCntFindKey(key){ return _invCntSheet.filter(function(x){ return !x.tracked && _invCntAddKey(x)===key; })[0]; }
+async function _invCntStartOne(key){
+  var it=_invCntFindKey(key); if(!it) return {ok:false,error:'Not found'};
+  var q=parseFloat(_invCntAddQty[key]);
+  if(!(q>0)) return {ok:false,error:'Enter how many '+(it.menu_names||it.name)+' are on display'};
+  var shift=(_invCntShift==='OPENING'?'OPENING':'CLOSING');
+  var r = it.menu_code ? await api('invStartMenuCount',{menuCode:it.menu_code, qty:q, shift:shift})
+                       : await api('invSubmitCount',{lines:[{itemId:it.item_id,counted:q,seen:null}], shift:shift});
+  if(r&&r.ok) delete _invCntAddQty[key];
+  return r||{ok:false,error:'Failed'};
+}
+async function _invCntStartKey(key){
+  var r=await _invCntStartOne(key);
+  if(r.ok){ showToast('Added to the count','success'); await _invCntLoad(); } else showToast(r.error||'Failed','error');
+}
+async function _invCntAddAll(){
+  var keys=Object.keys(_invCntAddQty).filter(function(k){ return _invNum(_invCntAddQty[k])>0; });
+  if(!keys.length){ showToast('Type a quantity for the items you want to add','error'); return; }
+  var b=document.getElementById('icAddAllBtn'); if(b){ b.disabled=true; b.textContent='Adding…'; }
+  var ok=0, fails=[];
+  for(var i=0;i<keys.length;i++){ var r=await _invCntStartOne(keys[i]); if(r.ok) ok++; else fails.push(r.error); }
+  showToast(ok+' added'+(fails.length?(' · '+fails.length+' failed: '+fails[0]):''), fails.length?'error':'success');
+  await _invCntLoad();
 }
 
 // Record spoilage any time (not only during the count)
