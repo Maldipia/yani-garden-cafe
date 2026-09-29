@@ -168,3 +168,4 @@ invSaveAddonMap
 invMenuStock
 invMenuAdd
 invMenuSetCount
+invMenuSetCost

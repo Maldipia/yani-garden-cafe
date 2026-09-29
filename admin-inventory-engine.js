@@ -563,7 +563,8 @@ function _ieMenuRowHtml(x){
     if(_invNum(x.fixed)) today.push('<span style="color:#c2410c">'+_ieSigned(x.fixed)+' fixed</span>');
     return '<div class="ms-row">'
       +'<div class="ms-name" onclick="_ieOpenItem('+x.item_id+',\'history\')"><div class="ms-t">'+_invEsc(x.name)+(x.open_shortages>0?' <span title="sold more than recorded" style="color:#b91c1c">⚠️</span>':'')+'</div>'
-      +'<div class="ms-s">'+(today.length?'Today: '+today.join(' · '):'No movement today')+(x.next_expiry?' · exp '+_invDate(x.next_expiry):'')+'</div></div>'
+      +'<div class="ms-s">'+(today.length?'Today: '+today.join(' · '):'No movement today')+(x.next_expiry?' · exp '+_invDate(x.next_expiry):'')+'</div>'
+      +'<div class="ms-s">'+_ieMenuCostLine(x)+'</div></div>'
       +'<div class="ms-av" style="color:'+col+'">'+_ieQ(av)+'<small>'+(av<=0?'SOLD OUT':_invEsc(x.unit)+' left')+'</small></div>'
       +'<div class="ms-act">'+_ieBtn('+ Add','_ieMenuAddForm('+x.item_id+')',true,'padding:6px 10px')
       +_ieBtn('Waste','_ieMenuWasteForm('+x.item_id+')',false,'padding:6px 10px;border-color:#b91c1c;color:#b91c1c')
@@ -573,6 +574,30 @@ function _ieMenuRowHtml(x){
     +'<div class="ms-name"><div class="ms-t" style="font-weight:600">'+_invEsc(x.name)+' <span style="color:var(--timber);font-size:.68rem;font-weight:600">'+_iePeso(x.price)+'</span></div>'
     +'<div class="ms-s">Not counted yet — type how many are available</div></div>'
     +'<div class="ms-act"><input type="number" min="0" step="any" inputmode="decimal" placeholder="qty" value="'+_invEsc(_ieMenuNew[x.menu_code]||'')+'" data-code="'+_invEsc(x.menu_code)+'" oninput="_ieMenuNew[this.dataset.code]=this.value;_ieMenuNewCount()" class="ie-in" style="width:92px;margin:0;padding:7px;text-align:right"></div></div>';
+}
+function _ieMenuCostLine(x){
+  var c=_invNum(x.unit_cost), p=_invNum(x.price);
+  if(!(c>0)) return '<span style="color:#b45309;font-weight:700">Cost not set</span>'+(_invIsAdmin()?' · <a href="javascript:void 0" onclick="event.stopPropagation();_ieMenuCostForm('+x.item_id+')" style="color:var(--forest);font-weight:700">Set cost</a>':'')+(p?' · sells '+_iePeso(p):'');
+  var m=p>0?Math.round((p-c)/p*100):null;
+  return 'Cost <b style="color:var(--forest-deep)">'+_iePeso(c)+'</b>/'+_invEsc(x.unit)+(p?' · sells '+_iePeso(p)+(m!==null?' · <span style="color:'+(m<50?'#b45309':'#15803d')+'">'+m+'% margin</span>':''):'');
+}
+function _ieMenuCostForm(id){
+  var x=_ieMenuRow(id); if(!x) return;
+  _ieModal('<div style="font-size:1rem;font-weight:800;color:var(--forest-deep);margin-right:34px">Set cost: '+_invEsc(x.name)+'</div>'
+    +'<div style="font-size:.72rem;color:var(--timber)">For the '+_ieQ(x.available)+' '+_invEsc(x.unit)+' on hand that have no cost yet. Later deliveries use the cost you enter on <b>+ Add</b>.</div>'
+    +'<label class="ie-lbl">Cost per '+_invEsc(x.unit)+' ₱</label><input id="ieMcCost" type="number" min="0" step="any" inputmode="decimal" class="ie-in">'
+    +(x.purchase_unit&&_invNum(x.purchase_to_stock)>0?'<div style="font-size:.7rem;color:var(--timber);margin-top:4px">Bought per '+_invEsc(x.purchase_unit)+'? Divide the '+_invEsc(x.purchase_unit)+' price by '+_ieQ(x.purchase_to_stock)+'.</div>':'')
+    +'<button id="ieMcBtn" onclick="_ieMenuSetCost('+id+')" style="width:100%;margin-top:12px;font-size:.9rem;font-weight:800;background:var(--forest);color:#fff;border:none;border-radius:10px;padding:12px;cursor:pointer">Save cost</button>');
+  setTimeout(function(){ var q=document.getElementById('ieMcCost'); if(q) q.focus(); },30);
+}
+async function _ieMenuSetCost(id){
+  var b=document.getElementById('ieMcBtn'); if(b&&b.disabled) return;
+  var c=parseFloat((document.getElementById('ieMcCost')||{}).value);
+  if(!(c>0)){ showToast('Enter the cost','error'); return; }
+  if(b){ b.disabled=true; b.textContent='Saving…'; }
+  var r=await api('invMenuSetCost',{itemId:id,unitCost:c});
+  if(r&&r.ok){ showToast('Cost saved · '+_iePeso(c)+' each','success'); _ieCloseModal(); await _ieLoadMenu(); _invRenderTab(); }
+  else { if(b){ b.disabled=false; b.textContent='Save cost'; } showToast((r&&r.error)||'Failed','error'); }
 }
 function _ieMenuHtml(){
   _ieCss();
@@ -646,12 +671,20 @@ function _ieMenuAddForm(id){
   _ieModal('<div style="font-size:1rem;font-weight:800;color:var(--forest-deep);margin-right:34px">+ Add: '+_invEsc(x.name)+'</div>'
     +'<div style="font-size:.72rem;color:var(--timber)">Now available: <b>'+_ieQ(x.available)+' '+_invEsc(x.unit)+'</b></div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div><label class="ie-lbl">How many?</label><input id="ieMaQty" type="number" min="0" step="any" inputmode="decimal" class="ie-in" oninput="_ieMaPrev('+id+')"></div>'
-    +'<div><label class="ie-lbl">Unit</label><select id="ieMaUnit" class="ie-in" onchange="_ieMaPrev('+id+')">'+units+'</select></div></div>'
-    +'<label class="ie-lbl" id="ieMaCostL">Cost per '+_invEsc(x.unit)+' ₱ (optional)</label><input id="ieMaCost" type="number" min="0" step="any" inputmode="decimal" class="ie-in" oninput="_ieMaPrev('+id+')">'
+    +'<div><label class="ie-lbl">Unit</label><select id="ieMaUnit" class="ie-in" onchange="_ieMaUnitChanged('+id+')">'+units+'</select></div></div>'
+    +'<label class="ie-lbl" id="ieMaCostL">Cost per '+_invEsc(x.unit)+' ₱</label><input id="ieMaCost" type="number" min="0" step="any" inputmode="decimal" class="ie-in" value="'+(_invNum(x.unit_cost)>0?_invEsc(x.unit_cost):'')+'" oninput="this.dataset.touched=1;_ieMaPrev('+id+')">'
     +'<label class="ie-lbl">Note</label><input id="ieMaNote" class="ie-in" placeholder="e.g. fresh batch from supplier">'
     +'<div id="ieMaPrev" style="margin-top:10px;font-size:.84rem;font-weight:800;color:#14532d"></div>'
     +'<button id="ieMaBtn" onclick="_ieMenuAdd('+id+')" style="width:100%;margin-top:12px;font-size:.9rem;font-weight:800;background:var(--forest);color:#fff;border:none;border-radius:10px;padding:12px;cursor:pointer">Add</button>');
   setTimeout(function(){ var q=document.getElementById('ieMaQty'); if(q) q.focus(); },30);
+}
+function _ieMaUnitChanged(id){
+  var x=_ieMenuRow(id), c=document.getElementById('ieMaCost'), u=+(document.getElementById('ieMaUnit')||{}).value;
+  if(c && !c.dataset.touched && _invNum(x.unit_cost)>0){
+    var isPu = x.purchase_unit_id && u===x.purchase_unit_id && u!==x.base_unit_id;
+    c.value = Math.round(_invNum(x.unit_cost)*(isPu?_invNum(x.purchase_to_stock):1)*100)/100;
+  }
+  _ieMaPrev(id);
 }
 function _ieMaPrev(id){
   var x=_ieMenuRow(id), q=parseFloat((document.getElementById('ieMaQty')||{}).value)||0, u=+(document.getElementById('ieMaUnit')||{}).value, c=parseFloat((document.getElementById('ieMaCost')||{}).value);

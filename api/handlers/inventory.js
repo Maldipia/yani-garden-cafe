@@ -33,7 +33,7 @@ const INV_ACTIONS = new Set([
   'invCurrentStock','invMovements','invMovementDetail','invItemDetail','invExplainStock','invDashboardV2',
   'invExceptions','invResolveException','invReverseMovement','invLedgerCheck','invListAddons','invSaveAddonMap',
   // menu stock: one list, add / waste / fix count
-  'invMenuStock','invMenuAdd','invMenuSetCount',
+  'invMenuStock','invMenuAdd','invMenuSetCount','invMenuSetCost',
 ]);
 
 const SPOIL_REASONS = ['SPOILED','EXPIRED','DAMAGED','STAFF_MEAL','COMPLIMENTARY'];
@@ -590,6 +590,15 @@ export async function routeInventory(action, body, auth, req, res) {
     const r = await rpc('inv_menu_add', { p_menu_code: itemId ? null : code, p_item_id: itemId || null, p_qty: qty,
       p_unit_id: int(body.unitId), p_unit_cost: cost, p_actor: actor, p_note: str(body.note, 300) });
     return rpcResult(res, r, 'Could not add stock');
+  }
+
+  // Fill in a missing cost (₱0 batches only — a real batch cost is never overwritten).
+  if (action === 'invMenuSetCost') {
+    const itemId = int(body.itemId), cost = num(body.unitCost);
+    if (!itemId) return bad(res, 'Pick an item');
+    if (!(cost > 0)) return bad(res, 'Enter the cost');
+    const r = await rpc('inv_menu_set_cost', { p_item_id: itemId, p_unit_cost: cost, p_actor: actor });
+    return rpcResult(res, r, 'Could not set the cost');
   }
 
   if (action === 'invMenuSetCount') {
