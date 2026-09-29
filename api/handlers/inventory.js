@@ -26,7 +26,12 @@ const INV_ACTIONS = new Set([
   'invSavePurchase','invListPurchases','invGetPurchase',
   // reports
   'invDashboard','invLowStock','invExpiringSoon','invTransactions',
+  // display count + spoilage (ready-to-sell, per item)
+  'invCountSheet','invSubmitCount','invRecordSpoilage','invDayLog',
 ]);
+
+const SPOIL_REASONS = ['SPOILED','EXPIRED','DAMAGED','STAFF_MEAL','COMPLIMENTARY'];
+const COUNT_REASONS = [...SPOIL_REASONS, 'MISSING'];
 
 // ── helpers ──────────────────────────────────────────────────────────────
 async function rpc(fn, args) {
@@ -39,6 +44,10 @@ const q    = (s) => encodeURIComponent(String(s));
 const num  = (v) => (v === null || v === undefined || v === '' ? null : parseFloat(v));
 const int  = (v) => (v === null || v === undefined || v === '' ? null : parseInt(v, 10));
 const str  = (v, max = 300) => (v === null || v === undefined ? null : String(v).trim().substring(0, max));
+async function moduleOn() {
+  const r = await supaFetch(`${SUPABASE_URL}/rest/v1/inv_config?key=eq.module_enabled&select=value`);
+  return !!(r.ok && r.data && r.data[0] && r.data[0].value === 'true');
+}
 const bad  = (res, msg)  => res.status(400).json({ ok: false, error: msg });
 const boom = (res, msg)  => res.status(500).json({ ok: false, error: msg });
 
@@ -442,6 +451,57 @@ export async function routeInventory(action, body, auth, req, res) {
                          'resolution=merge-duplicates,return=representation');
     if (!r.ok) return boom(res, 'Failed to save mapping');
     return res.status(200).json({ ok: true, mapping: (r.data || [])[0] || row });
+  }
+
+  // ══ DISPLAY COUNT + SPOILAGE ════════════════════════════════════════════
+  // Tracked ready-to-sell items (stock received at least once). The closing
+  // count compares what's on display with the system; a shortfall needs a
+  // reason and is booked as spoilage or missing. Nothing here is edited in
+  // place — every change is a ledger row with who, when and why.
+  if (action === 'invCountSheet') {
+    const r = await rpc('inv_count_sheet', {});
+    if (!r.ok) return boom(res, 'Failed to load count sheet');
+    return res.status(200).json({ ok: true, items: r.data || [], moduleEnabled: await moduleOn() });
+  }
+
+  if (action === 'invSubmitCount') {
+    const lines = Array.isArray(body.lines) ? body.lines : [];
+    if (!lines.length) return bad(res, 'Nothing to submit');
+    if (lines.length > 300) return bad(res, 'Too many lines');
+    const clean = [];
+    for (const l of lines) {
+      const itemId = int(l.itemId), counted = num(l.counted), seen = num(l.seen);
+      if (!itemId) return bad(res, 'Each line needs an item');
+      if (counted === null || !(counted >= 0)) return bad(res, 'Enter the count for every item');
+      const reason = l.reason ? String(l.reason).toUpperCase() : null;
+      if (reason && !COUNT_REASONS.includes(reason)) return bad(res, 'Unknown reason');
+      clean.push({ item_id: itemId, counted, seen, reason, note: str(l.note, 200) });
+    }
+    const r = await rpc('inv_submit_count', { p_lines: clean, p_actor: actor });
+    return rpcResult(res, r, 'Count failed');
+  }
+
+  if (action === 'invRecordSpoilage') {
+    const itemId = int(body.itemId), qty = num(body.qty);
+    const reason = String(body.reason || '').toUpperCase();
+    if (!itemId) return bad(res, 'Pick an item');
+    if (!(qty > 0)) return bad(res, 'Enter a quantity');
+    if (!SPOIL_REASONS.includes(reason)) return bad(res, 'Pick a reason');
+    const photo = str(body.photoUrl, 500);
+    if (photo && !/^https:\/\//.test(photo)) return bad(res, 'Photo must be an uploaded image link');
+    const r = await rpc('inv_record_spoilage', {
+      p_item_id: itemId, p_qty: qty, p_reason: reason,
+      p_notes: str(body.notes, 300), p_actor: actor, p_photo: photo || null,
+    });
+    return rpcResult(res, r, 'Spoilage failed');
+  }
+
+  if (action === 'invDayLog') {
+    const d = String(body.date || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return bad(res, 'date must be YYYY-MM-DD');
+    const r = await rpc('inv_day_log', { p_date: d });
+    if (!r.ok) return boom(res, 'Failed to load log');
+    return res.status(200).json({ ok: true, date: d, rows: r.data || [] });
   }
 
   // ══ PURCHASES (itemized expense / immutable purchasing history) ═════════

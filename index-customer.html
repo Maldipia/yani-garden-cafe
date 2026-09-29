@@ -1255,6 +1255,7 @@ a { color: var(--terra); text-decoration: none }
   font-size: .62rem; font-weight: 700; color: #a3781e; letter-spacing: .2px;
 }
 .menu-avail-note { font-size: .62rem; color: var(--timber); margin-top: 2px; }
+.menu-left-note { color: #9a5b06; font-weight: 700; }
 .menu-unavailable .menu-img-wrap { opacity: .45; }
 .menu-unavailable .menu-add-btn { opacity: .35; pointer-events: none; }
 .menu-grid { gap: 22px 12px; align-items: start; }
@@ -1837,7 +1838,9 @@ function apiItemToMenuData(item) {
     hasPortions: !!item.hasPortions,
     sizes:       sizes,
     portions:    portions,
-    available:      item.available !== false,
+    available:      item.available !== false && !item.soldOut,
+    soldOut:        !!item.soldOut,
+    stockLeft:      (typeof item.stockLeft === 'number') ? item.stockLeft : null,
     availableFrom:  item.availableFrom  || null,
     availableUntil: item.availableUntil || null,
     availableDays:  item.availableDays  || null,
@@ -1894,6 +1897,7 @@ function getContentTagBadge(item) {
 }
 
 function buildAvailLabel(item) {
+  if (item.soldOut) return 'Sold out';
   if (item.available !== false) return '';
   var parts = [];
   var days = item.availableDays;
@@ -2415,6 +2419,8 @@ function renderMenu() {
         (item.isSignature ? '<div class="menu-tag">★ Best seller</div>' : '') +
         (!item.available && item.availableLabel
           ? '<div class="menu-avail-note">' + esc(item.availableLabel) + '</div>' : '') +
+        (item.available && item.stockLeft !== null && item.stockLeft > 0 && item.stockLeft <= 3
+          ? '<div class="menu-avail-note menu-left-note">Only ' + item.stockLeft + ' left</div>' : '') +
       '</div>' +
     '</div>';
   }).join('');
@@ -3578,6 +3584,10 @@ async function placeOrder() {
         state.cart = state.cart.filter(function(c){ return c.code !== unavailCode[1]; });
         setTimeout(function(){ renderCartPage(); }, 1200);
       }
+    } else if (result.soldOut) {
+      // Stock ran out after the menu loaded — show it and send them back to the cart
+      toast('⚠️ ' + errMsg, 5000);
+      fetchMenuFromAPI(true);
     } else {
       toast('Order failed: ' + errMsg);
     }

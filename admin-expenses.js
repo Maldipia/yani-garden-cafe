@@ -601,7 +601,7 @@ async function _expReceiveSubmit(ref,supplier){
   var qty=parseFloat((document.getElementById('rvQty')||{}).value), unitId=+(document.getElementById('rvUnit')||{}).value;
   if(!(qty>0)){ showToast('Enter quantity','error'); return; }
   var r=await api('invReceiveStock',{ itemId:itemId, qty:qty, unitId:unitId, unitCost:parseFloat((document.getElementById('rvCost')||{}).value)||0, locationId:+(document.getElementById('rvLoc')||{}).value||null, expiryDate:(document.getElementById('rvExp')||{}).value||null, purchaseLineId:lineId, notes:'Received from purchase'+(ref?(' '+ref):'')+(supplier?(' · '+supplier):'')+(((document.getElementById('rvBatch')||{}).value)?(' · batch '+(document.getElementById('rvBatch')||{}).value):'') });
-  if(r&&r.ok){ showToast('Received to inventory: '+(r.stock_unit_code||'')+' ✅'); _expCloseModal2(); _expCloseDrawer(); await initExpenses(); }
+  if(r&&r.ok){ showToast('Received to inventory: '+(r.stock_unit_code||'')+(r.converted_from_packs?(' · '+qty+' box → '+r.qty_received+' portions'):'')+' ✅'); _expCloseModal2(); _expCloseDrawer(); await initExpenses(); }
   else showToast('Failed: '+((r&&r.error)||'Unknown'),'error');
 }
 

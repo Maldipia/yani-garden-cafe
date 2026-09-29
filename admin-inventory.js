@@ -120,7 +120,7 @@ function _invRender() {
   h += '</div>';
   // tabs
   h += '<div style="display:flex;gap:4px;border-bottom:2px solid var(--mist-light);margin:10px 0 14px">';
-  [['stock','📊 Stock'],['recipes','📖 Recipes'],['items','🏷️ Items'],['settings','⚙️ Settings']].forEach(function(t){
+  [['stock','📊 Stock'],['count','🧮 Count'],['recipes','📖 Recipes'],['items','🏷️ Items'],['settings','⚙️ Settings']].forEach(function(t){
     var on=_invTab===t[0];
     h += '<button onclick="_invSetTab(\''+t[0]+'\')" style="background:none;border:none;cursor:pointer;padding:7px 14px;font-size:.8rem;font-weight:700;'
        + (on?'color:var(--forest-deep);border-bottom:3px solid var(--gold);margin-bottom:-2px':'color:var(--timber)')+'">'+t[1]+'</button>';
@@ -130,10 +130,11 @@ function _invRender() {
   v.innerHTML = h;
   _invRenderTab();
 }
-function _invSetTab(t){ _invTab=t; _invRender(); }
+function _invSetTab(t){ _invTab=t; _invRender(); if(t==='count') _invCntLoad(); }
 function _invRenderTab(){
   var b=document.getElementById('invTabBody'); if(!b) return;
   if (_invTab==='stock') b.innerHTML=_invStockHtml();
+  else if (_invTab==='count') b.innerHTML=_invCntHtml();
   else if (_invTab==='recipes') b.innerHTML=_invRecipesHtml();
   else if (_invTab==='items') b.innerHTML=_invItemsHtml();
   else b.innerHTML=_invSettingsHtml();
@@ -671,7 +672,7 @@ function _invUnitPicker(id, sel){
 function _invOpenReceive(){
   if(!_invIsAdmin()){showToast('ADMIN/OWNER only','error');return;}
   if(!_invItems.length){showToast('Create an item first (Items tab)','error');return;}
-  var itemOpts=_invItems.map(function(it){return '<option value="'+it.id+'" data-unit="'+it.base_unit_id+'">'+_invEsc(it.name)+'</option>';}).join('');
+  var itemOpts=_invItems.map(function(it){return '<option value="'+it.id+'" data-unit="'+it.base_unit_id+'" data-yield="'+(it.standard_yield||'')+'">'+_invEsc(it.name)+'</option>';}).join('');
   var unitOpts=_invRef.units.map(function(u){return '<option value="'+u.id+'">'+_invEsc(u.name)+'</option>';}).join('');
   var locOpts='<option value="">—</option>'+_invRef.locations.map(function(l){return '<option value="'+l.id+'">'+_invEsc(l.name)+'</option>';}).join('');
   var body=_invField('Item',_invSelect('rcItem',itemOpts,'_invRcUnit()'))
@@ -684,11 +685,16 @@ function _invOpenReceive(){
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
       +'<div>'+_invField('Expiry date',_invInput('rcExp','date'))+'</div>'
       +'<div>'+_invField('Expected use',_invInput('rcUse','date'))+'</div></div>'
-    +_invField('Notes',_invInput('rcNotes','text','delivery ref, supplier…'));
+    +_invField('Notes',_invInput('rcNotes','text','delivery ref, supplier…'))
+    +'<div id="rcPackHint" style="display:none;font-size:.68rem;color:#8a5a0b;background:#fff7e6;border-radius:8px;padding:7px 9px;margin-top:8px"></div>';
   _invModal('Receive Stock', body, 'Receive', _invSubmitReceive);
   setTimeout(_invRcUnit,20);
 }
-function _invRcUnit(){ var s=document.getElementById('rcItem'); if(!s)return; var u=s.options[s.selectedIndex].getAttribute('data-unit'); var us=document.getElementById('rcUnit'); if(us&&u) us.value=u; }
+function _invRcUnit(){ var s=document.getElementById('rcItem'); if(!s)return; var o=s.options[s.selectedIndex]; var u=o.getAttribute('data-unit'), y=o.getAttribute('data-yield'); var us=document.getElementById('rcUnit'); if(us&&u) us.value=u;
+  var hint=document.getElementById('rcPackHint'); if(!hint) return;
+  var un=(_invRef.units.filter(function(x){return String(x.id)===String(u);})[0]||{}).name||'';
+  if(y && (un==='slice'||un==='serving')){ var box=_invRef.units.filter(function(x){return x.name==='box';})[0]; if(box&&us) us.value=box.id; hint.style.display='block'; hint.innerHTML='Stocked in '+un+'s. Pick unit <b>box</b> (or whole) and enter boxes — 1 box becomes <b>'+_invFmtQty(y)+' '+un+'s</b>. Unit cost is per box.'; }
+  else { hint.style.display='none'; } }
 async function _invSubmitReceive(){
   var itemId=+(document.getElementById('rcItem')||{}).value, qty=parseFloat((document.getElementById('rcQty')||{}).value), unitId=+(document.getElementById('rcUnit')||{}).value;
   if(!itemId){showToast('Pick an item','error');return;}
@@ -942,4 +948,210 @@ async function _invArchiveRecipe(id,name){
   var r=await api('invArchiveRecipe',{id:id});
   if(r&&r.ok){ showToast('Recipe archived','success'); await _invLoadRecipes(); _invRenderTab(); }
   else showToast((r&&r.error)||'Failed','error');
+}
+
+// ── COUNT TAB: closing display count + spoilage log (ready-to-sell) ─────────
+// One screen. System = what the POS says is left (after today's sales and
+// spoilage). Staff enter what is on display; a shortfall needs a reason and is
+// booked as spoilage or missing. Past dates open read-only from the log.
+var _invCntDate  = null;   // YYYY-MM-DD (Manila)
+var _invCntSheet = [];     // tracked items
+var _invCntVals  = {};     // itemId -> {counted, reason, note}
+var _invCntLog   = [];     // day log rows
+var _invCntBusy  = false;
+var _invCntLoaded = false;
+var INV_REASONS = { SPOILED:'Spoiled', EXPIRED:'Expired', DAMAGED:'Damaged', STAFF_MEAL:'Staff meal', COMPLIMENTARY:'Complimentary', MISSING:'Missing', FOUND:'Found (extra)', COUNTED:'Counted — matched' };
+var INV_SPOIL_REASONS = ['SPOILED','EXPIRED','DAMAGED','STAFF_MEAL','COMPLIMENTARY'];
+
+function _invManilaToday(){ return new Date(Date.now()+8*3600e3).toISOString().slice(0,10); }
+function _invPeso(n){ return '₱'+(_invNum(n)).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function _invDateLong(d){ try{ return new Date(d+'T00:00:00+08:00').toLocaleDateString('en-PH',{weekday:'short',month:'short',day:'numeric',year:'numeric',timeZone:'Asia/Manila'}); }catch(e){ return d; } }
+function _invTime(ts){ try{ return new Date(ts).toLocaleTimeString('en-PH',{hour:'numeric',minute:'2-digit',timeZone:'Asia/Manila'}); }catch(e){ return ''; } }
+
+async function _invCntLoad(){
+  if(!_invCntDate) _invCntDate=_invManilaToday();
+  var isToday=(_invCntDate===_invManilaToday());
+  var reqs=[api('invDayLog',{date:_invCntDate})];
+  if(isToday) reqs.push(api('invCountSheet',{}));
+  var res=await Promise.all(reqs);
+  _invCntLog=(res[0]&&res[0].ok)?(res[0].rows||[]):[];
+  if(isToday){
+    _invCntSheet=(res[1]&&res[1].ok)?(res[1].items||[]):[]; _invCntLoaded=true;
+    _invCntVals={};
+    _invCntSheet.forEach(function(it){ _invCntVals[it.item_id]={counted:_invNum(it.system_qty),reason:'',note:''}; });
+  }
+  if(_invTab==='count') _invRenderTab();
+}
+function _invCntShift(days){
+  var d=new Date((_invCntDate||_invManilaToday())+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()+days);
+  var nd=d.toISOString().slice(0,10); if(nd>_invManilaToday()) return;
+  _invCntDate=nd; _invCntLoad();
+}
+function _invCntPick(v){ if(!v) return; if(v>_invManilaToday()) v=_invManilaToday(); _invCntDate=v; _invCntLoad(); }
+
+function _invCntHtml(){
+  var today=_invManilaToday(); if(!_invCntDate) _invCntDate=today;
+  var isToday=(_invCntDate===today);
+  var h='';
+  if(_invCfg.module_enabled!=='true'){
+    h+='<div style="background:#fff7e6;border:1px solid #f3d9a4;color:#8a5a0b;border-radius:10px;padding:10px 12px;font-size:.74rem;margin-bottom:10px">'
+      +'<b>Stock Control is OFF.</b> Counts and spoilage still save, but sales won’t deduct stock and the QR menu won’t show sold out until it’s turned on in ⚙️ Settings.</div>';
+  }
+  // date bar
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px">'
+    +'<div style="display:flex;align-items:center;gap:6px">'
+      +'<span style="font-size:.72rem;color:var(--timber);font-weight:700">Count date</span>'
+      +'<button onclick="_invCntShift(-1)" style="border:1.5px solid var(--mist);background:#fff;border-radius:8px;padding:6px 10px;cursor:pointer" aria-label="Previous day">‹</button>'
+      +'<input type="date" value="'+_invCntDate+'" max="'+today+'" onchange="_invCntPick(this.value)" style="border:1.5px solid var(--mist);border-radius:8px;padding:6px 8px;font-size:.8rem">'
+      +'<button onclick="_invCntShift(1)" '+(isToday?'disabled ':'')+'style="border:1.5px solid var(--mist);background:#fff;border-radius:8px;padding:6px 10px;cursor:pointer;'+(isToday?'opacity:.4':'')+'" aria-label="Next day">›</button>'
+      +(isToday?'':'<button onclick="_invCntPick(\''+today+'\')" style="border:none;background:none;color:var(--forest);font-weight:700;font-size:.74rem;cursor:pointer">Today</button>')
+    +'</div>'
+    +'<button onclick="_invOpenSpoilage()" style="font-size:.76rem;font-weight:700;background:#fdf0ee;color:#8a2a22;border:1.5px solid #e0b4ae;border-radius:8px;padding:8px 14px;cursor:pointer">+ Record spoilage</button>'
+  +'</div>';
+
+  // summary from the day log
+  var spoiled=0, spoiledQty=0, missing=0, found=0, counts={};
+  _invCntLog.forEach(function(r){
+    if(r.kind==='SPOILAGE' || (r.kind==='COUNT' && INV_SPOIL_REASONS.indexOf(r.reason)>=0)){ spoiled+=_invNum(r.value_menu); spoiledQty+=Math.abs(_invNum(r.qty)); }
+    if(r.reason==='MISSING') missing+=_invNum(r.value_menu);
+    if(r.reason==='FOUND') found+=1;
+    if(r.kind==='COUNT' && r.reference_id) counts[r.reference_id]=r;
+  });
+  var nCounts=Object.keys(counts).length;
+  var soldOutNow=isToday?_invCntSheet.filter(function(it){return _invNum(it.system_qty)<=0;}).length:null;
+  var card=function(v,l,c){ return '<div style="background:#fff;border:1px solid var(--mist-light);border-radius:10px;padding:10px 12px"><div style="font-size:1.05rem;font-weight:800;color:'+(c||'var(--forest-deep)')+'">'+v+'</div><div style="font-size:.64rem;color:var(--timber);margin-top:1px">'+l+'</div></div>'; };
+  h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:12px">'
+    + card(nCounts?('✓ '+nCounts+' count'+(nCounts>1?'s':'')):'Not yet','count submitted'+(nCounts?(' · last '+_invTime(counts[Object.keys(counts)[0]].performed_at)):''), nCounts?'#3b6d11':'#9a5b06')
+    + card(_invPeso(spoiled),'spoiled'+(spoiledQty?(' · '+_invFmtQty(spoiledQty)+' pcs'):'')+' (menu price)', spoiled?'#8a2a22':null)
+    + card(_invPeso(missing),'missing / unexplained', missing?'#b3261e':null)
+    + (soldOutNow!==null?card(String(soldOutNow),'sold out on QR menu now', soldOutNow?'#b3261e':null):'')
+  +'</div>';
+
+  if(isToday) h+=_invCntSheetHtml();
+  h+=_invCntLogHtml(isToday);
+  return h;
+}
+
+function _invCntSheetHtml(){
+  if(!_invCntLoaded) return '<div style="padding:24px;text-align:center;color:var(--timber);font-size:.78rem">Loading count sheet…</div>';
+  if(!_invCntSheet.length){
+    return '<div style="background:#fff;border:1px dashed var(--mist);border-radius:10px;padding:22px;text-align:center;color:var(--timber);font-size:.78rem;margin-bottom:14px">'
+      +'<div style="font-weight:800;color:var(--forest-deep);margin-bottom:4px">No items to count yet</div>'
+      +'An item appears here after its first delivery is received (📊 Stock → Receive, or 📦 Receive on a purchase). '
+      +'Ready-to-sell items only — pastries, cakes, bottled and packed goods.</div>';
+  }
+  var th='position:sticky;top:0;background:var(--cream,#fbf8f3);z-index:1;font-size:.6rem;letter-spacing:.5px;color:var(--timber);text-transform:uppercase;text-align:left;padding:8px;border-bottom:1.5px solid var(--mist-light)';
+  var h='<div style="font-size:.68rem;color:var(--timber);margin-bottom:6px">System = received − sold − spoiled. Enter what is on display; only a difference needs a reason.</div>';
+  h+='<div style="background:#fff;border:1px solid var(--mist-light);border-radius:12px;overflow:auto;max-height:62vh">'
+    +'<table style="width:100%;border-collapse:collapse;min-width:720px"><thead><tr>'
+    +'<th style="'+th+'">Item</th><th style="'+th+'">Expiry</th><th style="'+th+';text-align:center">System</th><th style="'+th+'">On display</th><th style="'+th+';text-align:center">Diff</th><th style="'+th+'">Reason</th>'
+    +'</tr></thead><tbody>';
+  _invCntSheet.forEach(function(it){
+    var v=_invCntVals[it.item_id]||{counted:_invNum(it.system_qty),reason:'',note:''};
+    var sys=_invNum(it.system_qty), diff=Math.round((_invNum(v.counted)-sys)*1000)/1000;
+    var dl=_invDaysTo(it.next_expiry);
+    var exp=!it.next_expiry?'<span style="color:var(--timber)">—</span>'
+      : '<span style="font-weight:700;color:'+(dl<=0?'#b3261e':(dl<=1?'#9a5b06':'var(--forest-deep)'))+'">'+_invDate(it.next_expiry)+'</span>'
+        +'<div style="font-size:.62rem;color:'+(dl<=0?'#b3261e':'var(--timber)')+'">'+(dl<0?'expired':(dl===0?'expires today':(dl+' day'+(dl>1?'s':'')+' left')))+'</div>';
+    var chg=(diff!==0);
+    var reason='';
+    if(diff<0){
+      reason='<select onchange="_invCntSet('+it.item_id+',\'reason\',this.value)" style="font-size:.74rem;padding:6px;border-radius:8px;border:1.5px solid '+(v.reason?'var(--mist)':'#e0b4ae')+';background:'+(v.reason?'#fff':'#fdf0ee')+'">'
+        +'<option value="">Pick reason…</option>'
+        +['SPOILED','EXPIRED','DAMAGED','STAFF_MEAL','COMPLIMENTARY','MISSING'].map(function(k){return '<option value="'+k+'"'+(v.reason===k?' selected':'')+'>'+INV_REASONS[k]+'</option>';}).join('')
+        +'</select>';
+    } else if(diff>0){ reason='<span style="font-size:.7rem;color:#3b6d11;font-weight:700">Found — added back</span>'; }
+    else { reason='<span style="font-size:.7rem;color:#3b6d11">✓ matches</span>'; }
+    h+='<tr style="border-bottom:1px solid var(--mist-light)">'
+      +'<td style="padding:9px 8px"><div style="font-weight:700;color:var(--forest-deep);font-size:.82rem">'+_invEsc(it.name)+'</div>'
+        +'<div style="font-size:.62rem;color:var(--timber)">'+_invEsc(it.unit)+(it.standard_yield?(' · 1 box = '+_invFmtQty(it.standard_yield)):'')+'</div>'
+        +(it.menu_names?'<div style="font-size:.6rem;color:#6b5a3a;background:#f3eee3;display:inline-block;border-radius:8px;padding:1px 7px;margin-top:3px">sold as: '+_invEsc(it.menu_names)+'</div>':'')+'</td>'
+      +'<td style="padding:9px 8px;font-size:.74rem">'+exp+'</td>'
+      +'<td style="padding:9px 8px;text-align:center;font-size:.9rem;color:var(--timber)">'+_invFmtQty(sys)+'</td>'
+      +'<td style="padding:9px 8px"><div style="display:flex;align-items:center;gap:4px">'
+        +'<button onclick="_invCntStep('+it.item_id+',-1)" style="width:30px;height:32px;border:1.5px solid var(--mist);background:#fff;border-radius:8px;font-size:1rem;cursor:pointer;color:var(--forest)" aria-label="Less">−</button>'
+        +'<input type="number" min="0" step="1" value="'+_invFmtQty(v.counted)+'" onchange="_invCntSet('+it.item_id+',\'counted\',this.value)" style="width:56px;height:32px;text-align:center;font-weight:800;font-size:.9rem;border:2px solid '+(chg?'#c0762a':'var(--forest)')+';background:'+(chg?'#fff6ea':'#fff')+';border-radius:8px">'
+        +'<button onclick="_invCntStep('+it.item_id+',1)" style="width:30px;height:32px;border:1.5px solid var(--mist);background:#fff;border-radius:8px;font-size:1rem;cursor:pointer;color:var(--forest)" aria-label="More">+</button>'
+      +'</div></td>'
+      +'<td style="padding:9px 8px;text-align:center;font-weight:800;color:'+(diff<0?'#b3261e':(diff>0?'#3b6d11':'#9aa093'))+'">'+(diff>0?'+':'')+_invFmtQty(diff)+'</td>'
+      +'<td style="padding:9px 8px">'+reason+'</td></tr>';
+  });
+  h+='</tbody></table></div>';
+  h+='<div style="display:flex;justify-content:flex-end;gap:8px;margin:10px 0 18px">'
+    +'<button onclick="_invCntReset()" style="font-size:.78rem;font-weight:700;background:#fff;color:var(--forest);border:1.5px solid var(--mist);border-radius:8px;padding:9px 14px;cursor:pointer">Reset</button>'
+    +'<button id="invCntSubmitBtn" onclick="_invCntSubmit()" style="font-size:.8rem;font-weight:800;background:var(--forest);color:#fff;border:none;border-radius:8px;padding:9px 18px;cursor:pointer">Submit count</button></div>';
+  return h;
+}
+function _invCntSet(id,k,val){
+  var v=_invCntVals[id]; if(!v) return;
+  if(k==='counted'){ var n=parseFloat(val); v.counted=(isNaN(n)||n<0)?0:n; }
+  else v[k]=val;
+  _invRenderTab();
+}
+function _invCntStep(id,d){ var v=_invCntVals[id]; if(!v) return; v.counted=Math.max(0,_invNum(v.counted)+d); _invRenderTab(); }
+function _invCntReset(){ _invCntSheet.forEach(function(it){ _invCntVals[it.item_id]={counted:_invNum(it.system_qty),reason:'',note:''}; }); _invRenderTab(); }
+async function _invCntSubmit(){
+  if(_invCntBusy) return;
+  var lines=[], diffs=0, missingReason=null;
+  _invCntSheet.forEach(function(it){
+    var v=_invCntVals[it.item_id]; var d=_invNum(v.counted)-_invNum(it.system_qty);
+    if(Math.abs(d)>1e-9) diffs++;
+    if(d<-1e-9 && !v.reason && !missingReason) missingReason=it.name;
+    lines.push({itemId:it.item_id, counted:_invNum(v.counted), seen:_invNum(it.system_qty), reason:(d<0?v.reason:null)||null, note:v.note||''});
+  });
+  if(missingReason){ showToast('Pick a reason for '+missingReason,'error'); return; }
+  if(!confirm('Submit count for '+lines.length+' item'+(lines.length>1?'s':'')+'?'+(diffs?('\n'+diffs+' differ from the system and will be recorded.'):'\nEverything matches.'))) return;
+  _invCntBusy=true; var b=document.getElementById('invCntSubmitBtn'); if(b){ b.disabled=true; b.textContent='Saving…'; }
+  var r=await api('invSubmitCount',{lines:lines});
+  _invCntBusy=false;
+  if(r&&r.ok){ showToast('Count saved'+(r.differences?(' · '+r.differences+' difference'+(r.differences>1?'s':'')):' · all match'),'success'); await _invCntLoad(); }
+  else { showToast((r&&r.error)||'Count failed','error'); if(r&&r.stock_changed) await _invCntLoad(); else if(b){ b.disabled=false; b.textContent='Submit count'; } }
+}
+
+function _invCntLogHtml(isToday){
+  var rows=_invCntLog.filter(function(r){ return !(r.kind==='COUNT' && r.reason==='COUNTED'); });
+  var counted=_invCntLog.filter(function(r){ return r.kind==='COUNT'; });
+  var th='position:sticky;top:0;background:var(--cream,#fbf8f3);z-index:1;font-size:.6rem;letter-spacing:.5px;color:var(--timber);text-transform:uppercase;text-align:left;padding:7px 8px;border-bottom:1.5px solid var(--mist-light)';
+  var tagc={SPOILED:'#efe3f7;color:#5b2a86',EXPIRED:'#fbe3e0;color:#a4261d',DAMAGED:'#fbeed5;color:#8a5a0b',STAFF_MEAL:'#e6f0f7;color:#185fa5',COMPLIMENTARY:'#e6f0f7;color:#185fa5',MISSING:'#fbe3e0;color:#a4261d',FOUND:'#e6f0da;color:#3b6d11'};
+  var h='<div style="display:flex;justify-content:space-between;align-items:baseline;margin:6px 0 6px"><div style="font-weight:800;color:var(--forest-deep);font-size:.9rem">Spoilage and count log · '+_invDateLong(_invCntDate)+'</div>'
+    +'<div style="font-size:.64rem;color:var(--timber)">'+(counted.length?(new Set(counted.map(function(r){return r.reference_id;}))).size+' count(s) · ':'')+rows.length+' entr'+(rows.length===1?'y':'ies')+'</div></div>';
+  if(!rows.length){ return h+'<div style="font-size:.74rem;color:var(--timber);background:#fff;border:1px solid var(--mist-light);border-radius:10px;padding:14px">No spoilage or count differences '+(isToday?'yet today':'on this day')+'.</div>'; }
+  h+='<div style="background:#fff;border:1px solid var(--mist-light);border-radius:12px;overflow:auto;max-height:50vh"><table style="width:100%;border-collapse:collapse;min-width:640px"><thead><tr>'
+    +'<th style="'+th+'">Time</th><th style="'+th+'">Item</th><th style="'+th+';text-align:right">Qty</th><th style="'+th+'">Reason</th><th style="'+th+'">Note</th><th style="'+th+'">By</th><th style="'+th+';text-align:right">Value</th></tr></thead><tbody>';
+  rows.forEach(function(r){
+    var q=_invNum(r.qty);
+    h+='<tr style="border-bottom:1px solid var(--mist-light);font-size:.74rem">'
+      +'<td style="padding:7px 8px;white-space:nowrap">'+_invTime(r.performed_at)+'<div style="font-size:.6rem;color:var(--timber)">'+(r.kind==='COUNT'?'count':'spoilage')+'</div></td>'
+      +'<td style="padding:7px 8px;font-weight:700;color:var(--forest-deep)">'+_invEsc(r.item_name)+'</td>'
+      +'<td style="padding:7px 8px;text-align:right;white-space:nowrap">'+(q>0?'+':'')+_invFmtQty(q)+' '+_invEsc(r.unit)+'</td>'
+      +'<td style="padding:7px 8px"><span style="font-size:.62rem;font-weight:800;padding:2px 8px;border-radius:10px;background:'+(tagc[r.reason]||'#eee;color:#555')+'">'+_invEsc(INV_REASONS[r.reason]||r.reason||'Waste')+'</span></td>'
+      +'<td style="padding:7px 8px;color:var(--timber)">'+_invEsc(r.notes||'')+(r.photo_url?' <a href="'+_invEsc(r.photo_url)+'" target="_blank" rel="noopener">photo</a>':'')+'</td>'
+      +'<td style="padding:7px 8px">'+_invEsc(r.performed_by_name||r.performed_by||'')+'</td>'
+      +'<td style="padding:7px 8px;text-align:right;white-space:nowrap">'+(r.value_menu>0?_invPeso(r.value_menu):(r.value_cost>0?_invPeso(r.value_cost)+' <span style="font-size:.6rem;color:var(--timber)">cost</span>':'—'))+'</td></tr>';
+  });
+  h+='</tbody></table></div>';
+  return h;
+}
+
+// Record spoilage any time (not only during the count)
+async function _invOpenSpoilage(){
+  if(!_invCntSheet.length && _invCntDate===_invManilaToday()){ var s=await api('invCountSheet',{}); _invCntSheet=(s&&s.ok)?(s.items||[]):[]; }
+  if(!_invCntSheet.length){ showToast('Receive stock for an item first','error'); return; }
+  var opts=_invCntSheet.map(function(it){ return '<option value="'+it.item_id+'" data-unit="'+_invEsc(it.unit)+'" data-max="'+_invNum(it.system_qty)+'">'+_invEsc(it.name)+' — '+_invFmtQty(it.system_qty)+' '+_invEsc(it.unit)+' left</option>'; }).join('');
+  var ropts=INV_SPOIL_REASONS.map(function(k){ return '<option value="'+k+'">'+INV_REASONS[k]+'</option>'; }).join('');
+  var body=_invField('Item',_invSelect('spItem',opts))
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+      +'<div>'+_invField('Quantity',_invInput('spQty','number','1','1'))+'</div>'
+      +'<div>'+_invField('Reason',_invSelect('spReason','<option value="">Pick…</option>'+ropts))+'</div></div>'
+    +_invField('Note',_invInput('spNote','text','e.g. dropped while plating'))
+    +'<div style="font-size:.66rem;color:var(--timber);margin-top:8px">Stock goes down right away. If it reaches 0, the item shows Sold out on the QR menu.</div>';
+  _invModal('Record Spoilage', body, 'Record spoilage', async function(){
+    var id=+(document.getElementById('spItem')||{}).value, qty=parseFloat((document.getElementById('spQty')||{}).value), reason=(document.getElementById('spReason')||{}).value, note=(document.getElementById('spNote')||{}).value||'';
+    if(!id){ showToast('Pick an item','error'); return; }
+    if(!(qty>0)){ showToast('Enter a quantity','error'); return; }
+    if(!reason){ showToast('Pick a reason','error'); return; }
+    var r=await api('invRecordSpoilage',{itemId:id,qty:qty,reason:reason,notes:note});
+    if(r&&r.ok){ showToast('Spoilage recorded · '+_invFmtQty(r.remaining)+' left','success'); _invCloseModal(); _invCntDate=_invManilaToday(); await _invCntLoad(); await _invLoadStock(); }
+    else showToast((r&&r.error)||'Failed','error');
+  });
 }

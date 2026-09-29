@@ -95,6 +95,10 @@ hrNightDiffDecide
 hrNightDiffReview
 hrRotateQrToken
 hrVerifyPin
+invCountSheet
+invDayLog
+invRecordSpoilage
+invSubmitCount
 linkReservationTable
 listCards
 listPayments
