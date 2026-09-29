@@ -658,6 +658,56 @@ function _invModal(title, bodyHtml, submitLabel, submitFn){
     +'<button id="invModalSubmit" style="flex:2;font-size:.8rem;font-weight:700;background:var(--forest);color:#fff;border:none;border-radius:8px;padding:10px;cursor:pointer">'+submitLabel+'</button></div></div>';
   document.body.appendChild(m);
   document.getElementById('invModalSubmit').onclick=submitFn;
+  // long pickers become type-to-search (the <select> stays as the value holder)
+  m.querySelectorAll('select').forEach(function(s){ if(s.options.length>15) _invSearchable(s); });
+}
+
+// ── Type-to-search picker ────────────────────────────────────────────────
+// Wraps a <select>: staff type part of a name ("buco", "milk fresh") and pick
+// from the matches with a tap, Enter or arrow keys. The hidden select keeps the
+// value and fires its own onchange, so every existing reader keeps working.
+function _invSearchable(sel){
+  if(!sel || sel._invSearch) return; sel._invSearch=true;
+  var preset=false; for(var i=0;i<sel.options.length;i++){ if(sel.options[i].defaultSelected){ preset=true; break; } }
+  if(!preset && sel.options[0] && sel.options[0].value!==''){ var ph=document.createElement('option'); ph.value=''; ph.text=''; sel.insertBefore(ph, sel.options[0]); sel.value=''; }
+  var wrap=document.createElement('div'); wrap.style.cssText='position:relative;width:100%';
+  var inp=document.createElement('input'); inp.type='text'; inp.autocomplete='off'; inp.setAttribute('role','combobox'); inp.setAttribute('aria-expanded','false');
+  inp.placeholder='Type to search…';
+  inp.style.cssText=(sel.getAttribute('style')||'')+';width:100%;box-sizing:border-box';
+  var list=document.createElement('div'); list.setAttribute('role','listbox');
+  list.style.cssText='display:none;position:absolute;left:0;right:0;top:100%;margin-top:3px;background:#fff;border:1.5px solid var(--mist);border-radius:8px;box-shadow:0 8px 22px rgba(0,0,0,.14);max-height:240px;overflow:auto;z-index:10005';
+  sel.parentNode.insertBefore(wrap, sel); wrap.appendChild(inp); wrap.appendChild(list); wrap.appendChild(sel); sel.style.display='none';
+  var hits=[], hi=0;
+  function curText(){ var o=sel.options[sel.selectedIndex]; return (o&&o.value!=='')?o.text:''; }
+  inp.value=curText();
+  sel._invSync=function(){ inp.value=curText(); };   // call after setting sel.value in code
+  function norm(t){ return String(t||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+  function render(q){
+    var toks=norm(q).split(/\s+/).filter(Boolean);
+    hits=[];
+    for(var i=0;i<sel.options.length;i++){ var o=sel.options[i]; if(o.value==='') continue;
+      var t=norm(o.text); if(toks.every(function(k){ return t.indexOf(k)>=0; })) hits.push(o); }
+    if(toks.length) hits.sort(function(a,b){ var aa=norm(a.text).indexOf(toks[0])===0?0:1, bb=norm(b.text).indexOf(toks[0])===0?0:1; return aa-bb; });
+    hi=0;
+    list.innerHTML=hits.length? hits.slice(0,60).map(function(o,i){
+        return '<div data-i="'+i+'" role="option" style="padding:8px 10px;font-size:.8rem;cursor:pointer;border-bottom:1px solid var(--mist-light);'+(i===0?'background:var(--mist-light);':'')+'">'+_invEsc(o.text)+'</div>'; }).join('')
+      : '<div style="padding:9px 10px;font-size:.76rem;color:var(--timber)">No match for “'+_invEsc(q)+'”</div>';
+    list.style.display='block'; inp.setAttribute('aria-expanded','true');
+  }
+  function mark(){ var rows=list.querySelectorAll('[data-i]'); rows.forEach(function(r,i){ r.style.background=(i===hi)?'var(--mist-light)':''; }); if(rows[hi]) rows[hi].scrollIntoView({block:'nearest'}); }
+  function choose(o){ if(!o) return; sel.value=o.value; inp.value=o.text; close(); sel.dispatchEvent(new Event('change',{bubbles:true})); }
+  function close(){ list.style.display='none'; inp.setAttribute('aria-expanded','false'); }
+  inp.addEventListener('focus', function(){ inp.select(); render(''); });
+  inp.addEventListener('input', function(){ render(inp.value); });
+  inp.addEventListener('keydown', function(e){
+    if(list.style.display==='none' && (e.key==='ArrowDown')){ render(inp.value); return; }
+    if(e.key==='ArrowDown'){ e.preventDefault(); hi=Math.min(hi+1, Math.min(hits.length,60)-1); mark(); }
+    else if(e.key==='ArrowUp'){ e.preventDefault(); hi=Math.max(hi-1,0); mark(); }
+    else if(e.key==='Enter'){ e.preventDefault(); if(hits.length) choose(hits[hi]); }
+    else if(e.key==='Escape'){ close(); inp.value=curText(); }
+  });
+  list.addEventListener('mousedown', function(e){ var r=e.target.closest('[data-i]'); if(!r) return; e.preventDefault(); choose(hits[+r.getAttribute('data-i')]); });
+  inp.addEventListener('blur', function(){ setTimeout(function(){ close(); inp.value=curText(); },120); });
 }
 function _invCloseModal(){ var m=document.getElementById('invActionModal'); if(m) m.remove(); }
 function _invField(label, inner){ return '<label style="font-size:.72rem;font-weight:700;color:var(--forest-deep);display:block;margin-top:8px">'+label+'</label>'+inner; }
@@ -690,10 +740,10 @@ function _invOpenReceive(){
   _invModal('Receive Stock', body, 'Receive', _invSubmitReceive);
   setTimeout(_invRcUnit,20);
 }
-function _invRcUnit(){ var s=document.getElementById('rcItem'); if(!s)return; var o=s.options[s.selectedIndex]; var u=o.getAttribute('data-unit'), y=o.getAttribute('data-yield'); var us=document.getElementById('rcUnit'); if(us&&u) us.value=u;
+function _invRcUnit(){ var s=document.getElementById('rcItem'); if(!s)return; var o=s.options[s.selectedIndex]; var u=o.getAttribute('data-unit'), y=o.getAttribute('data-yield'); var us=document.getElementById('rcUnit'); if(us&&u){ us.value=u; if(us._invSync) us._invSync(); }
   var hint=document.getElementById('rcPackHint'); if(!hint) return;
   var un=(_invRef.units.filter(function(x){return String(x.id)===String(u);})[0]||{}).name||'';
-  if(y && (un==='slice'||un==='serving')){ var box=_invRef.units.filter(function(x){return x.name==='box';})[0]; if(box&&us) us.value=box.id; hint.style.display='block'; hint.innerHTML='Stocked in '+un+'s. Pick unit <b>box</b> (or whole) and enter boxes — 1 box becomes <b>'+_invFmtQty(y)+' '+un+'s</b>. Unit cost is per box.'; }
+  if(y && (un==='slice'||un==='serving')){ var box=_invRef.units.filter(function(x){return x.name==='box';})[0]; if(box&&us){ us.value=box.id; if(us._invSync) us._invSync(); } hint.style.display='block'; hint.innerHTML='Stocked in '+un+'s. Pick unit <b>box</b> (or whole) and enter boxes — 1 box becomes <b>'+_invFmtQty(y)+' '+un+'s</b>. Unit cost is per box.'; }
   else { hint.style.display='none'; } }
 async function _invSubmitReceive(){
   var itemId=+(document.getElementById('rcItem')||{}).value, qty=parseFloat((document.getElementById('rcQty')||{}).value), unitId=+(document.getElementById('rcUnit')||{}).value;
@@ -895,6 +945,7 @@ function _invRecipeRenderLines(){
       +'</div>';
   });
   box.innerHTML=h;
+  _invRecLines.forEach(function(l,i){ var s=document.getElementById('rl_ing_'+i); if(s) _invSearchable(s); });
   _invRecipeCostLive();
 }
 function _invRecipeSyncDom(){
