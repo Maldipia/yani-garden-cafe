@@ -740,6 +740,7 @@ function openManualClockModal(staffId, preset) {
       <div class="hr-edit-row"><label class="hr-edit-label">Shift date *</label><input class="hr-edit-input" id="clkDate" type="date" value="${presetDate}"></div>
       <div class="hr-edit-row"><label class="hr-edit-label">Time *</label><input class="hr-edit-input" id="clkTime" type="time" value="${presetTime}"></div>
     </div>
+    ${preset.taps?`<div style="font-size:.7rem;color:#475569;background:#f1f5f9;border-radius:6px;padding:6px 10px;margin:-4px 0 8px">Taps already on this day: <b>${esc(preset.taps)}</b>. A time-out must be later than the last one.</div>`:''}
     <div id="clkNextDay" style="display:none;font-size:.7rem;color:#b45309;background:#fef3c7;border-radius:6px;padding:6px 10px;margin:-4px 0 8px">
       🌙 Before 6:00 AM — this will be filed as the end of the <b id="clkNextDayLbl"></b> shift (early the next morning).
     </div>
@@ -1061,7 +1062,7 @@ async function renderPayrollSection(s, tc){
       <td style="padding:5px 7px">${esc(x.work_date)}${x.is_holiday?` <span title="${esc(x.holiday_name||'')}" style="font-size:.58rem;font-weight:700;background:#ffedd5;color:#c2410c;padding:1px 5px;border-radius:20px">HOL</span>`:''}</td>
       <td style="padding:5px 7px">${x.in_manual ? manual(esc(x.clock_in||'—'),'CLOCK_IN') : esc(x.clock_in||'—')}</td>
       <td style="padding:5px 7px">${x.clock_out ? (x.out_manual ? manual(esc(x.clock_out),'CLOCK_OUT') : esc(x.clock_out))
-        : `<span style="color:#b45309;font-weight:700" title="No time-out was tapped — hours stop at the last tap">—</span> <a href="#" onclick="openManualClockModal('${s.id}',{date:'${esc(x.work_date)}',event:'CLOCK_OUT'});return false" style="font-size:.62rem;color:#1d4ed8;text-decoration:none;white-space:nowrap">+ add time-out</a>`}</td>
+        : `<span style="color:#b45309;font-weight:700" title="No time-out was tapped — hours stop at the last tap">—</span> <a href="#" onclick="openManualClockModal('${s.id}',{date:'${esc(x.work_date)}',event:'CLOCK_OUT',taps:'${esc(('in '+(x.clock_in||'—')+(x.break_detail?' · breaks '+x.break_detail:'')+(x.break_end?' · last break end '+x.break_end:'')).replace(/'/g,''))}'});return false" style="font-size:.62rem;color:#1d4ed8;text-decoration:none;white-space:nowrap">+ add time-out</a>`}</td>
       ${x.break_manual
         ? `<td style="padding:5px 7px;text-align:right"><span style="${manualStyle}" title="${esc('Break entered manually: '+(x.manual_note||''))}">✎ ${N(x.break_mins)>0 ? hm(N(x.break_mins)) : '—'}</span></td>`
         : td(N(x.break_mins)>0 ? hm(N(x.break_mins)) : '—', N(x.break_mins)>0?'':grey, x.break_detail ? 'Breaks: '+x.break_detail+(N(x.break_count)>1?' ('+N(x.break_count)+' breaks)':'') : 'No break tapped')}

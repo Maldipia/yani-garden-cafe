@@ -589,6 +589,36 @@ export async function routeAdmin(action, body, auth, req, res) {
     if (evMs > Date.now() + 5*60*1000) {
       return res.status(400).json({ok:false,error:'That time is in the future — enter it after the shift ends'});
     }
+    // The entry has to fit the day's existing taps, or the hours engine
+    // ignores it and nothing visibly changes: a time-out before the last tap
+    // (the staff member was still on the clock after it), a time-in after
+    // the first tap, a break outside the shift, or an exact duplicate.
+    {
+      const ex = await supaFetch(SUPABASE_URL+'/rest/v1/hr_time_logs?tenant_id=eq.'+TENANT_HR2+
+        '&staff_id=eq.'+encodeURIComponent(staffId)+'&log_date=eq.'+log_date+
+        '&select=event_type,event_time,attendance_source&order=event_time.asc,created_at.asc');
+      const evs = Array.isArray(ex.data) ? ex.data : [];
+      const fmt = t => new Date(new Date(t).getTime() + 8*3600*1000).toISOString().slice(11,16).replace(/^(\d\d):(\d\d)$/, (m,h,mi) => {
+        const H = parseInt(h,10); return ((H%12)||12)+':'+mi+' '+(H<12?'AM':'PM'); });
+      const label = e => e.event_type.replace(/_/g,' ').toLowerCase()+' '+fmt(e.event_time);
+      if (evs.some(e => e.event_type===event_type && Math.abs(new Date(e.event_time).getTime()-evMs) < 60*1000)) {
+        return res.status(400).json({ok:false,error:'That '+event_type.replace(/_/g,' ').toLowerCase()+' is already recorded for this day'});
+      }
+      if (evs.length) {
+        const first = evs[0], last = evs[evs.length-1];
+        if (event_type==='CLOCK_OUT' && evMs <= new Date(last.event_time).getTime()) {
+          return res.status(400).json({ok:false,error:'The day\'s last tap is '+label(last)+' — a time-out must be after it (remove that tap first if it is wrong)'});
+        }
+        if (event_type==='CLOCK_IN' && evMs >= new Date(first.event_time).getTime() && last.event_type!=='CLOCK_OUT') {
+          return res.status(400).json({ok:false,error:'The day\'s first tap is '+label(first)+' — a time-in must be before it'});
+        }
+        if ((event_type==='BREAK_START' || event_type==='BREAK_END') &&
+            (evMs <= new Date(first.event_time).getTime() ||
+             (last.event_type==='CLOCK_OUT' && evMs >= new Date(last.event_time).getTime()))) {
+          return res.status(400).json({ok:false,error:'A break must fall inside the shift ('+label(first)+' → '+label(last)+')'});
+        }
+      }
+    }
     const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_time_logs',
       {method:'POST',headers:{Prefer:'return=representation'},
        body:JSON.stringify({tenant_id:TENANT_HR2,staff_id:staffId,

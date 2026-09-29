@@ -153,6 +153,14 @@ async function shiftAwareClock() {
   const future = await call({ action:'addHRTimeLog', userId: OWNER, staffId:'x', event_type:'CLOCK_OUT',
     log_date: futureDay, event_time: new Date(Date.now() + 2*86400000).toISOString(), notes:'future probe (never written)' });
   check('manual time in the future is refused', future.ok === false && /future/i.test(future.error||''), future.error);
+  // A time-out earlier than the day's last tap is refused (it would be silently ignored by the hours engine).
+  const staffList = await call({ action:'getHRStaff', userId: OWNER });
+  const someone = (staffList.staff||[]).find(x => x.staff_code === 'USR_011') || (staffList.staff||[])[0];
+  if (someone) {
+    const early = await call({ action:'addHRTimeLog', userId: OWNER, staffId: someone.id, event_type:'CLOCK_OUT',
+      log_date:'2026-09-09', event_time:'2026-09-09T02:30:00Z', notes:'sequence probe (must be refused, never written)' });
+    check('manual time-out before the last tap is refused', early.ok === false && /last tap/i.test(early.error||''), early.error);
+  }
   const rmAnon = await call({ action:'removeHRManualEntry', staffId:'x', log_date:'2026-01-01', event_type:'CLOCK_OUT', reason:'probe' });
   check('removing a manual entry refuses anonymous', rmAnon.ok === false);
   const rmNone = await call({ action:'removeHRManualEntry', userId: OWNER, staffId:'00000000-0000-0000-0000-000000000000', log_date:'2026-01-01', event_type:'CLOCK_OUT', reason:'probe on a non-existent staff id' });
