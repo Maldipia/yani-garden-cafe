@@ -963,32 +963,41 @@ async function renderPayrollSection(s, tc){
 
   const money = v => hrPeso(parseFloat(v||0));
   let totHrs=0, totOt=0, totPay=0, totUt=0, totNd=0, totNdPay=0, totNdPaid=0;
+  let totWorked=0, totRegPay=0, totOtPaid=0, totOtPay=0, totOtIf=0, totNdPayPaid=0, totNdIf=0, totUtPay=0;
+  const N = v => parseFloat(v||0);
+  const R2 = v => Math.round(v*100)/100;
   const dayRows = (br.days||[]).length ? (br.days||[]).map(function(x){
-    totHrs += parseFloat(x.regular_hours||0);
-    totOt  += parseFloat(x.ot_hours||0);
-    totPay += parseFloat(x.day_pay||0);
-    totNdPaid += parseFloat(x.nd_paid_hours||0);
+    var rate = N(x.hourly_rate), reg = N(x.regular_hours), ot = N(x.ot_hours), otPaid = N(x.ot_paid_hours);
+    var nd = N(x.night_hours), ndPaid = N(x.nd_paid_hours), ut = N(x.undertime_hours), worked = N(x.worked_hours);
+    var regPay = R2(reg*rate), otPay = R2(otPaid*rate*1.25), otIf = R2((ot-otPaid)*rate*1.25);
+    var ndPay = R2(ndPaid*rate*0.10), ndIf = R2((nd-ndPaid)*rate*0.10), utPay = R2(ut*rate);
+    totHrs += reg; totOt += ot; totPay += N(x.day_pay); totNdPaid += ndPaid; totUt += ut; totNd += nd;
+    totNdPay += N(x.night_diff_suggested); totWorked += worked; totRegPay += regPay; totOtPaid += otPaid;
+    totOtPay += otPay; totOtIf += otIf; totNdPayPaid += ndPay; totNdIf += ndIf; totUtPay += utPay;
     var brk = x.break_detail ? (x.break_detail + (x.break_count>1?` (${Math.round(x.break_mins)}m)`:''))
             : (x.break_mins>0 ? Math.round(x.break_mins)+'m' : '—');
-    var ut = parseFloat(x.undertime_hours||0), ot = parseFloat(x.ot_hours||0);
-    var nd = parseFloat(x.night_hours||0);
-    totUt += ut; totNd += nd; totNdPay += parseFloat(x.night_diff_suggested||0);
-    // only holidays get a row tint — tinting every undertime row made the
-    // whole table amber and unreadable
     var rowBg = x.is_holiday ? '#fff7ed' : '';
+    var sub = t => `<div style="font-size:.62rem;color:#6b7280;font-weight:400;white-space:nowrap">${t}</div>`;
+    var cell = (main, subtxt, color, title) => `<td style="padding:5px 7px;text-align:right;vertical-align:top${color?';color:'+color:''}" title="${esc(title||'')}">${main}${subtxt?sub(subtxt):''}</td>`;
     return `<tr${rowBg?' style="background:'+rowBg+'"':''}>
-      <td style="padding:5px 7px">${esc(x.work_date)}${x.is_holiday?` <span title="${esc(x.holiday_name||'')}" style="font-size:.58rem;font-weight:700;background:#ffedd5;color:#c2410c;padding:1px 5px;border-radius:20px">HOL</span>`:''}</td>
-      <td style="padding:5px 7px">${esc(x.clock_in||'—')}</td>
-      <td style="padding:5px 7px">${esc(brk)}</td>
-      <td style="padding:5px 7px">${x.clock_out ? esc(x.clock_out)
+      <td style="padding:5px 7px;vertical-align:top">${esc(x.work_date)}${x.is_holiday?` <span title="${esc(x.holiday_name||'')}" style="font-size:.58rem;font-weight:700;background:#ffedd5;color:#c2410c;padding:1px 5px;border-radius:20px">HOL</span>`:''}</td>
+      <td style="padding:5px 7px;vertical-align:top">${esc(x.clock_in||'—')}</td>
+      <td style="padding:5px 7px;vertical-align:top">${esc(brk)}</td>
+      <td style="padding:5px 7px;vertical-align:top">${x.clock_out ? esc(x.clock_out)
         : `<span style="color:#b45309;font-weight:700" title="No time-out was tapped — hours stop at the last tap">—</span> <a href="#" onclick="openManualClockModal('${s.id}',{date:'${esc(x.work_date)}',event:'CLOCK_OUT'});return false" style="font-size:.62rem;color:#1d4ed8;text-decoration:none;white-space:nowrap">+ add time-out</a>`}</td>
-      <td style="padding:5px 7px;text-align:right">${parseFloat(x.regular_hours||0).toFixed(2)}</td>
-      <td style="padding:5px 7px;text-align:right${ot>0?';color:#1d4ed8;font-weight:700':''}">${ot>0?ot.toFixed(2):'—'}</td>
-      <td style="padding:5px 7px;text-align:right${ut>0?';color:#b45309;font-weight:700':''}">${ut>0?ut.toFixed(2):'—'}</td>
-      <td style="padding:5px 7px;text-align:right${nd>0?(parseFloat(x.nd_paid_hours||0)>0?';color:#6d28d9;font-weight:700':';color:#9ca3af'):''}" title="${nd>0?(parseFloat(x.nd_paid_hours||0)>0?'Night differential approved · +10% on '+nd.toFixed(2)+' h':'Worked 10:00 PM–6:00 AM · not yet approved · worth '+hrPeso(parseFloat(x.night_diff_suggested||0))):''}">${nd>0?nd.toFixed(2)+(parseFloat(x.nd_paid_hours||0)>0?' ✓':''):'—'}</td>
-      <td style="padding:5px 7px;text-align:right;color:#6b7280">${hrPeso(parseFloat(x.hourly_rate||0))}</td>
-      <td style="padding:5px 7px;text-align:right;font-weight:700">${hrPeso(parseFloat(x.day_pay||0))}</td>
-      <td style="padding:5px 7px;font-size:.6rem;color:#6b7280">${esc(x.sources||'—')}</td>
+      ${cell(worked.toFixed(2)+' h', 'less '+Math.round(N(x.break_mins))+'m break', '', 'Clock in → clock out, minus tapped breaks')}
+      ${cell('<b>'+reg.toFixed(2)+' h</b>', hrPeso(regPay)+' = '+reg.toFixed(2)+' × '+hrPeso(rate), '', 'Regular hours are capped at '+N(x.standard_hours||8).toFixed(0)+' h a day')}
+      ${ot>0
+        ? cell(ot.toFixed(2)+' h worked', otPaid>0 ? '<b style="color:#1d4ed8">'+hrPeso(otPay)+'</b> = '+otPaid.toFixed(2)+' × '+hrPeso(rate)+' × 1.25' : '<span style="color:#9ca3af">₱0 · '+hrPeso(otIf)+' if approved</span>', otPaid>0?'#1d4ed8':'#6b7280', 'Overtime = approved hours × hourly rate × 1.25')
+        : cell('—','', '#9ca3af','')}
+      ${nd>0
+        ? cell(nd.toFixed(2)+' h', ndPaid>0 ? '<b style="color:#6d28d9">'+hrPeso(ndPay)+' ✓</b> = '+ndPaid.toFixed(2)+' × '+hrPeso(rate)+' × 10%' : '<span style="color:#9ca3af">₱0 · '+hrPeso(ndIf)+' pending</span>', ndPaid>0?'#6d28d9':'#6b7280', 'Night differential = approved hours between 10:00 PM and 6:00 AM × hourly rate × 10%')
+        : cell('—','', '#9ca3af','')}
+      ${ut>0
+        ? cell('<b>'+ut.toFixed(2)+' h</b>', 'short '+hrPeso(utPay), '#b45309', 'Hours short of the standard day — already reflected in the lower regular pay')
+        : cell('—','', '#9ca3af','')}
+      <td style="padding:5px 7px;text-align:right;vertical-align:top;font-weight:800;white-space:nowrap" title="Regular + approved OT + approved night diff">${hrPeso(N(x.day_pay))}${sub(hrPeso(regPay)+(otPay>0?' + '+hrPeso(otPay):'')+(ndPay>0?' + '+hrPeso(ndPay):''))}</td>
+      <td style="padding:5px 7px;font-size:.6rem;color:#6b7280;vertical-align:top">${esc(x.sources||'—')}</td>
     </tr>`;
   }).join('') : '<tr><td colspan="11" style="padding:10px;color:#9ca3af;font-size:.75rem">No attendance in this cut-off</td></tr>';
 
@@ -1046,25 +1055,32 @@ async function renderPayrollSection(s, tc){
         <thead><tr style="background:var(--mist-light,#f1f5f9);text-align:left">
           <th style="padding:5px 7px">DATE</th><th style="padding:5px 7px">IN</th>
           <th style="padding:5px 7px">BREAK</th><th style="padding:5px 7px">OUT</th>
-          <th style="padding:5px 7px;text-align:right">HRS</th>
-          <th style="padding:5px 7px;text-align:right">OT</th>
-          <th style="padding:5px 7px;text-align:right">UT</th>
-          <th style="padding:5px 7px;text-align:right">ND</th>
-          <th style="padding:5px 7px;text-align:right">RATE</th>
+          <th style="padding:5px 7px;text-align:right">WORKED</th>
+          <th style="padding:5px 7px;text-align:right">REGULAR</th>
+          <th style="padding:5px 7px;text-align:right">OVERTIME</th>
+          <th style="padding:5px 7px;text-align:right">NIGHT DIFF</th>
+          <th style="padding:5px 7px;text-align:right">UNDERTIME</th>
           <th style="padding:5px 7px;text-align:right">DAY PAY</th>
           <th style="padding:5px 7px">SRC</th>
         </tr></thead>
         <tbody>${dayRows}</tbody>
-        <tfoot><tr style="border-top:2px solid #d8ddd5;font-weight:700">
+        <tfoot><tr style="border-top:2px solid #d8ddd5;font-weight:700;vertical-align:top">
           <td colspan="4" style="padding:7px">${(br.days||[]).length} day(s)</td>
-          <td style="padding:7px;text-align:right">${totHrs.toFixed(2)}</td>
-          <td style="padding:7px;text-align:right${'' }">${totOt.toFixed(2)}</td>
-          <td style="padding:7px;text-align:right;color:#b45309">${totUt.toFixed(2)}</td>
-          <td style="padding:7px;text-align:right;color:#6d28d9">${totNd>0?totNd.toFixed(2):'—'}</td>
-          <td></td>
-          <td style="padding:7px;text-align:right">${money(totPay)}</td>
+          <td style="padding:7px;text-align:right">${totWorked.toFixed(2)} h</td>
+          <td style="padding:7px;text-align:right">${totHrs.toFixed(2)} h<div style="font-size:.62rem;color:#6b7280">${money(totRegPay)}</div></td>
+          <td style="padding:7px;text-align:right;color:#1d4ed8">${totOt.toFixed(2)} h<div style="font-size:.62rem;color:#6b7280">${totOtPaid.toFixed(2)} h paid · ${money(totOtPay)}${totOtIf>0?'<br>+ '+money(totOtIf)+' if approved':''}</div></td>
+          <td style="padding:7px;text-align:right;color:#6d28d9">${totNd>0?totNd.toFixed(2)+' h':'—'}<div style="font-size:.62rem;color:#6b7280">${totNd>0?(totNdPaid.toFixed(2)+' h paid · '+money(totNdPayPaid)+(totNdIf>0?'<br>+ '+money(totNdIf)+' pending':'')):''}</div></td>
+          <td style="padding:7px;text-align:right;color:#b45309">${totUt>0?totUt.toFixed(2)+' h':'—'}<div style="font-size:.62rem;color:#6b7280">${totUt>0?'short '+money(totUtPay):''}</div></td>
+          <td style="padding:7px;text-align:right;font-size:.85rem">${money(totPay)}<div style="font-size:.62rem;color:#6b7280;font-weight:400">${money(totRegPay)}${totOtPay>0?' + '+money(totOtPay):''}${totNdPayPaid>0?' + '+money(totNdPayPaid):''}</div></td>
           <td></td></tr></tfoot>
       </table></div>
+      <div style="font-size:.66rem;color:#6b7280;margin-top:6px;line-height:1.5">
+        <b>Formulas.</b> Hourly rate ${money((br.days||[])[0]?(br.days||[])[0].hourly_rate:0)} = daily rate ÷ ${N(((br.days||[])[0]||{}).standard_hours||8).toFixed(0)} standard hours ·
+        Regular = hours × rate, capped at ${N(((br.days||[])[0]||{}).standard_hours||8).toFixed(0)} h a day ·
+        Overtime = <u>approved</u> hours beyond that × rate × 1.25 ·
+        Night differential = <u>approved</u> hours between 10:00 PM and 6:00 AM × rate × 10% ·
+        Breaks are unpaid and already excluded from worked hours · Undertime is only shown; the shortfall is already reflected in regular pay.
+      </div>
 
       <div class="hr-section-title" style="margin-top:14px">💸 Deductions</div>
       <table style="width:100%;border-collapse:collapse;font-size:.76rem">
@@ -1153,14 +1169,25 @@ async function printPayslip(){
   const dRows=dedLines.length?dedLines.map(r=>`<tr><td>${esc(r[0])}<span class="m">${esc(r[1])}</span></td><td class="r">${P(r[2])}</td></tr>`).join('')
     : '<tr><td colspan="2" class="m">None</td></tr>';
 
-  const dayRows=days.map(x=>`<tr${x.is_holiday?' class="hol"':''}>
+  // Every peso on the slip traces to an hour on this table: hours, then the
+  // amount those hours earned, for regular / overtime / night differential.
+  const R2=v=>Math.round(v*100)/100;
+  let psReg=0, psOt=0, psNd=0;
+  const dayRows=days.map(x=>{
+    const rate=N(x.hourly_rate), reg=N(x.regular_hours), otP=N(x.ot_paid_hours), ndP=N(x.nd_paid_hours);
+    const regPay=R2(reg*rate), otPay=R2(otP*rate*1.25), ndPay=R2(ndP*rate*0.10);
+    psReg+=regPay; psOt+=otPay; psNd+=ndPay;
+    return `<tr${x.is_holiday?' class="hol"':''}>
     <td>${x.work_date.slice(5)}${x.is_holiday?' <b>H</b>':''}</td>
     <td>${x.clock_in||'-'}</td><td>${esc(x.break_detail||'-')}</td><td>${x.clock_out||'-'}</td>
-    <td class="r">${N(x.regular_hours).toFixed(2)}</td>
+    <td class="r">${N(x.worked_hours).toFixed(2)}</td>
+    <td class="r">${reg.toFixed(2)}</td><td class="r">${P(regPay)}</td>
     <td class="r">${N(x.ot_hours)>0?N(x.ot_hours).toFixed(2):'-'}</td>
-    <td class="r ut">${N(x.undertime_hours)>0?N(x.undertime_hours).toFixed(2):'-'}</td>
+    <td class="r">${otP>0?otP.toFixed(2):'-'}</td><td class="r">${otPay>0?P(otPay):'-'}</td>
     <td class="r nd">${N(x.night_hours)>0?N(x.night_hours).toFixed(2):'-'}</td>
-    <td class="r">${P(x.day_pay)}</td></tr>`).join('');
+    <td class="r nd">${ndP>0?ndP.toFixed(2):'-'}</td><td class="r nd">${ndPay>0?P(ndPay):'-'}</td>
+    <td class="r ut">${N(x.undertime_hours)>0?N(x.undertime_hours).toFixed(2):'-'}</td>
+    <td class="r"><b>${P(x.day_pay)}</b></td></tr>`;}).join('');
   const totNd=days.reduce((a,x)=>a+N(x.night_hours),0);
   const totNdPay=days.reduce((a,x)=>a+N(x.night_diff_suggested),0);
 
@@ -1253,21 +1280,36 @@ async function printPayslip(){
 
   <h4>Attendance detail</h4>
   <table class="att">
-    <thead><tr><th>DATE</th><th>IN</th><th>BREAKS</th><th>OUT</th>
-      <th class="r">REG</th><th class="r">OT</th><th class="r">UT</th><th class="r">ND</th><th class="r">DAY PAY</th></tr></thead>
+    <thead>
+      <tr><th rowspan="2">DATE</th><th rowspan="2">IN</th><th rowspan="2">BREAKS</th><th rowspan="2">OUT</th>
+        <th class="r" rowspan="2">WORKED<br>HRS</th>
+        <th class="r" colspan="2" style="text-align:center">REGULAR (× ₱${P(N(row.hourly_rate))})</th>
+        <th class="r" colspan="3" style="text-align:center">OVERTIME (× ₱${P(N(row.hourly_rate))} × 1.25)</th>
+        <th class="r" colspan="3" style="text-align:center">NIGHT DIFF 10PM–6AM (× ₱${P(N(row.hourly_rate))} × 10%)</th>
+        <th class="r" rowspan="2">UT<br>HRS</th><th class="r" rowspan="2">DAY PAY</th></tr>
+      <tr><th class="r">HRS</th><th class="r">PAY</th>
+        <th class="r">WORKED</th><th class="r">APPROVED</th><th class="r">PAY</th>
+        <th class="r">HRS</th><th class="r">APPROVED</th><th class="r">PAY</th></tr>
+    </thead>
     <tbody>${dayRows}</tbody>
     <tfoot><tr><td colspan="4">${days.length} day(s)</td>
-      <td class="r">${N(row.approved_regular_hours).toFixed(2)}</td>
-      <td class="r">${N(row.approved_ot_hours).toFixed(2)}</td>
-      <td class="r">${totUt>0?totUt.toFixed(2):'-'}</td>
+      <td class="r">${days.reduce((a,x)=>a+N(x.worked_hours),0).toFixed(2)}</td>
+      <td class="r">${N(row.approved_regular_hours).toFixed(2)}</td><td class="r">${P(psReg)}</td>
+      <td class="r">${N(row.actual_ot_hours).toFixed(2)}</td>
+      <td class="r">${N(row.approved_ot_hours).toFixed(2)}</td><td class="r">${P(psOt)}</td>
       <td class="r">${totNd>0?totNd.toFixed(2):'-'}</td>
-      <td class="r">${P(N(row.regular_pay)+N(row.overtime_pay)+N(row.night_diff_pay))}</td></tr></tfoot>
+      <td class="r">${N(row.night_diff_hours)>0?N(row.night_diff_hours).toFixed(2):'-'}</td><td class="r">${psNd>0?P(psNd):'-'}</td>
+      <td class="r">${totUt>0?totUt.toFixed(2):'-'}</td>
+      <td class="r"><b>${P(N(row.regular_pay)+N(row.overtime_pay)+N(row.night_diff_pay))}</b></td></tr></tfoot>
   </table>
 
   <div class="note">
-    <b>How this was computed.</b> Hourly rate = daily rate \u00f7 ${stdH} hours. Basic pay = regular hours \u00d7 hourly rate.
-    Overtime is paid at 1.25\u00d7 beyond ${stdH} hours in a day. Meal and rest breaks are unpaid and excluded from paid hours.
-    Undertime is the shortfall against the ${stdH}-hour standard day.
+    <b>How this was computed.</b> Hourly rate \u20b1${P(N(row.hourly_rate))} = daily rate \u20b1${P(N(row.daily_rate))} \u00f7 ${stdH} hours.
+    Worked hours = clock-in to clock-out minus tapped breaks (meal and rest breaks are unpaid).
+    Regular pay = worked hours up to ${stdH} a day \u00d7 hourly rate.
+    Overtime = hours beyond ${stdH} that were approved \u00d7 hourly rate \u00d7 1.25; unapproved overtime hours are listed but unpaid.
+    Night differential = approved hours between 10:00 PM and 6:00 AM \u00d7 hourly rate \u00d7 10%.
+    Day pay = regular + overtime + night differential. Undertime is the shortfall against the ${stdH}-hour standard day and is already reflected in the lower regular pay.
     ${holDays.length?`<br><b>H</b> marks a declared holiday (${holDays.map(x=>esc(x.holiday_name||x.work_date)).join(', ')}).${N(row.holiday_pay)>0?'':' No holiday premium has been applied.'}`:''}
     ${s.art82_exempt?'<br><b>Art. 82.</b> This employee is a managerial employee or field personnel and is not covered by the hours-of-work provisions — overtime, night differential, holiday pay and service incentive leave do not apply.':''}
     ${(!s.art82_exempt && holDays.length && N(row.holiday_pay)===0)?'<br>This establishment is a retail/service establishment regularly employing fewer than ten (10) workers and is exempt from regular holiday pay under Art. 94(a).':''}
