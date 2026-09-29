@@ -95,11 +95,11 @@ function _ieDashHtml(){
   h+='<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px">'
     +'<input type="date" value="'+_invEsc(d.date||today)+'" max="'+today+'" onchange="_ieDashDate=this.value;_ieDash=null;_invRenderTab();_ieLoadTab(\'dash\')" class="ie-in" style="width:auto;margin:0;padding:7px">'
     +'<div style="flex:1"></div>'+_ieBtn('🍰 Menu Stock','_invSetTab(\'menu\')',true)+'</div>';
-  var fc = d.food_cost_pct==null ? '—' : d.food_cost_pct+'%';
+  var fc = d.menu_food_cost_pct==null ? '—' : d.menu_food_cost_pct+'%';
   h+='<div class="ie-cards">'
     +_ieCard('Inventory value', _iePeso(d.inventory_value), null, 'at actual batch cost', '_invSetTab(\'menu\')')
     +_ieCard('Sales', _iePeso(d.sales), null, 'POS '+_iePeso(d.sales_pos)+' · Online '+_iePeso(d.sales_online))
-    +_ieCard('Food cost % (actual)', fc, d.food_cost_pct>40?'#b91c1c':'#15803d', 'COGS '+_iePeso(d.actual_cogs)+' ÷ sales')
+    +_ieCard('Food cost %', fc, d.menu_food_cost_pct>40?'#b91c1c':'#15803d', d.cost_coverage_pct==null?'no sales yet':'on '+d.cost_coverage_pct+'% of sales that have a cost', '_ieScrollTo(\'ieMissing\')')
     +_ieCard('Waste / spoilage', _iePeso(d.waste_cost), d.waste_cost>0?'#b91c1c':null, 'at batch cost', '_invSetTab(\'menu\')')
     +_ieCard('Low / out of stock', d.low_stock, d.low_stock>0?'#b45309':null, 'below par or empty', '_invSetTab(\'menu\')')
     +_ieCard('Near expiry', d.near_expiry, d.near_expiry>0?'#c2410c':null, 'within 2 days', '_invSetTab(\'menu\')')
@@ -107,6 +107,10 @@ function _ieDashHtml(){
     +_ieCard('Stock shortages', d.open_exceptions, d.open_exceptions>0?'#b91c1c':null, 'sold more than recorded', d.open_exceptions>0?'_ieScrollTo(\'ieExc\')':'')
     +'</div>';
   if(!d.moduleEnabled) h+='<div style="background:#fff7e6;border:1px solid #fde68a;color:#8a5a0b;border-radius:10px;padding:9px 12px;font-size:.76rem;margin-bottom:12px">The inventory module is OFF, so sales are not deducting stock. Turn it on in ⚙️ Settings.</div>';
+  // items selling without a cost in Menu Costing
+  var ms=d.missing_costs||[];
+  if(ms.length) h+='<div id="ieMissing">'+_ieBox('💡 Add a cost in Menu Costing <span style="font-weight:600;color:var(--timber);font-size:.7rem">— these sold '+(d.date===_invManilaToday()?'today':'on this day')+' with no cost, so they\'re left out of food cost %</span>',
+    ms.map(function(m){ return '<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--mist-light);font-size:.78rem"><span>'+_invEsc(m.name)+' <span style="color:var(--timber)">×'+_ieQ(m.qty)+'</span></span><b>'+_iePeso(m.amount)+'</b></div>'; }).join(''))+'</div>';
   // shortages first — they need action
   var ex=d.exceptions||[];
   h+='<div id="ieExc">'+_ieBox('⚠️ Stock shortages <span style="font-weight:600;color:var(--timber);font-size:.7rem">— sold more than the system had. Sale completed; check the shelf.</span>',
