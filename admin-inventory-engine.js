@@ -170,6 +170,7 @@ function _ieCurrentHtml(){
   if(!_ieStock.length) return _ieLoading();
   var rows=_ieStockRows(), val=0; rows.forEach(function(r){ val+=_invNum(r.stock_value); });
   var h='<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px">'
+    +_ieBtn('📥 Receive','_invSetTab(\'receive\')',true)+_ieBtn('🗑️ Waste','_invSetTab(\'waste\')',false,'border-color:#b91c1c;color:#b91c1c')
     +'<input id="ieStockQ" value="'+_invEsc(_ieStockQ)+'" oninput="_ieStockQ=this.value;_ieRenderStockTable()" placeholder="🔍 Search item…" class="ie-in" style="flex:1;min-width:180px;margin:0;padding:7px 10px">';
   [['ACTIVE','In stock system'],['LOW','Low / out'],['EXPIRY','Expiring / expired'],['UNTRACKED','Not tracked yet'],['ALL','All']].forEach(function(f){
     h+='<button class="ie-chip'+(_ieStockStatus===f[0]?' on':'')+'" onclick="_ieStockStatus=\''+f[0]+'\';_invRenderTab()">'+f[1]+'</button>';
@@ -281,9 +282,14 @@ async function _ieOpenMove(id){
   if(ss.length) h+='<div class="invsec" style="margin-top:14px">Same reference ('+_invEsc(m.source_ref)+')</div>'+ss.map(_ieMoveLine).join('');
   h+='<div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">'
     +_ieBtn('Open item','_ieOpenItem('+m.item_id+')',false)
+    +((_invIsOwner() && !raw.approved_by && ['WASTE','SPOILAGE','BREAKAGE','STAFF MEAL','COMPLIMENTARY'].indexOf(m.movement_type)>=0)?_ieBtn('✓ Approve waste','_ieApproveWaste('+m.txn_id+')',true):'')
     +((!m.reversed && !m.parent_txn_id && qty!==0 && _invIsAdmin())?_ieBtn('↩ Reverse (correct a mistake)','_ieReverse('+m.txn_id+')',false,'border-color:#b91c1c;color:#b91c1c'):'')
     +'</div>';
   _ieModal(h);
+}
+async function _ieApproveWaste(id){
+  var r=await api('invApproveSpoilage',{txnId:id});
+  if(r&&r.ok){ showToast('Approved','success'); _ieOpenMove(id); } else showToast((r&&r.error)||'Failed','error');
 }
 async function _ieReverse(id){
   var reason=prompt('Why is this movement wrong? A reversal is added to the ledger — the original stays visible.');
@@ -387,7 +393,7 @@ function _ieReceiveHtml(){
   var opts=items.map(function(it){ return '<option value="'+it.id+'"'+(_ieRcPreset===it.id?' selected':'')+'>'+_invEsc(it.name)+'</option>'; }).join('');
   var sup='<option value="">—</option>'+_invRef.suppliers.map(function(s){ return '<option value="'+s.id+'">'+_invEsc(s.name)+'</option>'; }).join('');
   var loc='<option value="">Default</option>'+_invRef.locations.map(function(l){ return '<option value="'+l.id+'">'+_invEsc(l.name)+'</option>'; }).join('');
-  var h='<div class="ie-2col"><div>'+_ieBox('📥 Receive stock',
+  var h=_ieBackToStock()+'<div class="ie-2col"><div>'+_ieBox('📥 Receive stock',
       '<label class="ie-lbl">What did you receive?</label><select id="ieRcItem" class="ie-in" onchange="_ieRcChanged()">'+opts+'</select>'
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div><label class="ie-lbl">How many?</label><input id="ieRcQty" type="number" min="0" step="any" inputmode="decimal" class="ie-in" oninput="_ieRcPreview()" placeholder="e.g. 2"></div>'
       +'<div><label class="ie-lbl">Unit</label><select id="ieRcUnit" class="ie-in" onchange="_ieRcPreview()"></select></div></div>'
@@ -404,6 +410,7 @@ function _ieReceiveHtml(){
   setTimeout(function(){ var s=document.getElementById('ieRcItem'); if(s){ _invSearchable(s); if(_ieRcPreset) { s.value=_ieRcPreset; if(s._invSync) s._invSync(); } _ieRcChanged(); } _ieRcPreset=null; },0);
   return h;
 }
+function _ieBackToStock(){ return '<button onclick="_invSetTab(\'current\')" style="background:none;border:none;color:var(--forest);font-size:.76rem;font-weight:700;cursor:pointer;padding:0 0 8px">← Current Stock</button>'; }
 function _ieRcChanged(){
   var it=_ieItemById((document.getElementById('ieRcItem')||{}).value); var us=document.getElementById('ieRcUnit'); if(!us) return;
   if(!it){ us.innerHTML=''; _ieRcPreview(); return; }
@@ -452,7 +459,7 @@ var _ieWsReason='', _ieWsPhoto='';
 function _ieWasteHtml(){
   var inStock=_ieStock.filter(function(r){ return r.tracked && _invNum(r.stock_qty)>0; });
   var opts=inStock.map(function(r){ return '<option value="'+r.item_id+'"'+(_ieWsPreset===r.item_id?' selected':'')+'>'+_invEsc(r.name)+' — '+_ieQ(r.stock_qty)+' '+_invEsc(r.unit)+'</option>'; }).join('');
-  var h='<div class="ie-2col"><div>'+_ieBox('🗑️ Record waste / spoilage',
+  var h=_ieBackToStock()+'<div class="ie-2col"><div>'+_ieBox('🗑️ Record waste / spoilage',
       (inStock.length? '<label class="ie-lbl">Item</label><select id="ieWsItem" class="ie-in" onchange="_ieWsChanged()">'+opts+'</select>'
       +'<label class="ie-lbl">How many?</label><div style="display:flex;gap:6px;align-items:center"><input id="ieWsQty" type="number" min="0" step="any" inputmode="decimal" class="ie-in" style="margin:0" oninput="_ieWsChanged()" placeholder="0"><span id="ieWsUnit" style="font-size:.8rem;color:var(--timber);white-space:nowrap"></span></div>'
       +'<div id="ieWsInfo" style="font-size:.7rem;color:var(--timber);margin-top:4px"></div>'

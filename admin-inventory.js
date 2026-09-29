@@ -98,7 +98,6 @@ async function _invLoadItems(){ var b={activeOnly:true}; if(_invItemFilter!=='AL
 async function _invLoadStock(){
   var r = await api('invListStockUnits', { limit:500 });
   _invUnits2 = (r&&r.ok)?(r.stockUnits||[]):[];
-  var d = await api('invDashboard', {}); _invDash = (d&&d.ok)?d:null;
 }
 
 // ── SHELL ──────────────────────────────────────────────────────────────────
@@ -122,8 +121,8 @@ function _invRender() {
   h += '</div>';
   // tabs
   h += '<div style="display:flex;gap:2px;border-bottom:2px solid var(--mist-light);margin:10px 0 14px;overflow-x:auto;-webkit-overflow-scrolling:touch">';
-  [['menu','🍰 Menu Stock'],['dash','📈 Dashboard'],['current','📦 Current Stock'],['receive','📥 Receive'],['waste','🗑️ Waste'],['moves','🧾 Movements'],['stock','🧱 Batches'],['recipes','📖 Recipes'],['items','🏷️ Items'],['settings','⚙️ Settings']].forEach(function(t){
-    var on=_invTab===t[0];
+  [['menu','🍰 Menu Stock'],['dash','📈 Dashboard'],['current','📦 Current Stock'],['moves','🧾 Movements'],['recipes','📖 Recipes'],['items','🏷️ Items'],['settings','⚙️ Settings']].forEach(function(t){
+    var on=_invTab===t[0] || (t[0]==='current' && (_invTab==='receive'||_invTab==='waste'));
     h += '<button onclick="_invSetTab(\''+t[0]+'\')" style="background:none;border:none;cursor:pointer;padding:7px 12px;font-size:.8rem;font-weight:700;white-space:nowrap;flex-shrink:0;'
        + (on?'color:var(--forest-deep);border-bottom:3px solid var(--gold);margin-bottom:-2px':'color:var(--timber)')+'">'+t[1]+'</button>';
   });

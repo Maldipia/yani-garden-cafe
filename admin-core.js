@@ -1065,7 +1065,7 @@ function renderSidebar() {
     html += item('MENU_MANAGER', '🍽️', 'Menu & Pricing', '');
     html += item('TABLES', '🪑', 'Tables & QR', '');
     html += item('FLOOR_MAP', '🗺️', 'Floor Plan', '');
-    html += item('INV_COSTING', '📦', 'Inventory / Costing', '');
+    html += item('INV_COSTING', '🧮', 'Menu Costing', '');
     html += item('INVENTORY', '🏬', 'Stock Control', 'NEW');
     html += item('ADDONS', '➕', 'Add-ons', '');
     html += item('PROMO_CODES', '🏷️', 'Promo Codes', '');
@@ -1409,7 +1409,7 @@ function setFilter(f) {
 // its loader fn is unchanged — we just toggle visibility + render a tab
 // strip above whichever one is active.
 var _membersActiveTab = 'customers';
-var _invCostActiveTab = 'inventory'; // persists within session
+var _invCostActiveTab = 'costing'; // the old Inventory list is retired — stock lives in Stock Control
 
 function openMembersHub(tab) {
   if (tab) _membersActiveTab = tab;
@@ -1486,8 +1486,9 @@ function openInvCostingHub(tab) {
     else document.body.appendChild(strip);
   }
 
+  // The old Inventory list is retired (read-only history); only Menu Costing remains here.
+  _invCostActiveTab = 'costing';
   var TABS = [
-    { k:'inventory', ico:'📦', label:'Inventory' },
     { k:'costing',   ico:'🧮', label:'Menu Costing' },
   ];
   strip.innerHTML = '<div style="display:flex;gap:6px">'
@@ -1501,7 +1502,7 @@ function openInvCostingHub(tab) {
           + '">' + t.ico + ' ' + t.label + '</button>';
       }).join('')
     + '</div>';
-  strip.style.display = 'block';
+  strip.style.display = 'none';   // single tab — no strip needed
 
   var iv = document.getElementById('inventoryView');
   var cv = document.getElementById('costingView');
