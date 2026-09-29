@@ -1237,7 +1237,8 @@ async function renderPayrollSection(s, tc){
         <button onclick="decideNightDiff(false)" style="font-size:.74rem;font-weight:700;background:#fff;color:#b91c1c;border:1.5px solid #fecaca;border-radius:7px;padding:7px 13px;margin-left:6px;cursor:pointer">Reject</button>
       </div>`:''}
       ${mine?`<button onclick="manualPayDialog()" style="margin-top:10px;margin-left:8px;font-size:.78rem;font-weight:700;background:#fff;color:#1f3d2b;border:1.5px solid #d8ddd5;border-radius:8px;padding:8px 14px;cursor:pointer">✎ Tips / premiums / gov't</button>`:''}
-      ${mine?`<button onclick="printPayslip()" style="margin-top:10px;margin-left:8px;font-size:.78rem;font-weight:700;background:#1f3d2b;color:#fff;border:none;border-radius:8px;padding:9px 16px;cursor:pointer">🧾 Print payslip</button>`:''}
+      ${mine?`<button onclick="printEmployeePayslip()" style="margin-top:10px;margin-left:8px;font-size:.78rem;font-weight:700;background:#1f3d2b;color:#fff;border:none;border-radius:8px;padding:9px 16px;cursor:pointer">🧾 Employee copy</button>`:''}
+      ${mine?`<button onclick="printPayslip()" style="margin-top:10px;margin-left:8px;font-size:.78rem;font-weight:700;background:#fff;color:#1f3d2b;border:1.5px solid #d8ddd5;border-radius:8px;padding:8px 14px;cursor:pointer">📋 Owner's copy</button>`:''}
     </div>`;
 }
 
@@ -1364,7 +1365,7 @@ async function printPayslip(){
 
   <div class="top">
     <div><div class="co">YANI GARDEN CAFE</div><div class="coa">Amadeo, Cavite, Philippines</div></div>
-    <div class="doc"><h2>PAYSLIP</h2><div class="ref">${ref}</div></div>
+    <div class="doc"><h2>PAYSLIP</h2><div class="ref">${ref} \u00b7 OWNER'S COPY \u2014 NOT FOR EMPLOYEE</div></div>
   </div>
 
   <div class="meta">
@@ -1455,6 +1456,97 @@ async function printPayslip(){
   <div class="noprint" style="margin-top:22px;text-align:center">
     <button onclick="window.print()" style="padding:10px 26px;font-size:12px;font-weight:700;background:#1f3d2b;color:#fff;border:none;border-radius:5px;cursor:pointer">Print / Save as PDF</button>
   </div>
+  </body></html>`);
+  w.document.close();
+}
+
+// Employee copy: only what was paid, each line with its one-step calculation.
+// Nothing unpaid (unapproved OT, pending ND, undertime) is printed here —
+// the owner's copy keeps the full working.
+async function printEmployeePayslip(){
+  const s=_hrSelected; if(!s||!_hrCutoffId) return;
+  const [pr, br] = await Promise.all([
+    api('hrGetPayroll',{userId:currentUser?.userId,cutoffId:_hrCutoffId}),
+    api('hrPayrollDaily',{userId:currentUser?.userId,cutoffId:_hrCutoffId,staffId:s.id}),
+  ]);
+  const row=(pr.rows||[]).find(r=>r.staff_id===s.id);
+  if(!row){ showToast('Compute payroll first','error'); return; }
+  const deds=(pr.deductions||[]).filter(d=>d.staff_id===s.id);
+  const cut=_hrCutoffs.find(c=>c.id===_hrCutoffId)||{};
+  const days=(br.days||[]).filter(x=>parseFloat(x.regular_hours||0)>0);
+  const N=v=>parseFloat(v||0), R2=v=>Math.round(v*100)/100;
+  const P=v=>'₱'+N(v).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const H=v=>N(v).toFixed(2);
+  const std=N(s.standard_hours_per_day)||8;
+  const fmtD=d=>new Date(d+'T00:00:00+08:00').toLocaleDateString('en-PH',{month:'short',day:'numeric',timeZone:'Asia/Manila'});
+  const fmtLong=d=>d?new Date(d+'T00:00:00+08:00').toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric',timeZone:'Asia/Manila'}):'-';
+
+  // Basic pay grouped by rate: "7 days × ₱500/day" when every day is a full day, else "hrs × rate/hr".
+  const groups=[];
+  days.forEach(x=>{ const rate=N(x.hourly_rate); let g=groups.find(g=>g.rate===rate);
+    if(!g){ g={rate,daily:R2(rate*std),days:0,hrs:0,pay:0,full:true}; groups.push(g); }
+    g.days++; g.hrs+=N(x.regular_hours); g.pay+=R2(N(x.regular_hours)*rate);
+    if(N(x.regular_hours)<std) g.full=false; });
+  const lines=[];
+  groups.forEach(g=>lines.push(['Basic pay', g.full ? `${g.days} day${g.days>1?'s':''} × ${P(g.daily)}/day` : `${H(g.hrs)} hrs × ${P(g.rate)}/hr`, g.pay]));
+  const otByRate={}, ndByRate={};
+  days.forEach(x=>{ const r=N(x.hourly_rate);
+    if(N(x.ot_paid_hours)>0){ otByRate[r]=(otByRate[r]||0)+N(x.ot_paid_hours); }
+    if(N(x.nd_paid_hours)>0){ ndByRate[r]=(ndByRate[r]||0)+N(x.nd_paid_hours); } });
+  Object.keys(otByRate).forEach(r=>lines.push(['Overtime', `${H(otByRate[r])} hrs × ${P(R2(r*1.25))}/hr`, R2(otByRate[r]*r*1.25)]));
+  Object.keys(ndByRate).forEach(r=>lines.push(['Night differential', `${H(ndByRate[r])} hrs × ${P(R2(r*0.10))}/hr`, R2(ndByRate[r]*r*0.10)]));
+  [['Holiday premium',row.holiday_pay],['Rest-day premium',row.rest_day_pay],['Allowances',row.allowances],['Incentives',row.incentives],['Service charge share',row.tips_share]]
+    .forEach(([l,v])=>{ if(N(v)>0) lines.push([l,'',N(v)]); });
+
+  const dedLines=[];
+  if(N(row.government_deduction)>0) dedLines.push(['SSS / PhilHealth / Pag-IBIG', N(row.government_deduction)]);
+  deds.forEach(d=>dedLines.push([(d.details||d.reason||(d.deduction_type||'Deduction').replace(/_/g,' ').toLowerCase()), d.amount_deducted!=null?d.amount_deducted:d.amount]));
+
+  const anyAuto=days.some(x=>!x.clock_out&&x.assumed_out);
+  const ref='PS-'+(cut.end_date||'').replace(/-/g,'')+'-'+(s.staff_code||'').replace(/[^A-Z0-9]/gi,'');
+  const eRows=lines.map(l=>`<tr><td>${esc(l[0])}${l[1]?`<span class="calc">${esc(l[1])}</span>`:''}</td><td class="r">${P(l[2])}</td></tr>`).join('');
+  const dRows=dedLines.length?dedLines.map(d=>`<tr><td>${esc(d[0])}</td><td class="r">– ${P(d[1])}</td></tr>`).join('')
+    : '<tr><td class="muted">None this period</td><td></td></tr>';
+  const dayRows=days.map(x=>`<tr><td>${fmtD(x.work_date)}</td><td>${esc(x.clock_in||'-')} – ${esc((x.clock_out||x.assumed_out||'-').replace(' +1',''))}${!x.clock_out&&x.assumed_out?'*':''}</td><td class="r">${H(x.regular_hours)}</td></tr>`).join('');
+
+  const w=window.open('','_blank','width=640,height=1000');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${ref}</title><style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font:13px/1.5 "Helvetica Neue",Arial,sans-serif;color:#1a1a1a;background:#fff;padding:28px;max-width:600px;margin:0 auto}
+  .top{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2.5px solid #1f3d2b;padding-bottom:10px}
+  .co{font-size:18px;font-weight:800;color:#1f3d2b}.coa{font-size:10.5px;color:#777}
+  .doc{text-align:right}.doc b{font-size:14px;letter-spacing:2px;color:#1f3d2b}.doc div{font-size:10px;color:#888}
+  .who{display:flex;justify-content:space-between;margin:12px 0 14px;font-size:12px}.who b.n{font-size:14px}
+  .muted{color:#777}
+  table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+  td{padding:6px 0;border-bottom:1px solid #eee;vertical-align:top}
+  td.r{text-align:right;white-space:nowrap}
+  .calc{display:block;color:#777;font-size:11.5px}
+  .sec{font-size:10px;letter-spacing:1.2px;color:#1f3d2b;font-weight:700;margin:14px 0 4px;text-transform:uppercase;display:flex;justify-content:space-between}
+  .tot td{font-weight:800;border-top:1.5px solid #bbb;border-bottom:none;padding-top:8px}
+  .net{margin-top:14px;background:#1f3d2b;color:#fff;border-radius:6px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .net span{font-size:12px;letter-spacing:1.5px}.net b{font-size:22px}
+  .days td{padding:3px 0;border-bottom:1px dotted #eee;font-size:12px}
+  .foot{font-size:10px;color:#888;margin-top:6px}
+  .sig{display:flex;justify-content:space-between;margin-top:28px;font-size:10.5px;color:#666}
+  .sig div{border-top:1px solid #333;width:44%;padding-top:4px}
+  @media print{body{padding:12mm} .noprint{display:none}}
+  </style></head><body>
+  <div class="top"><div><div class="co">YANI GARDEN CAFE</div><div class="coa">Amadeo, Cavite</div></div>
+    <div class="doc"><b>PAYSLIP</b><div>${ref}</div></div></div>
+  <div class="who"><div><b class="n">${esc(s.full_name||'')}</b><br><span class="muted">${esc((s.role||'').replace(/_/g,' ').toLowerCase().replace(/^./,c=>c.toUpperCase()))} · ${esc(s.staff_code||'')}</span></div>
+    <div style="text-align:right">Pay period <b>${fmtD(cut.start_date)} – ${fmtLong(cut.end_date)}</b><br><span class="muted">Pay date ${fmtLong(cut.pay_date)}</span></div></div>
+  <div class="sec">Earnings</div>
+  <table>${eRows}<tr class="tot"><td>GROSS PAY</td><td class="r">${P(row.gross_pay)}</td></tr></table>
+  <div class="sec">Deductions</div>
+  <table>${dRows}<tr class="tot"><td>TOTAL DEDUCTIONS</td><td class="r">– ${P(row.total_deductions)}</td></tr></table>
+  <div class="net"><span>NET PAY</span><b>${P(row.net_pay)}</b></div>
+  <div class="sec"><span>Days worked</span><span style="text-transform:none;letter-spacing:0;color:#888;font-weight:400">paid hrs</span></div>
+  <table class="days">${dayRows}</table>
+  <div class="foot">Breaks are unpaid.${anyAuto?' * No time-out recorded — counted to 10:00 PM.':''}</div>
+  <div class="sig"><div>Received by (signature / date)</div><div>Prepared by</div></div>
+  <div class="noprint" style="margin-top:20px;text-align:center">
+    <button onclick="window.print()" style="padding:10px 26px;font-size:12px;font-weight:700;background:#1f3d2b;color:#fff;border:none;border-radius:5px;cursor:pointer">Print / Save as PDF</button></div>
   </body></html>`);
   w.document.close();
   api('hrIssuePayslip',{userId:currentUser?.userId,staffId:s.id,cutoffId:_hrCutoffId});
