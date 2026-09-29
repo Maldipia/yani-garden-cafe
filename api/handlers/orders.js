@@ -128,7 +128,7 @@ export async function routeOrders(action, body, auth, req, res) {
               need[a.inv_item_id] = (need[a.inv_item_id] || 0) + q;
               if (need[a.inv_item_id] > have[a.inv_item_id] + 1e-9) {
                 const nm = (menuMap[it.code] && menuMap[it.code].name) || it.code;
-                const left = Math.floor(have[a.inv_item_id] / (parseFloat(a.portions_per_sale) || 1));
+                const left = Math.max(0, Math.floor((have[a.inv_item_id] - (need[a.inv_item_id] - q)) / (parseFloat(a.portions_per_sale) || 1)));
                 return res.status(409).json({ ok: false, soldOut: true, itemCode: it.code,
                   error: left > 0 ? `Only ${left} left of "${nm}". Please adjust your cart.` : `"${nm}" is sold out. Please remove it from your cart.` });
               }

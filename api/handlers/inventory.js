@@ -72,7 +72,8 @@ export async function routeInventory(action, body, auth, req, res) {
   // Every inventory action is ADMIN/OWNER. No anon surface at all.
   const a = await checkAdminAuth();
   if (!a.ok) return res.status(403).json({ ok: false, error: a.error });
-  const actor = a.userId || 'SYSTEM';
+  // JWT sessions carry userId; the legacy userId-in-body path was verified by checkAuth.
+  const actor = a.userId || (/^USR_\d{3,6}$/.test(String(body.userId || '')) ? String(body.userId) : 'SYSTEM');
   const isOwner = a.role === 'OWNER';
 
   // ══ META ══════════════════════════════════════════════════════════════
