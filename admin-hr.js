@@ -967,14 +967,15 @@ async function renderPayrollSection(s, tc){
   const rate0 = N(((br.days||[])[0]||{}).hourly_rate);
   const otRate = R2(rate0*1.25), ndRate = R2(rate0*0.10);
   let totHrs=0, totOt=0, totPay=0, totUt=0, totNd=0, totNdPay=0, totNdPaid=0;
-  let totWorked=0, totRegPay=0, totOtPaid=0, totOtPay=0, totNdPayPaid=0;
+  let totWorked=0, totRegPay=0, totOtPaid=0, totOtPay=0, totNdPayPaid=0, totBrkMin=0;
+  const hm = mins => { mins=Math.round(mins); const h=Math.floor(mins/60), m=mins%60; return h ? h+'h '+(m?m+'m':'') : m+'m'; };
   const dayRows = (br.days||[]).length ? (br.days||[]).map(function(x){
     var rate = N(x.hourly_rate), reg = N(x.regular_hours), ot = N(x.ot_hours), otPaid = N(x.ot_paid_hours);
     var nd = N(x.night_hours), ndPaid = N(x.nd_paid_hours), ut = N(x.undertime_hours), worked = N(x.worked_hours);
     var regPay = R2(reg*rate), otPay = R2(otPaid*rate*1.25), ndPay = R2(ndPaid*rate*0.10);
     totHrs += reg; totOt += ot; totPay += N(x.day_pay); totNdPaid += ndPaid; totUt += ut; totNd += nd;
     totNdPay += N(x.night_diff_suggested); totWorked += worked; totRegPay += regPay; totOtPaid += otPaid;
-    totOtPay += otPay; totNdPayPaid += ndPay;
+    totOtPay += otPay; totNdPayPaid += ndPay; totBrkMin += N(x.break_mins);
     var rowBg = x.is_holiday ? '#fff7ed' : '';
     var td = (v, style, title) => `<td style="padding:5px 7px;text-align:right${style||''}"${title?` title="${esc(title)}"`:''}>${v}</td>`;
     var grey = ';color:#9ca3af';
@@ -983,7 +984,8 @@ async function renderPayrollSection(s, tc){
       <td style="padding:5px 7px">${esc(x.clock_in||'—')}</td>
       <td style="padding:5px 7px">${x.clock_out ? esc(x.clock_out)
         : `<span style="color:#b45309;font-weight:700" title="No time-out was tapped — hours stop at the last tap">—</span> <a href="#" onclick="openManualClockModal('${s.id}',{date:'${esc(x.work_date)}',event:'CLOCK_OUT'});return false" style="font-size:.62rem;color:#1d4ed8;text-decoration:none;white-space:nowrap">+ add time-out</a>`}</td>
-      ${td(worked.toFixed(2), '', 'Clock in → out minus breaks'+(x.break_detail?' ('+x.break_detail+')':''))}
+      ${td(N(x.break_mins)>0 ? hm(N(x.break_mins)) : '—', N(x.break_mins)>0?'':grey, x.break_detail ? 'Breaks: '+x.break_detail+(N(x.break_count)>1?' ('+N(x.break_count)+' breaks)':'') : 'No break tapped')}
+      ${td(worked.toFixed(2), '', 'Clock in → out minus breaks')}
       ${td(reg.toFixed(2), ';font-weight:700')}
       ${td(hrPeso(regPay), '')}
       ${td(ot>0?ot.toFixed(2):'—', ot>0?';color:#1d4ed8;font-weight:700':grey)}
@@ -993,7 +995,7 @@ async function renderPayrollSection(s, tc){
       ${td(ut>0?ut.toFixed(2):'—', ut>0?';color:#b45309;font-weight:700':grey)}
       ${td(hrPeso(N(x.day_pay)), ';font-weight:800')}
     </tr>`;
-  }).join('') : '<tr><td colspan="12" style="padding:10px;color:#9ca3af;font-size:.75rem">No attendance in this cut-off</td></tr>';
+  }).join('') : '<tr><td colspan="13" style="padding:10px;color:#9ca3af;font-size:.75rem">No attendance in this cut-off</td></tr>';
 
   const dedRows = myDeds.length ? myDeds.map(d=>`<tr>
       <td style="padding:6px 8px">${esc(d.deduction_date||'—')}</td>
@@ -1048,6 +1050,7 @@ async function renderPayrollSection(s, tc){
       <table style="width:100%;border-collapse:collapse;font-size:.72rem;white-space:nowrap">
         <thead><tr style="background:var(--mist-light,#f1f5f9);text-align:left">
           <th style="padding:5px 7px">DATE</th><th style="padding:5px 7px">IN</th><th style="padding:5px 7px">OUT</th>
+          <th style="padding:5px 7px;text-align:right" title="Unpaid; hover a cell for the exact times">BREAK</th>
           <th style="padding:5px 7px;text-align:right" title="Clock in → out, minus breaks">HRS</th>
           <th style="padding:5px 7px;text-align:right">REG h</th>
           <th style="padding:5px 7px;text-align:right">REG ₱<div style="font-size:.58rem;font-weight:400;color:#6b7280">@ ${money(rate0)}/h</div></th>
@@ -1061,6 +1064,7 @@ async function renderPayrollSection(s, tc){
         <tbody>${dayRows}</tbody>
         <tfoot><tr style="border-top:2px solid #d8ddd5;font-weight:700">
           <td colspan="3" style="padding:7px">${(br.days||[]).length} day(s)</td>
+          <td style="padding:7px;text-align:right" title="Total unpaid break time">${totBrkMin>0?hm(totBrkMin):'—'}</td>
           <td style="padding:7px;text-align:right">${totWorked.toFixed(2)}</td>
           <td style="padding:7px;text-align:right">${totHrs.toFixed(2)}</td>
           <td style="padding:7px;text-align:right">${money(totRegPay)}</td>
