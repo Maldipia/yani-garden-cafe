@@ -77,25 +77,23 @@ export async function routeHR(action, body, auth, req, res) {
     const staffId = sr.data?.[0]?.id;
     if (!staffId) return res.status(200).json({ok:false,error:'Staff not found'});
 
-    // "Today" in Asia/Manila (UTC+8), matching the hr_clock_event() SQL function
-    const phNow = new Date(Date.now() + 8*60*60*1000);
-    const todayPH = phNow.toISOString().slice(0,10);
+    // One rule for "which shift is this person on", shared with the
+    // hr_clock_event() gate: a shift left open at midnight is still the live
+    // shift until 06:00. Reading only today's log_date here made the kiosk
+    // show "OUT" to closers at 12:30 AM, auto-clock them IN, and split every
+    // late shift in two on payroll.
+    const st = await supaFetch(SUPABASE_URL+'/rest/v1/rpc/hr_clock_state',
+      {method:'POST',body:JSON.stringify({p_tenant:TENANT_HR, p_staff_id:staffId})});
+    const row = Array.isArray(st.data) ? st.data[0] : null;
+    if (!st.ok || !row) return res.status(200).json({ok:false,error:'Could not read clock state'});
 
-    const lr = await supaFetch(
-      SUPABASE_URL+'/rest/v1/hr_time_logs?staff_id=eq.'+staffId+'&tenant_id=eq.'+TENANT_HR+
-      '&log_date=eq.'+todayPH+'&select=event_type,event_time&order=event_time.desc,created_at.desc&limit=1'
-    );
-    const last = lr.data?.[0] || null;
-    const lastType = last?.event_type || null;
-
-    let state = 'OUT';
-    if (lastType === 'CLOCK_IN' || lastType === 'BREAK_END' || lastType === 'BROKEN_TIME_END') state = 'IN';
-    else if (lastType === 'BREAK_START') state = 'ON_BREAK';
-    else if (lastType === 'BROKEN_TIME_START') state = 'ON_BROKEN';
-    else if (lastType === 'CLOCK_OUT') state = 'OUT';
-    // else (no logs today) stays 'OUT'
-
-    return res.status(200).json({ok:true, state, lastEvent:lastType, lastEventTime:last?.event_time||null});
+    const phToday = new Date(Date.now() + 8*60*60*1000).toISOString().slice(0,10);
+    return res.status(200).json({
+      ok:true, state: row.state, lastEvent: row.last_event || null,
+      lastEventTime: row.last_event_time || null,
+      shiftDate: row.shift_date,                 // the day this tap will be filed under
+      shiftIsYesterday: row.shift_date !== phToday,
+    });
   }
 
   // ── hrDailySummary — per-day worked hours for the Clock-in tab ──────────
@@ -178,39 +176,33 @@ export async function routeHR(action, body, auth, req, res) {
       return res.status(403).json({ok:false,error:'Kiosk not authorised'});
     }
     const today = new Date(Date.now() + 8*3600*1000).toISOString().slice(0,10); // PH date
-    const [staffR, logsR] = await Promise.all([
+    // State and hours per staff come from hr_clock_state_all(): the same
+    // shift rule as the clock-in gate, so a closer at 12:30 AM still shows IN
+    // with the full shift's hours instead of resetting to OUT / 0h at midnight.
+    const [staffR, stateR] = await Promise.all([
       supaFetch(SUPABASE_URL+'/rest/v1/hr_staff_master?tenant_id=eq.'+TENANT_HR+
         '&employment_status=eq.ACTIVE&select=id,staff_code,full_name,role,qr_token&order=full_name.asc'),
-      supaFetch(SUPABASE_URL+'/rest/v1/hr_time_logs?tenant_id=eq.'+TENANT_HR+
-        '&log_date=eq.'+today+'&select=staff_id,event_type,event_time&order=event_time.asc'),
+      supaFetch(SUPABASE_URL+'/rest/v1/rpc/hr_clock_state_all',
+        {method:'POST',body:JSON.stringify({p_tenant:TENANT_HR})}),
     ]);
-    const staff = Array.isArray(staffR.data) ? staffR.data : [];
-    const logs  = Array.isArray(logsR.data)  ? logsR.data  : [];
+    const staff  = Array.isArray(staffR.data) ? staffR.data : [];
+    const states = Array.isArray(stateR.data) ? stateR.data : [];
+    const stBy = {};
+    for (const r of states) stBy[r.staff_id] = r;
 
-    const byStaff = {};
-    for (const l of logs) {
-      (byStaff[l.staff_id] = byStaff[l.staff_id] || []).push(l);
-    }
-    const STATE = { CLOCK_IN:'IN', CLOCK_OUT:'OUT', BREAK_START:'BREAK', BREAK_END:'IN' };
+    const STATE = { IN:'IN', ON_BREAK:'BREAK', ON_BROKEN:'BREAK', OUT:'OUT' };
+    let events = 0;
     const board = staff.map(s => {
-      const evs = byStaff[s.id] || [];
-      const last = evs.length ? evs[evs.length-1] : null;
-      // worked seconds = paired IN/BREAK_END -> OUT/BREAK_START
-      let secs = 0, openAt = null;
-      for (const e of evs) {
-        if (e.event_type === 'CLOCK_IN' || e.event_type === 'BREAK_END') openAt = new Date(e.event_time);
-        else if ((e.event_type === 'CLOCK_OUT' || e.event_type === 'BREAK_START') && openAt) {
-          secs += (new Date(e.event_time) - openAt) / 1000; openAt = null;
-        }
-      }
-      if (openAt) secs += (Date.now() - openAt) / 1000;
+      const st = stBy[s.id] || null;
+      events += st ? Number(st.event_count || 0) : 0;
       return {
         staffCode: s.staff_code, name: s.full_name, role: s.role,
         hasQr: !!s.qr_token,
-        state: last ? (STATE[last.event_type] || 'OUT') : 'OUT',
-        lastEvent: last ? last.event_type : null,
-        lastEventTime: last ? last.event_time : null,
-        hoursToday: Math.round((secs/3600) * 100) / 100,
+        state: st ? (STATE[st.state] || 'OUT') : 'OUT',
+        lastEvent: st ? (st.last_event || null) : null,
+        lastEventTime: st ? (st.last_event_time || null) : null,
+        hoursToday: st ? Math.round((Number(st.worked_seconds || 0)/3600) * 100) / 100 : 0,
+        shiftDate: st ? st.shift_date : today,
       };
     });
     return res.status(200).json({
@@ -221,7 +213,7 @@ export async function routeHR(action, body, auth, req, res) {
         onBreak: board.filter(b => b.state === 'BREAK').length,
         out: board.filter(b => b.state === 'OUT').length,
       },
-      events: logs.length,
+      events,
     });
   }
 

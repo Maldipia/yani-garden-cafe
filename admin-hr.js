@@ -677,8 +677,11 @@ function openManualClockModal(staffId) {
       </select>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <div class="hr-edit-row"><label class="hr-edit-label">Date *</label><input class="hr-edit-input" id="clkDate" type="date" value="${now.toISOString().split('T')[0]}"></div>
+      <div class="hr-edit-row"><label class="hr-edit-label">Shift date *</label><input class="hr-edit-input" id="clkDate" type="date" value="${now.toISOString().split('T')[0]}"></div>
       <div class="hr-edit-row"><label class="hr-edit-label">Time *</label><input class="hr-edit-input" id="clkTime" type="time" value="${now.toTimeString().slice(0,5)}"></div>
+    </div>
+    <div id="clkNextDay" style="display:none;font-size:.7rem;color:#b45309;background:#fef3c7;border-radius:6px;padding:6px 10px;margin:-4px 0 8px">
+      🌙 Before 6:00 AM — this will be filed as the end of the <b id="clkNextDayLbl"></b> shift (early the next morning).
     </div>
     <div class="hr-edit-row"><label class="hr-edit-label">Reason (required)</label>
       <input class="hr-edit-input" id="clkNotes" type="text" placeholder="e.g. forgot to clock out, kiosk offline">
@@ -689,16 +692,40 @@ function openManualClockModal(staffId) {
     if(!date||!time){showToast('Date and time required','error');return false;}
     const reason=(document.getElementById('clkNotes').value||'').trim();
     if(reason.length<3){showToast('A reason is required for manual entries','error');return false;}
-    const eventTime=new Date(date+'T'+time).toISOString();
-    // Insert directly
+    const eventType=document.getElementById('clkEvent').value;
+    // "Shift date" + a time before 6:00 AM (for anything but a clock-in) means
+    // the early hours of the NEXT morning — closers leave at 12:15–1:40 AM and
+    // that time-out belongs to the shift that started the day before.
+    const calDate=_clkIsNextMorning(eventType,time)?_clkAddDay(date):date;
+    const eventTime=new Date(calDate+'T'+time).toISOString();
     const r=await api('addHRTimeLog',{userId:currentUser?.userId,staffId,
-      event_type:document.getElementById('clkEvent').value,
+      event_type:eventType,
       log_date:date,event_time:eventTime,
       notes:reason
     });
+    if(!r||!r.ok){showToast(r&&r.error?r.error:'Could not save the entry','error');return false;}
     showToast('Clock entry saved ✅','success');
     if(_hrSelected?.id===staffId) await loadHRTab(_hrSelected,'clock');
   });
+  setTimeout(_clkRefreshNextDayHint,0);
+  ['clkEvent','clkDate','clkTime'].forEach(function(id){
+    const el=document.getElementById(id); if(el) el.addEventListener('input',_clkRefreshNextDayHint);
+    if(el) el.addEventListener('change',_clkRefreshNextDayHint);
+  });
+}
+function _clkIsNextMorning(eventType,time){
+  return eventType!=='CLOCK_IN' && /^\d{2}:\d{2}/.test(time||'') && parseInt(time.slice(0,2),10) < 6;
+}
+function _clkAddDay(ymd){
+  const d=new Date(ymd+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()+1); return d.toISOString().slice(0,10);
+}
+function _clkRefreshNextDayHint(){
+  const ev=document.getElementById('clkEvent'), dt=document.getElementById('clkDate'), tm=document.getElementById('clkTime'),
+        box=document.getElementById('clkNextDay'), lbl=document.getElementById('clkNextDayLbl');
+  if(!ev||!dt||!tm||!box) return;
+  const on=_clkIsNextMorning(ev.value,tm.value);
+  box.style.display=on?'block':'none';
+  if(on&&lbl) lbl.textContent=hrDate(dt.value);
 }
 
 // ── PERFORMANCE TAB ────────────────────────────────────────────────────────

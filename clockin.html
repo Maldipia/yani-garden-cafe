@@ -434,6 +434,11 @@ function phTimeStr(iso){
   try{ return new Date(iso).toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit',hour12:true,timeZone:'Asia/Manila'}); }
   catch(e){ return ''; }
 }
+function phShiftDate(ymd){
+  if(!ymd) return '';
+  try{ return new Date(ymd+'T00:00:00+08:00').toLocaleDateString('en-PH',{weekday:'short',month:'short',day:'numeric',timeZone:'Asia/Manila'}); }
+  catch(e){ return ymd; }
+}
 
 
 // ── AUTO-ACTION ON SCAN ────────────────────────────────────────────────────
@@ -481,14 +486,18 @@ async function loadClockStateAndShow(){
   if(!r.ok) return; // server will still reject invalid transitions either way
 
   var state=r.state, t=phTimeStr(r.lastEventTime), lbl=EV_TIME_LABEL[r.lastEvent]||'';
+  // After midnight the server keeps yesterday's unfinished shift live until
+  // 6:00 AM, so a closer at 12:30 AM sees Clock Out (filed on yesterday's
+  // shift) instead of being clocked IN again on a new day.
+  var shiftNote = r.shiftIsYesterday ? ' · still on your ' + phShiftDate(r.shiftDate) + ' shift' : '';
   if(state==='IN'){
     btnIn.style.display='none'; btnBE.style.display='none';
     banner.className='status-banner st-in'; banner.style.display='flex';
-    banner.innerHTML='<span class="sb-dot"></span><span>🟢 Currently clocked in' + (t?' since '+t:'') + '</span>';
+    banner.innerHTML='<span class="sb-dot"></span><span>🟢 Currently clocked in' + (t?' since '+t:'') + shiftNote + '</span>';
   } else if(state==='ON_BREAK'){
     btnIn.style.display='none'; btnOut.style.display='none'; btnBS.style.display='none';
     banner.className='status-banner st-break'; banner.style.display='flex';
-    banner.innerHTML='<span class="sb-dot"></span><span>☕ On break' + (t?' since '+t:'') + '</span>';
+    banner.innerHTML='<span class="sb-dot"></span><span>☕ On break' + (t?' since '+t:'') + shiftNote + '</span>';
   } else if(state==='ON_BROKEN'){
     // Broken-time isn't exposed as a button here — nothing valid to show.
     btnIn.style.display=btnOut.style.display=btnBS.style.display=btnBE.style.display='none';
@@ -506,7 +515,7 @@ async function loadClockStateAndShow(){
 async function clockEvent(type){
   document.getElementById('evErr').style.display='none';
   var r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({action:'hrClockEvent',staffCode:_staff.staff_code,eventType:type,pin:_pin||undefined,kioskToken:kioskToken(),source:(_via==='QR'?'QR':'PIN'),build:'k14'})}).then(function(r){return r.json();}).catch(function(){return {ok:false,error:'Network error'};});
+    body:JSON.stringify({action:'hrClockEvent',staffCode:_staff.staff_code,eventType:type,pin:_pin||undefined,kioskToken:kioskToken(),source:(_via==='QR'?'QR':'PIN'),build:'k15'})}).then(function(r){return r.json();}).catch(function(){return {ok:false,error:'Network error'};});
   if(!r.ok){showErr('evErr','Error: '+(r.error||'Failed. Try again.'));return;}
   var color=EV_COLOR[type]||'#4ade80';
   var icon=document.getElementById('doneIcon');

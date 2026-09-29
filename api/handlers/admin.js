@@ -186,23 +186,23 @@ export async function routeAdmin(action, body, auth, req, res) {
 
       // Enrich each row with what the HR list actually needs to show: can this
       // person clock in, and where are they right now. Never their pay.
-      const today = new Date(Date.now() + 8*3600*1000).toISOString().slice(0,10);
-      const [rLogin, rLogs] = await Promise.all([
+      // clock_state comes from hr_clock_state_all() — the same shift rule the
+      // kiosk gate uses, so a closer still shows "In" after midnight.
+      const [rLogin, rState] = await Promise.all([
         supaFetch(SUPABASE_URL + '/rest/v1/hr_staff_login?select=staff_id,pin_hash'),
-        supaFetch(SUPABASE_URL + '/rest/v1/hr_time_logs?tenant_id=eq.' + TENANT_HR +
-                  '&log_date=eq.' + today + '&select=staff_id,event_type,event_time&order=event_time.asc'),
+        supaFetch(SUPABASE_URL + '/rest/v1/rpc/hr_clock_state_all',
+                  {method:'POST', body:JSON.stringify({p_tenant:TENANT_HR})}),
       ]);
       const pinBy = {};
       (Array.isArray(rLogin.data) ? rLogin.data : []).forEach(l => { if (l.pin_hash) pinBy[l.staff_id] = true; });
-      const lastBy = {};
-      (Array.isArray(rLogs.data) ? rLogs.data : []).forEach(l => { lastBy[l.staff_id] = l.event_type; });
-      const STATE = { CLOCK_IN:'IN', BREAK_END:'IN', BROKEN_TIME_END:'IN',
-                      BREAK_START:'BREAK', BROKEN_TIME_START:'BREAK', CLOCK_OUT:'OUT' };
+      const stateBy = {};
+      (Array.isArray(rState.data) ? rState.data : []).forEach(r => { stateBy[r.staff_id] = r.state; });
+      const STATE = { IN:'IN', ON_BREAK:'BREAK', ON_BROKEN:'BREAK', OUT:'OUT' };
 
       staffRows.forEach(s => {
         s.has_pin    = !!pinBy[s.id];
         s.has_qr     = !!(s.qr_token && String(s.qr_token).trim());
-        s.clock_state = STATE[lastBy[s.id]] || 'OUT';
+        s.clock_state = STATE[stateBy[s.id]] || 'OUT';
       });
       return res.status(200).json({ ok:true, staff: staffRows });
     } catch(hrErr) {
@@ -438,6 +438,26 @@ export async function routeAdmin(action, body, auth, req, res) {
       return res.status(400).json({ok:false,error:'A reason is required for manual entries'});
     }
     const who = authT.userId || body.userId || 'UNKNOWN';
+    // log_date is the SHIFT date. A time-out entered as 12:40 AM belongs to
+    // the shift that started the previous day, so it may sit on log_date+1 as
+    // long as it is before 06:00 — the same rule the kiosk gate applies. A
+    // manual row filed on the wrong day would re-create the split-shift bug.
+    const EV_OK = ['CLOCK_IN','CLOCK_OUT','BREAK_START','BREAK_END','BROKEN_TIME_START','BROKEN_TIME_END'];
+    if (!EV_OK.includes(event_type)) return res.status(400).json({ok:false,error:'Invalid event type'});
+    const evMs = Date.parse(event_time);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(log_date||'')) || isNaN(evMs)) {
+      return res.status(400).json({ok:false,error:'log_date and event_time required'});
+    }
+    const local = new Date(evMs + 8*3600*1000);            // Asia/Manila wall clock
+    const localDate = local.toISOString().slice(0,10);
+    const localHour = local.getUTCHours();
+    const nextDay = new Date(Date.parse(log_date+'T00:00:00Z') + 86400000).toISOString().slice(0,10);
+    const sameDay = localDate === log_date;
+    const earlyNext = event_type !== 'CLOCK_IN' && localDate === nextDay && localHour < 6;
+    if (!sameDay && !earlyNext) {
+      return res.status(400).json({ok:false,
+        error:'Time must fall on the shift date, or before 6:00 AM the next morning for a time-out'});
+    }
     const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_time_logs',
       {method:'POST',headers:{Prefer:'return=representation'},
        body:JSON.stringify({tenant_id:TENANT_HR2,staff_id:staffId,
