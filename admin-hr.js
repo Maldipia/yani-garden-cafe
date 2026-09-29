@@ -1100,7 +1100,9 @@ async function renderPayrollSection(s, tc){
       <td style="padding:5px 7px">${esc(x.work_date)}${x.is_holiday?` <span title="${esc(x.holiday_name||'')}" style="font-size:.58rem;font-weight:700;background:#ffedd5;color:#c2410c;padding:1px 5px;border-radius:20px">HOL</span>`:''}</td>
       <td style="padding:5px 7px">${x.clock_in ? (x.in_manual ? manual(esc(x.clock_in),'CLOCK_IN') : `<a href="#" onclick="openEditTimeModal('${s.id}',{date:'${esc(x.work_date)}',event:'CLOCK_IN',which:'first',current:'${esc(x.clock_in)}'});return false" title="Click to correct this time" style="color:inherit;text-decoration:none;border-bottom:1px dotted #9ca3af">${esc(x.clock_in)}</a>`) : '—'}</td>
       <td style="padding:5px 7px">${x.clock_out ? (x.out_manual ? manual(esc(x.clock_out),'CLOCK_OUT') : `<a href="#" onclick="openEditTimeModal('${s.id}',{date:'${esc(x.work_date)}',event:'CLOCK_OUT',which:'last',current:'${esc(x.clock_out)}'});return false" title="Click to correct this time" style="color:inherit;text-decoration:none;border-bottom:1px dotted #9ca3af">${esc(x.clock_out)}</a>`)
-        : `<span style="color:#b45309;font-weight:700" title="No time-out was tapped — hours stop at the last tap">—</span> <a href="#" onclick="openManualClockModal('${s.id}',{date:'${esc(x.work_date)}',event:'CLOCK_OUT',taps:'${esc(('in '+(x.clock_in||'—')+(x.break_detail?' · breaks '+x.break_detail:'')+(x.break_end?' · last break end '+x.break_end:'')).replace(/'/g,''))}'});return false" style="font-size:.62rem;color:#1d4ed8;text-decoration:none;white-space:nowrap">+ add time-out</a>`}</td>
+        : (x.assumed_out
+            ? `<span style="color:#6b7280;font-style:italic" title="No time-out was tapped — assumed ${esc(x.assumed_out)} (10:00 PM policy, or the last tap if later). Hours are counted to then.">${esc(x.assumed_out)} <span style="font-size:.6rem;font-weight:700;background:#f1f5f9;color:#475569;padding:1px 5px;border-radius:20px;font-style:normal">AUTO</span></span> <a href="#" onclick="openManualClockModal('${s.id}',{date:'${esc(x.work_date)}',event:'CLOCK_OUT',taps:'${esc(('in '+(x.clock_in||'—')+(x.break_detail?' · breaks '+x.break_detail:'')+(x.break_end?' · last break end '+x.break_end:'')).replace(/'/g,''))}'});return false" style="font-size:.62rem;color:#1d4ed8;text-decoration:none;white-space:nowrap">set actual</a>`
+            : `<span style="color:#b45309;font-weight:700" title="No time-out was tapped">—</span> <a href="#" onclick="openManualClockModal('${s.id}',{date:'${esc(x.work_date)}',event:'CLOCK_OUT',taps:'${esc(('in '+(x.clock_in||'—')+(x.break_detail?' · breaks '+x.break_detail:'')+(x.break_end?' · last break end '+x.break_end:'')).replace(/'/g,''))}'});return false" style="font-size:.62rem;color:#1d4ed8;text-decoration:none;white-space:nowrap">+ add time-out</a>`)}</td>
       ${x.break_manual
         ? `<td style="padding:5px 7px;text-align:right"><span style="${manualStyle}" title="${esc('Break entered manually: '+(x.manual_note||''))}">✎ ${N(x.break_mins)>0 ? hm(N(x.break_mins)) : '—'}</span></td>`
         : td(N(x.break_mins)>0 ? hm(N(x.break_mins)) : '—', N(x.break_mins)>0?'':grey, x.break_detail ? 'Breaks: '+x.break_detail+(N(x.break_count)>1?' ('+N(x.break_count)+' breaks)':'') : 'No break tapped')}
@@ -1195,7 +1197,7 @@ async function renderPayrollSection(s, tc){
           <td style="padding:7px;text-align:right;font-size:.85rem">${money(totPay)}</td></tr></tfoot>
       </table></div>
       <div style="font-size:.66rem;color:#6b7280;margin-top:6px">
-        Click any IN / OUT time to correct it (reason required; the original stays in the audit) · <span style="${'background:#fef3c7;color:#92400e;border-radius:4px;padding:0 5px;font-weight:700'}">✎ amber</span> = entered or corrected by an admin (hover for who and why; ✕ removes a typed entry) ·
+        Click any IN / OUT time to correct it (reason required; the original stays in the audit) · <i>AUTO</i> = no time-out was tapped, so the day ends at 10:00 PM (or the last tap if later) — "set actual" replaces it · <span style="${'background:#fef3c7;color:#92400e;border-radius:4px;padding:0 5px;font-weight:700'}">✎ amber</span> = entered or corrected by an admin (hover for who and why; ✕ removes a typed entry) ·
         ${rateSpans.length>1 ? 'Rate changed inside this cut-off — each day is paid at the rate in force that day (see Pay tab › Rate history)' : 'Rate '+money(rate0)+'/h = daily rate ÷ '+N(((br.days||[])[0]||{}).standard_hours||8).toFixed(0)+' h'} · REG capped at ${N(((br.days||[])[0]||{}).standard_hours||8).toFixed(0)} h/day · OT and ND pay only on <u>approved</u> hours (grey ₱0 = not yet approved; hover for the value) · breaks unpaid · DAY PAY = REG ₱ + OT ₱ + ND ₱.
       </div>
 
@@ -1298,7 +1300,7 @@ async function printPayslip(){
     psReg+=regPay; psOt+=otPay; psNd+=ndPay;
     return `<tr${x.is_holiday?' class="hol"':''}>
     <td>${x.work_date.slice(5)}${x.is_holiday?' <b>H</b>':''}${psMixed?' <span style="color:#777">@₱'+P(rate)+'</span>':''}</td>
-    <td>${x.clock_in||'-'}</td><td>${esc(x.break_detail||'-')}</td><td>${x.clock_out||'-'}</td>
+    <td>${x.clock_in||'-'}</td><td>${esc(x.break_detail||'-')}</td><td>${x.clock_out||(x.assumed_out?x.assumed_out+'*':'-')}</td>
     <td class="r">${N(x.worked_hours).toFixed(2)}</td>
     <td class="r">${reg.toFixed(2)}</td><td class="r">${P(regPay)}</td>
     <td class="r">${N(x.ot_hours)>0?N(x.ot_hours).toFixed(2):'-'}</td>
@@ -1429,6 +1431,7 @@ async function printPayslip(){
     Overtime = hours beyond ${stdH} that were approved \u00d7 hourly rate \u00d7 1.25; unapproved overtime hours are listed but unpaid.
     Night differential = approved hours between 10:00 PM and 6:00 AM \u00d7 hourly rate \u00d7 10%.
     Day pay = regular + overtime + night differential. Undertime is the shortfall against the ${stdH}-hour standard day and is already reflected in the lower regular pay.
+    ${days.some(x=>!x.clock_out&&x.assumed_out)?'<br><b>*</b> No time-out was recorded that day; the shift is taken to end at 10:00 PM (or the last recorded tap if later), per house policy.':''}
     ${holDays.length?`<br><b>H</b> marks a declared holiday (${holDays.map(x=>esc(x.holiday_name||x.work_date)).join(', ')}).${N(row.holiday_pay)>0?'':' No holiday premium has been applied.'}`:''}
     ${s.art82_exempt?'<br><b>Art. 82.</b> This employee is a managerial employee or field personnel and is not covered by the hours-of-work provisions — overtime, night differential, holiday pay and service incentive leave do not apply.':''}
     ${(!s.art82_exempt && holDays.length && N(row.holiday_pay)===0)?'<br>This establishment is a retail/service establishment regularly employing fewer than ten (10) workers and is exempt from regular holiday pay under Art. 94(a).':''}

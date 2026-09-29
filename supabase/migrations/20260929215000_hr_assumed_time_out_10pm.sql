@@ -1,0 +1,21 @@
+-- Owner policy (2026-09-29): a past shift with no time-out is assumed to end
+-- at 10:00 PM on its shift date — or at the last tap if that was later (a
+-- tap after 10 PM proves the person was still there). The live shift (today,
+-- or yesterday before 06:00) still counts up to now. hr_daily_hours gains
+-- assumed_out; hr_payroll_daily exposes it as text so the OUT cell can say
+-- "10:00 PM AUTO". Applied to production via the Supabase migration of the
+-- same name; the function bodies are the ones in
+-- 20260929210000_hr_effective_dated_rates.sql plus the block below.
+--
+--   IF v_open_in IS NOT NULL THEN
+--     v_open := true;
+--     v_live := (p_date = v_local::date) OR (p_date = v_local::date - 1 AND v_local::time < TIME '06:00');
+--     IF v_live THEN
+--       v_total := v_total + GREATEST(0, EXTRACT(EPOCH FROM (v_now - v_open_in))::bigint); v_sessions := v_sessions + 1;
+--     ELSE
+--       v_assumed := GREATEST((p_date + TIME '22:00') AT TIME ZONE 'Asia/Manila', v_last);
+--       IF v_assumed > v_open_in THEN
+--         v_total := v_total + EXTRACT(EPOCH FROM (v_assumed - v_open_in))::bigint; v_sessions := v_sessions + 1;
+--       END IF;
+--     END IF;
+--   END IF;
