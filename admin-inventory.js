@@ -115,14 +115,14 @@ function _invRender() {
   var h = '<div style="max-width:1440px;margin:0 auto;padding:14px 14px 60px">';
   h += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">';
   h += '<div><h2 style="margin:0;color:var(--forest-deep);font-size:1.25rem">Stock Control</h2>'
-     + '<div style="font-size:.72rem;color:var(--timber);margin-top:1px">Track every physical stock unit, batch, expiry, usage and movement.</div></div>';
+     + '<div style="font-size:.72rem;color:var(--timber);margin-top:1px">What\'s available on the menu. Sales deduct on their own — add, waste or fix.</div></div>';
   h += '<div style="font-size:.68rem;font-weight:700;padding:5px 11px;border-radius:20px;'
      + (enabled?'background:#fde8e8;color:#b91c1c':'background:var(--mist-light);color:var(--forest)')+'">'+(enabled?'● LIVE':'○ MODULE OFF (safe)')+'</div>';
   h += '</div>';
   // tabs
   h += '<div style="display:flex;gap:2px;border-bottom:2px solid var(--mist-light);margin:10px 0 14px;overflow-x:auto;-webkit-overflow-scrolling:touch">';
-  [['menu','🍰 Menu Stock'],['dash','📈 Dashboard'],['current','📦 Current Stock'],['moves','🧾 Movements'],['recipes','📖 Recipes'],['items','🏷️ Items'],['settings','⚙️ Settings']].forEach(function(t){
-    var on=_invTab===t[0] || (t[0]==='current' && (_invTab==='receive'||_invTab==='waste'));
+  [['menu','🍰 Menu Stock'],['dash','📈 Dashboard'],['moves','🧾 Movements'],['settings','⚙️ Settings']].forEach(function(t){
+    var on=_invTab===t[0];
     h += '<button onclick="_invSetTab(\''+t[0]+'\')" style="background:none;border:none;cursor:pointer;padding:7px 12px;font-size:.8rem;font-weight:700;white-space:nowrap;flex-shrink:0;'
        + (on?'color:var(--forest-deep);border-bottom:3px solid var(--gold);margin-bottom:-2px':'color:var(--timber)')+'">'+t[1]+'</button>';
   });

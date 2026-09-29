@@ -150,7 +150,7 @@ function _expRenderTable(){
   var h='<div style="background:#fff;border:1px solid var(--mist);border-radius:12px;overflow:auto;max-height:calc(100vh - 300px)">';
   h+='<table style="width:100%;border-collapse:collapse;font-size:.76rem;min-width:1000px">';
   h+='<thead><tr style="background:var(--forest-deep)">';
-  ['Date','Supplier / Store','Description','Ref / OR No.','Unit Price','Category','Amount','Status','Source'].forEach(function(c,i){
+  ['Date','Supplier / Store','Description','Ref / OR No.','Unit Price','Category','Amount','Source'].forEach(function(c,i){
     h+='<th style="position:sticky;top:0;z-index:2;background:var(--forest-deep);text-align:'+(i===6?'right':'left')+';padding:9px 12px;color:#fff;font-weight:700;font-size:.64rem;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap">'+c+'</th>'; });
   h+='</tr></thead><tbody>';
   recs.forEach(function(g,idx){
@@ -199,7 +199,6 @@ function _expRenderTable(){
       +'<td style="padding:9px 12px;font-size:.74rem;white-space:nowrap">'+upCell+'</td>'
       +'<td style="padding:9px 12px;color:var(--timber);white-space:nowrap">'+escH(g.category||'—')+'</td>'
       +'<td style="padding:9px 12px;text-align:right;font-weight:700;color:#dc2626;white-space:nowrap">'+peso(g.total)+'</td>'
-      +'<td style="padding:9px 12px;white-space:nowrap">'+status+'</td>'
       +'<td style="padding:9px 12px;white-space:nowrap">'+_expSourceBadge(g.source)+'</td></tr>';
   });
   h+='</tbody></table></div>';
@@ -297,31 +296,7 @@ function _expPurchaseDrawer(g, lines, summary){
     h+='<div style="font-size:.64rem;color:var(--timber);text-transform:uppercase;letter-spacing:.4px;font-weight:700;margin:14px 0 4px">Purchase history (normalized)</div>';
     lines.forEach(function(l){ if(l.base_unit_cost!=null) h+='<div style="display:flex;justify-content:space-between;font-size:.72rem;padding:2px 0"><span style="color:var(--forest-deep)">'+escH(l.item_name)+'</span><span style="color:var(--forest);font-weight:700">₱'+parseFloat(l.base_unit_cost).toFixed(2)+' / '+escH(l.base_unit||'')+'</span></div>'; });
   }
-  // inventory status + receive
-  h+='<div style="font-size:.64rem;color:var(--timber);text-transform:uppercase;letter-spacing:.4px;font-weight:700;margin:16px 0 6px">Inventory</div>';
-  var st=g.recStatus||'NOT_RECEIVED';
-  // per-line receiving detail (received / remaining / stock code)
-  if(lines){
-    h+='<div style="margin-bottom:8px">';
-    lines.forEach(function(l){
-      var pq=parseFloat(l.base_quantity||l.quantity||0), rq=parseFloat(l._received||0), rem=Math.max(0,pq-rq);
-      var bu=l.base_unit||l.purchase_unit||'';
-      var badge=l._status==='RECEIVED'?'<span style="color:#15803d;font-weight:700">received</span>':l._status==='PARTIAL'?'<span style="color:#b45309;font-weight:700">partial</span>':'<span style="color:var(--timber)">not received</span>';
-      h+='<div style="font-size:.7rem;padding:5px 0;border-bottom:1px solid var(--mist-light)">'
-        +'<div style="display:flex;justify-content:space-between"><span style="color:var(--forest-deep);font-weight:600">'+escH(l.item_name)+'</span>'+badge+'</div>'
-        +'<div style="color:var(--timber);margin-top:1px">received '+_expFmt(rq)+' / '+_expFmt(pq)+' '+escH(bu)+' · remaining '+_expFmt(rem)+' '+escH(bu)
-        +((l._received_codes&&l._received_codes.length)?(' · '+l._received_codes.map(escH).join(', ')):'')+'</div></div>';
-    });
-    h+='</div>';
-  }
-  if(st==='RECEIVED'){ h+='<div style="background:#e7f3ea;border-radius:8px;padding:10px 12px;font-size:.76rem;color:#15803d;font-weight:600">✓ All items received to inventory. Physical stock was created; the financial amount is not duplicated.</div>'; }
-  else {
-    h+='<div style="background:'+(st==='PARTIAL'?'#fef8ec':'#fff8ec')+';border:1px solid #f0d9a8;border-radius:8px;padding:10px 12px;margin-bottom:8px">'
-      +'<div style="font-size:.78rem;font-weight:700;color:#b45309">'+(st==='PARTIAL'?'Partially received':'Not received to inventory yet')+'</div>'
-      +'<div style="font-size:.68rem;color:var(--timber);margin-top:2px">Saving this purchase did not create stock. Receiving is explicit.</div></div>';
-    if(lines){ lines.forEach(function(l){ if(l._status!=='RECEIVED' && l.item_id){ h+='<button onclick="_expOpenReceiveLine('+l.id+','+l.item_id+',\''+escH(l.item_name).replace(/\x27/g,'')+'\','+(l.base_quantity||l.quantity||0)+','+(l.base_unit_id||l.purchase_unit_id||'null')+','+(l.unit_price||0)+',\''+escH(ref||'')+'\',\''+escH(sup||'')+'\','+(l._received||0)+')" style="display:block;width:100%;text-align:left;font-size:.74rem;font-weight:700;background:#fff;color:var(--forest);border:1.5px solid var(--forest);border-radius:8px;padding:8px 10px;cursor:pointer;margin-bottom:6px">📦 Receive \u201c'+escH(l.item_name)+'\u201d to Inventory</button>'; } }); }
-    else { h+='<div style="font-size:.68rem;color:var(--timber)">This purchase\u2019s items aren\u2019t mapped to inventory items, so receiving isn\u2019t available. Map items in Stock Control \u2192 Items to enable receiving.</div>'; }
-  }
+  // Purchases are money only. Stock lives in Stock Control → Menu Stock (+ Add); there is no second receiving path.
   return _expDrawerShell(h + _expOwnerActions(g));
 }
 
@@ -348,8 +323,6 @@ function _expGeneralDrawer(g){
   h+=_expDrawerRow('Status', l.is_paid===false?'<span style="color:#b45309">Unpaid / Due</span>':'<span style="color:#15803d">Paid</span>');
   if(g.ref) h+=_expDrawerRow('Reference', escH(g.ref));
   if(g.notes) h+='<div style="margin-top:8px;font-size:.74rem;color:var(--forest-deep)"><span style="color:var(--timber)">Notes:</span> '+escH(g.notes)+'</div>';
-  h+='<div style="font-size:.64rem;color:var(--timber);text-transform:uppercase;letter-spacing:.4px;font-weight:700;margin:16px 0 6px">Inventory</div>';
-  h+='<div style="background:var(--mist-light);border-radius:8px;padding:10px 12px;font-size:.74rem;color:var(--timber)">ⓘ Not applicable — this is a '+escH(g.category||'general')+' expense, not physical stock.</div>';
   return _expDrawerShell(h + _expOwnerActions(g));
 }
 function _expDateFull(d){ if(!d)return '—'; try{ var x=new Date(d); return MONTHS[x.getMonth()]+' '+x.getDate()+', '+x.getFullYear(); }catch(e){ return String(d).substring(0,10);} }

@@ -94,16 +94,16 @@ function _ieDashHtml(){
   var today=_invManilaToday();
   h+='<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px">'
     +'<input type="date" value="'+_invEsc(d.date||today)+'" max="'+today+'" onchange="_ieDashDate=this.value;_ieDash=null;_invRenderTab();_ieLoadTab(\'dash\')" class="ie-in" style="width:auto;margin:0;padding:7px">'
-    +'<div style="flex:1"></div>'+_ieBtn('📥 Receive','_invSetTab(\'receive\')',true)+_ieBtn('🗑️ Waste','_invSetTab(\'waste\')')+_ieBtn('🍰 Menu Stock','_invSetTab(\'menu\')')+'</div>';
+    +'<div style="flex:1"></div>'+_ieBtn('🍰 Menu Stock','_invSetTab(\'menu\')',true)+'</div>';
   var fc = d.food_cost_pct==null ? '—' : d.food_cost_pct+'%';
   h+='<div class="ie-cards">'
-    +_ieCard('Inventory value', _iePeso(d.inventory_value), null, 'at actual batch cost', '_invSetTab(\'current\')')
+    +_ieCard('Inventory value', _iePeso(d.inventory_value), null, 'at actual batch cost', '_invSetTab(\'menu\')')
     +_ieCard('Sales', _iePeso(d.sales), null, 'POS '+_iePeso(d.sales_pos)+' · Online '+_iePeso(d.sales_online))
     +_ieCard('Food cost % (actual)', fc, d.food_cost_pct>40?'#b91c1c':'#15803d', 'COGS '+_iePeso(d.actual_cogs)+' ÷ sales')
-    +_ieCard('Waste / spoilage', _iePeso(d.waste_cost), d.waste_cost>0?'#b91c1c':null, 'at batch cost', '_invSetTab(\'waste\')')
-    +_ieCard('Low / out of stock', d.low_stock, d.low_stock>0?'#b45309':null, 'below par or empty', '_ieStockStatus=\'LOW\';_invSetTab(\'current\')')
-    +_ieCard('Near expiry', d.near_expiry, d.near_expiry>0?'#c2410c':null, 'within 2 days', '_ieStockStatus=\'EXPIRY\';_invSetTab(\'current\')')
-    +_ieCard('Expired', d.expired, d.expired>0?'#b91c1c':null, 'still in stock', '_ieStockStatus=\'EXPIRY\';_invSetTab(\'current\')')
+    +_ieCard('Waste / spoilage', _iePeso(d.waste_cost), d.waste_cost>0?'#b91c1c':null, 'at batch cost', '_invSetTab(\'menu\')')
+    +_ieCard('Low / out of stock', d.low_stock, d.low_stock>0?'#b45309':null, 'below par or empty', '_invSetTab(\'menu\')')
+    +_ieCard('Near expiry', d.near_expiry, d.near_expiry>0?'#c2410c':null, 'within 2 days', '_invSetTab(\'menu\')')
+    +_ieCard('Expired', d.expired, d.expired>0?'#b91c1c':null, 'still in stock', '_invSetTab(\'menu\')')
     +_ieCard('Stock shortages', d.open_exceptions, d.open_exceptions>0?'#b91c1c':null, 'sold more than recorded', d.open_exceptions>0?'_ieScrollTo(\'ieExc\')':'')
     +'</div>';
   if(!d.moduleEnabled) h+='<div style="background:#fff7e6;border:1px solid #fde68a;color:#8a5a0b;border-radius:10px;padding:9px 12px;font-size:.76rem;margin-bottom:12px">The inventory module is OFF, so sales are not deducting stock. Turn it on in ⚙️ Settings.</div>';
@@ -345,8 +345,7 @@ function _ieRenderItem(){
       +((it.recipes||[]).length? it.recipes.map(function(rc){ return '<div style="font-size:.74rem;padding:5px 0;border-bottom:1px solid var(--mist-light)"><b>'+_invEsc(rc.size)+'</b>: '+(rc.ingredients||[]).map(function(g){ return _ieQ(g.qty)+' '+_invEsc(g.unit)+' '+_invEsc(g.item); }).join(', ')+'</div>'; }).join('') : _ieEmpty('No recipe (sold as is).'))
       +'</div></div>';
     h+='<div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap">'
-      +_ieBtn('📥 Receive','_ieCloseModal();_ieRcPreset='+it.id+';_invSetTab(\'receive\')',true)
-      +((st.tracked&&_invNum(st.stock_qty)>0)?_ieBtn('🗑️ Waste','_ieCloseModal();_ieWsPreset='+it.id+';_invSetTab(\'waste\')'):'')
+      +_ieBtn('🍰 Add / Waste / Fix in Menu Stock','_ieCloseModal();_invSetTab(\'menu\')',true)
       +(_invIsAdmin()?_ieBtn('Edit units & settings','_ieCloseModal();_invOpenItemForm('+it.id+')'):'')+'</div>';
   } else if(_ieItemTab==='batches'){
     var bs=d.batches||[];
@@ -598,7 +597,7 @@ function _ieMenuHtml(){
       }).join('') : _ieEmpty('Every non-drink menu item is already tracked.'))
      +(nw.length?'<button id="ieMenuStart" onclick="_ieMenuStartAll()" style="width:100%;margin-top:12px;font-size:.86rem;font-weight:800;background:var(--forest);color:#fff;border:none;border-radius:10px;padding:11px;cursor:pointer">Start tracking '+(entered?entered+' item'+(entered>1?'s':''):'entered items')+'</button>':''))+'</div>';
   // recipe items
-  h+=_ieBox('Made to order ('+rc.length+') <span style="font-weight:600;color:var(--timber);font-size:.7rem">— drinks made from a recipe; no count, their ingredients are tracked</span>',
+  h+=_ieBox('Made to order ('+rc.length+') <span style="font-weight:600;color:var(--timber);font-size:.7rem">— drinks made fresh; no count needed</span>',
      _ieMenuShowRecipe? rc.map(function(x){ return '<div style="font-size:.76rem;padding:4px 0;border-top:1px solid var(--mist-light)">'+_invEsc(x.name)+'</div>'; }).join('') : '',
      _ieBtn(_ieMenuShowRecipe?'Hide':'Show','_ieMenuShowRecipe=!_ieMenuShowRecipe;_ieMenuRerender()'));
   // today's movements
