@@ -1278,11 +1278,6 @@ function renderInventoryView() {
         + '</div>'
         + badge
         + '<div style="font-size:1.15rem;font-weight:800;min-width:40px;text-align:center;color:' + (parseFloat(i.stock_qty)===0?'#ef4444':i.low_stock?'#f59e0b':'#065f46') + '">' + qtyDisplay + '</div>'
-        + '<div style="display:flex;flex-direction:column;gap:4px">'
-        + '<button onclick="invQuickIn(\'' + i.item_code + '\')" style="background:#f0fdf4;color:#16a34a;border:1.5px solid #bbf7d0;border-radius:7px;padding:4px 10px;font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap">▲ IN</button>'
-        + '<button onclick="invQuickOut(\'' + i.item_code + '\')" style="background:#fef2f2;color:#dc2626;border:1.5px solid #fecaca;border-radius:7px;padding:4px 10px;font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap">▼ OUT</button>'
-        + '</div>'
-        + '<button onclick="openInvEdit(\'' + i.item_code + '\')" style="background:#f8fafc;color:#64748b;border:1px solid #e2e8f0;border-radius:8px;padding:6px 10px;font-size:.78rem;cursor:pointer;flex-shrink:0">⚙️</button>'
         + '</div>';
     }).join('');
 
@@ -1294,8 +1289,11 @@ function renderInventoryView() {
     + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
     + '<div><div style="font-weight:800;font-size:1.05rem;color:var(--forest-deep)">📦 Inventory</div>'
     + (summaryBadges ? '<div style="margin-top:4px">' + summaryBadges + '</div>' : '') + '</div>'
-    + '<button onclick="openInvAdd()" style="background:var(--forest-deep);color:#fff;border:none;border-radius:10px;padding:8px 14px;font-size:.82rem;font-weight:700;cursor:pointer">+ Add Item</button>'
+    + '<span style="background:#f1f5f9;color:#475569;border-radius:8px;padding:4px 10px;font-size:.72rem;font-weight:700">READ-ONLY · HISTORY</span>'
     + '</div>'
+    + '<div style="background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:10px;padding:10px 12px;font-size:.8rem;margin-bottom:12px;line-height:1.45">'
+    + '<strong>This old inventory list is retired.</strong> Stock now lives in <strong>Stock Control</strong> — receiving, sales deductions, waste and counts are all recorded there with batches and a full history. '
+    + 'These numbers are no longer updated by orders and are kept only for reference.</div>'
     + rowsHtml + '</div>';
 }
 

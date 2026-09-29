@@ -677,6 +677,40 @@ async function stockControl() {
   check('menu stock flags are consistent', flagged.every(i => i.soldOut === (i.stockLeft <= 0)),
         flagged.map(i => i.code + ':' + i.stockLeft).join(','));
   if (!sheet.moduleEnabled) check('no stock flags while module is off', flagged.length === 0);
+
+  // ── inventory engine (read-only + validation; nothing is written) ──
+  const cur = await call({ action: 'invCurrentStock', userId: OWNER });
+  check('current stock readable', cur.ok === true && Array.isArray(cur.rows), cur.error);
+  check('current stock refuses anonymous', (await call({ action: 'invCurrentStock' })).ok === false);
+  const tracked = (cur.rows || []).filter(r => r.tracked);
+  check('tracked stock is never negative', tracked.every(r => parseFloat(r.stock_qty) >= 0),
+        tracked.filter(r => parseFloat(r.stock_qty) < 0).map(r => r.name).join(','));
+  const dash = await call({ action: 'invDashboardV2', userId: OWNER });
+  check('inventory dashboard loads', dash.ok === true && 'inventory_value' in dash && Array.isArray(dash.alerts), dash.error);
+  const mv = await call({ action: 'invMovements', userId: OWNER, limit: 20 });
+  check('movement ledger readable', mv.ok === true && Array.isArray(mv.rows), mv.error);
+  check('every movement has a type and a reference', (mv.rows || []).every(m => m.movement_type && m.source_ref));
+  if ((mv.rows || []).length) {
+    const md = await call({ action: 'invMovementDetail', userId: OWNER, txnId: mv.rows[0].txn_id });
+    check('movement audit detail loads', md.ok === true && md.movement && md.movement.txn_id === mv.rows[0].txn_id, md.error);
+  }
+  if (tracked.length) {
+    const t0 = tracked[0];
+    const ex = await call({ action: 'invExplainStock', userId: OWNER, itemId: t0.item_id });
+    check('explain-stock reconciles with batches', ex.ok === true && ex.reconciles === true
+          && Math.abs(parseFloat(ex.closing) - parseFloat(t0.stock_qty)) < 0.001, ex.formula || ex.error);
+    const idt = await call({ action: 'invItemDetail', userId: OWNER, itemId: t0.item_id });
+    check('item detail loads', idt.ok === true && idt.item && Array.isArray(idt.batches), idt.error);
+  }
+  const lc = await call({ action: 'invLedgerCheck', userId: OWNER });
+  check('every batch balance equals its ledger movements', lc.ok === true && (lc.mismatches || []).length === 0,
+        JSON.stringify((lc.mismatches || []).slice(0, 3)));
+  const noRev = await call({ action: 'invReverseMovement', userId: OWNER, txnId: 1 });
+  check('reversal needs a reason', noRev.ok === false && /reason/i.test(noRev.error || ''), noRev.error);
+  const badWaste = await call({ action: 'invRecordSpoilage', userId: OWNER, itemId: 1, qty: 1, reason: 'PHYSICAL_VARIANCE' });
+  check('waste refuses a count-only reason', badWaste.ok === false, badWaste.error);
+  const legacy = await call({ action: 'adjustInventory', userId: OWNER, itemCode: 'H001', adjustment: 1 });
+  check('legacy inventory list is read-only', legacy.ok === false && /retired/i.test(legacy.error || ''), legacy.error);
 }
 
 async function menuCacheConsistency() {

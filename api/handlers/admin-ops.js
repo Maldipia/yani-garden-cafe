@@ -973,6 +973,8 @@ export async function routeAdminOps(action, body, auth, req, res) {
     if (action === 'upsertInventory') {
       const auth = await checkAdminAuth();
       if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      // Legacy `inventory` is frozen: inv_* (Stock Control) is the single source of truth.
+      return res.status(410).json({ ok: false, error: 'The old inventory list is retired (read-only). Use Stock Control to receive, waste or count stock.' });
       const { itemCode, stockQty, lowStockThreshold, unit, costPerUnit, sellingPrice,
               sizePerUnit, autoDisable, restockNotes, photoUrl } = body;
       if (!itemCode) return res.status(400).json({ ok: false, error: 'itemCode required' });
@@ -1023,6 +1025,8 @@ export async function routeAdminOps(action, body, auth, req, res) {
     if (action === 'adjustInventory') {
       const auth = await checkAdminAuth();
       if (!auth.ok) return res.status(403).json({ ok: false, error: auth.error });
+      // Legacy `inventory` is frozen: inv_* (Stock Control) is the single source of truth.
+      return res.status(410).json({ ok: false, error: 'The old inventory list is retired (read-only). Use Stock Control to receive, waste or count stock.' });
       const { itemCode, adjustment, changeType, notes, unitPrice, reference, direction } = body;
       if (!itemCode || adjustment === undefined) return res.status(400).json({ ok: false, error: 'itemCode + adjustment required' });
       // direction: 'IN' = positive (RESTOCK/RETURN), 'OUT' = negative (WASTE/SALE)

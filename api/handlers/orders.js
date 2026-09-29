@@ -350,31 +350,10 @@ export async function routeOrders(action, body, auth, req, res) {
         } catch(e) { console.error('Yani Card charge error:', e.message); }
       }
 
-      // Deduct inventory (fire-and-forget, non-blocking)
-      Promise.all(orderItems.map(async item => {
-        try {
-          const inv = await supaFetch(
-            `${SUPABASE_URL}/rest/v1/inventory?item_code=eq.${encodeURIComponent(item.item_code)}&select=stock_qty,auto_disable`
-          );
-          if (!inv.ok || !inv.data?.length) return;
-          const cur = inv.data[0];
-          const newQty = Math.max(0, parseFloat(cur.stock_qty) - parseFloat(item.qty || 1));
-          await supaFetch(
-            `${SUPABASE_URL}/rest/v1/inventory?item_code=eq.${encodeURIComponent(item.item_code)}`,
-            { method: 'PATCH', body: JSON.stringify({ stock_qty: newQty, updated_at: new Date().toISOString() }) }
-          );
-          if (newQty === 0 && cur.auto_disable) {
-            await supaFetch(
-              `${SUPABASE_URL}/rest/v1/menu_items?item_code=eq.${encodeURIComponent(item.item_code)}`,
-              { method: 'PATCH', body: JSON.stringify({ is_active: false }) }
-            );
-          }
-          await supaFetch(`${SUPABASE_URL}/rest/v1/inventory_log`, { method: 'POST',
-            body: JSON.stringify({ item_code: item.item_code, change_type: 'SALE',
-              qty_before: parseFloat(cur.stock_qty), qty_change: -parseFloat(item.qty || 1),
-              qty_after: newQty, order_id: orderId }) });
-        } catch (_) {}
-      })).catch(() => {});
+      // Stock is deducted by the inventory engine (inv_*) when the order is COMPLETED —
+      // one idempotent consumption per order (source POS-<orderId>). The legacy `inventory`
+      // table is no longer written from here so it can't act as a second source of truth.
+      // Its rows and inventory_log history are kept, read-only, until it is retired.
 
       // Auto-set table OCCUPIED
       if (tableNo && tableNo !== '0' && orderType === 'DINE-IN') {
@@ -397,37 +376,6 @@ export async function routeOrders(action, body, auth, req, res) {
         lineTotal: Math.round(it.unit_price * it.qty * 100) / 100,
         sugar: it.sugar_choice, notes: it.item_notes,
       }))});
-
-      // ── Auto-deduct inventory for tracked items (fire-and-forget) ──────────
-      try {
-        const invR = await supaFetch(
-          `${SUPABASE_URL}/rest/v1/inventory?select=item_code,stock_qty,auto_disable,low_stock_threshold`
-        );
-        if (invR.ok && invR.data && invR.data.length) {
-          const invMap = {};
-          invR.data.forEach(inv => { invMap[inv.item_code] = inv; });
-          for (const it of orderItems) {
-            const inv = invMap[it.code];
-            if (!inv) continue; // not tracked
-            const newQty = Math.max(0, parseFloat(inv.stock_qty) - it.qty);
-            // Deduct stock
-            await supa('PATCH', 'inventory', { stock_qty: newQty }, { item_code: `eq.${it.code}` });
-            // Log adjustment
-            await supa('POST', 'inventory_log', {
-              item_code: it.code, change_type: 'SALE', qty_change: -it.qty,
-              qty_after: newQty, reason: `Order ${orderId}`, created_by: 'system'
-            });
-            // Auto-disable menu item if stock hits 0 and auto_disable is true
-            if (inv.auto_disable && newQty <= 0) {
-              await supa('PATCH', 'menu_items', { is_active: false }, { item_code: `eq.${it.code}` });
-              invalidateMenuCache();
-            }
-          }
-        }
-      } catch(invErr) {
-        // Non-fatal — order still completes even if inventory update fails
-        console.error('Inventory deduction error:', invErr.message);
-      }
 
             return res.status(200).json({
         ok: true,

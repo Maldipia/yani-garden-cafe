@@ -9,7 +9,7 @@ var _invRef   = { units: [], locations: [], suppliers: [], itemTypes: [] };
 var _invItems = [];
 var _invUnits2 = [];           // stock units
 var _invDash  = null;
-var _invTab   = 'count';   // daily screen first
+var _invTab   = 'dash';    // today at a glance first
 var _invItemFilter = 'ALL';
 // stock filters
 var _invSearch = '';
@@ -74,7 +74,7 @@ async function initInventory() {
   v.innerHTML = '<div style="padding:32px;text-align:center;color:var(--timber)">Loading Stock Control…</div>';
   await _invLoadAll();
   _invRender();
-  if(_invTab==='count') _invCntLoad();
+  if(_invTab==='count') _invCntLoad(); else if(typeof _ieLoadTab==='function') _ieLoadTab(_invTab);
 }
 
 async function _invLoadAll() {
@@ -108,6 +108,7 @@ function _invRender() {
     var st=document.createElement('style'); st.id='invStyles';
     st.textContent='.inv-sumgrid{display:grid;grid-template-columns:repeat(6,1fr)}.inv-mob{display:none}'
       +'.invsec{font-size:.6rem;color:var(--timber);text-transform:uppercase;letter-spacing:.5px;font-weight:800;margin:12px 0 2px}'
+      +'#invItemModal input,#invItemModal select,#invActionModal input,#invActionModal select{box-sizing:border-box;max-width:100%}'
       +'@media(max-width:640px){.inv-sumgrid{grid-template-columns:repeat(3,1fr)}.inv-desk{display:none !important}.inv-mob{display:block !important}}';
     document.head.appendChild(st);
   }
@@ -120,10 +121,10 @@ function _invRender() {
      + (enabled?'background:#fde8e8;color:#b91c1c':'background:var(--mist-light);color:var(--forest)')+'">'+(enabled?'● LIVE':'○ MODULE OFF (safe)')+'</div>';
   h += '</div>';
   // tabs
-  h += '<div style="display:flex;gap:4px;border-bottom:2px solid var(--mist-light);margin:10px 0 14px">';
-  [['stock','📊 Stock'],['count','🧮 Count'],['recipes','📖 Recipes'],['items','🏷️ Items'],['settings','⚙️ Settings']].forEach(function(t){
+  h += '<div style="display:flex;gap:2px;border-bottom:2px solid var(--mist-light);margin:10px 0 14px;overflow-x:auto;-webkit-overflow-scrolling:touch">';
+  [['dash','📈 Dashboard'],['current','📦 Current Stock'],['receive','📥 Receive'],['waste','🗑️ Waste'],['count','🧮 Count'],['moves','🧾 Movements'],['stock','🧱 Batches'],['recipes','📖 Recipes'],['items','🏷️ Items'],['settings','⚙️ Settings']].forEach(function(t){
     var on=_invTab===t[0];
-    h += '<button onclick="_invSetTab(\''+t[0]+'\')" style="background:none;border:none;cursor:pointer;padding:7px 14px;font-size:.8rem;font-weight:700;'
+    h += '<button onclick="_invSetTab(\''+t[0]+'\')" style="background:none;border:none;cursor:pointer;padding:7px 12px;font-size:.8rem;font-weight:700;white-space:nowrap;flex-shrink:0;'
        + (on?'color:var(--forest-deep);border-bottom:3px solid var(--gold);margin-bottom:-2px':'color:var(--timber)')+'">'+t[1]+'</button>';
   });
   h += '</div><div id="invTabBody"></div></div>';
@@ -131,12 +132,17 @@ function _invRender() {
   v.innerHTML = h;
   _invRenderTab();
 }
-function _invSetTab(t){ _invTab=t; _invRender(); if(t==='count') _invCntLoad(); }
+function _invSetTab(t){ _invTab=t; _invRender(); if(t==='count') _invCntLoad(); else if(typeof _ieLoadTab==='function') _ieLoadTab(t); }
 function _invRenderTab(){
   var b=document.getElementById('invTabBody'); if(!b) return;
-  if (_invTab==='stock') b.innerHTML=_invStockHtml();
+  if (_invTab==='dash') b.innerHTML=_ieDashHtml();
+  else if (_invTab==='current') b.innerHTML=_ieCurrentHtml();
+  else if (_invTab==='moves') b.innerHTML=_ieMovesHtml();
+  else if (_invTab==='receive') b.innerHTML=_ieReceiveHtml();
+  else if (_invTab==='waste') b.innerHTML=_ieWasteHtml();
+  else if (_invTab==='stock') b.innerHTML=_invStockHtml();
   else if (_invTab==='count') b.innerHTML=_invCntHtml();
-  else if (_invTab==='recipes') b.innerHTML=_invRecipesHtml();
+  else if (_invTab==='recipes') b.innerHTML=_invRecipesHtml()+(typeof _ieAddonsHtml==='function'?_ieAddonsHtml():'');
   else if (_invTab==='items') b.innerHTML=_invItemsHtml();
   else b.innerHTML=_invSettingsHtml();
 }
@@ -570,6 +576,7 @@ function _invOpenItemForm(id){
         + '<input id="invfYield" type="number" step="0.01" value="'+(it&&it.standard_yield?_invEsc(it.standard_yield):'')+'" style="width:100%;margin-top:4px;font-size:.85rem;padding:9px;border:1.5px solid var(--mist);border-radius:8px">'
       + '</div>'
     + '</div>'
+    + _invUnitsBlock(it)
     + '<label style="font-size:.72rem;font-weight:700;color:var(--forest-deep)">Notes (optional)</label>'
     + '<input id="invfDesc" value="'+(it?_invEsc(it.description||''):'')+'" style="width:100%;margin:4px 0 14px;font-size:.85rem;padding:9px;border:1.5px solid var(--mist);border-radius:8px">'
     + '<div style="display:flex;gap:8px">'
@@ -578,8 +585,38 @@ function _invOpenItemForm(id){
     + '</div></div>';
   document.body.appendChild(m);
   _invItemTypeChanged();
+  _invPuHint();
 }
 function _invCloseItemForm(){ var m=document.getElementById('invItemModal'); if(m) m.remove(); }
+
+// purchase unit → stock unit, par, shelf life, rotation, supplier, location
+function _invUnitsBlock(it){
+  var o=function(list, sel, blank){ return (blank?'<option value="">'+blank+'</option>':'')+list.map(function(x){ return '<option value="'+x.id+'"'+(sel===x.id?' selected':'')+'>'+_invEsc(x.name)+'</option>'; }).join(''); };
+  var fs='width:100%;margin-top:3px;font-size:.82rem;padding:8px;border:1.5px solid var(--mist);border-radius:8px';
+  var lb='font-size:.7rem;font-weight:700;color:var(--forest-deep);display:block;margin-top:8px';
+  return '<div style="background:var(--mist-light);border-radius:10px;padding:10px 12px;margin-bottom:10px">'
+    + '<div style="font-size:.72rem;font-weight:800;color:var(--forest-deep)">How you buy it</div>'
+    + '<div style="font-size:.66rem;color:var(--timber)">e.g. bought per <b>whole</b> cake, stocked and sold per <b>slice</b>: 1 whole = 16 slice.</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+      + '<div><label style="'+lb+'">Purchase unit</label><select id="invfPU" onchange="_invPuHint()" style="'+fs+'">'+o(_invRef.units, it?it.purchase_unit_id:null, 'Same as stock unit')+'</select></div>'
+      + '<div><label style="'+lb+'" id="invfPtsL">Stock units in 1</label><input id="invfPts" type="number" step="any" min="0" oninput="_invPuHint()" value="'+(it&&it.purchase_to_stock!=null?_invEsc(it.purchase_to_stock):'')+'" style="'+fs+'"></div>'
+    + '</div><div id="invfPuHint" style="font-size:.7rem;color:#14532d;font-weight:700;margin-top:4px"></div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">'
+      + '<div><label style="'+lb+'">Par level</label><input id="invfPar" type="number" step="any" min="0" value="'+(it&&it.par_level!=null?_invEsc(it.par_level):'')+'" placeholder="low below" style="'+fs+'"></div>'
+      + '<div><label style="'+lb+'">Shelf life (days)</label><input id="invfShelf" type="number" step="1" min="0" value="'+(it&&it.shelf_life_days!=null?_invEsc(it.shelf_life_days):'')+'" style="'+fs+'"></div>'
+      + '<div><label style="'+lb+'">Use first</label><select id="invfRot" style="'+fs+'"><option value="FEFO"'+(!it||it.rotation!=='FIFO'?' selected':'')+'>Soonest expiry</option><option value="FIFO"'+(it&&it.rotation==='FIFO'?' selected':'')+'>Oldest received</option></select></div>'
+    + '</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+      + '<div><label style="'+lb+'">Default supplier</label><select id="invfSup" style="'+fs+'">'+o(_invRef.suppliers, it?it.default_supplier_id:null, '—')+'</select></div>'
+      + '<div><label style="'+lb+'">Storage location</label><select id="invfLoc" style="'+fs+'">'+o(_invRef.locations, it?it.default_location_id:null, '—')+'</select></div>'
+    + '</div></div>';
+}
+function _invPuHint(){
+  var pu=document.getElementById('invfPU'), pts=document.getElementById('invfPts'), su=document.getElementById('invfUnit'), h=document.getElementById('invfPuHint'); if(!pu||!h) return;
+  var pn=(_invRef.units.filter(function(u){return String(u.id)===pu.value;})[0]||{}).name, sn=(_invRef.units.filter(function(u){return String(u.id)===(su||{}).value;})[0]||{}).name||'unit';
+  var L=document.getElementById('invfPtsL'); if(L) L.textContent=pn?(sn+'s in 1 '+pn):'Stock units in 1';
+  if(pts) pts.disabled=!pn;
+  h.textContent = (pn && parseFloat(pts.value)>0) ? ('Receiving 2 '+pn+' adds '+_invFmtQty(2*parseFloat(pts.value))+' '+sn) : '';
+}
 
 function _invItemTypeChanged(){
   var t = (document.getElementById('invfType')||{}).value;
@@ -630,6 +667,19 @@ async function _invSaveItem(id){
   else if (portionCb && portionCb.checked) { isPortionable = true; standardYield = yieldEl ? parseFloat(yieldEl.value)||null : null; }
   var payload = { name:name, itemType:itemType, baseUnitId:parseInt(baseUnitId,10),
     isPortionable:isPortionable, standardYield:standardYield, description:(descEl?descEl.value.trim():'') };
+  var puEl=document.getElementById('invfPU');
+  if (puEl) {
+    var pu=parseInt(puEl.value,10)||null, pts=parseFloat((document.getElementById('invfPts')||{}).value);
+    if (pu && pu!==parseInt(baseUnitId,10) && !(pts>0)) { showToast('Enter how many stock units are in one purchase unit','error'); return; }
+    payload.purchaseUnitId = (pu && pu!==parseInt(baseUnitId,10)) ? pu : null;
+    payload.purchaseToStock = payload.purchaseUnitId ? pts : null;
+    var par=(document.getElementById('invfPar')||{}).value, sh=(document.getElementById('invfShelf')||{}).value;
+    payload.parLevel = par===''?null:parseFloat(par);
+    payload.shelfLifeDays = sh===''?null:parseInt(sh,10);
+    payload.rotation = (document.getElementById('invfRot')||{}).value||'FEFO';
+    payload.defaultSupplierId = parseInt((document.getElementById('invfSup')||{}).value,10)||null;
+    payload.defaultLocationId = parseInt((document.getElementById('invfLoc')||{}).value,10)||null;
+  }
   if (id) payload.id = id;
   var r = await api('invSaveItem', payload);
   if (r && r.ok) {
@@ -675,6 +725,7 @@ function _invSearchable(sel){
   var inp=document.createElement('input'); inp.type='text'; inp.autocomplete='off'; inp.setAttribute('role','combobox'); inp.setAttribute('aria-expanded','false');
   inp.placeholder='Type to search…';
   inp.style.cssText=(sel.getAttribute('style')||'')+';width:100%;box-sizing:border-box';
+  if(sel.className) inp.className=sel.className;
   var list=document.createElement('div'); list.setAttribute('role','listbox');
   list.style.cssText='display:none;position:absolute;left:0;right:0;top:100%;margin-top:3px;background:#fff;border:1.5px solid var(--mist);border-radius:8px;box-shadow:0 8px 22px rgba(0,0,0,.14);max-height:240px;overflow:auto;z-index:10005';
   sel.parentNode.insertBefore(wrap, sel); wrap.appendChild(inp); wrap.appendChild(list); wrap.appendChild(sel); sel.style.display='none';
@@ -873,7 +924,7 @@ function _invRecipesHtml(){
     var cpy=(cost!=null && _invNum(rc.yield_qty)>0)? (cost/_invNum(rc.yield_qty)) : null;
     h+='<div style="background:#fff;border:1px solid var(--mist);border-radius:10px;padding:11px 13px">'
       +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'
-        +'<div><div style="font-size:.9rem;font-weight:700;color:var(--forest-deep)">📖 '+_invEsc(rc.name)+'</div>'
+        +'<div><div style="font-size:.9rem;font-weight:700;color:var(--forest-deep)">📖 '+_invEsc(rc.name)+(rc.size_code?' <span style="font-size:.62rem;font-weight:800;background:#eef2ff;color:#4338ca;border-radius:6px;padding:2px 7px">'+_invEsc(rc.size_code)+'</span>':'')+'</div>'
         +'<div style="font-size:.7rem;color:var(--timber);margin-top:1px">makes <b>'+_invEsc(out)+'</b> · yields '+_invFmtQty(rc.yield_qty)+' '+_invEsc(yUnit)+' · '+lines.length+' ingredient'+(lines.length!==1?'s':'')+'</div></div>'
         +'<div style="text-align:right;white-space:nowrap"><div style="font-size:.62rem;color:var(--timber);text-transform:uppercase;letter-spacing:.3px">Cost</div>'
         +'<div style="font-size:.95rem;font-weight:800;color:var(--forest-deep)">'+(cost!=null?('₱'+cost.toFixed(2)):'—')+'</div>'
@@ -916,6 +967,7 @@ function _invOpenRecipeForm(id){
     +'<div style="font-size:.66rem;color:var(--timber);margin-bottom:12px">Definition only — saving does NOT deduct stock. Writes to inv_recipes / inv_recipe_ingredients.</div>'
     +_invField('Recipe name',_invInput('rcName','text','e.g. Chocolate Cake 4\\" recipe', rc?rc.name:''))
     +_invField('This recipe makes (output item)',_invSelect('rcOut',outOpts))
+    +_invField('Size (drinks: one recipe per size, with the real amounts)',_invSelect('rcSize',[['','Any size / no sizes'],['SHORT','Short'],['MEDIUM','Medium'],['TALL','Tall'],['SLICE','Slice'],['WHOLE','Whole']].map(function(z){ return '<option value="'+z[0]+'"'+((rc&&(rc.size_code||'')===z[0])?' selected':'')+'>'+z[1]+'</option>'; }).join('')))
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
       +'<div>'+_invField('Yield quantity',_invInput('rcYQty','number','1', rc?rc.yield_qty:''))+'</div>'
       +'<div>'+_invField('Yield unit',_invSelect('rcYUnit',unitOpts))+'</div></div>'
@@ -987,7 +1039,7 @@ async function _invSaveRecipe(id){
   var lines=_invRecLines.filter(function(l){return l.ingredientItemId && l.quantity>0 && l.unitId;});
   if(!lines.length){showToast('Add at least one ingredient','error');return;}
   if(lines.some(function(l){return l.ingredientItemId===itemId;})){showToast('A recipe cannot use its own output as an ingredient','error');return;}
-  var payload={name:name,itemId:itemId,yieldQty:yieldQty,yieldUnitId:yieldUnitId,yieldType:yieldType,notes:notes,
+  var payload={name:name,itemId:itemId,yieldQty:yieldQty,yieldUnitId:yieldUnitId,yieldType:yieldType,notes:notes,sizeCode:(document.getElementById('rcSize')||{}).value||null,
     ingredients:lines.map(function(l){return {ingredientItemId:l.ingredientItemId,quantity:l.quantity,unitId:l.unitId};})};
   if(id) payload.id=id;
   var r=await api('invSaveRecipe',payload);

@@ -1,7 +1,8 @@
 // ── INVENTORY & PRODUCTION HANDLER (ESM) ─────────────────────────────────
-// ISOLATED MODULE. Touches only inv_* tables + the inv_menu_map bridge.
+// ISOLATED MODULE. Touches only inv_* tables + the inv_menu_map bridge, plus the
+// three inventory columns on menu_addons (inv_item_id/inv_qty/inv_unit_id).
 // Never writes to menu_items, dine_in_orders, inventory, costing_* or any
-// other pre-existing table. Feature-flagged via inv_config.module_enabled.
+// other pre-existing column. Feature-flagged via inv_config.module_enabled.
 // ─────────────────────────────────────────────────────────────────────────
 import { supaFetch, supa } from '../lib/db.js';
 import { SUPABASE_URL }    from '../lib/config.js';
@@ -28,10 +29,18 @@ const INV_ACTIONS = new Set([
   'invDashboard','invLowStock','invExpiringSoon','invTransactions',
   // display count + spoilage (ready-to-sell, per item)
   'invCountSheet','invSubmitCount','invRecordSpoilage','invDayLog','invApproveSpoilage','invCountHistory','invStartMenuCount',
+  // engine: current stock, ledger, audit, explain, dashboard, exceptions, corrections, add-on mapping
+  'invCurrentStock','invMovements','invMovementDetail','invItemDetail','invExplainStock','invDashboardV2',
+  'invExceptions','invResolveException','invReverseMovement','invLedgerCheck','invListAddons','invSaveAddonMap',
 ]);
 
 const SPOIL_REASONS = ['SPOILED','EXPIRED','DAMAGED','STAFF_MEAL','COMPLIMENTARY'];
-const COUNT_REASONS = [...SPOIL_REASONS, 'MISSING'];
+const COUNT_REASONS = [...SPOIL_REASONS, 'MISSING', 'PHYSICAL_VARIANCE'];
+const WASTE_REASONS = [...SPOIL_REASONS, 'WASTE', 'BREAKAGE'];
+const MOVEMENT_TYPES = ['PURCHASE','OPENING BALANCE','POS SALE','ONLINE SALE','POS VOID','ONLINE VOID','POS RETURN','WASTE',
+  'SPOILAGE','BREAKAGE','STAFF MEAL','COMPLIMENTARY','PRODUCTION','PRODUCTION CONSUMPTION','TRANSFER','STOCK COUNT',
+  'STOCK ADJUSTMENT','RETURN TO SUPPLIER','PORTIONING'];
+const isoOrNull = (v) => { if (!v) return null; const d = new Date(v); return isNaN(d) ? null : d.toISOString(); };
 
 // ── helpers ──────────────────────────────────────────────────────────────
 async function rpc(fn, args) {
@@ -161,6 +170,20 @@ export async function routeInventory(action, body, auth, req, res) {
       description: str(body.description, 500),
       updated_at: new Date().toISOString(),
     };
+    // purchase → stock conversion and stock policy (sent only by the new Items form)
+    if ('purchaseUnitId' in body) payload.purchase_unit_id = int(body.purchaseUnitId);
+    if ('purchaseToStock' in body) {
+      const c = num(body.purchaseToStock);
+      if (c !== null && !(c > 0)) return bad(res, 'Conversion must be more than 0');
+      payload.purchase_to_stock = c;
+    }
+    if (payload.purchase_unit_id && !payload.purchase_to_stock && payload.purchase_unit_id !== baseUnitId)
+      return bad(res, 'Say how many stock units are in one purchase unit');
+    if ('parLevel' in body) payload.par_level = num(body.parLevel);
+    if ('shelfLifeDays' in body) payload.shelf_life_days = int(body.shelfLifeDays);
+    if ('rotation' in body) payload.rotation = body.rotation === 'FIFO' ? 'FIFO' : 'FEFO';
+    if ('defaultSupplierId' in body) payload.default_supplier_id = int(body.defaultSupplierId);
+    if ('defaultLocationId' in body) payload.default_location_id = int(body.defaultLocationId);
 
     if (id) {
       const r = await supa('PATCH', 'inv_items', payload, { id: `eq.${id}` });
@@ -222,6 +245,8 @@ export async function routeInventory(action, body, auth, req, res) {
       yield_qty: num(body.yieldQty) || 1,
       yield_unit_id: int(body.yieldUnitId),
       yield_type: ['whole','weight','volume','count'].includes(body.yieldType) ? body.yieldType : 'count',
+      size_code: ['SHORT','MEDIUM','TALL','SLICE','WHOLE'].includes(String(body.sizeCode || '').toUpperCase())
+                 ? String(body.sizeCode).toUpperCase() : null,
       notes: str(body.notes, 500),
       updated_at: new Date().toISOString(),
     };
@@ -230,12 +255,18 @@ export async function routeInventory(action, body, auth, req, res) {
     let recipeId = id;
     if (recipeId) {
       const up = await supa('PATCH', 'inv_recipes', head, { id: `eq.${recipeId}` });
-      if (!up.ok) return boom(res, 'Failed to update recipe');
+      if (!up.ok) {
+        if (up.status === 409) return bad(res, 'This item already has a recipe for that size');
+        return boom(res, 'Failed to update recipe');
+      }
       const del = await supa('DELETE', 'inv_recipe_ingredients', null, { recipe_id: `eq.${recipeId}` });
       if (!del.ok) return boom(res, 'Failed to replace recipe lines');
     } else {
       const ins = await supa('POST', 'inv_recipes', head);
-      if (!ins.ok) return boom(res, 'Failed to create recipe');
+      if (!ins.ok) {
+        if (ins.status === 409) return bad(res, 'This item already has a recipe for that size');
+        return boom(res, 'Failed to create recipe');
+      }
       recipeId = (ins.data || [])[0]?.id;
       if (!recipeId) return boom(res, 'Recipe id not returned');
     }
@@ -496,7 +527,7 @@ export async function routeInventory(action, body, auth, req, res) {
     const reason = String(body.reason || '').toUpperCase();
     if (!itemId) return bad(res, 'Pick an item');
     if (!(qty > 0)) return bad(res, 'Enter a quantity');
-    if (!SPOIL_REASONS.includes(reason)) return bad(res, 'Pick a reason');
+    if (!WASTE_REASONS.includes(reason)) return bad(res, 'Pick a reason');
     const photo = str(body.photoUrl, 500);
     if (photo && !/^https:\/\//.test(photo)) return bad(res, 'Photo must be an uploaded image link');
     const r = await rpc('inv_record_spoilage', {
@@ -537,6 +568,110 @@ export async function routeInventory(action, body, auth, req, res) {
     const r = await rpc('inv_day_log', { p_date: d });
     if (!r.ok) return boom(res, 'Failed to load log');
     return res.status(200).json({ ok: true, date: d, rows: r.data || [] });
+  }
+
+  // ══ ENGINE: CURRENT STOCK · LEDGER · AUDIT · EXPLAIN · DASHBOARD ═══════════
+  // All read from the append-only ledger and batch balances (inv_* is the single source of truth).
+  if (action === 'invCurrentStock') {
+    const r = await rpc('inv_current_stock', {});
+    if (!r.ok) return boom(res, 'Failed to load stock');
+    return res.status(200).json({ ok: true, rows: r.data || [] });
+  }
+
+  if (action === 'invMovements') {
+    const type = body.type && MOVEMENT_TYPES.includes(body.type) ? body.type : null;
+    const r = await rpc('inv_movements', {
+      p_from: isoOrNull(body.from), p_to: isoOrNull(body.to), p_item_id: int(body.itemId), p_type: type,
+      p_limit: Math.min(Math.max(int(body.limit) || 200, 1), 1000), p_txn_id: null,
+      p_source_ref: str(body.sourceRef, 80) || null,
+    });
+    if (!r.ok) return boom(res, 'Failed to load movements');
+    return res.status(200).json({ ok: true, rows: r.data || [], types: MOVEMENT_TYPES });
+  }
+
+  if (action === 'invMovementDetail') {
+    const id = int(body.txnId);
+    if (!id) return bad(res, 'txnId required');
+    const r = await rpc('inv_movement_detail', { p_txn_id: id });
+    if (!r.ok) return boom(res, 'Failed to load movement');
+    if (!r.data) return res.status(404).json({ ok: false, error: 'Movement not found' });
+    return res.status(200).json({ ok: true, ...r.data });
+  }
+
+  if (action === 'invItemDetail') {
+    const id = int(body.itemId);
+    if (!id) return bad(res, 'itemId required');
+    const r = await rpc('inv_item_detail', { p_item_id: id });
+    if (!r.ok) return boom(res, 'Failed to load item');
+    if (!r.data) return res.status(404).json({ ok: false, error: 'Item not found' });
+    return res.status(200).json({ ok: true, ...r.data });
+  }
+
+  if (action === 'invExplainStock') {
+    const id = int(body.itemId);
+    if (!id) return bad(res, 'itemId required');
+    const r = await rpc('inv_explain_stock', { p_item_id: id, p_from: isoOrNull(body.from), p_to: isoOrNull(body.to) });
+    return rpcResult(res, r, 'Failed to explain stock');
+  }
+
+  if (action === 'invDashboardV2') {
+    const d = String(body.date || '').slice(0, 10);
+    const r = await rpc('inv_dashboard_v2', { p_date: /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null });
+    if (!r.ok) return boom(res, 'Failed to load dashboard');
+    return res.status(200).json({ ok: true, ...(r.data || {}), moduleEnabled: await moduleOn() });
+  }
+
+  if (action === 'invExceptions') {
+    const status = body.status === 'RESOLVED' ? 'RESOLVED' : 'OPEN';
+    const r = await supaFetch(`${SUPABASE_URL}/rest/v1/inv_stock_exceptions?status=eq.${status}` +
+      `&select=*,inv_items(name,item_code),inv_units(name)&order=created_at.desc&limit=200`);
+    if (!r.ok) return boom(res, 'Failed to load stock shortages');
+    return res.status(200).json({ ok: true, rows: r.data || [] });
+  }
+
+  if (action === 'invResolveException') {
+    const id = int(body.id);
+    if (!id) return bad(res, 'id required');
+    const r = await rpc('inv_resolve_exception', { p_id: id, p_note: str(body.note, 500), p_actor: actor });
+    return rpcResult(res, r, 'Could not resolve');
+  }
+
+  // Corrections are never edits: an equal and opposite movement linked to the original.
+  if (action === 'invReverseMovement') {
+    const id = int(body.txnId);
+    const reason = str(body.reason, 300);
+    if (!id) return bad(res, 'txnId required');
+    if (!reason) return bad(res, 'A reason is required');
+    const r = await rpc('inv_reverse_movement', { p_txn_id: id, p_reason: reason, p_actor: actor });
+    return rpcResult(res, r, 'Reversal failed');
+  }
+
+  if (action === 'invLedgerCheck') {
+    const r = await rpc('inv_ledger_check', {});
+    if (!r.ok) return boom(res, 'Failed to run ledger check');
+    return res.status(200).json({ ok: true, mismatches: r.data || [] });
+  }
+
+  // Add-ons layered on top of the size recipe (extra shot → +18 g coffee beans)
+  if (action === 'invListAddons') {
+    const r = await supaFetch(`${SUPABASE_URL}/rest/v1/menu_addons?select=addon_code,name,price,is_active,inv_item_id,inv_qty,inv_unit_id&order=name.asc`);
+    if (!r.ok) return boom(res, 'Failed to load add-ons');
+    return res.status(200).json({ ok: true, addons: r.data || [] });
+  }
+
+  if (action === 'invSaveAddonMap') {
+    const code = str(body.addonCode, 80);
+    if (!code) return bad(res, 'addonCode required');
+    const invItemId = int(body.invItemId);
+    const qty = num(body.invQty), unitId = int(body.invUnitId);
+    if (invItemId && !(qty > 0)) return bad(res, 'Enter how much the add-on uses');
+    if (invItemId && !unitId) return bad(res, 'Pick a unit');
+    // only the three inventory columns are touched; the add-on itself stays as the menu team set it
+    const r = await supa('PATCH', 'menu_addons',
+      { inv_item_id: invItemId || null, inv_qty: invItemId ? qty : null, inv_unit_id: invItemId ? unitId : null },
+      { addon_code: `eq.${code}` });
+    if (!r.ok) return boom(res, 'Failed to save add-on mapping');
+    return res.status(200).json({ ok: true, addonCode: code });
   }
 
   // ══ PURCHASES (itemized expense / immutable purchasing history) ═════════
