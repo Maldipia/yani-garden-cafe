@@ -673,10 +673,8 @@ async function stockControl() {
   }
   // sold-out flags only on tracked items, and they agree with the count sheet
   const menu = await call({ action: 'getMenu' });
-  const flagged = (menu.items || []).filter(i => 'stockLeft' in i);
-  check('menu stock flags are consistent', flagged.every(i => i.soldOut === (i.stockLeft <= 0)),
-        flagged.map(i => i.code + ':' + i.stockLeft).join(','));
-  if (!sheet.moduleEnabled) check('no stock flags while module is off', flagged.length === 0);
+  const flagged = (menu.items || []).filter(i => 'stockLeft' in i || 'soldOut' in i);
+  check('customer menu never shows stock numbers', flagged.length === 0, flagged.map(i => i.code).join(','));
 
   // ── inventory engine (read-only + validation; nothing is written) ──
   const cur = await call({ action: 'invCurrentStock', userId: OWNER });

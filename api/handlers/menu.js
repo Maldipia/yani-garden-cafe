@@ -157,20 +157,7 @@ export async function routeMenu(action, body, auth, req, res) {
           availableDays:  m.available_days || null,
         };
       });
-      // Stock Control: tracked ready-to-sell items show "N left" / Sold out.
-      // Best-effort — if the lookup fails the menu is served without it.
-      try {
-        const avR = await supaFetch(`${SUPABASE_URL}/rest/v1/rpc/inv_menu_availability`, { method: 'POST', body: '{}' });
-        if (avR.ok && Array.isArray(avR.data) && avR.data.length) {
-          const av = {};
-          avR.data.forEach(a => { av[a.menu_item_code] = parseInt(a.available, 10) || 0; });
-          items.forEach(it => {
-            if (av[it.code] === undefined) return;
-            it.stockLeft = av[it.code];
-            it.soldOut = av[it.code] <= 0;
-          });
-        }
-      } catch (e) { console.warn('getMenu availability skipped:', e.message); }
+      // Stock numbers are staff-only (owner decision 2026-09-30): the customer menu never shows counts or Sold out.
       menuCache.public = items;
       menuCache.tsPublic = now;
       menuCache.stampPublic = stampP || '';

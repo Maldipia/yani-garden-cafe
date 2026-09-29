@@ -113,31 +113,8 @@ export async function routeOrders(action, body, auth, req, res) {
         menuR.data.forEach(m => { menuMap[m.item_code] = m; });
       }
 
-      // Stock Control: refuse more than what's on display for tracked
-      // ready-to-sell items (Sold out / "only N left"). Staff orders are not
-      // blocked. If the lookup fails, the order goes through as before.
-      if (!isStaffOrder) {
-        try {
-          const avR = await supaFetch(`${SUPABASE_URL}/rest/v1/rpc/inv_menu_availability`, { method: 'POST', body: '{}' });
-          if (avR.ok && Array.isArray(avR.data) && avR.data.length) {
-            const byCode = {}, need = {}, have = {};
-            avR.data.forEach(a => { byCode[a.menu_item_code] = a; have[a.inv_item_id] = parseFloat(a.item_available) || 0; });
-            for (const it of items) {
-              const a = byCode[it.code]; if (!a) continue;
-              // a WHOLE pie/cake uses all its portions (1 whole = 8 slices), same as the deduction
-              const wm = String(it.size || '').toUpperCase() === 'WHOLE' ? (parseFloat(a.whole_mult) || 1) : 1;
-              const q = Math.max(1, parseInt(it.qty) || 1) * (parseFloat(a.portions_per_sale) || 1) * wm;
-              need[a.inv_item_id] = (need[a.inv_item_id] || 0) + q;
-              if (need[a.inv_item_id] > have[a.inv_item_id] + 1e-9) {
-                const nm = (menuMap[it.code] && menuMap[it.code].name) || it.code;
-                const left = Math.max(0, Math.floor((have[a.inv_item_id] - (need[a.inv_item_id] - q)) / (parseFloat(a.portions_per_sale) || 1)));
-                return res.status(409).json({ ok: false, soldOut: true, itemCode: it.code,
-                  error: left > 0 ? `Only ${left} left of "${nm}". Please adjust your cart.` : `"${nm}" is sold out. Please remove it from your cart.` });
-              }
-            }
-          }
-        } catch (e) { console.warn('stock check skipped:', e.message); }
-      }
+      // Stock never blocks a customer order (owner decision 2026-09-30). Stock is deducted on COMPLETED;
+      // if it runs short the sale still completes and a STOCK SHORTAGE is recorded for staff.
 
       // Fetch addon prices from DB — never trust client-sent addon prices
       const addonR2 =await supaFetch(`${SUPABASE_URL}/rest/v1/menu_addons?is_active=eq.true&select=addon_code,price`);
