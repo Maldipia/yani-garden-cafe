@@ -47,14 +47,14 @@ getCustomers
 getDocsCardPayments
 getDocsLedger
 getDocsLive
+getEventInquiries
+getEventPackages
 getHRDocuments
 getHRIncidents
 getHRLeave
 getHRLoans
 getHRPerformance
 getHRProfile
-getEventInquiries
-getEventPackages
 getHRStaff
 getHRTimeLogs
 getInventory
@@ -88,6 +88,8 @@ hrGetClockStatus
 hrGetDailyHours
 hrGetHolidays
 hrLookupStaff
+hrNightDiffDecide
+hrNightDiffReview
 hrRotateQrToken
 hrVerifyPin
 linkReservationTable

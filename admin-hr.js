@@ -962,11 +962,12 @@ async function renderPayrollSection(s, tc){
     + `${esc(c.cutoff_name)} · ${c.payroll_status}</option>`).join('');
 
   const money = v => hrPeso(parseFloat(v||0));
-  let totHrs=0, totOt=0, totPay=0, totUt=0, totNd=0, totNdPay=0;
+  let totHrs=0, totOt=0, totPay=0, totUt=0, totNd=0, totNdPay=0, totNdPaid=0;
   const dayRows = (br.days||[]).length ? (br.days||[]).map(function(x){
     totHrs += parseFloat(x.regular_hours||0);
     totOt  += parseFloat(x.ot_hours||0);
     totPay += parseFloat(x.day_pay||0);
+    totNdPaid += parseFloat(x.nd_paid_hours||0);
     var brk = x.break_detail ? (x.break_detail + (x.break_count>1?` (${Math.round(x.break_mins)}m)`:''))
             : (x.break_mins>0 ? Math.round(x.break_mins)+'m' : '—');
     var ut = parseFloat(x.undertime_hours||0), ot = parseFloat(x.ot_hours||0);
@@ -984,7 +985,7 @@ async function renderPayrollSection(s, tc){
       <td style="padding:5px 7px;text-align:right">${parseFloat(x.regular_hours||0).toFixed(2)}</td>
       <td style="padding:5px 7px;text-align:right${ot>0?';color:#1d4ed8;font-weight:700':''}">${ot>0?ot.toFixed(2):'—'}</td>
       <td style="padding:5px 7px;text-align:right${ut>0?';color:#b45309;font-weight:700':''}">${ut>0?ut.toFixed(2):'—'}</td>
-      <td style="padding:5px 7px;text-align:right${nd>0?';color:#6d28d9;font-weight:700':''}" title="${nd>0?'Worked 10:00 PM–6:00 AM · suggested '+hrPeso(parseFloat(x.night_diff_suggested||0)):''}">${nd>0?nd.toFixed(2):'—'}</td>
+      <td style="padding:5px 7px;text-align:right${nd>0?(parseFloat(x.nd_paid_hours||0)>0?';color:#6d28d9;font-weight:700':';color:#9ca3af'):''}" title="${nd>0?(parseFloat(x.nd_paid_hours||0)>0?'Night differential approved · +10% on '+nd.toFixed(2)+' h':'Worked 10:00 PM–6:00 AM · not yet approved · worth '+hrPeso(parseFloat(x.night_diff_suggested||0))):''}">${nd>0?nd.toFixed(2)+(parseFloat(x.nd_paid_hours||0)>0?' ✓':''):'—'}</td>
       <td style="padding:5px 7px;text-align:right;color:#6b7280">${hrPeso(parseFloat(x.hourly_rate||0))}</td>
       <td style="padding:5px 7px;text-align:right;font-weight:700">${hrPeso(parseFloat(x.day_pay||0))}</td>
       <td style="padding:5px 7px;font-size:.6rem;color:#6b7280">${esc(x.sources||'—')}</td>
@@ -1022,9 +1023,10 @@ async function renderPayrollSection(s, tc){
           <div class="hr-pay-amount">${money(mine.gross_pay)}</div>
           <div class="hr-pay-sub">${parseFloat(mine.approved_regular_hours||0)} reg hrs @ ${money(mine.hourly_rate)}/hr</div>
           <div class="hr-pay-sub" style="margin-top:3px">
-            ${parseFloat(mine.approved_ot_hours||0)>0?`<span style="color:#1d4ed8;font-weight:700">OT ${parseFloat(mine.approved_ot_hours).toFixed(2)} hrs</span>`:''}
+            ${parseFloat(mine.approved_ot_hours||0)>0?`<span style="color:#1d4ed8;font-weight:700">OT ${parseFloat(mine.approved_ot_hours).toFixed(2)} hrs</span> `:''}
+            ${parseFloat(mine.night_diff_hours||0)>0?`<span style="color:#6d28d9;font-weight:700">🌙 ND ${parseFloat(mine.night_diff_hours).toFixed(2)} hrs = ${money(mine.night_diff_pay)}</span> `:''}
             ${parseFloat(mine.undertime_minutes||0)>0?`<span style="color:#b45309;font-weight:700">⚠ Undertime ${(parseFloat(mine.undertime_minutes)/60).toFixed(2)} hrs</span>`:''}
-            ${(parseFloat(mine.approved_ot_hours||0)===0&&parseFloat(mine.undertime_minutes||0)===0)?'No OT or undertime':''}
+            ${(parseFloat(mine.approved_ot_hours||0)===0&&parseFloat(mine.night_diff_hours||0)===0&&parseFloat(mine.undertime_minutes||0)===0)?'No OT, night differential or undertime':''}
           </div></div>
         <div class="hr-pay-card"><div class="hr-pay-label">NET PAY</div>
           <div class="hr-pay-amount" style="color:#15803d">${money(mine.net_pay)}</div>
@@ -1087,13 +1089,17 @@ async function renderPayrollSection(s, tc){
         <button onclick="decideOvertime(true)" style="font-size:.74rem;font-weight:700;background:#1d4ed8;color:#fff;border:none;border-radius:7px;padding:7px 13px;cursor:pointer">Approve overtime</button>
         <button onclick="decideOvertime(false)" style="font-size:.74rem;font-weight:700;background:#fff;color:#b91c1c;border:1.5px solid #fecaca;border-radius:7px;padding:7px 13px;margin-left:6px;cursor:pointer">Reject</button>
       </div>`:''}
-      ${(totNd>0 && !(_hrSelected||{}).art82_exempt && parseFloat((mine||{}).night_diff_pay||0)===0) ? `
+      ${(mine && totNd - totNdPaid > 0.005 && !(_hrSelected||{}).art82_exempt) ? `
       <div style="background:#f5f3ff;border:1.5px solid #ddd6fe;border-radius:8px;padding:10px 12px;margin-bottom:12px">
-        <div style="font-size:.78rem;font-weight:700;color:#6d28d9">🌙 ${totNd.toFixed(2)} hrs worked between 10:00 PM and 6:00 AM</div>
-        <div style="font-size:.68rem;color:#475569;margin-top:3px">
-          Night differential is +10% of the hourly rate for these hours — suggested <b>${money(totNdPay)}</b>.
-          Enter it under Tips / premiums / gov't to include it in pay.
+        <div style="font-size:.78rem;font-weight:700;color:#6d28d9">
+          🌙 ${(totNd-totNdPaid).toFixed(2)} hrs worked between 10:00 PM and 6:00 AM but not approved
         </div>
+        <div style="font-size:.68rem;color:#475569;margin:3px 0 8px">
+          Worked ${totNd.toFixed(2)} hrs · approved ${totNdPaid.toFixed(2)} hrs.
+          Night differential is +10% of the hourly rate — worth ${money((totNd-totNdPaid)*parseFloat(mine.hourly_rate||0)*0.10)} if approved.
+        </div>
+        <button onclick="decideNightDiff(true)" style="font-size:.74rem;font-weight:700;background:#6d28d9;color:#fff;border:none;border-radius:7px;padding:7px 13px;cursor:pointer">Approve night differential</button>
+        <button onclick="decideNightDiff(false)" style="font-size:.74rem;font-weight:700;background:#fff;color:#b91c1c;border:1.5px solid #fecaca;border-radius:7px;padding:7px 13px;margin-left:6px;cursor:pointer">Reject</button>
       </div>`:''}
       ${mine?`<button onclick="manualPayDialog()" style="margin-top:10px;margin-left:8px;font-size:.78rem;font-weight:700;background:#fff;color:#1f3d2b;border:1.5px solid #d8ddd5;border-radius:8px;padding:8px 14px;cursor:pointer">✎ Tips / premiums / gov't</button>`:''}
       ${mine?`<button onclick="printPayslip()" style="margin-top:10px;margin-left:8px;font-size:.78rem;font-weight:700;background:#1f3d2b;color:#fff;border:none;border-radius:8px;padding:9px 16px;cursor:pointer">🧾 Print payslip</button>`:''}
@@ -1255,7 +1261,7 @@ async function printPayslip(){
       <td class="r">${N(row.approved_ot_hours).toFixed(2)}</td>
       <td class="r">${totUt>0?totUt.toFixed(2):'-'}</td>
       <td class="r">${totNd>0?totNd.toFixed(2):'-'}</td>
-      <td class="r">${P(row.regular_pay+row.overtime_pay)}</td></tr></tfoot>
+      <td class="r">${P(N(row.regular_pay)+N(row.overtime_pay)+N(row.night_diff_pay))}</td></tr></tfoot>
   </table>
 
   <div class="note">
@@ -1268,7 +1274,7 @@ async function printPayslip(){
     ${totNd>0
       ? (N(row.night_diff_pay)>0
           ? `<br><b>ND</b> = hours worked between 10:00 PM and 6:00 AM (${totNd.toFixed(2)} hrs this period), paid at +10% of the hourly rate.`
-          : `<br><b>ND</b> = ${totNd.toFixed(2)} hrs worked between 10:00 PM and 6:00 AM. Night differential of ${P(totNdPay)} has NOT been applied to this payslip.`)
+          : `<br><b>ND</b> = ${totNd.toFixed(2)} hrs worked between 10:00 PM and 6:00 AM. Night differential (${P(totNdPay)}) was not approved for this cut-off and is not included.`)
       : '<br>No hours were worked between 10:00 PM and 6:00 AM this period.'}
     ${govt>0?'':'<br>Government contributions (SSS, PhilHealth, Pag-IBIG) are not included in this computation.'}
     <br>Please review and raise any discrepancy with management within five (5) days of receipt.
@@ -1302,6 +1308,48 @@ async function decideOvertime(approve){
   if(!r.ok){ showToast(r.error||'Failed','error'); return; }
   showToast(approve?'Overtime approved and payroll recomputed ✅':'Overtime rejected','success');
   await loadHRTab(_hrSelected,'payroll');
+}
+
+async function decideNightDiff(approve){
+  const s=_hrSelected; if(!s||!_hrCutoffId) return;
+  const note = prompt(approve ? 'Reason for approving this night differential (optional):'
+                              : 'Reason for rejecting this night differential:') ;
+  if(note===null) return;
+  if(!approve && !note.trim()){ showToast('A reason is required to reject','error'); return; }
+  const r=await api('hrNightDiffDecide',{userId:currentUser?.userId,staffId:s.id,
+    cutoffId:_hrCutoffId, approve:approve, note:note});
+  if(!r.ok){ showToast(r.error||'Failed','error'); return; }
+  showToast(approve?'Night differential approved and payroll recomputed ✅':'Night differential rejected','success');
+  await loadHRTab(_hrSelected,'payroll');
+}
+
+// Tips / premiums / gov't. Night differential is deliberately NOT here any
+// more — it is approved per cut-off like overtime (decideNightDiff).
+function manualPayDialog(){
+  const s=_hrSelected; if(!s||!_hrCutoffId) return;
+  const row=_hrPayRow||{};
+  const f=(id,label,val,hint)=>`<div class="hr-edit-row"><label class="hr-edit-label">${label}</label>
+      <input class="hr-edit-input" id="${id}" type="number" step="0.01" min="0" value="${parseFloat(val||0)||''}" placeholder="0.00">
+      ${hint?`<div style="font-size:.62rem;color:#8a7a6a;margin-top:2px">${hint}</div>`:''}</div>`;
+  hrModal('Tips / premiums / gov\'t — this cut-off', `
+    ${f('mpTips','Tips / service charge share (₱)',row.tips_share,'RA 11360 — 85% of collected service charge, shared among staff')}
+    ${f('mpHoliday','Holiday premium (₱)',row.holiday_pay,'Regular holiday worked = +100% of the day; special day worked = +30%')}
+    ${f('mpRest','Rest-day premium (₱)',row.rest_day_pay,'Work on the scheduled rest day = +30%')}
+    ${f('mpAllow','Allowances (₱)',row.allowances,'')}
+    ${f('mpInc','Incentives (₱)',row.incentives,'')}
+    ${f('mpGovt','Government contributions to deduct (₱)',row.government_deduction,'SSS / PhilHealth / Pag-IBIG employee share')}
+    <div class="hr-edit-row"><label class="hr-edit-label">Reason / note</label>
+      <input class="hr-edit-input" id="mpReason" type="text" placeholder="e.g. Sept 1–15 service charge share"></div>
+  `, async function(){
+    const v=id=>document.getElementById(id).value;
+    const r=await api('hrSavePayrollManual',{userId:currentUser?.userId,staffId:s.id,cutoffId:_hrCutoffId,
+      tipsShare:v('mpTips'), holidayPay:v('mpHoliday'), restDayPay:v('mpRest'),
+      allowances:v('mpAllow'), incentives:v('mpInc'), governmentDeduction:v('mpGovt'),
+      reason:v('mpReason')});
+    if(!r.ok){ showToast(r.error||'Could not save','error'); return false; }
+    showToast('Saved and payroll recomputed ✅','success');
+    await loadHRTab(_hrSelected,'payroll');
+  });
 }
 
 async function recomputePayroll(){

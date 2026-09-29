@@ -225,10 +225,26 @@ async function payrollMath() {
       const sumPay = n((daily.days || []).reduce((a, d) => a + parseFloat(d.day_pay || 0), 0));
       check(`${who}: daily hours match header`,
             sumReg === n(row.approved_regular_hours), `${sumReg} vs ${n(row.approved_regular_hours)}`);
-      check(`${who}: daily pay matches basic + OT`,
-            sumPay === n(n(row.regular_pay) + n(row.overtime_pay)),
-            `${sumPay} vs ${n(n(row.regular_pay) + n(row.overtime_pay))}`);
+      check(`${who}: daily pay matches basic + OT + night diff`,
+            sumPay === n(n(row.regular_pay) + n(row.overtime_pay) + n(row.night_diff_pay)),
+            `${sumPay} vs ${n(n(row.regular_pay) + n(row.overtime_pay) + n(row.night_diff_pay))}`);
+      const sumNdPaid = n((daily.days || []).reduce((a, d) => a + parseFloat(d.nd_paid_hours || 0), 0));
+      check(`${who}: night diff paid only on approved hours`,
+            sumNdPaid === n(row.night_diff_hours) &&
+            n(row.night_diff_pay) === n(n(row.night_diff_hours) * n(row.hourly_rate) * 0.10),
+            `${sumNdPaid} h vs ${row.night_diff_hours} h · ${row.night_diff_pay}`);
     }
+  }
+
+  // Night differential review is owner-only and mirrors the OT review shape.
+  const staffRow = (pay.rows || [])[0];
+  if (staffRow) {
+    const rev = await call({ action:'hrNightDiffReview', userId: OWNER, cutoffId: cut.id, staffId: staffRow.staff_id });
+    check('night diff review readable by owner', rev.ok === true && Array.isArray(rev.rows), rev.error);
+    check('night diff review rows carry hours + status',
+          (rev.rows || []).every(r => parseFloat(r.night_hours) > 0 && ['UNREVIEWED','APPROVED','REJECTED','PENDING'].includes(r.status)));
+    const anon = await call({ action:'hrNightDiffDecide', cutoffId: cut.id, staffId: staffRow.staff_id, approve: true });
+    check('night diff decide refuses anonymous', anon.ok === false);
   }
 }
 

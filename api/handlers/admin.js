@@ -80,23 +80,51 @@ export async function routeAdmin(action, body, auth, req, res) {
     return res.status(200).json({ok:true, days:r.data});
   }
 
+  // ── Night differential: same review/decide shape as overtime ────────────
+  if (action === 'hrNightDiffReview') {
+    const authNr = await checkAuth(['OWNER']);
+    if (!authNr.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
+    if (!body.cutoffId || !body.staffId) return res.status(400).json({ok:false,error:'cutoffId + staffId required'});
+    const r = await supaFetch(SUPABASE_URL+'/rest/v1/rpc/hr_night_diff_review',
+      {method:'POST',body:JSON.stringify({p_cutoff_id:body.cutoffId,p_staff_id:body.staffId})});
+    return res.status(200).json({ok:r.ok, rows: Array.isArray(r.data)?r.data:[]});
+  }
+
+  if (action === 'hrNightDiffDecide') {
+    const authNd = await checkAuth(['OWNER']);
+    if (!authNd.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
+    if (!body.cutoffId || !body.staffId) return res.status(400).json({ok:false,error:'cutoffId + staffId required'});
+    const who = authNd.userId || body.userId || 'UNKNOWN';
+    const r = await supaFetch(SUPABASE_URL+'/rest/v1/rpc/hr_night_diff_decide',
+      {method:'POST',body:JSON.stringify({p_cutoff_id:body.cutoffId,p_staff_id:body.staffId,
+        p_approve: body.approve !== false, p_actor: who, p_note: body.note || null})});
+    if (!r.ok) return res.status(500).json({ok:false,error:'Night differential decision failed'});
+    await supaFetch(SUPABASE_URL+'/rest/v1/rpc/hr_compute_payroll',
+      {method:'POST',body:JSON.stringify({p_cutoff_id:body.cutoffId,p_actor:who})});
+    await hrAudit({ action: body.approve!==false ? 'NIGHT_DIFF_APPROVED' : 'NIGHT_DIFF_REJECTED',
+      module:'PAYROLL', recordId: body.staffId, next:{days:r.data}, reason: body.note||null,
+      actorCode: who, role: authNd.role, req });
+    return res.status(200).json({ok:true, days:r.data});
+  }
+
   if (action === 'hrSavePayrollManual') {
     const authM = await checkAuth(['OWNER']);
     if (!authM.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     if (!body.cutoffId || !body.staffId) return res.status(400).json({ok:false,error:'cutoffId + staffId required'});
     const num = v => (v===''||v==null||isNaN(parseFloat(v))) ? 0 : Math.round(parseFloat(v)*100)/100;
+    // night_diff_pay is no longer typed here — it comes from hrNightDiffDecide,
+    // exactly like overtime, and hr_compute_payroll overwrites it on every run.
     const patch = {
       tips_share:          num(body.tipsShare),
       holiday_pay:         num(body.holidayPay),
       rest_day_pay:        num(body.restDayPay),
-      night_diff_pay:      num(body.nightDiffPay),
       allowances:          num(body.allowances),
       incentives:          num(body.incentives),
       government_deduction:num(body.governmentDeduction),
       updated_at: new Date().toISOString(),
     };
     const before = await supaFetch(SUPABASE_URL+'/rest/v1/hr_payroll_details?cutoff_id=eq.'+body.cutoffId+
-      '&staff_id=eq.'+body.staffId+'&select=tips_share,holiday_pay,rest_day_pay,night_diff_pay,allowances,incentives,government_deduction&limit=1');
+      '&staff_id=eq.'+body.staffId+'&select=tips_share,holiday_pay,rest_day_pay,allowances,incentives,government_deduction&limit=1');
     const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_payroll_details?cutoff_id=eq.'+body.cutoffId+
       '&staff_id=eq.'+body.staffId, {method:'PATCH', body:JSON.stringify(patch)});
     if (!r.ok) return res.status(500).json({ok:false,error:'Could not save'});
