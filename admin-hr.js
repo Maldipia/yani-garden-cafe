@@ -1931,6 +1931,14 @@ function hf(label,value){return`<div class="hr-field"><div class="hr-field-label
 // Row badges for the staff list. Shows what needs DOING (missing PIN or QR)
 // and where the person is right now — never their pay, which was previously
 // printed next to every name on a screen visible from the counter.
+// "6h 33m" worked so far this shift. While clocked in, keeps counting from when the list was loaded.
+function hrWorked(s, running){
+  var secs=Number(s.worked_seconds||0);
+  if(running && s.worked_at){ var d=(Date.now()-new Date(s.worked_at).getTime())/1000; if(d>0 && d<6*3600) secs+=d; }
+  if(!(secs>0)) return '';
+  var m=Math.floor(secs/60), h=Math.floor(m/60);
+  return ' · '+(h?h+'h ':'')+(m%60)+'m';
+}
 function hrRowBadges(s){
   var out=[];
   if(s.employment_status==='ACTIVE'){
@@ -1942,8 +1950,8 @@ function hrRowBadges(s){
     // scanning on the kiosk works without one.
     if(!s.has_pin) out.push(['No PIN','#f1f5f9','#64748b','No attendance PIN. Scanning still works; typing the staff code does not.']);
     if(s.art82_exempt) out.push(['Art.82','#f1f5f9','#475569','Managerial / field personnel — no OT, night differential, holiday pay or SIL entitlement']);
-    if(s.clock_state==='IN')    out.push(['In','#dcfce7','#15803d','Clocked in']);
-    if(s.clock_state==='BREAK') out.push(['Break','#ffedd5','#c2410c','On break']);
+    if(s.clock_state==='IN')    out.push(['In'+hrWorked(s,true),'#dcfce7','#15803d','Clocked in — hours worked so far this shift (breaks not counted)']);
+    if(s.clock_state==='BREAK') out.push(['Break'+hrWorked(s,false),'#ffedd5','#c2410c','On break — hours worked so far this shift']);
   }
   if(!out.length) return '';
   return ' ' + out.map(function(b){

@@ -298,14 +298,17 @@ export async function routeAdmin(action, body, auth, req, res) {
       ]);
       const pinBy = {};
       (Array.isArray(rLogin.data) ? rLogin.data : []).forEach(l => { if (l.pin_hash) pinBy[l.staff_id] = true; });
-      const stateBy = {};
-      (Array.isArray(rState.data) ? rState.data : []).forEach(r => { stateBy[r.staff_id] = r.state; });
+      const stateBy = {}, secsBy = {};
+      (Array.isArray(rState.data) ? rState.data : []).forEach(r => { stateBy[r.staff_id] = r.state; secsBy[r.staff_id] = Number(r.worked_seconds || 0); });
       const STATE = { IN:'IN', ON_BREAK:'BREAK', ON_BROKEN:'BREAK', OUT:'OUT' };
 
       staffRows.forEach(s => {
         s.has_pin    = !!pinBy[s.id];
         s.has_qr     = !!(s.qr_token && String(s.qr_token).trim());
         s.clock_state = STATE[stateBy[s.id]] || 'OUT';
+        // hours worked so far this shift (breaks excluded), for the In / Break badge
+        s.worked_seconds = s.clock_state === 'OUT' ? 0 : (secsBy[s.id] || 0);
+        s.worked_at = new Date().toISOString();
       });
       return res.status(200).json({ ok:true, staff: staffRows });
     } catch(hrErr) {
