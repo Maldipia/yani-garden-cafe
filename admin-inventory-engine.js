@@ -81,7 +81,7 @@ async function _ieLoadTab(t){
   else if(t==='waste'){ var s3=await api('invCurrentStock',{}); _ieStock=(s3&&s3.ok)?(s3.rows||[]):[];
     var w=await api('invMovements',{limit:300,from:new Date(Date.now()-7*864e5).toISOString()});
     _ieWasteRecent=((w&&w.ok)?(w.rows||[]):[]).filter(function(m){ return ['WASTE','SPOILAGE','BREAKAGE','STAFF MEAL','COMPLIMENTARY'].indexOf(m.movement_type)>=0; }); }
-  else if(t==='menu'){ await _ieLoadMenu(); }
+  else if(t==='menu'){ await _ieLoadMenu(); _ieMenuAutoRefresh(); }
   else if(t==='recipes'){ await _ieLoadAllItems(); var a=await api('invListAddons',{}); _ieAddons=(a&&a.ok)?(a.addons||[]):[]; }
   if(_invTab===t) _invRenderTab();
 }
@@ -565,11 +565,12 @@ function _ieMenuRowHtml(x){
     if(_invNum(x.sold)) today.push('<span style="color:#1d4ed8">'+_ieQ(x.sold)+' sold</span>');
     if(_invNum(x.wasted)) today.push('<span style="color:#b91c1c">'+_ieQ(x.wasted)+' wasted</span>');
     if(_invNum(x.fixed)) today.push('<span style="color:#c2410c">'+_ieSigned(x.fixed)+' fixed</span>');
+    if(_invNum(x.reserved)) today.push('<b style="color:#b45309">'+_ieQ(x.reserved)+' on open orders</b>');
     return '<div class="ms-row">'
       +'<div class="ms-name" onclick="_ieOpenItem('+x.item_id+',\'history\')"><div class="ms-t">'+_invEsc(x.name)+(x.open_shortages>0?' <span title="sold more than recorded" style="color:#b91c1c">⚠️</span>':'')+'</div>'
       +'<div class="ms-s">'+(today.length?'Today: '+today.join(' · '):'No movement today')+(x.next_expiry?' · exp '+_invDate(x.next_expiry):'')+'</div>'
       +'<div class="ms-s">'+_ieMenuCostLine(x)+'</div></div>'
-      +'<div class="ms-av" style="color:'+col+'">'+_ieQ(av)+'<small>'+(av<=0?'SOLD OUT':_invEsc(x.unit)+' left')+'</small></div>'
+      +'<div class="ms-av" style="color:'+col+'">'+_ieQ(av)+'<small>'+(av<=0?'SOLD OUT':_invEsc(x.unit)+' left')+'</small>'+(_invNum(x.reserved)?'<small style="color:#b45309">'+_ieQ(x.physical)+' on shelf</small>':'')+'</div>'
       +'<div class="ms-act">'+_ieBtn('+ Add','_ieMenuAddForm('+x.item_id+')',true,'padding:6px 10px')
       +_ieBtn('Waste','_ieMenuWasteForm('+x.item_id+')',false,'padding:6px 10px;border-color:#b91c1c;color:#b91c1c')
       +_ieBtn('Fix','_ieMenuFixForm('+x.item_id+')',false,'padding:6px 10px')+'</div></div>';
@@ -665,6 +666,18 @@ function _ieMenuHtml(){
   h+='<div style="margin-top:14px">'+_ieBox('🧾 Today\'s menu movements', _ieMenuMoves.length? _ieMenuMoves.slice(0,60).map(_ieMoveLine).join('') : _ieEmpty('No movement yet today.'), _ieBtn('All history','_invSetTab(\'moves\')'))+'</div>';
   return h;
 }
+var _ieMenuTimer=null;
+function _ieMenuAutoRefresh(){
+  if(_ieMenuTimer) return;
+  _ieMenuTimer=setInterval(async function(){
+    var v=document.getElementById('inventoryView');
+    if(_invTab!=='menu' || !v || v.offsetParent===null){ clearInterval(_ieMenuTimer); _ieMenuTimer=null; return; }
+    if(document.getElementById('ieModal')) return;                        // a form is open
+    var a=document.activeElement; if(a && a.tagName==='INPUT') return;      // someone is typing
+    if(Object.keys(_ieMenuNew).some(function(k){ return _invNum(_ieMenuNew[k])>0; })) return;
+    await _ieLoadMenu(); if(_invTab==='menu') _invRenderTab();
+  }, 30000);
+}
 function _ieMenuRerender(){ var q=document.getElementById('ieMenuQ'); var pos=q?q.selectionStart:null; _invRenderTab(); var q2=document.getElementById('ieMenuQ'); if(q2&&pos!==null){ q2.focus(); q2.setSelectionRange(pos,pos); } }
 function _ieMenuNewCount(){ var b=document.getElementById('ieMenuStart'), bar=document.getElementById('ieMenuBar'); if(!b) return; var n=Object.keys(_ieMenuNew).filter(function(k){ return _invNum(_ieMenuNew[k])>0; }).length; b.textContent='Start counting '+n+' item'+(n!==1?'s':''); if(bar) bar.style.display=n?'block':'none'; }
 async function _ieMenuStartAll(){
@@ -679,6 +692,7 @@ async function _ieMenuStartAll(){
   showToast(ok+' item'+(ok!==1?'s':'')+' now tracked'+(fail.length?' · '+fail.length+' failed: '+fail[0]:''), fail.length?'error':'success');
   await _ieLoadMenu(); _invRenderTab();
 }
+function _ieShelf(x){ return x.physical!=null ? _invNum(x.physical) : _invNum(x.available); }
 function _ieMenuRow(id){ return _ieMenu.filter(function(x){ return x.kind==='TRACKED' && x.item_id===id; })[0]; }
 function _ieMenuAddForm(id){
   var x=_ieMenuRow(id); if(!x) return;
@@ -720,7 +734,7 @@ async function _ieMenuAdd(id){
 function _ieMenuWasteForm(id){
   var x=_ieMenuRow(id); if(!x) return; _ieWsReason=''; _ieWsPhoto='';
   _ieModal('<div style="font-size:1rem;font-weight:800;color:#b91c1c;margin-right:34px">Waste: '+_invEsc(x.name)+'</div>'
-    +'<div style="font-size:.72rem;color:var(--timber)">Available: <b>'+_ieQ(x.available)+' '+_invEsc(x.unit)+'</b></div>'
+    +'<div style="font-size:.72rem;color:var(--timber)">On the shelf: <b>'+_ieQ(_ieShelf(x))+' '+_invEsc(x.unit)+'</b></div>'
     +'<label class="ie-lbl">How many?</label><input id="ieMwQty" type="number" min="0" step="any" inputmode="decimal" class="ie-in">'
     +'<label class="ie-lbl">Why?</label><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">'
     +IE_WASTE_REASONS.map(function(z){ return '<button class="ie-chip" onclick="_ieWsReason=\''+z[0]+'\';this.parentNode.querySelectorAll(\'.ie-chip\').forEach(function(b){b.classList.remove(\'on\')});this.classList.add(\'on\')">'+z[1]+'</button>'; }).join('')+'</div>'
@@ -733,7 +747,7 @@ async function _ieMenuWaste(id){
   var x=_ieMenuRow(id), b=document.getElementById('ieMwBtn'); if(b&&b.disabled) return;
   var q=parseFloat((document.getElementById('ieMwQty')||{}).value);
   if(!(q>0)){ showToast('Enter how many','error'); return; }
-  if(q>_invNum(x.available)+1e-9){ showToast('Only '+_ieQ(x.available)+' available','error'); return; }
+  if(q>_ieShelf(x)+1e-9){ showToast('Only '+_ieQ(_ieShelf(x))+' on the shelf','error'); return; }
   if(!_ieWsReason){ showToast('Pick why','error'); return; }
   if(b){ b.disabled=true; b.textContent='Saving…'; }
   var r=await api('invRecordSpoilage',{itemId:id,qty:q,reason:_ieWsReason,notes:(document.getElementById('ieMwNote')||{}).value||'',photoUrl:_ieWsPhoto||null});
@@ -743,7 +757,7 @@ async function _ieMenuWaste(id){
 function _ieMenuFixForm(id){
   var x=_ieMenuRow(id); if(!x) return;
   _ieModal('<div style="font-size:1rem;font-weight:800;color:var(--forest-deep);margin-right:34px">Fix count: '+_invEsc(x.name)+'</div>'
-    +'<div style="font-size:.72rem;color:var(--timber)">The system says <b>'+_ieQ(x.available)+' '+_invEsc(x.unit)+'</b>. Enter what is really there — the difference is recorded with your name.</div>'
+    +'<div style="font-size:.72rem;color:var(--timber)">The system says <b>'+_ieQ(_ieShelf(x))+' '+_invEsc(x.unit)+' on the shelf</b>'+(_invNum(x.reserved)?' (including '+_ieQ(x.reserved)+' for orders not served yet)':'')+'. Enter what is really there — the difference is recorded with your name.</div>'
     +'<label class="ie-lbl">Really there</label><input id="ieMfQty" type="number" min="0" step="any" inputmode="decimal" class="ie-in" oninput="_ieMfPrev('+id+')">'
     +'<div id="ieMfPrev" style="margin-top:6px;font-size:.8rem;font-weight:800"></div>'
     +'<label class="ie-lbl">Note</label><input id="ieMfNote" class="ie-in" placeholder="e.g. 2 given to staff, not recorded">'
@@ -753,7 +767,7 @@ function _ieMenuFixForm(id){
 function _ieMfPrev(id){
   var x=_ieMenuRow(id), v=(document.getElementById('ieMfQty')||{}).value, p=document.getElementById('ieMfPrev'); if(!p) return;
   if(v===''){ p.textContent=''; return; }
-  var d=parseFloat(v)-_invNum(x.available);
+  var d=parseFloat(v)-_ieShelf(x);
   p.innerHTML = Math.abs(d)<1e-9 ? '<span style="color:#15803d">Matches ✓</span>' : '<span style="color:'+(d<0?'#b91c1c':'#15803d')+'">'+(d<0?'Missing ':'Extra ')+_ieQ(Math.abs(d))+' '+_invEsc(x.unit)+'</span>';
 }
 async function _ieMenuFix(id){
