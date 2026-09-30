@@ -637,13 +637,14 @@ function _ieMenuHtml(){
   var q=_ieMenuQ.trim().toLowerCase(), cats=_ieMenuCats();
   if(_ieMenuCat!=='ALL' && cats.indexOf(_ieMenuCat)<0) _ieMenuCat='ALL';
   var h='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">'
-    +'<input id="ieMenuQ" value="'+_invEsc(_ieMenuQ)+'" oninput="_ieMenuQ=this.value;_ieMenuRerender()" placeholder="🔍 Search menu…" class="ie-in" style="flex:1;min-width:200px;margin:0;padding:8px 10px">'
+    +'<input id="ieMenuQ" value="'+_invEsc(_ieMenuQ)+'" oninput="_ieMenuQ=this.value;_ieMenuRerender()" placeholder="🔍 Search all menu items…" class="ie-in" style="flex:1;min-width:200px;margin:0;padding:8px 10px">'
+    +(q?'<button onclick="_ieMenuQ=\'\';_invRenderTab()" aria-label="Clear search" style="border:1.5px solid var(--mist);background:#fff;border-radius:8px;padding:7px 11px;cursor:pointer;font-weight:800;color:var(--forest)">✕</button>':'')
     +'<div style="font-size:.72rem;color:var(--timber)">'+_invDateLong(_invManilaToday())+' · sales deduct automatically</div></div>';
-  h+='<div class="ms-chips"><button class="ie-chip'+(_ieMenuCat==='ALL'?' on':'')+'" onclick="_ieMenuCat=\'ALL\';_invRenderTab()">All</button>'
-    +cats.map(function(c,i){ return '<button class="ie-chip'+(_ieMenuCat===c?' on':'')+'" onclick="_ieMenuCat=_ieMenuCats()['+i+'];_invRenderTab()">'+_invEsc(c)+'</button>'; }).join('')+'</div>';
+  h+='<div class="ms-chips"><button class="ie-chip'+(!q&&_ieMenuCat==='ALL'?' on':'')+'" onclick="_ieMenuQ=\'\';_ieMenuCat=\'ALL\';_invRenderTab()">All</button>'
+    +cats.map(function(c,i){ return '<button class="ie-chip'+(!q&&_ieMenuCat===c?' on':'')+'" onclick="_ieMenuQ=\'\';_ieMenuCat=_ieMenuCats()['+i+'];_invRenderTab()">'+_invEsc(c)+'</button>'; }).join('')+'</div>';
   var any=false;
   cats.forEach(function(c){
-    if(_ieMenuCat!=='ALL' && _ieMenuCat!==c) return;
+    if(!q && _ieMenuCat!=='ALL' && _ieMenuCat!==c) return;   // a search looks through every category
     var rows=_ieMenu.filter(function(x){ return (x.category||'OTHER')===c && (!q || ((x.name||'')+' '+(x.menus||'')).toLowerCase().indexOf(q)>=0); });
     if(!rows.length) return; any=true;
     rows.sort(function(a,b){ var k={TRACKED:0,NEW:1,RECIPE:2}; return (k[a.kind]-k[b.kind]) || String(a.name).localeCompare(String(b.name)); });
@@ -658,7 +659,7 @@ function _ieMenuHtml(){
     }
     h+='</div>';
   });
-  if(!any) h+='<div style="background:#fff;border:1px dashed var(--mist);border-radius:12px;padding:30px;text-align:center;color:var(--timber);font-size:.8rem">Nothing matches “'+_invEsc(_ieMenuQ)+'”.</div>';
+  if(!any) h+='<div style="background:#fff;border:1px dashed var(--mist);border-radius:12px;padding:30px;text-align:center;color:var(--timber);font-size:.8rem">No menu item matches “'+_invEsc(_ieMenuQ)+'”. <a href="javascript:void 0" onclick="_ieMenuQ=\'\';_invRenderTab()" style="color:var(--forest);font-weight:700">Clear search</a></div>';
   var entered=Object.keys(_ieMenuNew).filter(function(k){ return _invNum(_ieMenuNew[k])>0; }).length;
   h+='<div class="ms-bar" id="ieMenuBar" style="display:'+(entered?'block':'none')+'"><button id="ieMenuStart" onclick="_ieMenuStartAll()" style="width:100%;font-size:.9rem;font-weight:800;background:var(--forest);color:#fff;border:none;border-radius:12px;padding:13px;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.18)">Start counting '+entered+' item'+(entered!==1?'s':'')+'</button></div>';
   h+='<div style="margin-top:14px">'+_ieBox('🧾 Today\'s menu movements', _ieMenuMoves.length? _ieMenuMoves.slice(0,60).map(_ieMoveLine).join('') : _ieEmpty('No movement yet today.'), _ieBtn('All history','_invSetTab(\'moves\')'))+'</div>';
