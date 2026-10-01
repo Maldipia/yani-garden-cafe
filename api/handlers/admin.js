@@ -301,8 +301,25 @@ export async function routeAdmin(action, body, auth, req, res) {
       ]);
       const pinBy = {};
       (Array.isArray(rLogin.data) ? rLogin.data : []).forEach(l => { if (l.pin_hash) pinBy[l.staff_id] = true; });
-      const stateBy = {}, secsBy = {};
-      (Array.isArray(rState.data) ? rState.data : []).forEach(r => { stateBy[r.staff_id] = r.state; secsBy[r.staff_id] = Number(r.worked_seconds || 0); });
+      const stateBy = {}, secsBy = {}, dayBy = {};
+      (Array.isArray(rState.data) ? rState.data : []).forEach(r => { stateBy[r.staff_id] = r.state; secsBy[r.staff_id] = Number(r.worked_seconds || 0); dayBy[r.staff_id] = r.shift_date; });
+      // break time this shift (unpaid): finished breaks + the one running now
+      const brkBy = {}, brkNowBy = {};
+      const days = [...new Set(Object.values(dayBy).filter(Boolean))];
+      if (days.length) {
+        const rl = await supaFetch(SUPABASE_URL + '/rest/v1/hr_time_logs?tenant_id=eq.' + TENANT_HR +
+          '&log_date=in.(' + days.join(',') + ')&select=staff_id,log_date,event_type,event_time&order=event_time.asc');
+        const open = {};
+        (Array.isArray(rl.data) ? rl.data : []).forEach(e => {
+          if (dayBy[e.staff_id] !== e.log_date) return;
+          const t = new Date(e.event_time).getTime();
+          if (e.event_type === 'BREAK_START' || e.event_type === 'BROKEN_TIME_START') open[e.staff_id] = t;
+          else if (open[e.staff_id] != null && (e.event_type === 'BREAK_END' || e.event_type === 'BROKEN_TIME_END' || e.event_type === 'CLOCK_OUT')) {
+            brkBy[e.staff_id] = (brkBy[e.staff_id] || 0) + Math.max(0, (t - open[e.staff_id]) / 1000); open[e.staff_id] = null;
+          }
+        });
+        Object.keys(open).forEach(id => { if (open[id] != null) brkNowBy[id] = new Date(open[id]).toISOString(); });
+      }
       const STATE = { IN:'IN', ON_BREAK:'BREAK', ON_BROKEN:'BREAK', OUT:'OUT' };
 
       staffRows.forEach(s => {
@@ -312,6 +329,8 @@ export async function routeAdmin(action, body, auth, req, res) {
         // hours worked so far this shift (breaks excluded), for the In / Break badge
         s.worked_seconds = s.clock_state === 'OUT' ? 0 : (secsBy[s.id] || 0);
         s.worked_at = new Date().toISOString();
+        s.break_seconds = s.clock_state === 'OUT' ? 0 : Math.round(brkBy[s.id] || 0);   // finished breaks
+        s.break_since = s.clock_state === 'BREAK' ? (brkNowBy[s.id] || null) : null;  // current break start
       });
       return res.status(200).json({ ok:true, staff: staffRows });
     } catch(hrErr) {

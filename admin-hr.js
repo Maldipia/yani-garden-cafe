@@ -1932,6 +1932,7 @@ function hf(label,value){return`<div class="hr-field"><div class="hr-field-label
 // and where the person is right now — never their pay, which was previously
 // printed next to every name on a screen visible from the counter.
 // "6h 33m" worked so far this shift. While clocked in, keeps counting from when the list was loaded.
+function hrDur(secs){ var m=Math.floor(secs/60), h=Math.floor(m/60); return (h?h+'h ':'')+(m%60)+'m'; }
 function hrWorked(s, running){
   var secs=Number(s.worked_seconds||0);
   if(running && s.worked_at){ var d=(Date.now()-new Date(s.worked_at).getTime())/1000; if(d>0 && d<6*3600) secs+=d; }
@@ -1950,8 +1951,13 @@ function hrRowBadges(s){
     // scanning on the kiosk works without one.
     if(!s.has_pin) out.push(['No PIN','#f1f5f9','#64748b','No attendance PIN. Scanning still works; typing the staff code does not.']);
     if(s.art82_exempt) out.push(['Art.82','#f1f5f9','#475569','Managerial / field personnel — no OT, night differential, holiday pay or SIL entitlement']);
-    if(s.clock_state==='IN')    out.push(['In'+hrWorked(s,true),'#dcfce7','#15803d','Clocked in — hours worked so far this shift (breaks not counted)']);
-    if(s.clock_state==='BREAK') out.push(['Break'+hrWorked(s,false),'#ffedd5','#c2410c','On break — hours worked so far this shift']);
+    if(s.clock_state==='IN')    out.push(['In'+hrWorked(s,true)+(s.break_seconds>=60?' · '+hrDur(s.break_seconds)+' break':''),'#dcfce7','#15803d','Clocked in — hours worked so far this shift, and total break time taken (breaks are not paid)']);
+    if(s.clock_state==='BREAK'){
+      var now=s.break_since?(Date.now()-new Date(s.break_since).getTime())/1000:0;
+      var long=now>3600;   // longer than an hour
+      out.push(['On break'+(now>0?' '+hrDur(now):'')+hrWorked(s,false)+' worked',long?'#fee2e2':'#ffedd5',long?'#b91c1c':'#c2410c',
+        'On break since '+(s.break_since?new Date(s.break_since).toLocaleTimeString('en-PH',{hour:'numeric',minute:'2-digit'}):'—')+(s.break_seconds>=60?' · earlier breaks today '+hrDur(s.break_seconds):'')]);
+    }
   }
   if(!out.length) return '';
   return ' ' + out.map(function(b){
