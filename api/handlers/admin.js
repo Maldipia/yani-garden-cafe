@@ -20,6 +20,9 @@ export async function routeAdmin(action, body, auth, req, res) {
     const authC = await checkAuth(['OWNER']);
     if (!authC.ok) return res.status(403).json({ok:false,error:'Unauthorized'});
     const TENANT_HR = '11111111-1111-4111-8111-111111111111';
+    // the current semi-monthly cut-off always exists (1–15 paid on the 25th, 16–end paid on the 10th)
+    try { await supaFetch(SUPABASE_URL+'/rest/v1/rpc/hr_ensure_cutoff',
+            {method:'POST', body:JSON.stringify({p_tenant:TENANT_HR})}); } catch (_) {}
     const r = await supaFetch(SUPABASE_URL+'/rest/v1/hr_payroll_cut_offs?tenant_id=eq.'+TENANT_HR+
       '&select=id,cutoff_name,start_date,end_date,pay_date,payroll_status&order=start_date.desc');
     return res.status(200).json({ok:r.ok, cutoffs:Array.isArray(r.data)?r.data:[]});
