@@ -1105,7 +1105,11 @@ async function renderPayrollSection(s, tc){
             : `<span style="color:#b45309;font-weight:700" title="No time-out was tapped">—</span> <a href="#" onclick="openManualClockModal('${s.id}',{date:'${esc(x.work_date)}',event:'CLOCK_OUT',taps:'${esc(('in '+(x.clock_in||'—')+(x.break_detail?' · breaks '+x.break_detail:'')+(x.break_end?' · last break end '+x.break_end:'')).replace(/'/g,''))}'});return false" style="font-size:.62rem;color:#1d4ed8;text-decoration:none;white-space:nowrap">+ add time-out</a>`)}</td>
       ${x.break_manual
         ? `<td style="padding:5px 7px;text-align:right"><span style="${manualStyle}" title="${esc('Break entered manually: '+(x.manual_note||''))}">✎ ${N(x.break_mins)>0 ? hm(N(x.break_mins)) : '—'}</span></td>`
-        : td(N(x.break_mins)>0 ? hm(N(x.break_mins)) : '—', N(x.break_mins)>0?'':grey, x.break_detail ? 'Breaks: '+x.break_detail+(N(x.break_count)>1?' ('+N(x.break_count)+' breaks)':'') : 'No break tapped')}
+        : td((N(x.break_mins)>0 ? hm(N(x.break_mins)) : '—')
+              + (/ out/.test(x.break_detail||'') ? '<span style="display:block;font-size:.6rem;color:#b45309;font-weight:700;white-space:nowrap">'
+                  + esc((x.break_detail||'').split(', ').filter(function(p){return / out$/.test(p);}).map(function(p){return 'out '+p.replace(/ out$/,'');}).join(', ')) + '</span>' : ''),
+            N(x.break_mins)>0?'':grey,
+            x.break_detail ? 'Breaks: '+x.break_detail+(N(x.break_count)>1?' ('+N(x.break_count)+' breaks)':'')+(/ out/.test(x.break_detail)?' — "out" = clocked out then back in (unpaid)':'') : 'No break tapped')}
       ${td(worked.toFixed(2), '', 'Clock in → out minus breaks')}
       ${td(reg.toFixed(2), ';font-weight:700')}
       ${td(hrPeso(regPay), '')}
