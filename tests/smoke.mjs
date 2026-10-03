@@ -662,6 +662,10 @@ async function stockControl() {
   check('spoilage needs a valid reason', noReason.ok === false && /reason/i.test(noReason.error || ''), noReason.error);
   const noQty = await call({ action: 'invRecordSpoilage', userId: OWNER, itemId: 1, qty: 0, reason: 'SPOILED' });
   check('spoilage needs a quantity', noQty.ok === false, noQty.error);
+  const noPin = await call({ action: 'invRecordSpoilage', userId: OWNER, itemId: 1, qty: 1, reason: 'SPOILED' });
+  check('waste needs the manager PIN', noPin.ok === false && noPin.needsPin === true, noPin.error);
+  const badPin = await call({ action: 'invRecordSpoilage', userId: OWNER, itemId: 1, qty: 1, reason: 'SPOILED', pin: '0000' });
+  check('waste refuses a wrong PIN', badPin.ok === false && badPin.badPin === true, badPin.error);
   const empty = await call({ action: 'invSubmitCount', userId: OWNER, lines: [] });
   check('empty count refused', empty.ok === false, empty.error);
   // a count line with a shortfall and no reason must be refused (validated before anything changes)

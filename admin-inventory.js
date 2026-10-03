@@ -1488,8 +1488,9 @@ async function _invOpenSpoilage(){
       +'<div>'+_invField('Quantity',_invInput('spQty','number','1','1'))+'</div>'
       +'<div>'+_invField('Reason',_invSelect('spReason','<option value="">Pick…</option>'+ropts))+'</div></div>'
     +_invField('Note',_invInput('spNote','text','e.g. dropped while plating'))
-    +_invField('Photo','<input id="spPhoto" type="file" accept="image/*" capture="environment" style="width:100%;margin-top:3px;font-size:.8rem">')
-    +'<div style="font-size:.66rem;color:var(--timber);margin-top:8px">Photo required above '+_invPeso(_invPhotoAbove())+'. Above '+_invPeso(_invApprovalAbove())+' it waits for owner approval. Stock goes down right away.</div>';
+    +_invField('Photo (optional)','<input id="spPhoto" type="file" accept="image/*" capture="environment" style="width:100%;margin-top:3px;font-size:.8rem">')
+    +_invField('🔒 Manager PIN','<input id="spPin" type="password" inputmode="numeric" autocomplete="one-time-code" maxlength="12" placeholder="same PIN as cancel / delete order" style="width:100%;margin-top:3px;padding:8px;border:1.5px solid #d1d5db;border-radius:8px;letter-spacing:4px">')
+    +'<div style="font-size:.66rem;color:var(--timber);margin-top:8px">Needs the manager PIN. Stock goes down right away.</div>';
   _invModal('Record Spoilage', body, 'Record spoilage', async function(){
     var id=+(document.getElementById('spItem')||{}).value, qty=parseFloat((document.getElementById('spQty')||{}).value), reason=(document.getElementById('spReason')||{}).value, note=(document.getElementById('spNote')||{}).value||'';
     var file=(document.getElementById('spPhoto')||{}).files; file=file&&file[0];
@@ -1497,10 +1498,11 @@ async function _invOpenSpoilage(){
     if(!(qty>0)){ showToast('Enter a quantity','error'); return; }
     if(!reason){ showToast('Pick a reason','error'); return; }
     var it=tracked.filter(function(x){return x.item_id===id;})[0];
-    if(it && qty*_invNum(it.menu_price)>_invPhotoAbove() && !file){ showToast('Add a photo — worth '+_invPeso(qty*_invNum(it.menu_price)),'error'); return; }
+    var pin=((document.getElementById('spPin')||{}).value||'').trim();
+    if(!pin){ showToast('Enter the manager PIN','error'); return; }
     var btn=document.getElementById('invModalSubmit'); if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
     var photo=null; if(file){ photo=await _invUploadPhoto(file); if(!photo){ if(btn){ btn.disabled=false; btn.textContent='Record spoilage'; } return; } }
-    var r=await api('invRecordSpoilage',{itemId:id,qty:qty,reason:reason,notes:note,photoUrl:photo});
+    var r=await api('invRecordSpoilage',{itemId:id,qty:qty,reason:reason,notes:note,photoUrl:photo,pin:pin});
     if(r&&r.ok){ showToast('Spoilage recorded · '+_invFmtQty(r.remaining)+' left','success'); _invCloseModal(); _invCntDate=_invManilaToday(); await _invCntLoad(); await _invLoadStock(); }
     else { showToast((r&&r.error)||'Failed','error'); if(btn){ btn.disabled=false; btn.textContent='Record spoilage'; } }
   });

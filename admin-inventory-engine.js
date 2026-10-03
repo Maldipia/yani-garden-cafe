@@ -472,6 +472,7 @@ function _ieWasteHtml(){
       +'<label class="ie-lbl">Photo <span id="ieWsPhotoReq" style="font-weight:600;color:var(--timber)"></span></label>'
       +'<input type="file" accept="image/*" capture="environment" onchange="_ieWsPhotoPick(this)" class="ie-in" style="padding:6px">'
       +'<div id="ieWsPhotoOk" style="font-size:.7rem;color:#15803d;margin-top:3px">'+(_ieWsPhoto?'✓ Photo attached':'')+'</div>'
+      +'<label class="ie-lbl">🔒 Manager PIN</label><input id="ieWsPin" type="password" inputmode="numeric" autocomplete="one-time-code" maxlength="12" class="ie-in" placeholder="same PIN as cancel / delete order" style="letter-spacing:4px">'
       +'<button id="ieWsBtn" onclick="_ieSubmitWaste()" style="width:100%;margin-top:14px;font-size:.9rem;font-weight:800;background:#b91c1c;color:#fff;border:none;border-radius:10px;padding:12px;cursor:pointer">Record waste</button>'
       +'<div style="font-size:.66rem;color:var(--timber);margin-top:6px">Taken from the '+'soonest-expiring batch and costed at that batch\'s price. Recorded with your name and the time.</div>'
       : _ieEmpty('Nothing is in stock yet, so there is nothing to waste.')))
@@ -485,7 +486,7 @@ function _ieWsChanged(){
   var u=document.getElementById('ieWsUnit'); if(u) u.textContent=r.unit;
   var q=parseFloat((document.getElementById('ieWsQty')||{}).value)||0;
   var info=document.getElementById('ieWsInfo'); if(info) info.innerHTML='In stock: <b>'+_ieQ(r.stock_qty)+' '+_invEsc(r.unit)+'</b>'+(q>_invNum(r.stock_qty)?' · <b style="color:#b91c1c">more than in stock</b>':'');
-  var pr=document.getElementById('ieWsPhotoReq'); if(pr) pr.textContent='(needed when the loss is over ₱'+_invPhotoAbove()+' at selling price)';
+  var pr=document.getElementById('ieWsPhotoReq'); if(pr) pr.textContent='(optional)';
 }
 async function _ieWsPhotoPick(input){
   var f=input.files&&input.files[0]; if(!f) return;
@@ -499,11 +500,13 @@ async function _ieSubmitWaste(){
   if(!(qty>0)){ showToast('Enter how many','error'); return; }
   if(qty>_invNum(r.stock_qty)+1e-9){ showToast('Only '+_ieQ(r.stock_qty)+' '+r.unit+' in stock','error'); return; }
   if(!_ieWsReason){ showToast('Pick why','error'); return; }
+  var pinEl=document.getElementById('ieWsPin'), pin=((pinEl||{}).value||'').trim();
+  if(!pin){ showToast('Enter the manager PIN','error'); if(pinEl) pinEl.focus(); return; }
   if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
-  var res=await api('invRecordSpoilage',{itemId:r.item_id,qty:qty,reason:_ieWsReason,notes:(document.getElementById('ieWsNote')||{}).value||'',photoUrl:_ieWsPhoto||null});
+  var res=await api('invRecordSpoilage',{itemId:r.item_id,qty:qty,reason:_ieWsReason,notes:(document.getElementById('ieWsNote')||{}).value||'',photoUrl:_ieWsPhoto||null,pin:pin});
   if(btn){ btn.disabled=false; btn.textContent='Record waste'; }
   if(res&&res.ok){ showToast('Recorded '+(res.source_ref||'')+' · '+_iePeso(res.cost)+' at cost','success'); _ieWsReason=''; _ieWsPhoto=''; _ieLoadTab('waste'); }
-  else showToast((res&&res.error)||'Failed','error');
+  else { if(res&&(res.badPin||res.needsPin)&&pinEl){ pinEl.value=''; pinEl.focus(); } showToast((res&&res.error)||'Failed','error'); }
 }
 
 // ══ ADD-ONS (recipes tab) ═════════════════════════════════════════════════
@@ -739,8 +742,9 @@ function _ieMenuWasteForm(id){
     +'<label class="ie-lbl">Why?</label><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">'
     +IE_WASTE_REASONS.map(function(z){ return '<button class="ie-chip" onclick="_ieWsReason=\''+z[0]+'\';this.parentNode.querySelectorAll(\'.ie-chip\').forEach(function(b){b.classList.remove(\'on\')});this.classList.add(\'on\')">'+z[1]+'</button>'; }).join('')+'</div>'
     +'<label class="ie-lbl">Note</label><input id="ieMwNote" class="ie-in" placeholder="what happened">'
-    +'<label class="ie-lbl">Photo <span style="font-weight:600;color:var(--timber)">(needed when over ₱'+_invPhotoAbove()+' at menu price)</span></label>'
+    +'<label class="ie-lbl">Photo <span style="font-weight:600;color:var(--timber)">(optional)</span></label>'
     +'<input type="file" accept="image/*" capture="environment" onchange="_ieWsPhotoPick(this)" class="ie-in" style="padding:6px"><div id="ieWsPhotoOk" style="font-size:.7rem;color:#15803d;margin-top:3px"></div>'
+    +'<label class="ie-lbl">🔒 Manager PIN</label><input id="ieMwPin" type="password" inputmode="numeric" autocomplete="one-time-code" maxlength="12" class="ie-in" placeholder="same PIN as cancel / delete order" style="letter-spacing:4px" onkeydown="if(event.key===\'Enter\')_ieMenuWaste('+id+')">'
     +'<button id="ieMwBtn" onclick="_ieMenuWaste('+id+')" style="width:100%;margin-top:12px;font-size:.9rem;font-weight:800;background:#b91c1c;color:#fff;border:none;border-radius:10px;padding:12px;cursor:pointer">Record waste</button>');
 }
 async function _ieMenuWaste(id){
@@ -749,10 +753,12 @@ async function _ieMenuWaste(id){
   if(!(q>0)){ showToast('Enter how many','error'); return; }
   if(q>_ieShelf(x)+1e-9){ showToast('Only '+_ieQ(_ieShelf(x))+' on the shelf','error'); return; }
   if(!_ieWsReason){ showToast('Pick why','error'); return; }
+  var pinEl=document.getElementById('ieMwPin'), pin=((pinEl||{}).value||'').trim();
+  if(!pin){ showToast('Enter the manager PIN','error'); if(pinEl) pinEl.focus(); return; }
   if(b){ b.disabled=true; b.textContent='Saving…'; }
-  var r=await api('invRecordSpoilage',{itemId:id,qty:q,reason:_ieWsReason,notes:(document.getElementById('ieMwNote')||{}).value||'',photoUrl:_ieWsPhoto||null});
+  var r=await api('invRecordSpoilage',{itemId:id,qty:q,reason:_ieWsReason,notes:(document.getElementById('ieMwNote')||{}).value||'',photoUrl:_ieWsPhoto||null,pin:pin});
   if(r&&r.ok){ showToast('Waste recorded · '+_ieQ(r.remaining)+' left','success'); _ieCloseModal(); await _ieLoadMenu(); _invRenderTab(); }
-  else { if(b){ b.disabled=false; b.textContent='Record waste'; } showToast((r&&r.error)||'Failed','error'); }
+  else { if(b){ b.disabled=false; b.textContent='Record waste'; } if(r&&(r.badPin||r.needsPin)&&pinEl){ pinEl.value=''; pinEl.focus(); } showToast((r&&r.error)||'Failed','error'); }
 }
 function _ieMenuFixForm(id){
   var x=_ieMenuRow(id); if(!x) return;

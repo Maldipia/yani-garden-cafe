@@ -6,6 +6,7 @@
 // ─────────────────────────────────────────────────────────────────────────
 import { supaFetch, supa } from '../lib/db.js';
 import { SUPABASE_URL }    from '../lib/config.js';
+import bcrypt              from 'bcryptjs';
 
 const INV_ACTIONS = new Set([
   // reporting
@@ -532,9 +533,21 @@ export async function routeInventory(action, body, auth, req, res) {
     if (!WASTE_REASONS.includes(reason)) return bad(res, 'Pick a reason');
     const photo = str(body.photoUrl, 500);
     if (photo && !/^https:\/\//.test(photo)) return bad(res, 'Photo must be an uploaded image link');
-    const r = await rpc('inv_record_spoilage', {
+    // Manager PIN — the same one used to cancel / delete an order. Checked here (bcrypt),
+    // never in the browser. With a verified PIN the photo is optional and the waste
+    // counts as approved.
+    const pinCf = await supaFetch(`${SUPABASE_URL}/rest/v1/secure_config?key=eq.DELETE_ORDER_PIN_HASH&select=value`);
+    const pinHash = Array.isArray(pinCf.data) && pinCf.data[0] ? pinCf.data[0].value : null;
+    let pinOk = false;
+    if (pinHash) {
+      const pin = String(body.pin || '').trim();
+      if (!pin) return res.status(401).json({ ok: false, needsPin: true, error: 'A manager PIN is required to record waste.' });
+      try { pinOk = await bcrypt.compare(pin, pinHash); } catch (_) { pinOk = false; }
+      if (!pinOk) return res.status(401).json({ ok: false, badPin: true, error: 'Wrong PIN — waste was not recorded.' });
+    }
+    const r = await rpc('inv_record_waste', {
       p_item_id: itemId, p_qty: qty, p_reason: reason,
-      p_notes: str(body.notes, 300), p_actor: actor, p_photo: photo || null,
+      p_notes: str(body.notes, 300), p_actor: actor, p_photo: photo || null, p_pin_ok: pinOk,
     });
     return rpcResult(res, r, 'Spoilage failed');
   }
